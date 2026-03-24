@@ -1,0 +1,24 @@
+Original prompt: Perfecto. Ahora necesito que vayas implementando cada cambio que ya hicimos antes, pero lo haremos poco a poco.
+
+- Rehecho el bloque del HUD de combate sobre `d5520d5`.
+- Quitado `Ayudar` del HUD y la vista `Acciones` queda con `Atacar`, `Correr` y `Esquivar`.
+- Los tres botones de `Acciones` ahora se reparten a todo el ancho disponible tanto en movil como en PC.
+- Quitados los iconos dentro de las vistas `Clase` y `Objetos` para que el texto quede centrado.
+- Eliminado el tooltip hover de las acciones.
+- Intento de validacion visual bloqueado: `web_game_playwright_client.js` no resuelve el paquete `playwright` en este repo/entorno.
+- Corregido detalle pendiente del HUD: eliminados tambien los iconos de estado vacio en Clase y Objetos.
+- Rehecho el bloque del inspector de equipamiento en `CanvasSection.jsx`.
+- Las armas equipadas se muestran siempre primero, por encima de armaduras, habilidades, accesorios y objetos.
+- Las cards de armadura ya no muestran `Coste`.
+- El borrado sigue apuntando al item correcto porque el listado se ordena visualmente conservando el indice original.
+- Reimplementado el sistema de armaduras.
+- `savePlayer` sincroniza bloques de armadura automaticamente al equipar, desequipar o cambiar de armadura sin volver a pisar cambios manuales mientras la armadura activa no cambie.
+- `syncTokenWithSheet` ahora mapea armaduras/armas/poderes de la ficha al token, resetea armadura cuando cambia la fuente y conserva el estado actual del token al enriquecerlo para combate.
+- El flujo de combate del canvas filtra rasgos anulados por la armadura antes de tirar, guarda `negatedTraits` y muestra el aviso en `CombatReactionModal`.
+- `AttackModal` desactiva visualmente los rasgos anulados por la armadura del objetivo y `DefenseModal` muestra el aviso de proteccion activa.
+- La CD de armadura ya no queda fija a `Vigor`: si la armadura equipada lleva rasgo `Destreza`, `Intelecto` o `Voluntad`, el umbral de sus bloques y el `Dx` mostrado en el inspector pasan a usar ese atributo.
+- `MapCanvas` ahora mantiene una cola local de animaciones de daño pendientes para no perder el primer popup tras recargar si el token o el stage todavia no estan listos.
+- `MapCanvas` ahora interpola los movimientos remotos de tokens para que otros clientes vean el desplazamiento hasta la nueva posicion en vez de un teletransporte instantaneo, sin afectar al arrastre o movimiento local.
+- Corregido el canvas correcto para el tablero SVG: `CanvasSection` ahora renderiza los tokens con `motion.div` y anima los desplazamientos remotos A->B, mientras que las fichas manipuladas localmente siguen moviendose sin retardo.
+- `CombatReactionModal` ahora aplica a `Parar` la misma restriccion de velocidad que a `Evadir` (`V.Diff <= 1`), tanto al mostrar la opcion como al confirmar la reaccion.
+- No se ha lanzado `npm test -- --watchAll=false` por peticion explicita del usuario.

@@ -58,6 +58,7 @@ import EncounterPanel from './components/EncounterPanel';
 import { normalizeStateEntry, normalizeStateList } from './utils/stateUtils';
 import CustomItemManager from './components/inventory/CustomItemManager';
 import { ToastProvider } from './components/Toast';
+import { syncArmorState } from './utils/armorSystem';
 import DiceCalculator from './components/DiceCalculator';
 import BarraReflejos from './components/BarraReflejos';
 import { CharacterCreatorView } from './components/CharacterCreatorView';
@@ -4064,11 +4065,15 @@ function App() {
         if (!recalculated.claves) recalculated.claves = [];
         if (!recalculated.estados) recalculated.estados = [];
         const withKarma = attachKarma(recalculated);
-        setPlayerData(withKarma);
-        const loadedList = withKarma.resourcesList || [];
+        const withArmorSync = syncArmorState(withKarma, {
+          armaduras,
+          mode: 'sheet',
+        });
+        setPlayerData(withArmorSync);
+        const loadedList = withArmorSync.resourcesList || [];
         setResourcesList(loadedList.length > 0 ? loadedList : defaultResourcesList);
-        setClaves(withKarma.claves || []);
-        setEstados(withKarma.estados || []);
+        setClaves(withArmorSync.claves || []);
+        setEstados(withArmorSync.estados || []);
       } else {
         const defaultData = {
           weapons: [],
@@ -4206,8 +4211,12 @@ function App() {
       playerName
     );
     const withKarma = attachKarma(recalculated);
+    const withArmorSync = syncArmorState(withKarma, {
+      armaduras,
+      mode: 'sheet',
+    });
     const fullData = {
-      ...withKarma,
+      ...withArmorSync,
       resourcesList: listaParaGuardar,
       claves: clavesParaGuardar,
       estados: estadosParaGuardar,

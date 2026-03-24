@@ -2,6 +2,7 @@
 import React from 'react';
 import { FiChevronDown, FiPlus, FiMinus } from 'react-icons/fi';
 import { Shield, Activity, Footprints } from 'lucide-react';
+import { getArmorCdAttribute } from '../utils/armorSystem';
 
 const ATTRIBUTES = [
     { id: 'destreza', label: 'Destreza', short: 'DES' },
@@ -143,7 +144,11 @@ const TokenResources = ({ token, onUpdate }) => {
                 <div className="space-y-3">
                     {RESOURCES.map(res => {
                         const stat = token.stats?.[res.id] || { current: 0, max: 5 }; // Default 5 max
-                        const linkedDie = getAttributeDie(res.attr);
+                        const linkedAttrId =
+                            res.id === 'armadura'
+                                ? getArmorCdAttribute(token)
+                                : res.attr;
+                        const linkedDie = getAttributeDie(linkedAttrId);
 
                         return (
                             <div key={res.id} className="bg-[#0b1120] border border-slate-800/50 rounded-lg p-2.5 space-y-2">

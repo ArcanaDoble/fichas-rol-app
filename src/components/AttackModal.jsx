@@ -22,6 +22,11 @@ import { nanoid } from 'nanoid';
 import { saveTokenSheet } from '../utils/token';
 import { addSpeedForToken, consumeStatForToken } from '../utils/initiative';
 import { buildDamageEventWrite } from '../utils/damageEvents';
+import {
+  getArmorProtection,
+  getItemTraits,
+  normalizeCombatTrait,
+} from '../utils/armorSystem';
 
 const AUTO_RESOLVE_MS = 20000;
 
@@ -53,10 +58,12 @@ const AttackModal = ({
   distance,
   pageId,
   armas = [],
+  armaduras = [],
   poderesCatalog = [],
   onClose,
 }) => {
   const [sheet, setSheet] = useState(null);
+  const [targetSheet, setTargetSheet] = useState(null);
 
   useEffect(() => {
     if (!attacker?.tokenSheetId) {
@@ -88,6 +95,36 @@ const AttackModal = ({
     window.addEventListener('tokenSheetSaved', handler);
     return () => window.removeEventListener('tokenSheetSaved', handler);
   }, [attacker]);
+
+  useEffect(() => {
+    if (!target?.tokenSheetId) {
+      setTargetSheet(null);
+      return;
+    }
+    const id = target.tokenSheetId;
+    const load = async () => {
+      const stored = localStorage.getItem('tokenSheets');
+      const sheets = stored ? JSON.parse(stored) : {};
+      if (sheets[id]) {
+        setTargetSheet(sheets[id]);
+      } else {
+        try {
+          const snap = await getDoc(doc(db, 'tokenSheets', id));
+          if (snap.exists()) {
+            setTargetSheet(snap.data());
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    };
+    load();
+    const handler = (e) => {
+      if (e.detail && e.detail.id === id) setTargetSheet(e.detail);
+    };
+    window.addEventListener('tokenSheetSaved', handler);
+    return () => window.removeEventListener('tokenSheetSaved', handler);
+  }, [target]);
 
   const parseRange = (val) => {
     if (!val && val !== 0) return Infinity;
@@ -170,12 +207,6 @@ const AttackModal = ({
   const [loading, setLoading] = useState(false);
   const [disabledTraits, setDisabledTraits] = useState([]);
 
-  const toggleTrait = (trait) => {
-    setDisabledTraits((prev) =>
-      prev.includes(trait) ? prev.filter((t) => t !== trait) : [...prev, trait]
-    );
-  };
-
   const selectedItem = useMemo(
     () => [...weapons, ...powers].find((i) => i.nombre === choice),
     [choice, weapons, powers]
@@ -185,10 +216,47 @@ const AttackModal = ({
     setDisabledTraits([]);
   }, [choice]);
 
-  const allTraits = selectedItem?.rasgos || [];
+  const allTraits = useMemo(() => getItemTraits(selectedItem), [selectedItem]);
+  const targetArmorSource = useMemo(() => {
+    if (!target?.tokenSheetId) return null;
+    try {
+      const stored = localStorage.getItem('tokenSheets');
+      const sheets = stored ? JSON.parse(stored) : {};
+      return sheets[target.tokenSheetId] || null;
+    } catch (err) {
+      return null;
+    }
+  }, [target]);
+  const armorProtection = useMemo(
+    () =>
+      getArmorProtection(targetSheet || targetArmorSource || target, selectedItem, {
+        armaduras,
+      }),
+    [targetSheet, targetArmorSource, target, selectedItem, armaduras]
+  );
+  const autoBlockedTraitKeys = useMemo(
+    () =>
+      new Set(
+        (armorProtection.negatedTraits || []).map((trait) =>
+          normalizeCombatTrait(trait)
+        )
+      ),
+    [armorProtection.negatedTraits]
+  );
+  const isAutoBlockedTrait = (trait) =>
+    autoBlockedTraitKeys.has(normalizeCombatTrait(trait));
+  const toggleTrait = (trait) => {
+    if (isAutoBlockedTrait(trait)) return;
+    setDisabledTraits((prev) =>
+      prev.includes(trait) ? prev.filter((t) => t !== trait) : [...prev, trait]
+    );
+  };
   const activeTraits = useMemo(
-    () => allTraits.filter((t) => !disabledTraits.includes(t)),
-    [allTraits, disabledTraits]
+    () =>
+      allTraits.filter(
+        (t) => !disabledTraits.includes(t) && !isAutoBlockedTrait(t)
+      ),
+    [allTraits, disabledTraits, autoBlockedTraitKeys]
   );
 
   const attrTraitStrings = useMemo(
@@ -210,7 +278,7 @@ const AttackModal = ({
 
   const allSpecialTraits = useMemo(
     () =>
-      allTraits.filter((r) => r.toLowerCase().includes('crítico')),
+      allTraits.filter((r) => normalizeCombatTrait(r).includes('critico')),
     [allTraits]
   );
 
@@ -221,7 +289,7 @@ const AttackModal = ({
           !r
             .toLowerCase()
             .match(/(vigor|destreza|intelecto|voluntad)/)
-          && !r.toLowerCase().includes('crítico')
+          && !normalizeCombatTrait(r).includes('critico')
       ),
     [allTraits]
   );
@@ -241,9 +309,7 @@ const AttackModal = ({
     const item = [...weapons, ...powers].find((i) => i.nombre === choice);
     const itemDamage = item?.dano ?? item?.poder ?? '';
     const baseFormula = damage || parseDamage(itemDamage) || '1d20';
-    const activeRasgos = (item?.rasgos || []).filter(
-      (t) => !disabledTraits.includes(t)
-    );
+    const activeRasgos = activeTraits;
     const attrDice = parseAttrBonuses(activeRasgos)
       .flatMap(({ attr, mult }) => {
         const die = sheet?.atributos?.[attr];
@@ -253,7 +319,7 @@ const AttackModal = ({
       .join(' + ');
     const formula = attrDice ? `${baseFormula} + ${attrDice}` : baseFormula;
     const hasCritical = activeRasgos.some((r) =>
-      r.toLowerCase().includes('crítico')
+      normalizeCombatTrait(r).includes('critico')
     );
     setLoading(true);
     try {
@@ -279,12 +345,18 @@ const AttackModal = ({
       const attackerName = attacker.customName || attacker.name || 'Atacante';
       const targetName = target.customName || target.name || '';
       const text = `${attackerName} ataca a ${targetName}`;
-      messages.push({ id: nanoid(), author: attackerName, text, result });
+      const enrichedResult = {
+        ...result,
+        blockedTraits: armorProtection.negatedTraits || [],
+        negatedTraits: armorProtection.negatedTraits || [],
+        armorProtectionSource: armorProtection.armorProtectionSource || null,
+      };
+      messages.push({ id: nanoid(), author: attackerName, text, result: enrichedResult });
       await setDoc(doc(db, 'assetSidebar', 'chat'), { messages });
       const docRef = await addDoc(collection(db, 'attacks'), {
         attackerId: attacker.id,
         targetId: target.id,
-        result,
+        result: enrichedResult,
         timestamp: serverTimestamp(),
         completed: false,
       });
@@ -301,7 +373,7 @@ const AttackModal = ({
               const sheet = sheets[target.tokenSheetId];
               if (sheet) {
                 let updated = sheet;
-                let remaining = result.total;
+                let remaining = enrichedResult.total;
                 ['postura', 'armadura', 'vida'].forEach((stat) => {
                   const res = applyDamage(updated, remaining, stat);
                   remaining = res.remaining;
@@ -371,9 +443,9 @@ const AttackModal = ({
         const targetName = target.customName || target.name || 'Defensor';
         const vigor = parseDieValue(updatedSheet?.atributos?.vigor);
         const destreza = parseDieValue(updatedSheet?.atributos?.destreza);
-        const diff = result.total;
-        const noDamageText = `${targetName} resiste el daño. Ataque ${result.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
-        const damageText = `${targetName} no se defendió. Ataque ${result.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
+        const diff = enrichedResult.total;
+        const noDamageText = `${targetName} resiste el daño. Ataque ${enrichedResult.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
+        const damageText = `${targetName} no se defendió. Ataque ${enrichedResult.total} Defensa 0 Dif ${diff} (V${vigor} D${destreza}) Bloques A-${lost.armadura} P-${lost.postura} V-${lost.vida}`;
         msgs.push({
           id: nanoid(),
           author: targetName,
@@ -386,7 +458,7 @@ const AttackModal = ({
         }
       }, AUTO_RESOLVE_MS);
       setLoading(false);
-      onClose(result);
+      onClose(enrichedResult);
       await addSpeedForToken(attacker, speedCost);
       await consumeStatForToken(attacker, 'ingenio', ingenioCost, pageId);
     } catch (e) {
@@ -450,16 +522,33 @@ const AttackModal = ({
                       Consumo: 🟡{speedCost}
                       {ingenioCost > 0 && <> {' '}🔵{ingenioCost}</>}
                     </p>
+                    {armorProtection.negatedTraits?.length > 0 && (
+                      <div className="mt-2 rounded border border-emerald-500/30 bg-emerald-900/20 px-2 py-2 text-xs text-emerald-100">
+                        Armadura activa
+                        {armorProtection.armorProtectionSource
+                          ? `: ${armorProtection.armorProtectionSource}. `
+                          : '. '}
+                        Se anulan: {armorProtection.negatedTraits.join(', ')}
+                      </div>
+                    )}
                     {attrTraitDetails.length > 0 && (
                       <p className="text-sm text-gray-300 mt-1 flex flex-wrap">
                         {attrTraitDetails.map(({ attr, mult, trait }) => {
-                          const disabled = disabledTraits.includes(trait);
+                          const autoBlocked = isAutoBlockedTrait(trait);
+                          const disabled =
+                            disabledTraits.includes(trait) || autoBlocked;
                           return (
                             <span
                               key={trait}
                               onClick={() => toggleTrait(trait)}
-                              className={`mr-2 cursor-pointer ${disabled ? 'line-through opacity-50' : ''}`}
-                              style={{ color: disabled ? undefined : atributoColor[attr] }}
+                              className={`mr-2 ${autoBlocked ? 'cursor-not-allowed line-through opacity-40' : 'cursor-pointer'} ${disabled && !autoBlocked ? 'line-through opacity-50' : ''}`}
+                              style={{
+                                color: autoBlocked
+                                  ? '#9ca3af'
+                                  : disabled
+                                    ? undefined
+                                    : atributoColor[attr],
+                              }}
                             >
                               {attr} {sheet?.atributos?.[attr]}
                               {mult > 1 ? ` x${mult}` : ''}
@@ -471,13 +560,17 @@ const AttackModal = ({
                     {allSpecialTraits.length > 0 && (
                       <p className="text-sm text-gray-300 mt-1 flex flex-wrap">
                         {allSpecialTraits.map((t, i) => {
-                          const disabled = disabledTraits.includes(t);
+                          const autoBlocked = isAutoBlockedTrait(t);
+                          const disabled =
+                            disabledTraits.includes(t) || autoBlocked;
                           return (
                             <span
                               key={i}
                               onClick={() => toggleTrait(t)}
-                              className={`mr-2 cursor-pointer ${disabled ? 'line-through opacity-50' : ''}`}
-                              style={{ color: specialTraitColor }}
+                              className={`mr-2 ${autoBlocked ? 'cursor-not-allowed line-through opacity-40' : 'cursor-pointer'} ${disabled && !autoBlocked ? 'line-through opacity-50' : ''}`}
+                              style={{
+                                color: autoBlocked ? '#9ca3af' : specialTraitColor,
+                              }}
                             >
                               {t}
                             </span>
@@ -488,12 +581,15 @@ const AttackModal = ({
                     {allOtherTraits.length > 0 && (
                       <p className="text-sm text-gray-300 mt-1 flex flex-wrap">
                         {allOtherTraits.map((t, i) => {
-                          const disabled = disabledTraits.includes(t);
+                          const autoBlocked = isAutoBlockedTrait(t);
+                          const disabled =
+                            disabledTraits.includes(t) || autoBlocked;
                           return (
                             <span
                               key={i}
                               onClick={() => toggleTrait(t)}
-                              className={`mr-2 cursor-pointer ${disabled ? 'line-through opacity-50' : ''}`}
+                              className={`mr-2 ${autoBlocked ? 'cursor-not-allowed line-through opacity-40' : 'cursor-pointer'} ${disabled && !autoBlocked ? 'line-through opacity-50' : ''}`}
+                              style={autoBlocked ? { color: '#9ca3af' } : undefined}
                             >
                               {t}
                             </span>
@@ -536,6 +632,7 @@ AttackModal.propTypes = {
   distance: PropTypes.number,
   pageId: PropTypes.string,
   armas: PropTypes.array,
+  armaduras: PropTypes.array,
   poderesCatalog: PropTypes.array,
   onClose: PropTypes.func,
 };

@@ -222,6 +222,8 @@ const DefenseModal = ({
   }, [sheet]);
 
   const hasAvailable = weapons.length > 0 || powers.length > 0;
+  const blockedAttackTraits =
+    attackResult?.blockedTraits || attackResult?.negatedTraits || [];
 
   if (!attacker || !target) return null;
 
@@ -434,6 +436,15 @@ const DefenseModal = ({
           <p className="text-sm text-gray-300 mb-1">
             Distancia: {distance} casillas
           </p>
+          {blockedAttackTraits.length > 0 && (
+            <div className="mb-3 rounded border border-emerald-500/30 bg-emerald-900/20 px-2 py-2 text-xs text-emerald-100">
+              Armadura activa
+              {attackResult?.armorProtectionSource
+                ? `: ${attackResult.armorProtectionSource}. `
+                : '. '}
+              Se anulan: {blockedAttackTraits.join(', ')}
+            </div>
+          )}
           {hasEquip ? (
             hasAvailable ? (
               <>

@@ -11,6 +11,12 @@ import CombatReactionModal from './CombatReactionModal';
 import FloatingCombatEffects from './FloatingCombatEffects';
 import { DEFAULT_STATUS_EFFECTS, ICON_MAP } from '../utils/statusEffects';
 import { rollAttack, getSpeedConsumption } from '../utils/combatSystem';
+import {
+    syncArmorState,
+    getArmorProtection,
+    applyNegatedTraitsToItem,
+    getArmorCdAttribute,
+} from '../utils/armorSystem';
 import { db, storage } from '../firebase';
 import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, query, where, orderBy, getDoc, getDocs, serverTimestamp, addDoc, limit } from 'firebase/firestore';
 import { nanoid } from 'nanoid';
@@ -396,8 +402,23 @@ const getRarityInfo = (rareza) => {
 };
 
 // --- Helper: Transform character sheet data into token format ---
-const syncTokenWithSheet = (token, sheetData) => {
+const normalizeEquipmentName = (value = '') =>
+    value
+        .toString()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+
+const syncTokenWithSheet = (token, sheetData, catalogs = {}, options = {}) => {
     if (!sheetData) return token;
+    const { preserveTokenState = false, skipArmorSync = false } = options;
+    const {
+        armas = [],
+        armaduras = [],
+        habilidades = [],
+        accesorios = [],
+    } = catalogs;
 
     // Map character attributes to token attributes format
     const tokenAttributes = {};
@@ -425,8 +446,8 @@ const syncTokenWithSheet = (token, sheetData) => {
         Object.entries(sheetData.stats).forEach(([key, value]) => {
             const mappedKey = key.toLowerCase();
             if (validStats.includes(mappedKey) && value && typeof value === 'object') {
-                const max = value.max ?? 0;
-                const current = value.current ?? max;
+                const max = value.max ?? value.total ?? value.base ?? 0;
+                const current = value.current ?? value.actual ?? max;
                 tokenStats[mappedKey] = {
                     current: Math.min(current, 10),
                     max: Math.min(max, 10),
@@ -455,8 +476,58 @@ const syncTokenWithSheet = (token, sheetData) => {
         return item;
     };
 
+    const mergeCatalogItem = (entry, catalog, type) => {
+        const flattened = flattenItem(entry);
+        if (!flattened) return null;
+        const rawName =
+            typeof flattened === 'string'
+                ? flattened
+                : flattened.nombre || flattened.name || '';
+        const normalizedName = normalizeEquipmentName(rawName);
+        const fromCatalog =
+            catalog.find(
+                (candidate) =>
+                    normalizeEquipmentName(
+                        candidate?.nombre || candidate?.name || ''
+                    ) === normalizedName
+            ) || null;
+        const merged =
+            typeof flattened === 'string'
+                ? { ...(fromCatalog || {}), nombre: rawName || fromCatalog?.nombre || fromCatalog?.name || '' }
+                : { ...(fromCatalog || {}), ...flattened };
+        return {
+            ...merged,
+            type: merged.type || type,
+        };
+    };
+
+    const pushUniqueItem = (target, item, type) => {
+        const merged = mergeCatalogItem(item, (() => {
+            if (type === 'weapon') return armas;
+            if (type === 'armor') return armaduras;
+            if (type === 'ability') return habilidades;
+            if (type === 'access') return accesorios;
+            return [];
+        })(), type);
+        if (!merged) return;
+        const key = `${type}:${normalizeEquipmentName(merged.nombre || merged.name)}`;
+        if (target.some((candidate) => `${candidate.type}:${normalizeEquipmentName(candidate.nombre || candidate.name)}` === key)) {
+            return;
+        }
+        target.push(merged);
+    };
+
     // Extract equipped items from character sheet slots into token format
     const tokenEquippedItems = [];
+    const hasExplicitEquipmentSource =
+        (sheetData.equippedItems && typeof sheetData.equippedItems === 'object') ||
+        Array.isArray(sheetData.weapons) ||
+        Array.isArray(sheetData.armaduras) ||
+        Array.isArray(sheetData.poderes) ||
+        Array.isArray(sheetData.abilities) ||
+        Array.isArray(sheetData.equipment?.abilities) ||
+        Array.isArray(sheetData.actionData?.reaction);
+
     if (sheetData.equippedItems && typeof sheetData.equippedItems === 'object') {
         const slotTypeMap = {
             mainHand: 'weapon',
@@ -475,9 +546,26 @@ const syncTokenWithSheet = (token, sheetData) => {
                 else if (slot.startsWith('accessory_')) type = 'access';
                 else type = flattened.type || 'weapon'; // fallback
             }
-            tokenEquippedItems.push({ ...flattened, type });
+            pushUniqueItem(tokenEquippedItems, flattened, type);
         });
     }
+
+    (sheetData.weapons || []).forEach((weapon) =>
+        pushUniqueItem(tokenEquippedItems, weapon, 'weapon')
+    );
+    (sheetData.armaduras || []).forEach((armor) =>
+        pushUniqueItem(tokenEquippedItems, armor, 'armor')
+    );
+    (sheetData.poderes || []).forEach((power) =>
+        pushUniqueItem(tokenEquippedItems, power, 'ability')
+    );
+    [
+        ...(sheetData.equipment?.abilities || []),
+        ...(sheetData.abilities || []),
+        ...((sheetData.actionData?.reaction || []).filter(
+            (entry) => entry?.isActive && (entry.damage || entry.dano)
+        )),
+    ].forEach((ability) => pushUniqueItem(tokenEquippedItems, ability, 'ability'));
 
     // Extract inventory items (equipment)
     // sheetData.equipment can be an array OR an object with categories { weapons: [], armor: [], ... }
@@ -498,21 +586,33 @@ const syncTokenWithSheet = (token, sheetData) => {
         }
     }
 
-    return {
+    const syncedToken = {
         ...token,
         // Mantener la imagen del canvas si ya existe, de lo contrario usar la de la ficha
         img: token.img || sheetData.avatar || sheetData.portraitSource || sheetData.image,
         // El retrato siempre usa la imagen de la ficha (si existe) para el inspector/HUD
         portrait: sheetData.avatar || sheetData.portraitSource || sheetData.image || token.portrait || token.img,
         name: sheetData.name || token.name,
-        status: tokenStatus,
+        status: preserveTokenState ? token.status || tokenStatus : tokenStatus,
         attributes: tokenAttributes,
-        stats: tokenStats,
-        equippedItems: tokenEquippedItems,
-        inventory: tokenInventory,
+        stats: preserveTokenState
+            ? token.stats || tokenStats || {}
+            : Object.keys(tokenStats).length > 0
+                ? tokenStats
+                : token.stats || {},
+        equippedItems: hasExplicitEquipmentSource
+            ? tokenEquippedItems
+            : token.equippedItems || tokenEquippedItems,
+        inventory: tokenInventory.length > 0 ? tokenInventory : token.inventory || [],
         velocidad: token.velocidad || 0,
         linkedCharacterId: sheetData.id || token.linkedCharacterId || null,
     };
+
+    if (skipArmorSync) {
+        return syncedToken;
+    }
+
+    return syncArmorState(syncedToken, { armaduras, mode: 'token' });
 };
 
 // --- Normalize glossary word (mirrors LoadoutView) ---
@@ -529,6 +629,23 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
     const [isAddOpen, setIsAddOpen] = useState(false);
     const searchInputRef = useRef(null);
 
+    const getEquipmentPriority = useCallback((item) => {
+        const rawType = (item?.type || item?._category || item?.category || '').toString().toLowerCase();
+        const rawName = `${item?.nombre || item?.name || ''} ${rawType}`.toLowerCase().replace(/[_-]/g, ' ');
+
+        if (rawType === 'armor' || rawType === 'armors' || rawName.includes('armadura')) return 1;
+        if (rawType === 'weapon' || rawType === 'weapons' || (rawName.includes('arma') && !rawName.includes('armadura'))) return 0;
+        if (rawType === 'ability' || rawType === 'abilities' || rawType === 'power' || rawType === 'powers' || rawName.includes('habilidad')) return 2;
+        if (rawType === 'access' || rawType === 'accessory' || rawType === 'accessories' || rawName.includes('accesorio')) return 3;
+        return 4;
+    }, []);
+
+    const isArmorLikeItem = useCallback((item) => {
+        const rawType = (item?.type || item?._category || item?.category || '').toString().toLowerCase();
+        const rawName = `${item?.nombre || item?.name || ''} ${rawType}`.toLowerCase().replace(/[_-]/g, ' ');
+        return rawType === 'armor' || rawType === 'armors' || rawName.includes('armadura');
+    }, []);
+
     // Find current category config
     const currentCat = categories.find(c => c.id === addCat) || categories[0];
     const filteredItems = useMemo(() => {
@@ -542,6 +659,16 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
         // Even with search, limit to 50 for performance and cleanliness
         return list.filter(i => (i.nombre || i.name || '').toLowerCase().includes(q)).slice(0, 50);
     }, [currentCat, searchTerm, isPlayerView]);
+
+    const orderedEquippedItems = useMemo(() => {
+        return equippedItems
+            .map((item, originalIndex) => ({ item, originalIndex }))
+            .sort((a, b) => {
+                const priorityDiff = getEquipmentPriority(a.item) - getEquipmentPriority(b.item);
+                if (priorityDiff !== 0) return priorityDiff;
+                return a.originalIndex - b.originalIndex;
+            });
+    }, [equippedItems, getEquipmentPriority]);
 
     useEffect(() => {
         if (isAddOpen && searchInputRef.current) {
@@ -593,7 +720,7 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
             {/* Equipped Items — Inventory card style */}
             {equippedItems.length > 0 ? (
                 <div className="space-y-2">
-                    {equippedItems.map((item, idx) => {
+                    {orderedEquippedItems.map(({ item, originalIndex }) => {
                         const rarity = getRarityInfo(item.rareza);
                         const rarityColor = rarityColorMap[item.rareza] || '#94a3b8';
                         const itemImage = getObjectImage(item, customEquipmentImages);
@@ -602,7 +729,7 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
 
                         return (
                             <div
-                                key={idx}
+                                key={`${originalIndex}-${item.nombre || item.name || item.type || 'item'}`}
                                 className={`relative bg-[#161f32] border ${rarity.border} rounded-lg overflow-hidden group hover:border-[#c8aa6e]/60 transition-all duration-300`}
                             >
                                 {/* Dynamic Background Gradient (Hover Effect) — mirrors LoadoutView */}
@@ -679,7 +806,7 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
                                                     <span className="text-slate-300">{item.alcance || item.range}</span>
                                                 </div>
                                             )}
-                                            {(item.consumo || item.consumption) && (
+                                            {(item.consumo || item.consumption) && !isArmorLikeItem(item) && (
                                                 <div>
                                                     <span className="text-slate-500 uppercase font-bold mr-1">Coste:</span>
                                                     <span>{item.consumo || item.consumption}</span>
@@ -715,7 +842,7 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        onRemoveItem && onRemoveItem(idx);
+                                        onRemoveItem && onRemoveItem(originalIndex);
                                     }}
                                     className="absolute top-1.5 right-1.5 p-1 bg-red-500/10 hover:bg-red-500/30 text-red-400/70 hover:text-red-400 rounded opacity-0 group-hover:opacity-100 transition-all z-20"
                                     title="Eliminar"
@@ -911,38 +1038,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         if (!rawToken || !rawToken.linkedCharacterId || availableCharacters.length === 0) return rawToken;
         const charData = availableCharacters.find(c => c.id === rawToken.linkedCharacterId);
         if (!charData) return rawToken;
-
-        // Helper crucial para aplanar items que vienen de la ficha (a veces los datos están en .payload)
-        const flattenItem = (item) => {
-            if (!item) return null;
-            if (item.payload) {
-                return { ...item.payload, ...item, payload: undefined };
-            }
-            return item;
-        };
-
-        const eq = charData.equippedItems || {};
-        const hands = [eq.mainHand, eq.offHand]
-            .map(flattenItem)
-            .filter(i => i && Object.keys(i).length > 0 && (i.name || i.nombre))
-            .map(i => ({ ...i, type: i.type || 'weapon' }));
-
-        const equipmentAbilities = (charData.equipment?.abilities || []).map(flattenItem);
-        const rootAbilities = (charData.abilities || []).map(flattenItem);
-        const activeTalents = (charData.actionData?.reaction?.filter(t => t.isActive && (t.damage || t.dano)) || []).map(flattenItem);
-        const allAbilitiesSource = [...equipmentAbilities, ...rootAbilities, ...activeTalents].filter(Boolean);
-
-        const formattedAbilities = allAbilitiesSource.map(a => ({ ...a, type: 'ability' }));
-        const rawInventory = charData.inventory || charData.backpackItems || [];
-        const formattedInventory = (Array.isArray(rawInventory) ? rawInventory : []).map(flattenItem).filter(Boolean).map(i => ({ ...i, type: i.type || 'item' }));
-
-        return {
-            ...rawToken,
-            attributes: charData.attributes || charData.atributos || rawToken.attributes,
-            stats: charData.stats || rawToken.stats,
-            equippedItems: [...hands, ...formattedAbilities, ...formattedInventory],
-        };
-    }, [availableCharacters]);
+        return syncTokenWithSheet(
+            rawToken,
+            charData,
+            {
+                armas,
+                armaduras,
+                habilidades,
+                accesorios,
+            },
+            { preserveTokenState: true, skipArmorSync: true }
+        );
+    }, [availableCharacters, armas, armaduras, habilidades, accesorios]);
 
     // Tabs del Sidebar
     const [activeTab, setActiveTab] = useState(isPlayerView ? 'TOKENS' : 'CONFIG'); // 'CONFIG' | 'TOKENS' | 'ACCESS' | 'INSPECTOR'
@@ -2447,7 +2554,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                 if (existingToken) {
                     // Sincronizar datos de ficha al token existente (stats, atributos, etc.)
-                    const syncedToken = syncTokenWithSheet(existingToken, characterData);
+                    const syncedToken = syncTokenWithSheet(existingToken, characterData, {
+                        armas,
+                        armaduras,
+                        habilidades,
+                        accesorios,
+                    });
 
                     if (JSON.stringify(syncedToken) !== JSON.stringify(existingToken)) {
                         console.log('🔄 [SafeSync] Sincronizando token existente al entrar:', characterName);
@@ -2481,7 +2593,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         isCircular: true,
                     };
 
-                    const newToken = syncTokenWithSheet(baseToken, characterData);
+                    const newToken = syncTokenWithSheet(baseToken, characterData, {
+                        armas,
+                        armaduras,
+                        habilidades,
+                        accesorios,
+                    });
                     console.log('🎭 [SafeSync] Auto-creating player token:', newToken.name);
 
                     // Añadir a la lista fresca del servidor (no a la local)
@@ -2508,7 +2625,17 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         };
 
         safeSync();
-    }, [isPlayerView, characterData, activeScenario?.id, playerName, gridConfig]);
+    }, [
+        isPlayerView,
+        characterData,
+        activeScenario?.id,
+        playerName,
+        gridConfig,
+        armas,
+        armaduras,
+        habilidades,
+        accesorios,
+    ]);
 
     // Listener para sincronización en tiempo real desde edición de fichas
     // ⚠️ CRITICAL: Lee datos frescos del servidor antes de escribir para evitar sobrescrituras.
@@ -2532,7 +2659,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         (!item.linkedCharacterId && item.name === name);
 
                     if (isMatch && item.layer === 'TOKEN') {
-                        const synced = syncTokenWithSheet(item, sheet);
+                        const synced = syncTokenWithSheet(item, sheet, {
+                            armas,
+                            armaduras,
+                            habilidades,
+                            accesorios,
+                        });
                         if (JSON.stringify(synced) !== JSON.stringify(item)) {
                             hasChanges = true;
                             return synced;
@@ -2557,7 +2689,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         window.addEventListener('playerSheetSaved', handleSyncEvent);
         return () => window.removeEventListener('playerSheetSaved', handleSyncEvent);
-    }, []); // Dependencias vacías: usamos activeScenarioRef para leer sin re-bindear el evento
+    }, [armas, armaduras, habilidades, accesorios]);
 
 
     const saveCurrentScenario = async () => {
@@ -2901,7 +3033,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         if (!token || !charData) return;
 
         // Perform synchronization
-        const syncedToken = syncTokenWithSheet(token, charData);
+        const syncedToken = syncTokenWithSheet(token, charData, {
+            armas,
+            armaduras,
+            habilidades,
+            accesorios,
+        });
 
         // Add owner to controlledBy if not present
         let newControlledBy = [...(token.controlledBy || [])];
@@ -3148,6 +3285,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const isLight = item.type === 'light';
         const isWall = item.type === 'wall';
         const isGeometry = item.type === 'geometry';
+        const isToken = !isLight && !isWall && !isGeometry;
+        const isLocallyInteracting =
+            !!(draggedTokenId || rotatingTokenId || resizingTokenId) &&
+            selectedTokenIds.includes(item.id);
+        const itemMotionTransition = isToken && !isLocallyInteracting
+            ? { type: 'tween', duration: 0.42, ease: [0.22, 1, 0.36, 1] }
+            : { duration: 0 };
 
         // Lógica de visibilidad y bloqueo por capas
         const isLightingLayer = activeLayer === 'LIGHTING';
@@ -3472,7 +3616,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     </>
                 )}
 
-                <div
+                <motion.div
                     onMouseDown={(e) => canInteract && handleTokenMouseDown(e, item)}
                     onTouchStart={(e) => canInteract && handleTokenMouseDown(e, item)}
                     onDoubleClick={(e) => {
@@ -3488,8 +3632,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         setActiveTab('INSPECTOR');
                         setShowSettings(true);
                     }}
+                    initial={false}
+                    animate={{
+                        x: item.x,
+                        y: item.y,
+                        rotate: item.rotation || 0,
+                        opacity,
+                    }}
+                    transition={itemMotionTransition}
                     style={{
-                        transform: `translate(${item.x}px, ${item.y}px) rotate(${item.rotation}deg)`,
                         width: `${item.width}px`,
                         height: `${item.height}px`,
                         position: 'absolute',
@@ -3498,8 +3649,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         pointerEvents: canInteract ? 'auto' : 'none',
                         cursor: (targetingState && !isLight && !isWall) ? 'crosshair' : (canInteract ? 'grab' : 'default'),
                         zIndex: isLight ? 10 : 20, // Luces siempre debajo de tokens
-                        opacity: opacity,
-                        transition: 'opacity 0.3s ease'
+                        transformOrigin: 'center center',
+                        willChange: 'transform, opacity'
                     }}
                     className="group"
                 >
@@ -3705,7 +3856,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             />
                         )}
                     </div>
-                </div>
+                </motion.div>
             </React.Fragment>
         );
     };
@@ -3967,8 +4118,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     };
 
     const applyCombatCalculations = (token, damage, weapon) => {
-        let destrezaRaw = token.attributes?.destreza || 'd6';
-        let vigorRaw = token.attributes?.vigor || 'd6';
+        const attributeDice = {
+            destreza: token.attributes?.destreza || 'd6',
+            vigor: token.attributes?.vigor || 'd6',
+            intelecto: token.attributes?.intelecto || 'd6',
+            voluntad: token.attributes?.voluntad || 'd6',
+        };
 
         // Reducir grado del dado si el arma tiene Agudeza
         const traits = weapon?.rasgos || weapon?.traits || weapon?.trait || weapon?.properties || [];
@@ -3994,15 +4149,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         };
 
         if (hasAgudeza) {
-            destrezaRaw = reduceDieStep(destrezaRaw);
-            vigorRaw = reduceDieStep(vigorRaw);
+            Object.keys(attributeDice).forEach((attrId) => {
+                attributeDice[attrId] = reduceDieStep(attributeDice[attrId]);
+            });
         }
 
-        const posturaUmbral = parseDieValue(destrezaRaw) || 1;
-        const vidaUmbral = parseDieValue(vigorRaw) || 1;
-
-        let remainingBlocks = Math.floor(damage / posturaUmbral);
-        if (remainingBlocks === 0 && damage >= posturaUmbral) remainingBlocks = 1;
+        const armorAttr = getArmorCdAttribute(token, { armaduras });
+        const posturaUmbral = parseDieValue(attributeDice.destreza) || 1;
+        const armaduraUmbral =
+            parseDieValue(attributeDice[armorAttr] || attributeDice.vigor) || 1;
+        const vidaUmbral = parseDieValue(attributeDice.vigor) || 1;
 
         let lostPostura = 0;
         let lostArmadura = 0;
@@ -4011,27 +4167,30 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         let currentPostura = token.stats?.postura?.current || 0;
         let currentArmadura = token.stats?.armadura?.current || 0;
         let currentVida = token.stats?.vida?.current || 0;
+        let remainingDamage = Math.max(0, Number(damage) || 0);
 
-        lostPostura = Math.min(remainingBlocks, currentPostura);
+        const consumeDamageBlocks = (availableBlocks, threshold) => {
+            if (availableBlocks <= 0 || threshold <= 0 || remainingDamage < threshold) {
+                return 0;
+            }
+
+            const lostBlocks = Math.min(
+                Math.floor(remainingDamage / threshold),
+                availableBlocks
+            );
+
+            remainingDamage -= lostBlocks * threshold;
+            return lostBlocks;
+        };
+
+        lostPostura = consumeDamageBlocks(currentPostura, posturaUmbral);
         currentPostura -= lostPostura;
-        remainingBlocks -= lostPostura;
 
-        if (remainingBlocks > 0) {
-            lostArmadura = Math.min(remainingBlocks, currentArmadura);
-            currentArmadura -= lostArmadura;
-            remainingBlocks -= lostArmadura;
-        }
+        lostArmadura = consumeDamageBlocks(currentArmadura, armaduraUmbral);
+        currentArmadura -= lostArmadura;
 
-        if (remainingBlocks > 0) {
-            // Reevaluamos bloques para Vida si usa otro umbral? 
-            // El usuario dice: "Si tiene destreza d8 umbral postura 8. Vigor d6 umbral Vida 6".
-            // Para simplificar recalculamos bloques de vida con su umbral si sobran bloques de postura/armadura
-            const damageForVida = remainingBlocks * posturaUmbral;
-            const vidaBlocks = Math.floor(damageForVida / vidaUmbral);
-
-            lostVida = Math.min(vidaBlocks, currentVida);
-            currentVida -= lostVida;
-        }
+        lostVida = consumeDamageBlocks(currentVida, vidaUmbral);
+        currentVida -= lostVida;
 
         const newStatus = [...(token.status || [])];
         if (currentPostura === 0 && !newStatus.includes('derribado')) {
@@ -4066,13 +4225,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }
 
         const scenario = activeScenarioRef.current || activeScenario;
-        const attackerToken = scenario.items.find(i => i.id === event.attackerId);
-        const targetToken = scenario.items.find(i => i.id === event.targetId);
+        const attackerTokenBase = scenario.items.find(i => i.id === event.attackerId);
+        const targetTokenBase = scenario.items.find(i => i.id === event.targetId);
 
-        if (!attackerToken || !targetToken) {
+        if (!attackerTokenBase || !targetTokenBase) {
             await deleteDoc(doc(db, 'combat_events', event.id));
             return;
         }
+
+        const attackerToken = enrichTokenWithCharacterData(attackerTokenBase);
+        const targetToken = enrichTokenWithCharacterData(targetTokenBase);
 
         // Extraer dados individuales del atacante para el log visual
         const attackerDice = [];
@@ -4140,7 +4302,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const evadedAll = newTotal <= 0; // Todos los dados evadidos
             const res = applyCombatCalculations(targetToken, newTotal, event.weapon);
             blocksLost = res.lost;
-            updateTokenInList(targetToken.id, { stats: res.stats, status: res.status, velocidad: (targetToken.velocidad || 0) + (event.reactionData.yellowCost || 0) });
+            updateTokenInList(targetTokenBase.id, { stats: res.stats, status: res.status, velocidad: (targetTokenBase.velocidad || 0) + (event.reactionData.yellowCost || 0) });
             if (evadedAll) {
                 logText = `¡${targetToken.name} evadió completamente el ataque de ${attackerToken.name}!`;
             } else {
@@ -4148,7 +4310,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             }
         } else if (event.reactionType === 'parar') {
             const defenderAttrs = targetToken.attributes || targetToken.atributos || {};
-            const defenderRoll = rollAttack(event.reactionData.weapon, defenderAttrs);
+            const counterArmorProtection = getArmorProtection(attackerToken, event.reactionData.weapon, { armaduras });
+            const defenderWeapon = applyNegatedTraitsToItem(
+                event.reactionData.weapon,
+                counterArmorProtection.negatedTraits
+            );
+            const defenderRoll = rollAttack(defenderWeapon, defenderAttrs);
             defenderTotal = defenderRoll.total;
 
             // Extract defender dice details
@@ -4182,22 +4349,22 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
             if (diff === 0) {
                 finalDamage = 0;
-                updateTokenInList(targetToken.id, { velocidad: (targetToken.velocidad || 0) + yellowCost });
+                updateTokenInList(targetTokenBase.id, { velocidad: (targetTokenBase.velocidad || 0) + yellowCost });
                 const defWeaponName = event.reactionData.weapon?.nombre || event.reactionData.weapon?.name || 'su arma';
                 logText = `${targetToken.name} realizó una parada perfecta con ${defWeaponName}.`;
             } else if (diff > 0) {
                 finalDamage = diff;
                 const res = applyCombatCalculations(targetToken, diff, event.weapon);
                 blocksLost = res.lost;
-                updateTokenInList(targetToken.id, { stats: res.stats, status: res.status, velocidad: (targetToken.velocidad || 0) + yellowCost });
+                updateTokenInList(targetTokenBase.id, { stats: res.stats, status: res.status, velocidad: (targetTokenBase.velocidad || 0) + yellowCost });
                 const defWeaponName = event.reactionData.weapon?.nombre || event.reactionData.weapon?.name || 'su arma';
                 logText = `${targetToken.name} paró con ${defWeaponName} pero recibió ${diff} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
             } else {
                 counterDamage = Math.abs(diff);
-                const res = applyCombatCalculations(attackerToken, counterDamage, event.reactionData.weapon);
+                const res = applyCombatCalculations(attackerToken, counterDamage, defenderWeapon);
                 blocksLost = res.lost;
-                updateTokenInList(attackerToken.id, { stats: res.stats, status: res.status });
-                updateTokenInList(targetToken.id, { velocidad: (targetToken.velocidad || 0) + yellowCost });
+                updateTokenInList(attackerTokenBase.id, { stats: res.stats, status: res.status });
+                updateTokenInList(targetTokenBase.id, { velocidad: (targetTokenBase.velocidad || 0) + yellowCost });
                 const defWeaponName = event.reactionData.weapon?.nombre || event.reactionData.weapon?.name || 'su arma';
                 logText = `¡${targetToken.name} paró con ${defWeaponName} y contraatacó a ${attackerToken.name} por ${counterDamage} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques)!`;
             }
@@ -4205,7 +4372,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             finalDamage = event.attackerRollResult.total;
             const res = applyCombatCalculations(targetToken, event.attackerRollResult.total, event.weapon);
             blocksLost = res.lost;
-            updateTokenInList(targetToken.id, { stats: res.stats, status: res.status });
+            updateTokenInList(targetTokenBase.id, { stats: res.stats, status: res.status });
             logText = `${targetToken.name} recibió el golpe directo de ${attackerToken.name} por ${event.attackerRollResult.total} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
         }
 
@@ -4229,12 +4396,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             defenderWeapon: event.reactionData?.weapon?.nombre || event.reactionData?.weapon?.name || null,
             blocksLost,
             damage: finalDamage,
+            negatedTraits: event.negatedTraits || [],
+            armorProtectionSource: event.armorProtectionSource || null,
             logText, // deferred for chat
             clientTimestamp: Date.now()
         };
 
-        const updatedTarget = finalItems.find(i => i.id === targetToken.id);
-        const updatedAttacker = finalItems.find(i => i.id === attackerToken.id);
+        const updatedTarget = finalItems.find(i => i.id === targetTokenBase.id);
+        const updatedAttacker = finalItems.find(i => i.id === attackerTokenBase.id);
 
         await updateDoc(doc(db, 'combat_events', event.id), {
             status: 'resuelto',
@@ -4348,8 +4517,23 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 if (action.actionId === 'attack' && action.targetId) {
                     const targetToken = scenario.items.find(i => i.id === action.targetId);
                     if (targetToken) {
-                        const attackerAttrs = token.attributes || token.atributos || {};
-                        const attackerRollResult = rollAttack(action.weapon, attackerAttrs);
+                        const attackerToken = enrichTokenWithCharacterData(token);
+                        const targetCombatToken = enrichTokenWithCharacterData(targetToken);
+                        const armorProtection = getArmorProtection(
+                            targetCombatToken,
+                            action.weapon,
+                            { armaduras }
+                        );
+                        const effectiveWeapon = applyNegatedTraitsToItem(
+                            action.weapon,
+                            armorProtection.negatedTraits
+                        );
+                        const attackerAttrs =
+                            attackerToken.attributes || attackerToken.atributos || {};
+                        const attackerRollResult = rollAttack(
+                            effectiveWeapon,
+                            attackerAttrs
+                        );
                         // Calcular distancia real (AABB) entre bordes de los tokens, no solo entre centros
                         // Esto soluciona que atacar a tokens gigantes requiera estar "encima" de ellos
                         const getDistanceInCells = (t1, t2) => {
@@ -4397,7 +4581,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             targetId: targetToken.id,
                             targetName: targetToken.name,
                             attackerRollResult,
-                            weapon: action.weapon || null,
+                            weapon: effectiveWeapon || null,
+                            negatedTraits: armorProtection.negatedTraits || [],
+                            armorProtectionSource:
+                                armorProtection.armorProtectionSource || null,
                             status: 'esperando_reaccion',
                             scenarioId: scenario.id,
                             clientTimestamp: Date.now(),
@@ -6222,12 +6409,42 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                             isPlayerView={isPlayerView}
                                                             onAddItem={(item, type) => {
                                                                 const newItems = [...equippedItems, { ...item, type }];
-                                                                updateItem(token.id, { equippedItems: newItems }, true);
+                                                                const updatedToken =
+                                                                    token.linkedCharacterId
+                                                                        ? { ...token, equippedItems: newItems }
+                                                                        : syncArmorState(
+                                                                            { ...token, equippedItems: newItems },
+                                                                            { armaduras, mode: 'token' }
+                                                                        );
+                                                                updateItem(
+                                                                    token.id,
+                                                                    {
+                                                                        equippedItems: updatedToken.equippedItems,
+                                                                        stats: updatedToken.stats,
+                                                                        armorSync: updatedToken.armorSync,
+                                                                    },
+                                                                    true
+                                                                );
                                                             }}
                                                             onRemoveItem={(idx) => {
                                                                 const newItems = [...equippedItems];
                                                                 newItems.splice(idx, 1);
-                                                                updateItem(token.id, { equippedItems: newItems }, true);
+                                                                const updatedToken =
+                                                                    token.linkedCharacterId
+                                                                        ? { ...token, equippedItems: newItems }
+                                                                        : syncArmorState(
+                                                                            { ...token, equippedItems: newItems },
+                                                                            { armaduras, mode: 'token' }
+                                                                        );
+                                                                updateItem(
+                                                                    token.id,
+                                                                    {
+                                                                        equippedItems: updatedToken.equippedItems,
+                                                                        stats: updatedToken.stats,
+                                                                        armorSync: updatedToken.armorSync,
+                                                                    },
+                                                                    true
+                                                                );
                                                             }}
                                                         />
                                                     );
@@ -7578,7 +7795,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         if (!isFocused && !isPendingTarget) return null;
 
                                         return (
-                                            <div
+                                            <motion.div
                                                 key={`global-targeting-${item.id}`}
                                                 className={`absolute pointer-events-none transition-all duration-300
                                                     ${isFocused
@@ -7587,13 +7804,20 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     }
                                                     ${item.isCircular ? 'rounded-full' : 'rounded-sm'}
                                                 `}
+                                                initial={false}
+                                                animate={{
+                                                    x: item.x,
+                                                    y: item.y,
+                                                    rotate: item.rotation || 0,
+                                                }}
+                                                transition={{ type: 'tween', duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
                                                 style={{
-                                                    transformOrigin: 'center center',
-                                                    transform: `translate(${item.x}px, ${item.y}px) rotate(${item.rotation}deg)`,
                                                     width: `${item.width}px`,
                                                     height: `${item.height}px`,
                                                     left: 0,
-                                                    top: 0
+                                                    top: 0,
+                                                    transformOrigin: 'center center',
+                                                    willChange: 'transform'
                                                 }}
                                             >
                                                 {/* Etiqueta superior */}
@@ -7614,7 +7838,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         <div className="absolute w-[150%] h-[1px] bg-red-500"></div>
                                                     </div>
                                                 )}
-                                            </div>
+                                            </motion.div>
                                         );
                                     })}
 
