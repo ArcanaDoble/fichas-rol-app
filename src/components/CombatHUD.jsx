@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sword, Footprints, Shield, Hand, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X, Zap } from 'lucide-react';
+import { Sword, Footprints, Shield, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X, Zap } from 'lucide-react';
 import { parseAttrBonuses, getSpeedConsumption } from '../utils/combatSystem';
 import CombatModifiersPanel, { applyModifiersToWeapon } from './CombatModifiersPanel';
 import { getCustomImage, useCustomEquipmentImages } from '../hooks/useCustomEquipmentImages';
@@ -146,7 +146,7 @@ const CombatHUD = ({
             onAction('attack');
         } else {
             if (actionId === 'dash') return; // Temporarily disable Dash
-            // Otras acciones (Dodge, Help) son directas
+            // Otras acciones directas
             onAction(actionId);
             setSelectedActionId(null);
         }
@@ -154,15 +154,14 @@ const CombatHUD = ({
 
     const categories = [
         { id: 'ACCIONES', label: 'Acciones' },
-        { id: 'CLASE', label: 'Clase', icon: Sparkles },
-        { id: 'OBJETOS', label: 'Objetos', icon: Backpack }
+        { id: 'CLASE', label: 'Clase' },
+        { id: 'OBJETOS', label: 'Objetos' }
     ];
 
     const actions = [
-        { id: 'attack', label: 'Atacar', icon: Sword, description: 'Realizar un ataque con tu arma principal.' },
-        { id: 'dash', label: 'Correr', icon: Footprints, description: 'Dobla tu movimiento por este turno.' },
-        { id: 'dodge', label: 'Esquivar', icon: Shield, description: 'Impón desventaja en ataques contra ti.' },
-        { id: 'help', label: 'Ayudar', icon: Hand, description: 'Otorga ventaja a un aliado.' },
+        { id: 'attack', label: 'Atacar', icon: Sword },
+        { id: 'dash', label: 'Correr', icon: Footprints },
+        { id: 'dodge', label: 'Esquivar', icon: Shield },
     ];
 
     const panelVariants = {
@@ -581,10 +580,10 @@ const CombatHUD = ({
                             `}</style>
 
                             {activeCategory === 'ACCIONES' && actions.map(action => (
-                                <div key={action.id} className="relative group shrink-0">
+                                <div key={action.id} className="relative group flex-1 min-w-0">
                                     <button
                                         onClick={() => handleActionClick(action.id)}
-                                        className={`relative flex flex-col items-center justify-center h-16 w-24 md:w-32 md:h-24 bg-[#161f32] border rounded-lg transition-all ${action.id === 'dash'
+                                        className={`relative flex w-full flex-col items-center justify-center h-16 md:h-24 bg-[#161f32] border rounded-lg transition-all ${action.id === 'dash'
                                             ? 'opacity-40 grayscale cursor-not-allowed border-slate-800' // Style for disabled Dash
                                             : isActive
                                                 ? (selectedActionId === action.id ? 'border-[#c8aa6e] bg-[#c8aa6e]/20 shadow-[0_0_15px_rgba(200,170,110,0.3)]' : 'border-slate-700/50 hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 active:scale-95')
@@ -599,13 +598,6 @@ const CombatHUD = ({
                                             {/* Indicador de armas múltiples */}
 
                                         </div>
-
-                                        {/* Tooltip Hover Effect */}
-                                        {isActive && !selectedActionId && (
-                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden md:group-hover:block w-48 bg-black/90 text-[#f0e6d2] text-[10px] p-2 rounded border border-[#c8aa6e]/30 shadow-2xl z-50 text-center pointer-events-none uppercase">
-                                                {action.description}
-                                            </div>
-                                        )}
                                     </button>
                                 </div>
                             ))}
@@ -618,8 +610,7 @@ const CombatHUD = ({
 
                                 if (classAbilities.length === 0) {
                                     return (
-                                        <div className="w-full flex flex-col items-center justify-center text-slate-500 py-4 gap-2">
-                                            <Sparkles size={24} className="opacity-20" />
+                                        <div className="w-full flex flex-col items-center justify-center text-slate-500 py-4">
                                             <span className="text-[10px] uppercase tracking-widest italic">Sin habilidades de clase</span>
                                         </div>
                                     );
@@ -633,8 +624,7 @@ const CombatHUD = ({
                                                 onClick={() => onAction('ability', ability)}
                                                 className="flex flex-col items-center justify-center min-w-[80px] md:min-w-[100px] h-16 md:h-20 bg-[#161f32] border border-purple-500/30 rounded-lg hover:bg-purple-900/20 transition-all shrink-0 group active:scale-95"
                                             >
-                                                <Sparkles className="w-4 h-4 md:w-5 md:h-5 text-purple-400 mb-1 group-hover:scale-110 transition-transform" />
-                                                <span className="text-[8px] md:text-[9px] font-bold text-slate-300 uppercase tracking-tighter truncate w-full px-1 text-center">
+                                                <span className="text-[8px] md:text-[9px] font-bold text-slate-300 uppercase tracking-tighter truncate w-full px-2 text-center">
                                                     {ability.name || ability.nombre}
                                                 </span>
                                             </button>
@@ -651,8 +641,7 @@ const CombatHUD = ({
 
                                 if (objectItems.length === 0) {
                                     return (
-                                        <div className="w-full flex flex-col items-center justify-center text-slate-500 py-4 gap-2">
-                                            <Backpack size={24} className="opacity-20" />
+                                        <div className="w-full flex flex-col items-center justify-center text-slate-500 py-4">
                                             <span className="text-[10px] uppercase tracking-widest italic">Mochila vacía</span>
                                         </div>
                                     );
@@ -666,8 +655,7 @@ const CombatHUD = ({
                                                 onClick={() => onAction('use_item', obj)}
                                                 className="flex flex-col items-center justify-center min-w-[80px] md:min-w-[100px] h-16 md:h-20 bg-[#161f32] border border-blue-500/30 rounded-lg hover:bg-blue-900/20 transition-all shrink-0 group active:scale-95"
                                             >
-                                                <Backpack className="w-4 h-4 md:w-5 md:h-5 text-blue-400 mb-1 group-hover:scale-110 transition-transform" />
-                                                <span className="text-[8px] md:text-[9px] font-bold text-slate-300 uppercase tracking-tighter truncate w-full px-1 text-center">
+                                                <span className="text-[8px] md:text-[9px] font-bold text-slate-300 uppercase tracking-tighter truncate w-full px-2 text-center">
                                                     {obj.name || obj.nombre}
                                                 </span>
                                             </button>

@@ -87,6 +87,7 @@ import { db } from '../firebase';
 import { deepEqual } from '../utils/deepEqual';
 import {
   buildDamageEventWrite,
+  DAMAGE_EVENT_STALE_MS,
   getDamageEventTimestampMs,
   isDamageEventStale,
 } from '../utils/damageEvents';
@@ -487,6 +488,9 @@ const DAMAGE_POPUP_GROUP_WINDOW_MS = 1000;
 const DAMAGE_POPUP_STAT_ORDER = ['postura', 'armadura', 'vida', 'ingenio', 'voluntad', 'cordura'];
 const DAMAGE_POPUP_STAGGER_SECONDS = 1.5;
 const DAMAGE_POPUP_DURATION_SECONDS = 4.5;
+const TOKEN_MOVE_ANIMATION_MIN_MS = 420;
+const TOKEN_MOVE_ANIMATION_MAX_MS = 1400;
+const TOKEN_MOVE_ANIMATION_MS_PER_CELL = 260;
 
 const normalizeWallRotation = (x1, y1, x2, y2) => {
   let deg = (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI;
@@ -1675,6 +1679,8 @@ const MapCanvas = ({
   const [damageFlashTimes, setDamageFlashTimes] = useState(new Map());
   const damageFlashTimesRef = useRef(damageFlashTimes);
   const processedDamageEventIdsRef = useRef(new Map());
+  const pendingDamagePopupsRef = useRef([]);
+  const damagePopupTimeoutsRef = useRef(new Map());
   useEffect(() => {
     damageFlashTimesRef.current = damageFlashTimes;
   }, [damageFlashTimes]);
@@ -1762,10 +1768,19 @@ const MapCanvas = ({
   }, [damageFlashNow, damageFlashTimes]);
   const [dragShadow, setDragShadow] = useState(null);
   const [pendingTokenPositions, setPendingTokenPositions] = useState({});
+  const [animatedTokenPositions, setAnimatedTokenPositions] = useState({});
+  const animatedTokenPositionsRef = useRef(animatedTokenPositions);
+  const tokenMoveAnimationsRef = useRef(new Map());
+  const localTokenMoveTargetsRef = useRef(new Map());
+  const previousTokenPositionsRef = useRef(new Map());
+  const [tokenMoveAnimationVersion, setTokenMoveAnimationVersion] = useState(0);
   const [settingsTokenIds, setSettingsTokenIds] = useState([]);
   const [estadoTokenIds, setEstadoTokenIds] = useState([]);
   const [barsToken, setBarsToken] = useState(null);
   const [openSheetTokens, setOpenSheetTokens] = useState([]);
+  useEffect(() => {
+    animatedTokenPositionsRef.current = animatedTokenPositions;
+  }, [animatedTokenPositions]);
   // Track tokenSheet IDs that have already been fetched to avoid redundant requests
   const loadedSheetIds = useRef(new Set());
   const [activeTool, setActiveTool] = useState('select');
@@ -3252,6 +3267,262 @@ const MapCanvas = ({
     });
   }, [tokens]);
 
+  const clearTokenMoveAnimations = useCallback((tokenIds = []) => {
+    const ids = tokenIds
+      .map((tokenId) => String(tokenId))
+      .filter(Boolean);
+    if (ids.length === 0) return;
+
+    ids.forEach((id) => {
+      tokenMoveAnimationsRef.current.delete(id);
+    });
+
+    setAnimatedTokenPositions((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      ids.forEach((id) => {
+        if (next[id]) {
+          delete next[id];
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, []);
+
+  const registerLocalTokenMoves = useCallback(
+    (moves = []) => {
+      if (!Array.isArray(moves) || moves.length === 0) return;
+      const timestamp = getTimestamp();
+      const idsToClear = [];
+
+      moves.forEach((move) => {
+        if (!move || move.id == null) return;
+        const id = String(move.id);
+        idsToClear.push(id);
+        localTokenMoveTargetsRef.current.set(id, {
+          x: move.x,
+          y: move.y,
+          at: timestamp,
+        });
+      });
+
+      clearTokenMoveAnimations(idsToClear);
+    },
+    [clearTokenMoveAnimations, getTimestamp]
+  );
+
+  useLayoutEffect(() => {
+    const now = getTimestamp();
+    const currentPositions = new Map(
+      tokens.map((token) => [
+        String(token.id),
+        {
+          x: Number(token.x) || 0,
+          y: Number(token.y) || 0,
+        },
+      ])
+    );
+    const previousPositions = previousTokenPositionsRef.current;
+    let startedAnyAnimation = false;
+    const startingPositions = {};
+
+    tokens.forEach((token) => {
+      const id = String(token.id);
+      const current = currentPositions.get(id);
+      const previous = previousPositions.get(id);
+      if (!previous || !current) return;
+
+      const localMove = localTokenMoveTargetsRef.current.get(id);
+      if (localMove && localMove.x === current.x && localMove.y === current.y) {
+        localTokenMoveTargetsRef.current.delete(id);
+      }
+
+      if (previous.x === current.x && previous.y === current.y) return;
+
+      const pendingPosition = pendingTokenPositions[id];
+      if (
+        pendingPosition &&
+        pendingPosition.x === current.x &&
+        pendingPosition.y === current.y
+      ) {
+        return;
+      }
+
+      const remainingLocalMove = localTokenMoveTargetsRef.current.get(id);
+      if (remainingLocalMove) {
+        if (now - remainingLocalMove.at <= 2000) {
+          return;
+        }
+        localTokenMoveTargetsRef.current.delete(id);
+      }
+
+      const currentAnimated = animatedTokenPositionsRef.current[id];
+      const fromX = currentAnimated?.x ?? previous.x;
+      const fromY = currentAnimated?.y ?? previous.y;
+      const distance = Math.hypot(current.x - fromX, current.y - fromY);
+      if (distance <= 0) return;
+
+      const duration = Math.max(
+        TOKEN_MOVE_ANIMATION_MIN_MS,
+        Math.min(
+          TOKEN_MOVE_ANIMATION_MAX_MS,
+          distance * TOKEN_MOVE_ANIMATION_MS_PER_CELL
+        )
+      );
+
+      tokenMoveAnimationsRef.current.set(id, {
+        fromX,
+        fromY,
+        toX: current.x,
+        toY: current.y,
+        startTime: now,
+        duration,
+      });
+      startingPositions[id] = {
+        x: fromX,
+        y: fromY,
+      };
+      startedAnyAnimation = true;
+    });
+
+    const removedTokenIds = [];
+    previousPositions.forEach((_, id) => {
+      if (!currentPositions.has(id)) {
+        tokenMoveAnimationsRef.current.delete(id);
+        localTokenMoveTargetsRef.current.delete(id);
+        removedTokenIds.push(id);
+      }
+    });
+    if (removedTokenIds.length > 0) {
+      clearTokenMoveAnimations(removedTokenIds);
+    }
+
+    previousTokenPositionsRef.current = currentPositions;
+
+    if (startedAnyAnimation) {
+      setAnimatedTokenPositions((prev) => {
+        const next = { ...prev };
+        let changed = false;
+
+        Object.entries(startingPositions).forEach(([id, position]) => {
+          const previousAnimated = next[id];
+          if (
+            !previousAnimated ||
+            previousAnimated.x !== position.x ||
+            previousAnimated.y !== position.y
+          ) {
+            next[id] = position;
+            changed = true;
+          }
+        });
+
+        return changed ? next : prev;
+      });
+      setTokenMoveAnimationVersion((value) => value + 1);
+    }
+  }, [tokens, pendingTokenPositions, getTimestamp, clearTokenMoveAnimations]);
+
+  useEffect(() => {
+    if (tokenMoveAnimationsRef.current.size === 0) return undefined;
+
+    let frameId;
+    const raf =
+      typeof requestAnimationFrame === 'function'
+        ? requestAnimationFrame
+        : (cb) => setTimeout(() => cb(getTimestamp()), 16);
+    const caf =
+      typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : clearTimeout;
+
+    const step = (timestamp) => {
+      const now = typeof timestamp === 'number' ? timestamp : getTimestamp();
+      const nextPositions = {};
+      let hasActiveAnimations = false;
+
+      tokenMoveAnimationsRef.current.forEach((animation, id) => {
+        const rawProgress =
+          animation.duration > 0
+            ? (now - animation.startTime) / animation.duration
+            : 1;
+        const progress = Math.min(Math.max(rawProgress, 0), 1);
+
+        if (progress >= 1) {
+          tokenMoveAnimationsRef.current.delete(id);
+          return;
+        }
+
+        const easedProgress =
+          progress < 0.5
+            ? 4 * progress * progress * progress
+            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+        nextPositions[id] = {
+          x: animation.fromX + (animation.toX - animation.fromX) * easedProgress,
+          y: animation.fromY + (animation.toY - animation.fromY) * easedProgress,
+        };
+        hasActiveAnimations = true;
+      });
+
+      setAnimatedTokenPositions((prev) => {
+        const next = { ...prev };
+        let changed = false;
+
+        Object.keys(next).forEach((id) => {
+          if (!nextPositions[id]) {
+            delete next[id];
+            changed = true;
+          }
+        });
+
+        Object.entries(nextPositions).forEach(([id, position]) => {
+          const prevPosition = next[id];
+          if (
+            !prevPosition ||
+            prevPosition.x !== position.x ||
+            prevPosition.y !== position.y
+          ) {
+            next[id] = position;
+            changed = true;
+          }
+        });
+
+        return changed ? next : prev;
+      });
+
+      if (hasActiveAnimations) {
+        frameId = raf(step);
+      }
+    };
+
+    frameId = raf(step);
+
+    return () => {
+      if (frameId) {
+        caf(frameId);
+      }
+    };
+  }, [tokenMoveAnimationVersion, getTimestamp]);
+
+  const getRenderedTokenPosition = useCallback(
+    (token) => {
+      const tokenId = String(token.id);
+      const pendingPosition = pendingTokenPositions[tokenId];
+      if (pendingPosition) return pendingPosition;
+
+      const animatedPosition = animatedTokenPositions[tokenId];
+      if (animatedPosition) return animatedPosition;
+
+      return { x: token.x, y: token.y };
+    },
+    [animatedTokenPositions, pendingTokenPositions]
+  );
+
+  useEffect(() => {
+    previousTokenPositionsRef.current = new Map();
+    tokenMoveAnimationsRef.current.clear();
+    localTokenMoveTargetsRef.current.clear();
+    setAnimatedTokenPositions({});
+  }, [pageId]);
+
   // Función para cambiar de capa
   const handleLayerChange = (newLayer) => {
     setActiveLayer(newLayer);
@@ -3765,6 +4036,57 @@ const MapCanvas = ({
   }, [tokenSheetIdsKey, playerName, userType]);
 
   // Función para mostrar animaciones de daño
+  const canRenderDamagePopup = useCallback((tokenId) => {
+    if (!tokenId || !stageRef.current || !containerRef.current) return false;
+    return tokensRef.current.some((token) => token.id === tokenId);
+  }, []);
+
+  const scheduleDamagePopupRemoval = useCallback((popupId) => {
+    const existingTimeout = damagePopupTimeoutsRef.current.get(popupId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+
+    const timeoutId = setTimeout(() => {
+      setDamagePopups((prev) => prev.filter((popup) => popup.id !== popupId));
+      damagePopupTimeoutsRef.current.delete(popupId);
+    }, DAMAGE_ANIMATION_MS);
+
+    damagePopupTimeoutsRef.current.set(popupId, timeoutId);
+  }, []);
+
+  const activateDamagePopup = useCallback(
+    (popup) => {
+      setDamagePopups((prev) => {
+        if (prev.some((entry) => entry.id === popup.id)) return prev;
+        return [...prev, popup];
+      });
+      scheduleDamagePopupRemoval(popup.id);
+    },
+    [scheduleDamagePopupRemoval]
+  );
+
+  const flushPendingDamagePopups = useCallback(() => {
+    if (pendingDamagePopupsRef.current.length === 0) return;
+
+    const now = Date.now();
+    const remaining = [];
+
+    pendingDamagePopupsRef.current.forEach((popup) => {
+      if (now - popup.createdAt > DAMAGE_EVENT_STALE_MS) {
+        return;
+      }
+
+      if (canRenderDamagePopup(popup.tokenId)) {
+        activateDamagePopup(popup);
+      } else {
+        remaining.push(popup);
+      }
+    });
+
+    pendingDamagePopupsRef.current = remaining;
+  }, [activateDamagePopup, canRenderDamagePopup]);
+
   const triggerDamagePopup = useCallback(
     ({ tokenId, value, stat, type, clientTimestamp, ts }) => {
       if (!tokenId) {
@@ -3780,24 +4102,30 @@ const MapCanvas = ({
             : typeof ts === 'number'
               ? ts
               : Date.now();
-        setDamagePopups((prev) => [...prev, { id, tokenId, value, stat, type, createdAt }]);
+        const popup = { id, tokenId, value, stat, type, createdAt };
 
-        setTimeout(() => {
-          setDamagePopups((prev) => prev.filter((p) => p.id !== id));
-        }, DAMAGE_ANIMATION_MS);
+        if (canRenderDamagePopup(tokenId)) {
+          activateDamagePopup(popup);
+        } else {
+          pendingDamagePopupsRef.current = [
+            ...pendingDamagePopupsRef.current.filter(
+              (entry) => Date.now() - entry.createdAt <= DAMAGE_EVENT_STALE_MS
+            ),
+            popup,
+          ];
+        }
+
         return true;
       } catch (error) {
         console.error('Error en triggerDamagePopup:', error);
         return false;
       }
     },
-    []
+    [activateDamagePopup, canRenderDamagePopup]
   );
 
   const highlightTokenDamage = useCallback((tokenId) => {
     if (!tokenId) return;
-    const current = tokensRef.current;
-    if (!current.find((t) => t.id === tokenId)) return;
     const timestamp = getTimestamp();
     setDamageFlashTimes((prev) => {
       const next = new Map(prev);
@@ -3806,11 +4134,37 @@ const MapCanvas = ({
     });
   }, [getTimestamp]);
 
+  useEffect(() => {
+    flushPendingDamagePopups();
+  }, [
+    flushPendingDamagePopups,
+    tokens,
+    pageId,
+    containerSize.width,
+    containerSize.height,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      damagePopupTimeoutsRef.current.forEach((timeoutId) => {
+        clearTimeout(timeoutId);
+      });
+      damagePopupTimeoutsRef.current.clear();
+      pendingDamagePopupsRef.current = [];
+    };
+  }, []);
+
   // Listener de Firebase para eventos de daño
   useEffect(() => {
     if (!pageId) return undefined;
     console.log(`Configurando listener de damageEvents para pageId: ${pageId}`);
     processedDamageEventIdsRef.current = new Map();
+    pendingDamagePopupsRef.current = [];
+    damagePopupTimeoutsRef.current.forEach((timeoutId) => {
+      clearTimeout(timeoutId);
+    });
+    damagePopupTimeoutsRef.current.clear();
+    setDamagePopups([]);
     const q = query(collection(db, 'damageEvents'), where('pageId', '==', pageId));
     const unsub = onSnapshot(q, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
@@ -4679,6 +5033,7 @@ const MapCanvas = ({
 
 
     if (token && (token.x !== col || token.y !== row)) {
+      registerLocalTokenMoves([{ id, x: col, y: row }]);
       setPendingTokenPositions((prev) => ({
         ...prev,
         [id]: { x: col, y: row },
@@ -4699,6 +5054,10 @@ const MapCanvas = ({
   const handleSizeChange = (id, w, h, px, py) => {
     const x = pxToCell(px, gridOffsetX);
     const y = pxToCell(py, gridOffsetY);
+    const currentToken = tokens.find((token) => token.id === id);
+    if (currentToken && (currentToken.x !== x || currentToken.y !== y)) {
+      registerLocalTokenMoves([{ id, x, y }]);
+    }
     const updated = tokens.map((t) => (t.id === id ? { ...t, w, h, x, y } : t));
     handleTokensChange(updated);
   };
@@ -5743,6 +6102,7 @@ const MapCanvas = ({
         }
 
         if (deltaX !== 0 || deltaY !== 0) {
+          const movedTokens = [];
           const updated = tokens.map((t) => {
             if (selectedTokens.includes(t.id)) {
               // Validación de permisos para jugadores
@@ -5755,11 +6115,15 @@ const MapCanvas = ({
 
               // Verificar colisiones con muros
               if (!isPositionBlocked(newX, newY)) {
+                if (newX !== t.x || newY !== t.y) {
+                  movedTokens.push({ id: t.id, x: newX, y: newY });
+                }
                 return { ...t, x: newX, y: newY };
               }
             }
             return t;
           });
+          registerLocalTokenMoves(movedTokens);
           handleTokensChange(updated);
         }
         return;
@@ -5819,6 +6183,9 @@ const MapCanvas = ({
       const updated = tokens.map((t) =>
         t.id === selectedId ? { ...t, x: newX, y: newY } : t
       );
+      if (newX !== x || newY !== y) {
+        registerLocalTokenMoves([{ id: selectedId, x: newX, y: newY }]);
+      }
       handleTokensChange(updated);
     },
     [
@@ -5856,6 +6223,7 @@ const MapCanvas = ({
       containerSize,
       mousePosition,
       selectedTileId,
+      registerLocalTokenMoves,
       updateTiles,
       tiles,
     ]
@@ -6189,9 +6557,9 @@ const MapCanvas = ({
                   />
                 )}
                 {filteredTokens.map((token) => {
-                  const pendingPosition = pendingTokenPositions[token.id];
-                  const tokenX = pendingPosition ? pendingPosition.x : token.x;
-                  const tokenY = pendingPosition ? pendingPosition.y : token.y;
+                  const renderedPosition = getRenderedTokenPosition(token);
+                  const tokenX = renderedPosition.x;
+                  const tokenY = renderedPosition.y;
 
                   return (
                     <TokenAura
@@ -6245,9 +6613,9 @@ const MapCanvas = ({
                 />
               )}
               {filteredTokens.map((token) => {
-                const pendingPosition = pendingTokenPositions[token.id];
-                const tokenX = pendingPosition ? pendingPosition.x : token.x;
-                const tokenY = pendingPosition ? pendingPosition.y : token.y;
+                const renderedPosition = getRenderedTokenPosition(token);
+                const tokenX = renderedPosition.x;
+                const tokenY = renderedPosition.y;
 
                 return (
                   <Token
@@ -6723,9 +7091,9 @@ const MapCanvas = ({
           </Layer>
           <Layer listening>
             {filteredTokens.map((token) => {
-              const pendingPosition = pendingTokenPositions[token.id];
-              const tokenX = pendingPosition ? pendingPosition.x : token.x;
-              const tokenY = pendingPosition ? pendingPosition.y : token.y;
+              const renderedPosition = getRenderedTokenPosition(token);
+              const tokenX = renderedPosition.x;
+              const tokenY = renderedPosition.y;
 
               return (
                 <TokenBars
@@ -7370,6 +7738,7 @@ const MapCanvas = ({
           )) : 0}
           pageId={pageId}
           armas={armas}
+          armaduras={armaduras}
           poderesCatalog={habilidades}
           onClose={(res) => {
             setAttackReady(false);
@@ -7392,6 +7761,7 @@ const MapCanvas = ({
           attackResult={attackResult}
           pageId={pageId}
           armas={armas}
+          armaduras={armaduras}
           poderesCatalog={habilidades}
           onClose={async (res) => {
             const currentAttackResult = attackResult;

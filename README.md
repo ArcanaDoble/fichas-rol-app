@@ -1862,4 +1862,13 @@ Guía rápida: ver `docs/Minimapa.md`.
 - Se corrigió un problema donde la eliminación de tokens por jugadores no se reflejaba en el mapa del máster.
 - El modal de resultado/reaction log de combate ahora queda limitado al alto del viewport en móvil, con cuerpo scrollable y botón de confirmación siempre accesible como en el modal normal de reacción.
 - Se reforzó la sincronización de `damageEvents` con `clientTimestamp` estable y un listener más tolerante, evitando que algunas animaciones de daño se perdieran de forma intermitente en clientes lentos o móviles.
+- El HUD de combate vuelve a mostrar solo tres acciones principales (`Atacar`, `Correr`, `Esquivar`) repartidas a ancho completo, y las secciones `Clase` y `Objetos` ya no muestran iconos para mantener el texto centrado.
+- En el inspector, el equipamiento vuelve a ordenarse con las armas al principio y las cards de armadura ya no muestran la línea de `Coste` aunque el item traiga ese dato.
+- El sistema de armaduras vuelve a sincronizar automáticamente los bloques de armadura del token o ficha al equipar, desequipar o cambiar de armadura, respetando cambios manuales mientras no cambie la armadura activa.
+- Los rasgos de una armadura equipada ahora pueden anular rasgos del arma atacante en el flujo de combate, y los modales muestran de forma explícita qué rasgos han quedado anulados por la armadura activa.
+- La CD de `Armadura` ahora depende de los rasgos de la armadura equipada: por defecto usa `Vigor`, pero si la armadura lleva `Destreza`, `Intelecto` o `Voluntad`, el umbral y el `Dx` visible del inspector pasan a usar ese atributo.
+- Las animaciones de daño del canvas ya no se pierden si el evento entra justo tras una recarga: los popups esperan localmente hasta que el token y el stage estén listos antes de consumirse.
+- Los movimientos remotos de tokens en el tablero ya no se teletransportan: ahora los demás clientes ven un desplazamiento interpolado hasta la nueva celda, mientras el cliente que mueve el token mantiene su control inmediato.
+- En `CanvasSection` los tokens del tablero SVG también animan su desplazamiento remoto entre la posición anterior y la nueva, sin meter inercia al cliente que está arrastrando la ficha.
+- En el modal de reacción del canvas SVG, `Parar` ahora exige la misma diferencia de velocidad que `Evadir` (`V.Diff <= 1`), por lo que ambas reacciones quedan bloqueadas bajo la misma regla.
 

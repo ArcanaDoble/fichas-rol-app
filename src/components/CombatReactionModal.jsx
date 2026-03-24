@@ -7,6 +7,27 @@ import { useCustomEquipmentImages, getCustomImage } from '../hooks/useCustomEqui
 
 const normalizeKey = (name) => (name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
 
+const getArmorProtectionMeta = (payload) => ({
+    traits: payload?.negatedTraits || payload?.blockedTraits || [],
+    source: payload?.armorProtectionSource || null,
+});
+
+const ArmorProtectionBanner = ({ source, traits = [] }) => {
+    if (!traits.length) return null;
+
+    return (
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-900/20 px-3 py-2 text-center">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-300 font-bold">
+                Armadura activa
+            </p>
+            <p className="text-xs text-emerald-100 mt-1">
+                {source ? <span className="font-semibold">{source}</span> : 'La armadura equipada'} anula{' '}
+                <span className="font-semibold">{traits.join(', ')}</span>
+            </p>
+        </div>
+    );
+};
+
 const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queueResolved = 0, queueCurrent = 0 }) => {
     const customEquipmentImages = useCustomEquipmentImages();
     const [selectedDiceIndices, setSelectedDiceIndices] = useState([]);
@@ -59,10 +80,9 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
         });
     }, [event]);
 
-    const yellowSpeed = targetToken?.velocidad ?? 0;
-
     const diffVelocidad = event?.diffVelocidad ?? 0;
     const canEvade = diffVelocidad <= 1;
+    const canParryBySpeed = diffVelocidad <= 1;
 
     const weapons = useMemo(() => {
         return (targetToken?.equippedItems || []).filter(i => i.type === 'weapon');
@@ -80,13 +100,27 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
         setIsSubmitting(false);
     }, [event?.id, event?.status]);
 
+    useEffect(() => {
+        if (reactionType === 'evadir' && !canEvade) {
+            setReactionType(null);
+            setSelectedDiceIndices([]);
+        }
+        if (reactionType === 'parar' && !canParryBySpeed) {
+            setReactionType(null);
+            setSelectedWeapon('');
+            setSelectedDiceIndices([]);
+        }
+    }, [reactionType, canEvade, canParryBySpeed]);
+
     const handleConfirm = async () => {
         if (isSubmitting) return;
 
         let payload;
         if (reactionType === 'evadir') {
+            if (!canEvade) return;
             payload = { type: 'evadir', data: { evadedDiceIds: selectedDiceIndices, yellowCost: selectedDiceIndices.length } };
         } else if (reactionType === 'parar') {
+            if (!canParryBySpeed) return;
             const weapon = weapons.find((w, idx) => getWeaponId(w, idx) === selectedWeapon);
             const modifiedWeapon = applyModifiersToWeapon(weapon, customModifiers);
             const cost = getSpeedConsumption(modifiedWeapon);
@@ -121,6 +155,8 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
     const showQueue = queueTotal > 1;
     const isResolving = event.status && event.status.endsWith('_pendiente');
     const isResolved = event.status === 'resuelto';
+    const pendingProtection = getArmorProtectionMeta(event);
+    const resolvedProtection = getArmorProtectionMeta(event.result);
     const renderResultDice = (diceList, evadedIds = []) => {
         if (!diceList || diceList.length === 0) return null;
         return (
@@ -252,6 +288,11 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                                     <span className="text-blue-400 font-fantasy uppercase tracking-wide break-words">{event.result.targetName}</span>
                                                 </div>
 
+                                                <ArmorProtectionBanner
+                                                    source={resolvedProtection.source}
+                                                    traits={resolvedProtection.traits}
+                                                />
+
                                                 <div className="py-3 border-y border-slate-700/50">
                                                     {event.result.reactionType === 'evadir' && (
                                                         <div className="space-y-3">
@@ -349,6 +390,12 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                     <p className="text-center text-slate-300 mb-6">
                                         <strong className="text-white">{event.attackerName}</strong> te está atacando con <strong className="text-red-400">{event.weapon?.nombre || 'su arma'}</strong>.
                                     </p>
+                                    <div className="mb-4">
+                                        <ArmorProtectionBanner
+                                            source={pendingProtection.source}
+                                            traits={pendingProtection.traits}
+                                        />
+                                    </div>
                                 </div>
 
                                 {/* ZONA SCROLLABLE (DADOS Y BOTONES DE REACCIÓN) */}
@@ -439,14 +486,14 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                         setSelectedWeapon(weapons[0] ? getWeaponId(weapons[0], 0) : '');
                                         setSelectedDiceIndices([]);
                                     }}
-                                    disabled={weapons.length === 0}
+                                    disabled={weapons.length === 0 || !canParryBySpeed}
                                     className={`flex flex-col items-center justify-center p-3 rounded border transition-all ${reactionType === 'parar' ? 'bg-[#c8aa6e]/20 border-[#c8aa6e]' : 'bg-black/40 border-slate-700 hover:border-slate-500'
-                                        } ${weapons.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        } ${!canParryBySpeed ? 'opacity-50 cursor-not-allowed hidden' : ''} ${weapons.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                     <div className="flex items-center gap-2 text-[#c8aa6e] font-bold uppercase tracking-wider">
                                         <Sword size={18} /> Parar
                                     </div>
-                                    <span className="text-xs text-slate-400 mt-1">Contraataca con tu propia arma</span>
+                                    <span className="text-xs text-slate-400 mt-1">Requiere V.Diff ≤ 1</span>
                                 </button>
 
                                 {/* BOTÓN RECIBIR */}
@@ -460,7 +507,7 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                             </div>
 
                             {/* SELECTOR DE ARMA (Si es Parar) */}
-                            {reactionType === 'parar' && weapons.length > 0 && (
+                            {reactionType === 'parar' && weapons.length > 0 && canParryBySpeed && (
                                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                                     <div>
                                         <label className="block text-[10px] text-[#c8aa6e] font-bold uppercase tracking-[0.2em] mb-3">
@@ -510,7 +557,7 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                             </div>
                             <button
                                 onClick={handleConfirm}
-                                disabled={isSubmitting || !reactionType || (reactionType === 'parar' && !selectedWeapon)}
+                                disabled={isSubmitting || !reactionType || (reactionType === 'parar' && (!selectedWeapon || !canParryBySpeed))}
                                 className="px-8 py-2.5 bg-gradient-to-r from-red-600 to-red-800 text-white font-fantasy text-sm uppercase tracking-[0.2em] rounded shadow-lg hover:shadow-red-600/20 active:scale-95 disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed transition-all"
                             >
                                 {isSubmitting ? 'Procesando...' : 'Confirmar'}
