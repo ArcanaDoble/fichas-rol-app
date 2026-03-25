@@ -12,6 +12,7 @@ const ATTRIBUTES = [
 ];
 
 const DICE_OPTIONS = ['d4', 'd6', 'd8', 'd10', 'd12'];
+const VELOCITY_VISIBLE_SLOTS = 10;
 
 const RESOURCES = [
     { id: 'postura', label: 'Postura', color: '#10b981', attr: 'destreza' },  // Verde
@@ -41,6 +42,10 @@ const TokenResources = ({ token, onUpdate }) => {
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
+
+    const currentVelocity = Math.max(0, token.velocidad || 0);
+    const velocityOverflowBase = Math.max(0, currentVelocity - VELOCITY_VISIBLE_SLOTS);
+    const visibleVelocitySlots = VELOCITY_VISIBLE_SLOTS;
 
     // Helper para actualizar stats. Estructura: token.stats = { postura: { current: 5, max: 10 }, ... }
     const updateStat = (resourceId, field, value) => {
@@ -231,35 +236,48 @@ const TokenResources = ({ token, onUpdate }) => {
 
                         {/* Controls */}
                         <div className="flex items-center gap-1 bg-black/40 rounded px-1 border border-slate-800/50">
-                            <button onClick={() => onUpdate({ velocidad: Math.max(0, (token.velocidad || 0) - 1) })} className="text-slate-500 hover:text-white p-1 outline-none"><FiMinus size={10} /></button>
-                            <span className="text-[9px] font-mono text-[#c8aa6e] w-4 text-center font-bold">{token.velocidad || 0}</span>
-                            <button onClick={() => onUpdate({ velocidad: (token.velocidad || 0) + 1 })} className="text-slate-500 hover:text-white p-1 outline-none"><FiPlus size={10} /></button>
+                            <button onClick={() => onUpdate({ velocidad: Math.max(0, currentVelocity - 1) })} className="text-slate-500 hover:text-white p-1 outline-none"><FiMinus size={10} /></button>
+                            <span className="text-[9px] font-mono text-[#c8aa6e] min-w-[2.25rem] text-center font-bold">{currentVelocity}</span>
+                            <button onClick={() => onUpdate({ velocidad: currentVelocity + 1 })} className="text-slate-500 hover:text-white p-1 outline-none"><FiPlus size={10} /></button>
                         </div>
                     </div>
 
                     {/* Visual counter bar */}
-                    <div className="flex gap-1 h-5 w-full">
-                        {Array.from({ length: Math.max(10, (token.velocidad || 0)) }).map((_, idx) => {
-                            const isFilled = idx < (token.velocidad || 0);
-                            return (
-                                <button
-                                    key={idx}
-                                    onClick={() => onUpdate({ velocidad: idx + 1 === (token.velocidad || 0) ? idx : idx + 1 })}
-                                    className={`
-                                        flex-1 rounded-sm border transition-all duration-200 outline-none
-                                        ${isFilled
-                                            ? 'bg-opacity-80 border-opacity-50 hover:bg-opacity-100 shadow-[0_0_8px_-2px_currentColor]'
-                                            : 'bg-transparent border-slate-800 hover:bg-slate-800/50'
-                                        }
-                                    `}
-                                    style={{
-                                        backgroundColor: isFilled ? '#c8aa6e' : undefined,
-                                        borderColor: isFilled ? '#c8aa6e' : undefined,
-                                        color: '#c8aa6e'
-                                    }}
-                                />
-                            );
-                        })}
+                    <div className="flex items-center gap-2 h-5 w-full">
+                        {velocityOverflowBase > 0 && (
+                            <button
+                                onClick={() => onUpdate({ velocidad: velocityOverflowBase })}
+                                className="shrink-0 h-5 px-2 rounded-sm border border-[#c8aa6e]/35 bg-[#c8aa6e]/10 text-[#c8aa6e] text-[8px] font-mono font-bold tracking-wide hover:bg-[#c8aa6e]/15 transition-all outline-none"
+                                title={`Velocidad acumulada resumida: ${velocityOverflowBase}`}
+                            >
+                                +{velocityOverflowBase}
+                            </button>
+                        )}
+                        <div className="flex gap-1 h-5 min-w-0 flex-1">
+                            {Array.from({ length: visibleVelocitySlots }).map((_, idx) => {
+                                const representedValue = velocityOverflowBase + idx + 1;
+                                const isFilled = representedValue <= currentVelocity;
+                                return (
+                                    <button
+                                        key={idx}
+                                        onClick={() => onUpdate({ velocidad: representedValue === currentVelocity ? Math.max(0, representedValue - 1) : representedValue })}
+                                        className={`
+                                            flex-1 rounded-sm border transition-all duration-200 outline-none
+                                            ${isFilled
+                                                ? 'bg-opacity-80 border-opacity-50 hover:bg-opacity-100 shadow-[0_0_8px_-2px_currentColor]'
+                                                : 'bg-transparent border-slate-800 hover:bg-slate-800/50'
+                                            }
+                                        `}
+                                        style={{
+                                            backgroundColor: isFilled ? '#c8aa6e' : undefined,
+                                            borderColor: isFilled ? '#c8aa6e' : undefined,
+                                            color: '#c8aa6e'
+                                        }}
+                                        title={`Velocidad ${representedValue}`}
+                                    />
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
             </div>

@@ -42,6 +42,171 @@ const PRESET_COLORS = [
     '#3b82f6', '#a855f7'  // Blue, Purple
 ];
 
+const DEFAULT_GRID_CONFIG = {
+    cellWidth: 50,
+    cellHeight: 50,
+    color: '#334155',
+    opacity: 0.3,
+    lineWidth: 1,
+    lineType: 'solid',
+    isInfinite: true,
+    columns: 20,
+    rows: 15,
+    backgroundImage: null,
+    backgroundImageHash: null,
+    imageWidth: null,
+    imageHeight: null,
+    snapToGrid: false,
+    ambientDarkness: 0,
+    fogOfWar: false,
+    isCombatActive: false,
+    lockFiniteMapSize: true,
+};
+
+const normalizeGridConfig = (config = {}) => ({
+    ...DEFAULT_GRID_CONFIG,
+    ...(config || {}),
+    columns: Math.max(1, Math.round(Number(config?.columns ?? DEFAULT_GRID_CONFIG.columns) || DEFAULT_GRID_CONFIG.columns)),
+    rows: Math.max(1, Math.round(Number(config?.rows ?? DEFAULT_GRID_CONFIG.rows) || DEFAULT_GRID_CONFIG.rows)),
+});
+
+const roundGridValue = (value) => {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return value;
+    return Math.round(numericValue * 100) / 100;
+};
+
+const getFiniteMapDimensions = (config = {}) => {
+    const safeColumns = Number(config.columns) || DEFAULT_GRID_CONFIG.columns;
+    const safeRows = Number(config.rows) || DEFAULT_GRID_CONFIG.rows;
+    const safeCellWidth = Number(config.cellWidth) || DEFAULT_GRID_CONFIG.cellWidth;
+    const safeCellHeight = Number(config.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight;
+    const imageWidth = Number(config.imageWidth);
+    const imageHeight = Number(config.imageHeight);
+
+    return {
+        width: Number.isFinite(imageWidth) && imageWidth > 0
+            ? imageWidth
+            : safeColumns * safeCellWidth,
+        height: Number.isFinite(imageHeight) && imageHeight > 0
+            ? imageHeight
+            : safeRows * safeCellHeight,
+    };
+};
+
+const getGridPixelDimensions = (config = {}) => ({
+    width: (Number(config.columns) || DEFAULT_GRID_CONFIG.columns) * (Number(config.cellWidth) || DEFAULT_GRID_CONFIG.cellWidth),
+    height: (Number(config.rows) || DEFAULT_GRID_CONFIG.rows) * (Number(config.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight),
+});
+
+const fitCellSizeIntoFrame = (frameSize, cellCount) => {
+    const safeFrameSize = Number(frameSize);
+    const safeCellCount = Math.max(1, Math.round(Number(cellCount) || 1));
+
+    if (!Number.isFinite(safeFrameSize) || safeFrameSize <= 0) {
+        return DEFAULT_GRID_CONFIG.cellWidth;
+    }
+
+    return Math.max(1, Math.floor(safeFrameSize / safeCellCount));
+};
+
+const fitGridCountIntoFrame = (frameSize, cellSize) => {
+    const safeFrameSize = Number(frameSize);
+    const safeCellSize = Math.max(1, Number(cellSize) || DEFAULT_GRID_CONFIG.cellWidth);
+
+    if (!Number.isFinite(safeFrameSize) || safeFrameSize <= 0) {
+        return 1;
+    }
+
+    return Math.max(1, Math.floor(safeFrameSize / safeCellSize));
+};
+
+const getGreatestCommonDivisor = (a, b) => {
+    let x = Math.abs(Math.round(Number(a) || 0));
+    let y = Math.abs(Math.round(Number(b) || 0));
+
+    while (y !== 0) {
+        const remainder = x % y;
+        x = y;
+        y = remainder;
+    }
+
+    return x || 1;
+};
+
+const getExactBackgroundGridPresets = (config = {}, minimumCellSize = 10) => {
+    const imageWidth = Math.round(Number(config.imageWidth) || 0);
+    const imageHeight = Math.round(Number(config.imageHeight) || 0);
+
+    if (imageWidth <= 0 || imageHeight <= 0) {
+        return [];
+    }
+
+    const gcd = getGreatestCommonDivisor(imageWidth, imageHeight);
+    const divisors = new Set();
+
+    for (let i = 1; i <= Math.sqrt(gcd); i += 1) {
+        if (gcd % i !== 0) continue;
+        divisors.add(i);
+        divisors.add(gcd / i);
+    }
+
+    const sortedDivisors = Array.from(divisors).sort((a, b) => a - b);
+    const preferredDivisors = sortedDivisors.filter((value) => value >= minimumCellSize);
+    const usableDivisors = preferredDivisors.length > 0 ? preferredDivisors : sortedDivisors;
+
+    return usableDivisors.map((cellSize) => ({
+        cellSize,
+        columns: imageWidth / cellSize,
+        rows: imageHeight / cellSize,
+    }));
+};
+
+const findClosestBackgroundGridPreset = (presets = [], key, rawTarget) => {
+    if (!Array.isArray(presets) || presets.length === 0) return null;
+
+    const target = Number(rawTarget);
+    if (!Number.isFinite(target)) {
+        return presets[presets.length - 1];
+    }
+
+    return presets.reduce((bestPreset, currentPreset) => {
+        if (!bestPreset) return currentPreset;
+
+        const currentDistance = Math.abs((Number(currentPreset[key]) || 0) - target);
+        const bestDistance = Math.abs((Number(bestPreset[key]) || 0) - target);
+
+        if (currentDistance !== bestDistance) {
+            return currentDistance < bestDistance ? currentPreset : bestPreset;
+        }
+
+        return (Number(currentPreset.cellSize) || 0) > (Number(bestPreset.cellSize) || 0)
+            ? currentPreset
+            : bestPreset;
+    }, null);
+};
+
+const getBackgroundGridPresetIndex = (config = {}, presets = []) => {
+    if (!Array.isArray(presets) || presets.length === 0) return 0;
+
+    const exactIndex = presets.findIndex((preset) =>
+        Number(preset.columns) === Number(config.columns) &&
+        Number(preset.rows) === Number(config.rows) &&
+        Number(preset.cellSize) === Number(config.cellWidth)
+    );
+
+    if (exactIndex >= 0) return exactIndex;
+
+    const closestPreset = findClosestBackgroundGridPreset(presets, 'cellSize', config.cellWidth);
+    const closestIndex = presets.findIndex((preset) =>
+        Number(preset.columns) === Number(closestPreset?.columns) &&
+        Number(preset.rows) === Number(closestPreset?.rows) &&
+        Number(preset.cellSize) === Number(closestPreset?.cellSize)
+    );
+
+    return closestIndex >= 0 ? closestIndex : 0;
+};
+
 const formatCombatTraitLabel = (trait = '') => {
     const normalized = trait.toString().trim().toLowerCase();
     if (normalized === 'derribado' || normalized === 'derribar' || normalized === 'derribo') return 'Derribo';
@@ -95,14 +260,15 @@ const getTokenDistanceInCells = (t1, t2, gridConfig = {}) => {
 
     const cellW = gridConfig.cellWidth || 50;
     const cellH = gridConfig.cellHeight || 50;
+    const gridRect = getGridWorldRect(gridConfig);
 
-    const t1x = Math.round((t1.x || 0) / cellW);
-    const t1y = Math.round((t1.y || 0) / cellH);
+    const t1x = Math.round(((t1.x || 0) - gridRect.x) / cellW);
+    const t1y = Math.round(((t1.y || 0) - gridRect.y) / cellH);
     const t1w = Math.max(1, Math.round((t1.width || cellW) / cellW));
     const t1h = Math.max(1, Math.round((t1.height || cellH) / cellH));
 
-    const t2x = Math.round((t2.x || 0) / cellW);
-    const t2y = Math.round((t2.y || 0) / cellH);
+    const t2x = Math.round(((t2.x || 0) - gridRect.x) / cellW);
+    const t2y = Math.round(((t2.y || 0) - gridRect.y) / cellH);
     const t2w = Math.max(1, Math.round((t2.width || cellW) / cellW));
     const t2h = Math.max(1, Math.round((t2.height || cellH) / cellH));
 
@@ -229,6 +395,136 @@ const CombatTraitLine = ({ label, traits = [], accent = 'slate' }) => {
 
 const GRID_SIZE = 50; // Tamaño de la celda en px
 const WORLD_SIZE = 12000; // Tamaño del mundo canvas en px (Aumentado para mapas 4k)
+
+const getGridWorldRect = (config = {}) => {
+    if (config.isInfinite) {
+        return { x: 0, y: 0, width: WORLD_SIZE, height: WORLD_SIZE };
+    }
+
+    const frameDimensions = getFiniteMapDimensions(config);
+    const gridDimensions = getGridPixelDimensions(config);
+    return {
+        x: (WORLD_SIZE - frameDimensions.width) / 2,
+        y: (WORLD_SIZE - frameDimensions.height) / 2,
+        width: gridDimensions.width,
+        height: gridDimensions.height,
+    };
+};
+
+const clampToRange = (value, min, max) => Math.min(Math.max(value, min), max);
+
+const getEffectiveItemSnap = (item, config = {}) => {
+    if (!item) return false;
+    if (item.snapToGrid !== undefined) return !!item.snapToGrid;
+    return !!config.snapToGrid;
+};
+
+const snapWorldPositionToGrid = (worldPos = {}, config = {}, itemSize = {}) => {
+    const cellWidth = Number(config.cellWidth) || DEFAULT_GRID_CONFIG.cellWidth;
+    const cellHeight = Number(config.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight;
+    const gridRect = getGridWorldRect(config);
+
+    let x = gridRect.x + Math.round(((Number(worldPos.x) || 0) - gridRect.x) / cellWidth) * cellWidth;
+    let y = gridRect.y + Math.round(((Number(worldPos.y) || 0) - gridRect.y) / cellHeight) * cellHeight;
+
+    if (!config.isInfinite) {
+        const itemWidth = Math.max(0, Number(itemSize.width) || 0);
+        const itemHeight = Math.max(0, Number(itemSize.height) || 0);
+        x = clampToRange(x, gridRect.x, gridRect.x + gridRect.width - itemWidth);
+        y = clampToRange(y, gridRect.y, gridRect.y + gridRect.height - itemHeight);
+    }
+
+    return {
+        x: roundGridValue(x),
+        y: roundGridValue(y),
+    };
+};
+
+const getCenteredSpawnPosition = (config = {}, itemSize = {}) => {
+    const width = Number(itemSize.width) || Number(config.cellWidth) || DEFAULT_GRID_CONFIG.cellWidth;
+    const height = Number(itemSize.height) || Number(config.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight;
+    const centeredPosition = {
+        x: (WORLD_SIZE / 2) - (width / 2),
+        y: (WORLD_SIZE / 2) - (height / 2),
+    };
+
+    return getEffectiveItemSnap({ snapToGrid: config.snapToGrid }, config)
+        ? snapWorldPositionToGrid(centeredPosition, config, { width, height })
+        : centeredPosition;
+};
+
+const adjustItemsForGridChange = (items = [], previousConfig = {}, nextConfig = {}) => {
+    if (previousConfig.backgroundImage || nextConfig.backgroundImage) {
+        return items;
+    }
+
+    const previousCellWidth = Number(previousConfig.cellWidth) || DEFAULT_GRID_CONFIG.cellWidth;
+    const previousCellHeight = Number(previousConfig.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight;
+    const nextCellWidth = Number(nextConfig.cellWidth) || DEFAULT_GRID_CONFIG.cellWidth;
+    const nextCellHeight = Number(nextConfig.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight;
+
+    if (
+        Math.abs(previousCellWidth - nextCellWidth) < 0.001 &&
+        Math.abs(previousCellHeight - nextCellHeight) < 0.001
+    ) {
+        return items;
+    }
+
+    const previousRect = getGridWorldRect(previousConfig);
+    const nextRect = getGridWorldRect(nextConfig);
+
+    const convertX = (value) => roundGridValue(
+        nextRect.x + (((Number(value) || 0) - previousRect.x) / previousCellWidth) * nextCellWidth
+    );
+    const convertY = (value) => roundGridValue(
+        nextRect.y + (((Number(value) || 0) - previousRect.y) / previousCellHeight) * nextCellHeight
+    );
+    const convertWidth = (value) => roundGridValue(((Number(value) || nextCellWidth) / previousCellWidth) * nextCellWidth);
+    const convertHeight = (value) => roundGridValue(((Number(value) || nextCellHeight) / previousCellHeight) * nextCellHeight);
+
+    return items.map((item) => {
+        if (!getEffectiveItemSnap(item, previousConfig)) {
+            return item;
+        }
+
+        if (item.type === 'wall') {
+            const x1 = convertX(item.x1);
+            const y1 = convertY(item.y1);
+            const x2 = convertX(item.x2);
+            const y2 = convertY(item.y2);
+
+            return {
+                ...item,
+                x1,
+                y1,
+                x2,
+                y2,
+                x: Math.min(x1, x2),
+                y: Math.min(y1, y2),
+                width: Math.max(Math.abs(x2 - x1), 5),
+                height: Math.max(Math.abs(y2 - y1), 5),
+            };
+        }
+
+        const width = Math.max(convertWidth(item.width), 5);
+        const height = Math.max(convertHeight(item.height), 5);
+        let x = convertX(item.x);
+        let y = convertY(item.y);
+
+        if (!nextConfig.isInfinite) {
+            x = clampToRange(x, nextRect.x, nextRect.x + nextRect.width - width);
+            y = clampToRange(y, nextRect.y, nextRect.y + nextRect.height - height);
+        }
+
+        return {
+            ...item,
+            x,
+            y,
+            width,
+            height,
+        };
+    });
+};
 
 // Helpers matemáticos para Muros y Colisiones
 const linesIntersect = (x1, y1, x2, y2, x3, y3, x4, y4) => {
@@ -575,6 +871,54 @@ const getObjectImage = (item, customImages) => {
     if (name.includes('casco de minero')) return '/accesorios/casco_de_minero.png';
     if (name.includes('guante blanco')) return '/accesorios/guante_blanco.png';
     return null;
+};
+
+const CanvasAssetImage = ({
+    src,
+    label = '',
+    imageClassName = '',
+    overlayClassName = '',
+    fallback = null,
+}) => {
+    const [status, setStatus] = useState(src ? 'loading' : 'idle');
+
+    useEffect(() => {
+        setStatus(src ? 'loading' : 'idle');
+    }, [src]);
+
+    if (!src) return fallback;
+
+    const showFallback = status === 'error' && fallback;
+
+    return (
+        <>
+            <img
+                src={src}
+                alt=""
+                aria-label={label || undefined}
+                draggable={false}
+                onLoad={() => setStatus('loaded')}
+                onError={() => setStatus('error')}
+                className={`${imageClassName} transition-opacity duration-500 ${status === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
+            />
+            {overlayClassName && !showFallback && (
+                <div className={`${overlayClassName} transition-opacity duration-500 ${status === 'loaded' ? 'opacity-100' : 'opacity-0'}`} />
+            )}
+            {status === 'loading' && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#0b1120]/95 via-black/70 to-[#161f32]/90">
+                    <div className="relative flex items-center justify-center">
+                        <div className="absolute inset-[-7px] rounded-full border border-[#c8aa6e]/15 animate-pulse" />
+                        <RotateCw className="w-4 h-4 text-[#c8aa6e]/80 animate-spin drop-shadow-[0_0_8px_rgba(200,170,110,0.35)]" />
+                    </div>
+                </div>
+            )}
+            {showFallback && (
+                <div className="absolute inset-0">
+                    {fallback}
+                </div>
+            )}
+        </>
+    );
 };
 
 // --- Helper: Get rarity visual info ---
@@ -936,14 +1280,17 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
                                     {/* Left Column — Image or Icon (mirrors LoadoutView style) */}
                                     <div className="w-16 bg-black/50 relative shrink-0 ml-[3px] flex flex-col z-10 overflow-hidden">
                                         {itemImage && (
-                                            <>
-                                                <img
-                                                    src={itemImage}
-                                                    alt={item.nombre || item.name}
-                                                    className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-90 transition-opacity duration-500"
-                                                />
-                                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-                                            </>
+                                            <CanvasAssetImage
+                                                src={itemImage}
+                                                label={item.nombre || item.name || item.type || 'equipamiento'}
+                                                imageClassName="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-90"
+                                                overlayClassName="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"
+                                                fallback={
+                                                    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#0b1120]/95 via-black/75 to-[#161f32]/90">
+                                                        <TypeIcon className={`w-7 h-7 ${rarity.text} opacity-60 drop-shadow-[0_0_10px_rgba(255,255,255,0.18)]`} />
+                                                    </div>
+                                                }
+                                            />
                                         )}
                                         <div className="w-full h-full flex flex-col items-center justify-center relative z-20 py-2">
                                             {!itemImage && (
@@ -1585,10 +1932,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 // --- Sincronización de Configuración (Oscuridad, Grid, Fondo) ---
                 if (remoteData.config) {
                     setGridConfig(currentConfig => {
+                        const normalizedRemoteConfig = normalizeGridConfig(remoteData.config);
                         // Comprobación profunda simple para evitar re-renders innecesarios
-                        if (JSON.stringify(remoteData.config) !== JSON.stringify(currentConfig)) {
+                        if (JSON.stringify(normalizedRemoteConfig) !== JSON.stringify(currentConfig)) {
                             console.log("🌑 Sincronizando configuración (oscuridad/grid) remota...");
-                            return remoteData.config;
+                            return normalizedRemoteConfig;
                         }
                         return currentConfig;
                     });
@@ -1893,8 +2241,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         // 1. Snap a la rejilla si está activo
         if (shouldSnap) {
-            snappedPos.x = Math.round(snappedPos.x / gridConfig.cellWidth) * gridConfig.cellWidth;
-            snappedPos.y = Math.round(snappedPos.y / gridConfig.cellHeight) * gridConfig.cellHeight;
+            snappedPos = snapWorldPositionToGrid(snappedPos, gridConfig);
         }
 
         // 2. Snap a otros muros (prioritario sobre la rejilla si está cerca)
@@ -2029,10 +2376,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     const shouldSnap = item.snapToGrid !== undefined ? item.snapToGrid : gridConfig.snapToGrid;
 
                     if (shouldSnap) {
-                        const cellW = gridConfig.cellWidth;
-                        const cellH = gridConfig.cellHeight;
-                        newX = Math.round(newX / cellW) * cellW;
-                        newY = Math.round(newY / cellH) * cellH;
+                        const snappedPosition = snapWorldPositionToGrid(
+                            { x: newX, y: newY },
+                            gridConfig,
+                            { width: item.width, height: item.height }
+                        );
+                        newX = snappedPosition.x;
+                        newY = snappedPosition.y;
                     }
 
                     // Si es un muro, desplazamos sus puntos
@@ -2433,30 +2783,34 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [, setLoadingRotation] = useState(0);
 
     // Estado de configuración del Grid
-    const [gridConfig, setGridConfig] = useState({
-        cellWidth: 50,
-        cellHeight: 50,
-        color: '#334155',
-        opacity: 0.3,
-        lineWidth: 1,
-        lineType: 'solid', // 'solid', 'dashed', 'dotted'
-        isInfinite: true,
-        columns: 20,
-        rows: 15,
-        backgroundImage: null,
-        imageWidth: null,
-        imageHeight: null,
-        snapToGrid: false,
-        ambientDarkness: 0, // 0 = Día (Transparente), 1 = Noche Total (Negro)
-        fogOfWar: false, // Control de Niebla de Guerra
-        isCombatActive: false, // Modo por turnos dinámico
-    });
+    const [gridConfig, setGridConfig] = useState(DEFAULT_GRID_CONFIG);
 
     // --- CAMPOS DE MAPA CALCULADOS ---
-    // Usamos el tamaño de la rejilla (columnas * ancho) para asegurar que la niebla cubra todo el tablero
+    const finiteMapFrameDimensions = !gridConfig.isInfinite ? getFiniteMapDimensions(gridConfig) : null;
+    const finiteGridDimensions = !gridConfig.isInfinite ? getGridPixelDimensions(gridConfig) : null;
+    const backgroundGridPresets = useMemo(() => {
+        if (
+            gridConfig.isInfinite ||
+            !gridConfig.backgroundImage ||
+            !(Number(gridConfig.imageWidth) > 0) ||
+            !(Number(gridConfig.imageHeight) > 0)
+        ) {
+            return [];
+        }
+
+        return getExactBackgroundGridPresets(gridConfig, 10).sort((a, b) => b.cellSize - a.cellSize);
+    }, [gridConfig.isInfinite, gridConfig.backgroundImage, gridConfig.imageWidth, gridConfig.imageHeight]);
+    const currentBackgroundGridPresetIndex = useMemo(
+        () => getBackgroundGridPresetIndex(gridConfig, backgroundGridPresets),
+        [gridConfig, backgroundGridPresets]
+    );
     const mapBounds = {
-        width: (gridConfig.columns * gridConfig.cellWidth),
-        height: (gridConfig.rows * gridConfig.cellHeight),
+        width: gridConfig.isInfinite
+            ? (gridConfig.columns * gridConfig.cellWidth)
+            : (finiteMapFrameDimensions?.width || (gridConfig.columns * gridConfig.cellWidth)),
+        height: gridConfig.isInfinite
+            ? (gridConfig.rows * gridConfig.cellHeight)
+            : (finiteMapFrameDimensions?.height || (gridConfig.rows * gridConfig.cellHeight)),
     };
     // Añadimos un pequeño margen (bleed) de 4px para asegurar que no haya fugas en los bordes por redondeo
     const bleed = 4;
@@ -2489,8 +2843,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const img = new window.Image();
             img.src = event.target.result;
             img.onload = () => {
-                const cols = Math.ceil(img.width / gridConfig.cellWidth);
-                const rows = Math.ceil(img.height / gridConfig.cellHeight);
+                const exactPresets = getExactBackgroundGridPresets({
+                    imageWidth: img.width,
+                    imageHeight: img.height,
+                }, 10);
+                const matchedPreset = findClosestBackgroundGridPreset(exactPresets, 'cellSize', gridConfig.cellWidth);
+                const cols = matchedPreset?.columns ?? fitGridCountIntoFrame(img.width, gridConfig.cellWidth);
+                const rows = matchedPreset?.rows ?? fitGridCountIntoFrame(img.height, gridConfig.cellHeight);
+                const cellSize = matchedPreset?.cellSize ?? gridConfig.cellWidth;
 
                 setGridConfig(prev => ({
                     ...prev,
@@ -2499,7 +2859,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     imageHeight: img.height,
                     isInfinite: false,
                     columns: cols,
-                    rows: rows
+                    rows: rows,
+                    cellWidth: cellSize,
+                    cellHeight: cellSize,
                 }));
             };
         };
@@ -2654,21 +3016,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             lastModified: Date.now(),
             ownerId: currentUserId,
             preview: null,
-            config: {
-                cellWidth: 50,
-                cellHeight: 50,
-                color: '#334155',
-                opacity: 0.3,
-                lineWidth: 1,
-                lineType: 'solid',
-                isInfinite: true,
-                columns: 20,
-                rows: 15,
-                backgroundImage: null,
-                backgroundImageHash: null,
-                snapToGrid: false,
-                ambientDarkness: 0,
-            },
+            config: { ...DEFAULT_GRID_CONFIG },
             items: [], // Inicializamos array de tokens
             camera: { zoom: 1, offset: { x: 0, y: 0 } }
         };
@@ -2683,7 +3031,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
     const loadScenario = (scenario) => {
         setActiveScenario(scenario);
-        if (scenario.config) setGridConfig(scenario.config);
+        if (scenario.config) setGridConfig(normalizeGridConfig(scenario.config));
 
         // Determinar cámara inicial
         let initialCamera = scenario.camera;
@@ -2763,13 +3111,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     }
                 } else {
                     // El token NO existe en el servidor → crearlo (spawn nuevo)
-                    const spawnX = (WORLD_SIZE / 2) - (gridConfig.cellWidth / 2);
-                    const spawnY = (WORLD_SIZE / 2) - (gridConfig.cellHeight / 2);
+                    const spawnPosition = getCenteredSpawnPosition(gridConfig, {
+                        width: gridConfig.cellWidth,
+                        height: gridConfig.cellHeight,
+                    });
 
                     const baseToken = {
                         id: `token-${Date.now()}-${playerName}`,
-                        x: spawnX,
-                        y: spawnY,
+                        x: spawnPosition.x,
+                        y: spawnPosition.y,
                         width: gridConfig.cellWidth,
                         height: gridConfig.cellHeight,
                         rotation: 0,
@@ -2795,8 +3145,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     const playerZoom = 1.2;
                     setZoom(playerZoom);
                     setOffset({
-                        x: -(spawnX + gridConfig.cellWidth / 2 - WORLD_SIZE / 2) * playerZoom,
-                        y: -(spawnY + gridConfig.cellHeight / 2 - WORLD_SIZE / 2) * playerZoom,
+                        x: -(spawnPosition.x + gridConfig.cellWidth / 2 - WORLD_SIZE / 2) * playerZoom,
+                        y: -(spawnPosition.y + gridConfig.cellHeight / 2 - WORLD_SIZE / 2) * playerZoom,
                     });
 
                     await updateDoc(doc(db, 'canvas_scenarios', scenarioId), {
@@ -3080,13 +3430,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const w = gridConfig.cellWidth;
         const h = gridConfig.cellHeight;
 
-        const spawnX = centerX - (w / 2);
-        const spawnY = centerY - (h / 2);
+        const centeredSpawn = { x: centerX - (w / 2), y: centerY - (h / 2) };
+        const spawnPosition = gridConfig.snapToGrid
+            ? snapWorldPositionToGrid(centeredSpawn, gridConfig, { width: w, height: h })
+            : centeredSpawn;
 
         const newToken = {
             id: `token-${Date.now()}`,
-            x: spawnX,
-            y: spawnY,
+            x: spawnPosition.x,
+            y: spawnPosition.y,
             width: gridConfig.cellWidth, // Tamaño por defecto: 1 celda
             height: gridConfig.cellHeight,
             img: tokenUrl,
@@ -4139,8 +4491,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
 
     // Calcular dimensiones totales si es finito
-    const finiteGridWidth = gridConfig.columns * gridConfig.cellWidth;
-    const finiteGridHeight = gridConfig.rows * gridConfig.cellHeight;
+    const finiteMapWidth = finiteMapFrameDimensions?.width || (gridConfig.columns * gridConfig.cellWidth);
+    const finiteMapHeight = finiteMapFrameDimensions?.height || (gridConfig.rows * gridConfig.cellHeight);
+    const finiteGridWidth = finiteGridDimensions?.width || (gridConfig.columns * gridConfig.cellWidth);
+    const finiteGridHeight = finiteGridDimensions?.height || (gridConfig.rows * gridConfig.cellHeight);
 
     // Estado para mostrar/ocultar panel de configuración
     const [showSettings, setShowSettings] = useState(false);
@@ -4149,27 +4503,166 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const handleConfigChange = (key, value) => {
         setGridConfig(prev => {
             const newConfig = { ...prev, [key]: value };
+            const shouldLockFiniteMapSize =
+                !prev.isInfinite &&
+                prev.lockFiniteMapSize &&
+                ['columns', 'rows', 'cellWidth', 'cellHeight'].includes(key);
+            const shouldLockSquareCells =
+                !prev.isInfinite &&
+                ['columns', 'rows', 'cellWidth', 'cellHeight'].includes(key);
+            const hasBackgroundFrame =
+                !!prev.backgroundImage &&
+                Number(prev.imageWidth) > 0 &&
+                Number(prev.imageHeight) > 0;
 
-            // Si hay imagen de fondo, sincronizar dimensiones para mantener el tamaño del mapa
-            if (prev.backgroundImage && prev.imageWidth && prev.imageHeight) {
+            const safeCellSize = (rawValue) => Math.max(10, Number(rawValue) || DEFAULT_GRID_CONFIG.cellWidth);
+            const safeGridCount = (rawValue) => Math.max(1, Math.round(Number(rawValue) || 1));
+
+            if (hasBackgroundFrame) {
+                const exactPresets = getExactBackgroundGridPresets(prev, 10);
+                const presetKey =
+                    key === 'rows'
+                        ? 'rows'
+                        : (key === 'cellWidth' || key === 'cellHeight')
+                            ? 'cellSize'
+                            : 'columns';
+                const matchedPreset = findClosestBackgroundGridPreset(exactPresets, presetKey, value);
+
+                if (matchedPreset) {
+                    newConfig.columns = matchedPreset.columns;
+                    newConfig.rows = matchedPreset.rows;
+                    newConfig.cellWidth = matchedPreset.cellSize;
+                    newConfig.cellHeight = matchedPreset.cellSize;
+                } else {
+                    const { width: baseMapWidth, height: baseMapHeight } = getFiniteMapDimensions(prev);
+                    if (key === 'columns') {
+                        const nextColumns = safeGridCount(value);
+                        const nextSquareSize = fitCellSizeIntoFrame(baseMapWidth, nextColumns);
+                        newConfig.columns = nextColumns;
+                        newConfig.cellWidth = nextSquareSize;
+                        newConfig.cellHeight = nextSquareSize;
+                        newConfig.rows = fitGridCountIntoFrame(baseMapHeight, nextSquareSize);
+                    } else if (key === 'rows') {
+                        const nextRows = safeGridCount(value);
+                        const nextSquareSize = fitCellSizeIntoFrame(baseMapHeight, nextRows);
+                        newConfig.rows = nextRows;
+                        newConfig.cellHeight = nextSquareSize;
+                        newConfig.cellWidth = nextSquareSize;
+                        newConfig.columns = fitGridCountIntoFrame(baseMapWidth, nextSquareSize);
+                    } else if (key === 'cellWidth') {
+                        const nextSquareSize = Math.min(
+                            safeCellSize(value),
+                            Math.max(1, Math.floor(Math.min(baseMapWidth, baseMapHeight)))
+                        );
+                        newConfig.cellWidth = nextSquareSize;
+                        newConfig.cellHeight = nextSquareSize;
+                        newConfig.columns = fitGridCountIntoFrame(baseMapWidth, nextSquareSize);
+                        newConfig.rows = fitGridCountIntoFrame(baseMapHeight, nextSquareSize);
+                    } else if (key === 'cellHeight') {
+                        const nextSquareSize = Math.min(
+                            safeCellSize(value),
+                            Math.max(1, Math.floor(Math.min(baseMapWidth, baseMapHeight)))
+                        );
+                        newConfig.cellHeight = nextSquareSize;
+                        newConfig.cellWidth = nextSquareSize;
+                        newConfig.rows = fitGridCountIntoFrame(baseMapHeight, nextSquareSize);
+                        newConfig.columns = fitGridCountIntoFrame(baseMapWidth, nextSquareSize);
+                    }
+                }
+            // Si el mapa es finito sin imagen y el bloqueo está activo, sincronizar dimensiones para mantener el tamaño del mapa
+            } else if (shouldLockFiniteMapSize) {
+                const { width: baseMapWidth, height: baseMapHeight } = getFiniteMapDimensions(prev);
                 if (key === 'columns') {
-                    // Si cambio columnas, ajusto ancho de celda para que quepan en la imagen
-                    newConfig.cellWidth = prev.imageWidth / value;
+                    const nextColumns = safeGridCount(value);
+                    const nextSquareSize = roundGridValue(baseMapWidth / nextColumns);
+                    newConfig.columns = nextColumns;
+                    newConfig.cellWidth = nextSquareSize;
+                    if (shouldLockSquareCells) {
+                        newConfig.cellHeight = nextSquareSize;
+                        newConfig.rows = safeGridCount(baseMapHeight / nextSquareSize);
+                    }
                 } else if (key === 'rows') {
-                    // Si cambio filas, ajusto alto de celda
-                    newConfig.cellHeight = prev.imageHeight / value;
+                    const nextRows = safeGridCount(value);
+                    const nextSquareSize = roundGridValue(baseMapHeight / nextRows);
+                    newConfig.rows = nextRows;
+                    newConfig.cellHeight = nextSquareSize;
+                    if (shouldLockSquareCells) {
+                        newConfig.cellWidth = nextSquareSize;
+                        newConfig.columns = safeGridCount(baseMapWidth / nextSquareSize);
+                    }
                 } else if (key === 'cellWidth') {
-                    // Si cambio ancho celda, ajusto número de columnas
-                    newConfig.columns = prev.imageWidth / value;
+                    const nextSquareSize = safeCellSize(value);
+                    newConfig.cellWidth = nextSquareSize;
+                    newConfig.columns = safeGridCount(baseMapWidth / nextSquareSize);
+                    if (shouldLockSquareCells) {
+                        newConfig.cellHeight = nextSquareSize;
+                        newConfig.rows = safeGridCount(baseMapHeight / nextSquareSize);
+                    }
                 } else if (key === 'cellHeight') {
-                    // Si cambio alto celda, ajusto número de filas
-                    newConfig.rows = prev.imageHeight / value;
+                    const nextSquareSize = safeCellSize(value);
+                    newConfig.cellHeight = nextSquareSize;
+                    newConfig.rows = safeGridCount(baseMapHeight / nextSquareSize);
+                    if (shouldLockSquareCells) {
+                        newConfig.cellWidth = nextSquareSize;
+                        newConfig.columns = safeGridCount(baseMapWidth / nextSquareSize);
+                    }
+                }
+            } else if (shouldLockSquareCells) {
+                if (key === 'cellWidth') {
+                    newConfig.cellHeight = safeCellSize(value);
+                } else if (key === 'cellHeight') {
+                    newConfig.cellWidth = safeCellSize(value);
                 }
             }
+
+            const cellSizeChanged =
+                Math.abs((Number(prev.cellWidth) || 0) - (Number(newConfig.cellWidth) || 0)) >= 0.001 ||
+                Math.abs((Number(prev.cellHeight) || 0) - (Number(newConfig.cellHeight) || 0)) >= 0.001;
+
+            setActiveScenario(currentScenario => {
+                if (!currentScenario) return currentScenario;
+
+                return {
+                    ...currentScenario,
+                    config: newConfig,
+                    items: cellSizeChanged
+                        ? adjustItemsForGridChange(currentScenario.items || [], prev, newConfig)
+                        : currentScenario.items,
+                };
+            });
 
             return newConfig;
         });
     };
+
+    const applyBackgroundGridPreset = useCallback((presetIndex) => {
+        if (!backgroundGridPresets.length) return;
+
+        const clampedIndex = Math.min(Math.max(Number(presetIndex) || 0, 0), backgroundGridPresets.length - 1);
+        const preset = backgroundGridPresets[clampedIndex];
+        if (!preset) return;
+
+        setGridConfig(prev => {
+            const newConfig = {
+                ...prev,
+                columns: preset.columns,
+                rows: preset.rows,
+                cellWidth: preset.cellSize,
+                cellHeight: preset.cellSize,
+            };
+
+            setActiveScenario(currentScenario => {
+                if (!currentScenario) return currentScenario;
+                return {
+                    ...currentScenario,
+                    config: newConfig,
+                    items: currentScenario.items,
+                };
+            });
+
+            return newConfig;
+        });
+    }, [backgroundGridPresets]);
 
     // Versión dinámica para invalidar caché de máscaras SVG cuando cambian puertas
     // IMPORTANTE: Solo cambia cuando cambia el estado de las puertas (isOpen), no cuando se mueven tokens
@@ -5766,6 +6259,26 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     <Maximize className="w-3 h-3" />
                                                     Dimensiones (Celdas)
                                                 </h4>
+                                                <div className={`bg-[#0b1120] p-3 rounded border transition-all ${gridConfig.lockFiniteMapSize ? 'border-[#c8aa6e]/30 shadow-[0_0_18px_rgba(200,170,110,0.08)]' : 'border-slate-800'}`}>
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                                                                <Link className={`w-3 h-3 ${gridConfig.lockFiniteMapSize ? 'text-[#c8aa6e]' : 'text-slate-500'}`} />
+                                                                Mantener tamaño total
+                                                            </div>
+                                                            <p className="mt-1 text-[10px] text-slate-500 leading-relaxed">
+                                                                Al cambiar columnas, filas o el tamaño de celda, el mapa conserva su ancho y alto automáticamente.
+                                                            </p>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => handleConfigChange('lockFiniteMapSize', !gridConfig.lockFiniteMapSize)}
+                                                            className={`relative w-12 h-6 rounded-full transition-all shrink-0 ${gridConfig.lockFiniteMapSize ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                            title={gridConfig.lockFiniteMapSize ? 'Manteniendo tamaño total' : 'Edición libre'}
+                                                        >
+                                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${gridConfig.lockFiniteMapSize ? 'left-7' : 'left-1'}`} />
+                                                        </button>
+                                                    </div>
+                                                </div>
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div className="bg-[#0b1120] p-3 rounded border border-slate-800 hover:border-[#c8aa6e]/30 transition-colors group relative">
                                                         <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors">Columnas</span>
@@ -5800,6 +6313,41 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         </div>
                                                     </div>
                                                 </div>
+                                                {!gridConfig.isInfinite && gridConfig.backgroundImage && backgroundGridPresets.length > 0 && (
+                                                    <div className="bg-[#0b1120] p-4 rounded border border-slate-800 space-y-3">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Cantidad de Casillas</span>
+                                                            <span className="text-[10px] font-mono text-[#c8aa6e]">
+                                                                {gridConfig.columns}x{gridConfig.rows} · {gridConfig.cellWidth}px
+                                                            </span>
+                                                        </div>
+                                                        <input
+                                                            type="range"
+                                                            min="0"
+                                                            max={Math.max(backgroundGridPresets.length - 1, 0)}
+                                                            step="1"
+                                                            value={currentBackgroundGridPresetIndex}
+                                                            onChange={(e) => applyBackgroundGridPreset(Number(e.target.value))}
+                                                            className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
+                                                        />
+                                                        <div className="flex items-center justify-between gap-4 text-[9px] font-bold uppercase tracking-[0.16em]">
+                                                            <div className="flex items-center gap-2 text-slate-500">
+                                                                <span className="w-5 h-px bg-slate-700/80 rounded-full"></span>
+                                                                <span className="text-left leading-tight">
+                                                                    <span className="block text-slate-400">Menos Casillas</span>
+                                                                    <span className="block text-[8px] tracking-[0.14em] text-slate-600">Más grandes</span>
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 text-slate-500">
+                                                                <span className="text-right leading-tight">
+                                                                    <span className="block text-slate-400">Más Casillas</span>
+                                                                    <span className="block text-[8px] tracking-[0.14em] text-slate-600">Más pequeñas</span>
+                                                                </span>
+                                                                <span className="w-5 h-px bg-slate-700/80 rounded-full"></span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
                                                 <div className="text-[9px] text-slate-600 text-right font-mono flex items-center justify-end gap-2 uppercase">
                                                     <span className="w-1 h-1 rounded-full bg-slate-800"></span>
                                                     TOTAL: {finiteGridWidth}x{finiteGridHeight}PX
@@ -7185,7 +7733,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 {/* --- GRID LAYER (SVG) --- */}
                                 {/* Contenedor del SVG: Si es finito, lo centramos en el mundo */}
                                 <div className={`absolute ${gridConfig.isInfinite ? 'inset-0' : 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'}`}
-                                    style={!gridConfig.isInfinite ? { width: finiteGridWidth, height: finiteGridHeight } : {}}
+                                    style={!gridConfig.isInfinite ? { width: finiteMapWidth, height: finiteMapHeight } : {}}
                                 >
                                     <svg
                                         width="100%"
@@ -7199,7 +7747,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 <img
                                                     src={gridConfig.backgroundImage}
                                                     alt="Map Background"
-                                                    className="w-full h-full object-cover"
+                                                    className="w-full h-full"
                                                     style={{ pointerEvents: 'none', userSelect: 'none' }}
                                                 />
                                             </foreignObject>
@@ -7230,7 +7778,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         </defs>
 
                                         {/* Rectángulo que rellena con el patrón */}
-                                        <rect width="100%" height="100%" fill="url(#grid-pattern)" />
+                                        <rect width={finiteGridWidth} height={finiteGridHeight} fill="url(#grid-pattern)" />
 
                                         {/* Borde del Grid (Visible especialmente si es Finito) */}
                                         <rect
