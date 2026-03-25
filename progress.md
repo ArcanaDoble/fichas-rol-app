@@ -50,4 +50,14 @@ Original prompt: Perfecto. Ahora necesito que vayas implementando cada cambio qu
 - Ajustado `Fluida` para separar la versión manual de la versión nativa: el modificador manual solo reduce el coste actual si el arma vale más de `1`, mientras que la `Fluida` propia del arma mantiene la cadena automática entre ataques y paradas.
 - Blindada la resolución de `combat_events` del canvas SVG: si una parada falla durante `resolveCombatEvent`, el evento vuelve a su estado pendiente y deja de quedarse colgado en `procesando`.
 - Corregido el envío de reacciones de combate: `handleReaction` serializa `reaction.data` antes de `updateDoc` y ya no traga silenciosamente el error, para evitar que `Parar` se quede en `Procesando...` con ciertas armas como las de `Fluida`.
+- Añadido un modo `Mantener tamaño total` en la configuración del canvas SVG para mapas finitos, de modo que columnas, filas y tamaño de celda puedan reajustarse automáticamente sin hacer proporciones manuales.
+- Al cambiar el tamaño de celda en el canvas SVG, los items con `snapToGrid` ahora se reescalan y recolocan siguiendo la nueva rejilla para que no se descuadren respecto a las casillas.
+- En mapas finitos del canvas SVG, las casillas quedan cuadradas por regla interna y el `snap` se calcula respecto al origen real del mapa finito, evitando que tokens nuevos o movidos nazcan medio descuadrados entre celdas.
+- En mapas finitos, `rows` y `columns` ya no quedan en decimales durante los reajustes automáticos, evitando celdas cortadas en los bordes del grid.
+- Extendida la misma lógica a mapas con fondo en el canvas SVG: el frame de la imagen se mantiene intacto, la rejilla se calibra encima sin generar medias celdas y el ajuste usa siempre casillas cuadradas completas.
+- Al recalibrar mapas con fondo en el canvas SVG ya no se autoajustan los items existentes, evitando mover muros y luces mientras se corrige la grid sobre la imagen.
+- Ajustada la calibración de mapas con fondo para que columnas, filas y tamaño de celda salten siempre al preset exacto más cercano que cubre toda la imagen con casillas cuadradas completas, evitando que la grid se desprenda del fondo.
+- Añadida una barra de densidad para mapas con fondo en el canvas SVG: recorre los presets exactos compatibles del fondo y facilita aumentar o reducir la cantidad de casillas sin pelearse con columnas, filas o escala.
+- Compactada la barra de `Velocidad` del inspector: conserva la lectura por casillas, pero limita la vista a 10 segmentos y resume el resto en un acumulado `+N` para que valores altos no se salgan del panel.
+- Añadido un estado de carga visual para imágenes de equipamiento en el canvas SVG: mientras llegan desde Firebase, las cards del inspector muestran un loader elegante en lugar de dejar ver texto o saltos feos del navegador.
 - No se ha lanzado `npm test -- --watchAll=false` por peticion explicita del usuario.
