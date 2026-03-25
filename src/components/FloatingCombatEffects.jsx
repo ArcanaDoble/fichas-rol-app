@@ -21,7 +21,11 @@ const BLOCK_LABELS = {
 
 const BLOCK_RENDER_ORDER = ['postura', 'armadura', 'vida', 'ingenio', 'voluntad', 'cordura'];
 const DAMAGE_BLOCK_STAGGER_SECONDS = 1.5;
+const COMBAT_RESULT_INTRO_DELAY_SECONDS = 1.5;
 const DAMAGE_BLOCK_HORIZONTAL_OFFSET = 28;
+const FLYOFF_DURATION_SECONDS = 4.0;
+const HIGHLIGHT_DURATION_SECONDS = 2.5;
+const STATE_EFFECT_DELAY_SECONDS = 1.6;
 
 const hashString = (value) => {
     const text = String(value || '');
@@ -56,6 +60,80 @@ const getLostBlocks = (blocksLost) => {
     }, []);
 };
 
+const getDamageFlyoffCount = ({ finalDamage, blocks, resistedTargetHit = false }) => {
+    if (blocks.length > 0) return blocks.length;
+    if (finalDamage > 0 && !resistedTargetHit) return 1;
+    return 0;
+};
+
+const getDelayedSequenceLastStart = (count, baseDelay = 0) => {
+    if (!count) return 0;
+    return baseDelay + ((count - 1) * DAMAGE_BLOCK_STAGGER_SECONDS);
+};
+
+const getStatusSequenceDelay = (lastSequenceStart = 0, hasSequence = false) => {
+    if (!hasSequence) return 0;
+    return lastSequenceStart + STATE_EFFECT_DELAY_SECONDS;
+};
+
+export function getCombatEffectLifetimeMs(effect) {
+    if (!effect) return 5500;
+
+    const {
+        reactionType,
+        finalDamage = 0,
+        counterDamage = 0,
+        blocksLost,
+        statusEffectsApplied
+    } = effect;
+
+    const blocks = getLostBlocks(blocksLost);
+    const hasBlocksLost = blocks.length > 0;
+    const resistedTargetHit = finalDamage > 0 && !hasBlocksLost;
+    const hasCounterIntro = reactionType === 'parar' && counterDamage > 0;
+    const hasResistIntro = reactionType === 'parar' && finalDamage > 0;
+    const targetIntroCount = (
+        (reactionType === 'parar') ||
+        (reactionType === 'evadir') ||
+        ((!reactionType || reactionType === 'recibir') && resistedTargetHit)
+    ) ? 1 : 0;
+    const targetIntroEnd = targetIntroCount ? FLYOFF_DURATION_SECONDS : 0;
+    const targetDamageDelay = hasResistIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0;
+    const targetDamageLastStart = getDelayedSequenceLastStart(
+        getDamageFlyoffCount({ finalDamage, blocks, resistedTargetHit }),
+        targetDamageDelay
+    );
+    const attackerDamageDelay = hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0;
+    const attackerDamageLastStart = getDelayedSequenceLastStart(
+        getDamageFlyoffCount({ finalDamage: counterDamage, blocks, resistedTargetHit: false }),
+        attackerDamageDelay
+    );
+
+    const targetStateDelay = Array.isArray(statusEffectsApplied?.target) && statusEffectsApplied.target.length > 0
+        ? getStatusSequenceDelay(
+            Math.max(targetDamageLastStart, hasResistIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0),
+            targetIntroCount > 0 || getDamageFlyoffCount({ finalDamage, blocks, resistedTargetHit }) > 0
+        )
+        : 0;
+    const attackerStateDelay = Array.isArray(statusEffectsApplied?.attacker) && statusEffectsApplied.attacker.length > 0
+        ? getStatusSequenceDelay(
+            Math.max(attackerDamageLastStart, hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0),
+            hasCounterIntro || getDamageFlyoffCount({ finalDamage: counterDamage, blocks, resistedTargetHit: false }) > 0
+        )
+        : 0;
+    const latestEffectEnd = Math.max(
+        targetIntroEnd,
+        targetDamageLastStart ? targetDamageLastStart + FLYOFF_DURATION_SECONDS : 0,
+        attackerDamageLastStart ? attackerDamageLastStart + FLYOFF_DURATION_SECONDS : 0,
+        targetStateDelay ? targetStateDelay + FLYOFF_DURATION_SECONDS : 0,
+        attackerStateDelay ? attackerStateDelay + FLYOFF_DURATION_SECONDS : 0,
+        hasBlocksLost ? targetDamageDelay + HIGHLIGHT_DURATION_SECONDS : 0,
+        counterDamage > 0 && hasBlocksLost ? attackerDamageDelay + HIGHLIGHT_DURATION_SECONDS : 0
+    );
+
+    return Math.max(5500, Math.ceil((latestEffectEnd + 0.3) * 1000));
+}
+
 export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
     if (!effect) {
         return { highlights: [], flyoffs: [] };
@@ -65,7 +143,9 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
         reactionType,
         finalDamage,
         counterDamage,
+        counterPreventedByRange,
         blocksLost,
+        statusEffectsApplied,
         attackerId,
         targetId,
         sourceEventId,
@@ -77,6 +157,21 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
     const highlights = [];
     const blocks = getLostBlocks(blocksLost);
     const hasBlocksLost = blocks.length > 0;
+    const targetAppliedStatusEffects = Array.isArray(statusEffectsApplied?.target) ? statusEffectsApplied.target : [];
+    const attackerAppliedStatusEffects = Array.isArray(statusEffectsApplied?.attacker) ? statusEffectsApplied.attacker : [];
+
+    const addHighlight = (id, position, delay = 0) => {
+        if (!position) return;
+
+        highlights.push({
+            id: `${effectKey}-${id}`,
+            x: position.x,
+            y: position.y,
+            width: position.width,
+            height: position.height,
+            delay
+        });
+    };
 
     const addFlyoff = (id, data) => {
         const flyoffType = data.type || 'info';
@@ -88,7 +183,7 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
         });
     };
 
-    const addDamageFlyoff = (id, position, fallbackValue) => {
+    const addDamageFlyoff = (id, position, fallbackValue, baseDelay = 0) => {
         if (!position) return;
 
         const centerX = position.x + position.width / 2;
@@ -103,7 +198,7 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
                     color: BLOCK_COLORS[block.tipo] || '#fff',
                     label: BLOCK_LABELS[block.tipo],
                     type: 'damage',
-                    delay: idx * DAMAGE_BLOCK_STAGGER_SECONDS
+                    delay: baseDelay + (idx * DAMAGE_BLOCK_STAGGER_SECONDS)
                 });
             });
             return;
@@ -117,7 +212,8 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
                 text: `-${block.cantidad}`,
                 color: BLOCK_COLORS[block.tipo] || '#fff',
                 label: BLOCK_LABELS[block.tipo],
-                type: 'damage'
+                type: 'damage',
+                delay: baseDelay
             });
             return;
         }
@@ -128,25 +224,35 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
             text: `-${fallbackValue}`,
             color: '#ef4444',
             label: 'Daño',
-            type: 'damage'
+            type: 'damage',
+            delay: baseDelay
         });
     };
 
     const resistedTargetHit = finalDamage > 0 && !hasBlocksLost;
+    const hasCounterIntro = reactionType === 'parar' && counterDamage > 0 && !!targetPos;
+    const hasResistIntro = reactionType === 'parar' && finalDamage > 0 && !!targetPos;
+    const targetDamageFlyoffCount = getDamageFlyoffCount({ finalDamage, blocks, resistedTargetHit });
+    const targetDamageLastStart = getDelayedSequenceLastStart(targetDamageFlyoffCount, hasResistIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0);
+    const hasTargetIntro = (
+        (reactionType === 'parar' && !!targetPos) ||
+        (reactionType === 'evadir' && !!targetPos) ||
+        ((!reactionType || reactionType === 'recibir') && !!targetPos && resistedTargetHit)
+    );
+    const attackerDamageFlyoffCount = getDamageFlyoffCount({ finalDamage: counterDamage, blocks, resistedTargetHit: false });
+    const attackerDamageLastStart = getDelayedSequenceLastStart(
+        attackerDamageFlyoffCount,
+        hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0
+    );
 
     if (finalDamage > 0 && targetPos) {
+        const targetDamageDelay = hasResistIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0;
         if (hasBlocksLost) {
-            highlights.push({
-                id: `${effectKey}-target-highlight`,
-                x: targetPos.x,
-                y: targetPos.y,
-                width: targetPos.width,
-                height: targetPos.height
-            });
+            addHighlight('target-highlight', targetPos, targetDamageDelay);
         }
 
         if (!resistedTargetHit || hasBlocksLost) {
-            addDamageFlyoff('target-dmg', targetPos, finalDamage);
+            addDamageFlyoff('target-dmg', targetPos, finalDamage, targetDamageDelay);
         }
     }
 
@@ -158,6 +264,14 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
                 text: '¡Contraataque!',
                 color: '#f97316',
                 type: 'special'
+            });
+        } else if (counterPreventedByRange) {
+            addFlyoff('target-parry-no-counter', {
+                x: targetPos.x + targetPos.width / 2,
+                y: targetPos.y - 30,
+                text: '¡Parada sin contraataque!',
+                color: '#60a5fa',
+                type: 'info'
             });
         } else if (finalDamage === 0) {
             addFlyoff('target-perfect', {
@@ -206,18 +320,45 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
     }
 
     if (counterDamage > 0 && attackerPos) {
+        const counterDamageDelay = hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0;
         if (hasBlocksLost) {
-            highlights.push({
-                id: `${effectKey}-att-highlight`,
-                x: attackerPos.x,
-                y: attackerPos.y,
-                width: attackerPos.width,
-                height: attackerPos.height
-            });
+            addHighlight('att-highlight', attackerPos, counterDamageDelay);
         }
 
-        addDamageFlyoff('att-dmg', attackerPos, counterDamage);
+        addDamageFlyoff('att-dmg', attackerPos, counterDamage, counterDamageDelay);
     }
+
+    targetAppliedStatusEffects.forEach((statusEffect, idx) => {
+        if (!targetPos) return;
+
+        addFlyoff(`target-status-${statusEffect.id || idx}`, {
+            x: targetPos.x + targetPos.width / 2,
+            y: targetPos.y - 40,
+            text: `¡${statusEffect.label || 'Estado'}!`,
+            color: statusEffect.hex || '#818cf8',
+            type: 'state',
+            delay: getStatusSequenceDelay(
+                Math.max(targetDamageLastStart, hasResistIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0),
+                hasTargetIntro || targetDamageFlyoffCount > 0
+            ) + (idx * 0.2)
+        });
+    });
+
+    attackerAppliedStatusEffects.forEach((statusEffect, idx) => {
+        if (!attackerPos) return;
+
+        addFlyoff(`attacker-status-${statusEffect.id || idx}`, {
+            x: attackerPos.x + attackerPos.width / 2,
+            y: attackerPos.y - 40,
+            text: `¡${statusEffect.label || 'Estado'}!`,
+            color: statusEffect.hex || '#818cf8',
+            type: 'state',
+            delay: getStatusSequenceDelay(
+                Math.max(attackerDamageLastStart, hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0),
+                hasCounterIntro || attackerDamageFlyoffCount > 0
+            ) + (idx * 0.2)
+        });
+    });
 
     return { highlights, flyoffs };
 }
@@ -248,7 +389,7 @@ function FloatingCombatEffectsComponent({ effect, targetPos, attackerPos }) {
                         scale: [0.8, 1, 1.05, 1, 0.9]
                     }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 2.5, ease: 'easeInOut' }}
+                    transition={{ delay: highlight.delay || 0, duration: 2.5, ease: 'easeInOut' }}
                     className="absolute pointer-events-none z-[190] bg-red-600 rounded-full mix-blend-overlay blur-sm"
                     style={{
                         left: highlight.x,
@@ -273,7 +414,7 @@ function FloatingCombatEffectsComponent({ effect, targetPos, attackerPos }) {
                     exit={{ opacity: 0 }}
                     transition={{
                         delay: flyoff.delay || 0,
-                        duration: 4.0,
+                        duration: FLYOFF_DURATION_SECONDS,
                         times: [0, 0.15, 0.85, 1],
                         ease: 'easeOut'
                     }}
@@ -284,7 +425,7 @@ function FloatingCombatEffectsComponent({ effect, targetPos, attackerPos }) {
                             className="font-fantasy font-black italic tracking-tighter"
                             style={{
                                 color: flyoff.color,
-                                fontSize: flyoff.type === 'damage' ? '48px' : '32px',
+                                fontSize: flyoff.type === 'damage' ? '48px' : (flyoff.type === 'state' ? '34px' : '32px'),
                                 textShadow: `
                                     0 0 10px ${flyoff.color}80,
                                     0 0 20px #000,

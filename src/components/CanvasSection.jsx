@@ -8,14 +8,15 @@ import TokenResources from './TokenResources';
 import TokenHUD from './TokenHUD';
 import CombatHUD from './CombatHUD';
 import CombatReactionModal from './CombatReactionModal';
-import FloatingCombatEffects from './FloatingCombatEffects';
-import { DEFAULT_STATUS_EFFECTS, ICON_MAP } from '../utils/statusEffects';
-import { rollAttack, getSpeedConsumption } from '../utils/combatSystem';
+import FloatingCombatEffects, { getCombatEffectLifetimeMs } from './FloatingCombatEffects';
+import { DEFAULT_STATUS_EFFECTS, ICON_MAP, PRONE_STATUS_IDS } from '../utils/statusEffects';
+import { rollAttack, getSpeedConsumption, hasCombatTrait, hasManualCombatTrait, hasNativeCombatTrait } from '../utils/combatSystem';
 import {
     syncArmorState,
     getArmorProtection,
     applyNegatedTraitsToItem,
     getArmorCdAttribute,
+    getItemTraits,
 } from '../utils/armorSystem';
 import { db, storage } from '../firebase';
 import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, query, where, orderBy, getDoc, getDocs, serverTimestamp, addDoc, limit } from 'firebase/firestore';
@@ -28,7 +29,7 @@ import DiceSvg from './DiceSvg';
 // --- Constants ---
 const STATUS_EFFECT_IDS = [
     'acido', 'apresado', 'ardiendo', 'asfixiado', 'asustado', 'aturdido',
-    'cansado', 'cegado', 'congelado', 'derribado', 'enfermo', 'ensordecido',
+    'cansado', 'cegado', 'congelado', 'derribado', 'conmocionado', 'enfermo', 'ensordecido',
     'envenenado', 'herido', 'iluminado', 'regeneracion', 'sangrado', 'silenciado'
 ];
 import { getOrUploadFile, releaseFile } from '../utils/storage'; // Importamos releaseFile para limpiar
@@ -40,6 +41,191 @@ const PRESET_COLORS = [
     '#ef4444', '#22c55e', // Red, Green
     '#3b82f6', '#a855f7'  // Blue, Purple
 ];
+
+const formatCombatTraitLabel = (trait = '') => {
+    const normalized = trait.toString().trim().toLowerCase();
+    if (normalized === 'derribado' || normalized === 'derribar' || normalized === 'derribo') return 'Derribo';
+    if (normalized === 'conmocionante') return 'Conmocionante';
+    if (normalized === 'fluida') return 'Fluida';
+    return trait;
+};
+
+const COMBAT_RANGE_MAP = {
+    toque: 1,
+    cercano: 2,
+    intermedio: 3,
+    lejano: 4,
+    extremo: 5
+};
+
+const getCombatRangeData = (item) => {
+    const rawRange =
+        item?.alc ??
+        item?.alcance ??
+        item?.range ??
+        item?.Alcance ??
+        item?.Range ??
+        item?.payload?.range ??
+        item?.payload?.alcance ??
+        item?.payload?.alc;
+
+    if (rawRange === undefined || rawRange === null || rawRange === '') {
+        return { value: 1, label: 'Toque' };
+    }
+
+    const label = rawRange.toString().trim();
+    const normalized = label.toLowerCase();
+
+    if (normalized.includes('toque')) return { value: COMBAT_RANGE_MAP.toque, label };
+    if (normalized.includes('cercano')) return { value: COMBAT_RANGE_MAP.cercano, label };
+    if (normalized.includes('intermedio')) return { value: COMBAT_RANGE_MAP.intermedio, label };
+    if (normalized.includes('lejano')) return { value: COMBAT_RANGE_MAP.lejano, label };
+    if (normalized.includes('extremo')) return { value: COMBAT_RANGE_MAP.extremo, label };
+
+    const digitMatch = normalized.match(/\d+/);
+    if (digitMatch) {
+        return { value: parseInt(digitMatch[0], 10), label };
+    }
+
+    return { value: 1, label };
+};
+
+const getTokenDistanceInCells = (t1, t2, gridConfig = {}) => {
+    if (!t1 || !t2) return 0;
+
+    const cellW = gridConfig.cellWidth || 50;
+    const cellH = gridConfig.cellHeight || 50;
+
+    const t1x = Math.round((t1.x || 0) / cellW);
+    const t1y = Math.round((t1.y || 0) / cellH);
+    const t1w = Math.max(1, Math.round((t1.width || cellW) / cellW));
+    const t1h = Math.max(1, Math.round((t1.height || cellH) / cellH));
+
+    const t2x = Math.round((t2.x || 0) / cellW);
+    const t2y = Math.round((t2.y || 0) / cellH);
+    const t2w = Math.max(1, Math.round((t2.width || cellW) / cellW));
+    const t2h = Math.max(1, Math.round((t2.height || cellH) / cellH));
+
+    const distX = Math.max(0, t2x - (t1x + t1w - 1), t1x - (t2x + t2w - 1));
+    const distY = Math.max(0, t2y - (t1y + t1h - 1), t1y - (t2y + t2h - 1));
+
+    return Math.max(distX, distY);
+};
+
+const getTokenProneStatusId = (token) => {
+    const statuses = Array.isArray(token?.status) ? token.status : [];
+    return PRONE_STATUS_IDS.find((statusId) => statuses.includes(statusId)) || null;
+};
+
+const getTokenProneStatusMeta = (token) => {
+    const proneStatusId = getTokenProneStatusId(token);
+    if (!proneStatusId) return null;
+    return {
+        id: proneStatusId,
+        ...(DEFAULT_STATUS_EFFECTS[proneStatusId] || DEFAULT_STATUS_EFFECTS.derribado)
+    };
+};
+
+const isTokenDerribado = (token) => !!getTokenProneStatusId(token);
+
+const getStandUpSpeedCost = (token) => {
+    const proneStatusId = getTokenProneStatusId(token);
+    return proneStatusId === 'conmocionado' ? 2 : 1;
+};
+
+const getCombatWeaponName = (weapon) =>
+    String(weapon?.nombre || weapon?.name || '').trim().toLowerCase();
+
+const normalizeFluidaState = (state) => {
+    if (!state || !state.targetId) return null;
+
+    const updatedAt = Number(state.updatedAt);
+
+    return {
+        targetId: state.targetId,
+        weaponName: state.weaponName || '',
+        updatedAt: Number.isFinite(updatedAt) ? updatedAt : Date.now(),
+        source: state.source || 'attack'
+    };
+};
+
+const getTokenFluidaState = (token) => normalizeFluidaState(token?.fluidaState);
+
+const createFluidaState = (targetId, weapon, source = 'attack') => {
+    if (!targetId) return null;
+    return {
+        targetId,
+        weaponName: getCombatWeaponName(weapon),
+        updatedAt: Date.now(),
+        source
+    };
+};
+
+const getQueuedFluidaState = (token, pendingState) => {
+    let nextState = getTokenFluidaState(token);
+
+    if (!pendingState || pendingState.tokenId !== token?.id) {
+        return nextState;
+    }
+
+    (pendingState.actions || []).forEach((action) => {
+        if (action.actionId !== 'attack') {
+            nextState = null;
+            return;
+        }
+
+        if (!hasNativeCombatTrait(action.weapon, 'fluida') || !action.targetId) {
+            nextState = null;
+            return;
+        }
+
+        nextState = createFluidaState(action.targetId, action.weapon, 'attack');
+    });
+
+    return nextState;
+};
+
+const getAttackSpeedCostMeta = ({ attackerToken, targetId, weapon, pendingState }) => {
+    const baseCost = Math.max(1, weapon ? getSpeedConsumption(weapon) : 2);
+    const hasNativeFluidaTrait = hasNativeCombatTrait(weapon, 'fluida');
+    const hasManualFluidaTrait = !hasNativeFluidaTrait && hasManualCombatTrait(weapon, 'fluida');
+    const queuedFluidaState = getQueuedFluidaState(attackerToken, pendingState);
+    const weaponName = getCombatWeaponName(weapon);
+    const automaticFluidaDiscountApplied =
+        hasNativeFluidaTrait &&
+        queuedFluidaState?.targetId &&
+        queuedFluidaState.targetId === targetId &&
+        queuedFluidaState?.weaponName &&
+        queuedFluidaState.weaponName === weaponName &&
+        baseCost > 1;
+    const manualFluidaDiscountApplied = hasManualFluidaTrait && baseCost > 1;
+    const fluidaDiscountApplied = automaticFluidaDiscountApplied || manualFluidaDiscountApplied;
+
+    return {
+        baseCost,
+        cost: fluidaDiscountApplied ? Math.max(1, baseCost - 1) : baseCost,
+        hasFluidaTrait: hasNativeFluidaTrait || hasManualFluidaTrait,
+        hasNativeFluidaTrait,
+        hasManualFluidaTrait,
+        fluidaDiscountApplied,
+        fluidaDiscountMode: manualFluidaDiscountApplied ? 'manual' : automaticFluidaDiscountApplied ? 'native' : null
+    };
+};
+
+const CombatTraitLine = ({ label, traits = [], accent = 'slate' }) => {
+    if (!Array.isArray(traits) || traits.length === 0) return null;
+    void label;
+    void accent;
+
+    return (
+        <div className="flex items-center gap-2">
+            <div className="w-3 h-[1px] bg-slate-800 shrink-0" />
+            <span className="text-[9px] text-slate-500 italic tracking-wider">
+                {traits.map((trait) => formatCombatTraitLabel(trait)).join(' · ')}
+            </span>
+        </div>
+    );
+};
 
 const GRID_SIZE = 50; // Tamaño de la celda en px
 const WORLD_SIZE = 12000; // Tamaño del mundo canvas en px (Aumentado para mapas 4k)
@@ -1552,11 +1738,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             if (newAnims.length > 0) {
                 setActiveCombatAnimations(prev => [...prev, ...newAnims]);
 
-                // Limpiar cada animación tras su duración (4s animación + 1s buffer)
+                // Limpiar cada animación tras su duración real para no cortar secuencias escalonadas o estados finales
                 newAnims.forEach((anim) => {
+                    const lifetimeMs = getCombatEffectLifetimeMs(anim.effect);
                     setTimeout(() => {
                         setActiveCombatAnimations(prev => prev.filter(a => a.id !== anim.id));
-                    }, 5500);
+                    }, lifetimeMs);
                 });
             }
 
@@ -3000,13 +3187,31 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 return; // No iniciamos drag si estamos deseleccionando
             }
 
+            const currentScenario = activeScenarioRef.current || activeScenario;
+            if (gridConfig.isCombatActive && activeLayer === 'TABLETOP' && currentScenario) {
+                const hasProneTokenInSelection = currentScenario.items.some(item =>
+                    newSelection.includes(item.id) && isTokenDerribado(item)
+                );
+                if (hasProneTokenInSelection) {
+                    const selectedProneToken = currentScenario.items.find(item =>
+                        newSelection.includes(item.id) && isTokenDerribado(item)
+                    );
+                    const proneStatusMeta = getTokenProneStatusMeta(selectedProneToken);
+                    triggerToast(
+                        proneStatusMeta?.label || "Derribado",
+                        `No puedes desplazar una ficha con el estado ${proneStatusMeta?.label?.toLowerCase() || 'derribado'} mientras el combate está activo`,
+                        'warning'
+                    );
+                    return;
+                }
+            }
+
             setDraggedTokenId(token.id);
             const touchId = (isTouch && e.touches && e.touches[0]) ? e.touches[0].identifier : null;
             setTokenDragStart({ x: curX, y: curY, identifier: touchId });
 
             // Guardar posiciones originales de TODOS los seleccionados
             const originals = {};
-            const currentScenario = activeScenarioRef.current || activeScenario;
             if (currentScenario) {
                 currentScenario.items.forEach(i => {
                     if (newSelection.includes(i.id)) {
@@ -4007,11 +4212,44 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         const token = scenario.items.find(i => i.id === tokenId);
         if (!token) return;
+        const tokenIsProne = isTokenDerribado(token);
+        const proneStatusMeta = getTokenProneStatusMeta(token);
 
         // --- LÓGICA DE TARGETING / CANCELACIÓN ---
         if (actionId === 'cancel_targeting') {
             setTargetingState(null);
             setFocusedTargetId(null);
+            return;
+        }
+
+        if (tokenIsProne && actionId !== 'stand_up') {
+            if (targetingState?.attackerId === tokenId) {
+                setTargetingState(null);
+                setFocusedTargetId(null);
+            }
+            triggerToast(
+                proneStatusMeta?.label || "Derribado",
+                `Mientras estés ${proneStatusMeta?.label?.toLowerCase() || 'derribado'} solo puedes levantarte`,
+                'warning'
+            );
+            return;
+        }
+
+        if (actionId === 'stand_up') {
+            if (!tokenIsProne) return;
+
+            const pendingActions = pendingTurnStateRef.current?.tokenId === tokenId
+                ? (pendingTurnStateRef.current.actions || [])
+                : [];
+
+            if (pendingActions.some(action => action.actionId === 'stand_up')) {
+                triggerToast("Levantarse pendiente", "Ya has preparado la acción de levantarte para este turno", 'info');
+                return;
+            }
+
+            const standUpCost = getStandUpSpeedCost(token);
+            updatePendingTurnActions(tokenId, token, "Levantarse", standUpCost, { actionId: 'stand_up' });
+            triggerToast("Levantarse", `${token.name} se preparará para incorporarse al final del turno (${standUpCost} de velocidad)`, 'info');
             return;
         }
 
@@ -4042,9 +4280,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         } else if (actionId === 'help') {
             cost = 1;
             actionName = "Ayudar";
-        } else if (actionId === 'dash') {
-            triggerToast("Correr no disponible", "Implementaremos la lógica de doble movimiento más adelante", 'info');
-            return;
         }
 
         if (cost > 0) {
@@ -4064,11 +4299,33 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         if (actionId === 'attack') {
             const weapon = data || (attackerToken.equippedItems || []).find(i => i.type === 'weapon');
-            cost = weapon ? getSpeedConsumption(weapon) : 2;
+            const costMeta = getAttackSpeedCostMeta({
+                attackerToken,
+                targetId: targetToken?.id,
+                weapon,
+                pendingState: pendingTurnStateRef.current
+            });
+            cost = costMeta.cost;
             actionName = `Ataque a ${targetToken.name} (${weapon?.nombre || weapon?.name || 'Arma'})`;
 
             // Aquí podríamos disparar efectos visuales, tirar dados, etc.
             triggerToast("¡Ataque!", `${attackerToken.name} ataca a ${targetToken.name} con ${weapon?.nombre || 'arma'}`, 'success');
+
+            if (cost > 0) {
+                updatePendingTurnActions(attackerId, attackerToken, actionName, cost, {
+                    targetId: targetToken.id,
+                    actionId,
+                    weapon,
+                    baseCost: costMeta.baseCost,
+                    fluidaDiscountApplied: costMeta.fluidaDiscountApplied,
+                    hasFluidaTrait: costMeta.hasFluidaTrait,
+                    hasNativeFluidaTrait: costMeta.hasNativeFluidaTrait,
+                    hasManualFluidaTrait: costMeta.hasManualFluidaTrait,
+                    fluidaDiscountMode: costMeta.fluidaDiscountMode
+                });
+            }
+
+            return;
         }
 
         if (cost > 0) {
@@ -4128,10 +4385,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         // Reducir grado del dado si el arma tiene Agudeza
         const traits = weapon?.rasgos || weapon?.traits || weapon?.trait || weapon?.properties || [];
         const traitsArray = Array.isArray(traits) ? traits : traits.toString().split(',');
-        const hasAgudeza = traitsArray.some(t => {
-            if (typeof t !== 'string') return false;
-            return t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('agudeza');
-        });
+        const normalizedTraits = traitsArray
+            .filter((t) => typeof t === 'string')
+            .map((t) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
+        const hasAgudeza = normalizedTraits.some((t) => t.includes('agudeza'));
+        const hasDerribado = normalizedTraits.some((t) => t.includes('derribado') || t.includes('derribar') || t.includes('derribo'));
+        const hasHendir = normalizedTraits.some((t) => t.includes('hendir'));
+        const hasConmocionante = normalizedTraits.some((t) => t.includes('conmocionante'));
 
         const reduceDieStep = (dieStr) => {
             if (!dieStr || typeof dieStr !== 'string') return dieStr;
@@ -4163,10 +4423,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         let lostPostura = 0;
         let lostArmadura = 0;
         let lostVida = 0;
+        let extraPosturaFromTrait = 0;
+        let extraArmaduraFromTrait = 0;
+        let baseLostPostura = 0;
+        let baseLostArmadura = 0;
+        const appliedStatusEffects = [];
 
         let currentPostura = token.stats?.postura?.current || 0;
         let currentArmadura = token.stats?.armadura?.current || 0;
         let currentVida = token.stats?.vida?.current || 0;
+        const posturaInicial = currentPostura;
         let remainingDamage = Math.max(0, Number(damage) || 0);
 
         const consumeDamageBlocks = (availableBlocks, threshold) => {
@@ -4184,17 +4450,42 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         };
 
         lostPostura = consumeDamageBlocks(currentPostura, posturaUmbral);
+        baseLostPostura = lostPostura;
         currentPostura -= lostPostura;
 
+        if (hasDerribado && lostPostura > 0 && currentPostura > 0) {
+            lostPostura += 1;
+            currentPostura -= 1;
+            extraPosturaFromTrait = 1;
+        }
+
         lostArmadura = consumeDamageBlocks(currentArmadura, armaduraUmbral);
+        baseLostArmadura = lostArmadura;
         currentArmadura -= lostArmadura;
+
+        if (hasHendir && lostArmadura > 0 && currentArmadura > 0) {
+            lostArmadura += 1;
+            currentArmadura -= 1;
+            extraArmaduraFromTrait = 1;
+        }
 
         lostVida = consumeDamageBlocks(currentVida, vidaUmbral);
         currentVida -= lostVida;
 
+        const wasAlreadyProne = PRONE_STATUS_IDS.some((statusId) => Array.isArray(token.status) && token.status.includes(statusId));
+        const fellProneByPostureBreak = posturaInicial > 0 && currentPostura === 0;
+        const fellProneByBodyDamageWithoutPosture = posturaInicial === 0 && (lostArmadura > 0 || lostVida > 0);
+
         const newStatus = [...(token.status || [])];
-        if (currentPostura === 0 && !newStatus.includes('derribado')) {
-            newStatus.push('derribado');
+        const appliedProneNow = !wasAlreadyProne && (fellProneByPostureBreak || fellProneByBodyDamageWithoutPosture);
+        const proneStatusId = hasConmocionante ? 'conmocionado' : 'derribado';
+        if (appliedProneNow && !newStatus.includes(proneStatusId)) {
+            newStatus.push(proneStatusId);
+            appliedStatusEffects.push({
+                id: proneStatusId,
+                label: DEFAULT_STATUS_EFFECTS[proneStatusId]?.label || 'Derribado',
+                hex: DEFAULT_STATUS_EFFECTS[proneStatusId]?.hex || '#818cf8'
+            });
         }
 
         return {
@@ -4205,7 +4496,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 vida: { ...token.stats.vida, current: currentVida },
             },
             status: newStatus,
-            lost: { postura: lostPostura, armadura: lostArmadura, vida: lostVida }
+            lost: { postura: lostPostura, armadura: lostArmadura, vida: lostVida },
+            baseLost: { postura: baseLostPostura, armadura: baseLostArmadura, vida: lostVida },
+            traitBonuses: {
+                postura: extraPosturaFromTrait ? { name: 'Derribo', blocks: extraPosturaFromTrait } : null,
+                armadura: extraArmaduraFromTrait ? { name: 'Hendir', blocks: extraArmaduraFromTrait } : null,
+            },
+            appliedStatusEffects
         };
     };
 
@@ -4224,64 +4521,88 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             return;
         }
 
-        const scenario = activeScenarioRef.current || activeScenario;
-        const attackerTokenBase = scenario.items.find(i => i.id === event.attackerId);
-        const targetTokenBase = scenario.items.find(i => i.id === event.targetId);
+        try {
+            const scenario = activeScenarioRef.current || activeScenario;
+            const attackerTokenBase = scenario.items.find(i => i.id === event.attackerId);
+            const targetTokenBase = scenario.items.find(i => i.id === event.targetId);
 
-        if (!attackerTokenBase || !targetTokenBase) {
-            await deleteDoc(doc(db, 'combat_events', event.id));
-            return;
-        }
-
-        const attackerToken = enrichTokenWithCharacterData(attackerTokenBase);
-        const targetToken = enrichTokenWithCharacterData(targetTokenBase);
-
-        // Extraer dados individuales del atacante para el log visual
-        const attackerDice = [];
-        (event.attackerRollResult?.details || []).forEach((detail, dIdx) => {
-            if (detail.type === 'dice') {
-                const match = detail.formula?.match(/d(\d+)/i);
-                const faces = match ? parseInt(match[1]) : 20;
-
-                detail.rolls.forEach((r, rIdx) => {
-                    attackerDice.push({
-                        value: typeof r === 'object' ? r.value : r,
-                        critical: typeof r === 'object' ? r.critical : false,
-                        matchedAttr: detail.matchedAttr || null,
-                        id: `${dIdx}-${rIdx}`,
-                        faces
-                    });
-                });
-            } else if (detail.matchedAttr && (detail.type === 'calc' || detail.type === 'modifier')) {
-                attackerDice.push({
-                    value: detail.value || detail.total || 0,
-                    matchedAttr: detail.matchedAttr,
-                    critical: false,
-                    id: `${dIdx}-0`,
-                    faces: 6
-                });
+            if (!attackerTokenBase || !targetTokenBase) {
+                await deleteDoc(doc(db, 'combat_events', event.id));
+                return;
             }
-        });
 
-        attackerDice.sort((a, b) => {
-            const rankA = a.critical ? 1 : a.matchedAttr ? 2 : 0;
-            const rankB = b.critical ? 1 : b.matchedAttr ? 2 : 0;
-            return rankA - rankB;
-        });
+            const attackerToken = enrichTokenWithCharacterData(attackerTokenBase);
+            const targetToken = enrichTokenWithCharacterData(targetTokenBase);
 
-        let logText = "";
-        let finalItems = [...scenario.items];
-        const updateTokenInList = (id, updates) => {
-            finalItems = finalItems.map(item => item.id === id ? { ...item, ...updates } : item);
-        };
+            // Extraer dados individuales del atacante para el log visual
+            const attackerDice = [];
+            (event.attackerRollResult?.details || []).forEach((detail, dIdx) => {
+                if (detail.type === 'dice') {
+                    const match = detail.formula?.match(/d(\d+)/i);
+                    const faces = match ? parseInt(match[1]) : 20;
+
+                    detail.rolls.forEach((r, rIdx) => {
+                        attackerDice.push({
+                            value: typeof r === 'object' ? r.value : r,
+                            critical: typeof r === 'object' ? r.critical : false,
+                            matchedAttr: detail.matchedAttr || null,
+                            id: `${dIdx}-${rIdx}`,
+                            faces
+                        });
+                    });
+                } else if (detail.matchedAttr && (detail.type === 'calc' || detail.type === 'modifier')) {
+                    attackerDice.push({
+                        value: detail.value || detail.total || 0,
+                        matchedAttr: detail.matchedAttr,
+                        critical: false,
+                        id: `${dIdx}-0`,
+                        faces: 6
+                    });
+                }
+            });
+
+            attackerDice.sort((a, b) => {
+                const rankA = a.critical ? 1 : a.matchedAttr ? 2 : 0;
+                const rankB = b.critical ? 1 : b.matchedAttr ? 2 : 0;
+                return rankA - rankB;
+            });
+
+            let logText = "";
+            let finalItems = [...scenario.items];
+            const updateTokenInList = (id, updates) => {
+                finalItems = finalItems.map(item => item.id === id ? { ...item, ...updates } : item);
+            };
 
         // Variables para el log rico
         let finalDamage = 0;
         let counterDamage = 0;
         let blocksLost = { postura: 0, armadura: 0, vida: 0 };
+        let baseBlocksLost = { postura: 0, armadura: 0, vida: 0 };
+        let traitBonuses = { postura: null, armadura: null };
         let evadedDiceIds = [];
         let defenderDice = [];
         let defenderTotal = 0;
+        let counterPreventedByRange = false;
+        let attackerRangeLabel = null;
+        let defenderRangeLabel = null;
+        let distanceBetweenTokens = null;
+        const attackTraits = getItemTraits(event.weapon);
+        const attackHasFluida = hasNativeCombatTrait(event.weapon, 'fluida');
+        const laterActionBreaksAttackerFluida =
+            !!event.fluidaMeta?.laterActionBreaksChain ||
+            !!event.fluidaMeta?.laterNonAttackBreaksChain;
+        let defenderTraits = [];
+        let statusEffectsApplied = { target: [], attacker: [] };
+        let nextAttackerFluidaState = getTokenFluidaState(attackerTokenBase);
+        let nextTargetFluidaState = getTokenFluidaState(targetTokenBase);
+
+        const setAttackerFluidaState = (state) => {
+            nextAttackerFluidaState = laterActionBreaksAttackerFluida ? null : normalizeFluidaState(state);
+        };
+
+        const setTargetFluidaState = (state) => {
+            nextTargetFluidaState = normalizeFluidaState(state);
+        };
 
         if (event.reactionType === 'evadir') {
             evadedDiceIds = event.reactionData.evadedDiceIds || [];
@@ -4302,12 +4623,17 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const evadedAll = newTotal <= 0; // Todos los dados evadidos
             const res = applyCombatCalculations(targetToken, newTotal, event.weapon);
             blocksLost = res.lost;
+            baseBlocksLost = res.baseLost || baseBlocksLost;
+            traitBonuses = res.traitBonuses || traitBonuses;
+            statusEffectsApplied.target = res.appliedStatusEffects || [];
             updateTokenInList(targetTokenBase.id, { stats: res.stats, status: res.status, velocidad: (targetTokenBase.velocidad || 0) + (event.reactionData.yellowCost || 0) });
             if (evadedAll) {
                 logText = `¡${targetToken.name} evadió completamente el ataque de ${attackerToken.name}!`;
             } else {
                 logText = `${targetToken.name} evadió parcialmente a ${attackerToken.name} y recibió ${newTotal} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
             }
+            setAttackerFluidaState(attackHasFluida ? createFluidaState(targetToken.id, event.weapon, 'attack') : null);
+            setTargetFluidaState(null);
         } else if (event.reactionType === 'parar') {
             const defenderAttrs = targetToken.attributes || targetToken.atributos || {};
             const counterArmorProtection = getArmorProtection(attackerToken, event.reactionData.weapon, { armaduras });
@@ -4315,8 +4641,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 event.reactionData.weapon,
                 counterArmorProtection.negatedTraits
             );
+            defenderTraits = getItemTraits(defenderWeapon);
+            const defenderHasFluida = hasNativeCombatTrait(defenderWeapon, 'fluida');
             const defenderRoll = rollAttack(defenderWeapon, defenderAttrs);
             defenderTotal = defenderRoll.total;
+            const attackerRange = getCombatRangeData(event.weapon);
+            const defenderRange = getCombatRangeData(defenderWeapon);
+            const storedDistance = Number(event.distanceBetweenTokens);
+            distanceBetweenTokens = Number.isFinite(storedDistance)
+                ? storedDistance
+                : getTokenDistanceInCells(attackerTokenBase, targetTokenBase, gridConfig);
+            attackerRangeLabel = attackerRange.label;
+            defenderRangeLabel = defenderRange.label;
 
             // Extract defender dice details
             (defenderRoll.details || []).forEach((detail, dIdx) => {
@@ -4352,29 +4688,56 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 updateTokenInList(targetTokenBase.id, { velocidad: (targetTokenBase.velocidad || 0) + yellowCost });
                 const defWeaponName = event.reactionData.weapon?.nombre || event.reactionData.weapon?.name || 'su arma';
                 logText = `${targetToken.name} realizó una parada perfecta con ${defWeaponName}.`;
+                setAttackerFluidaState(null);
+                setTargetFluidaState(defenderHasFluida ? createFluidaState(attackerToken.id, defenderWeapon, 'parry') : null);
             } else if (diff > 0) {
                 finalDamage = diff;
                 const res = applyCombatCalculations(targetToken, diff, event.weapon);
                 blocksLost = res.lost;
+                baseBlocksLost = res.baseLost || baseBlocksLost;
+                traitBonuses = res.traitBonuses || traitBonuses;
+                statusEffectsApplied.target = res.appliedStatusEffects || [];
                 updateTokenInList(targetTokenBase.id, { stats: res.stats, status: res.status, velocidad: (targetTokenBase.velocidad || 0) + yellowCost });
                 const defWeaponName = event.reactionData.weapon?.nombre || event.reactionData.weapon?.name || 'su arma';
                 logText = `${targetToken.name} paró con ${defWeaponName} pero recibió ${diff} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
+                setAttackerFluidaState(attackHasFluida ? createFluidaState(targetToken.id, event.weapon, 'attack') : null);
+                setTargetFluidaState(defenderHasFluida ? createFluidaState(attackerToken.id, defenderWeapon, 'parry') : null);
             } else {
-                counterDamage = Math.abs(diff);
-                const res = applyCombatCalculations(attackerToken, counterDamage, defenderWeapon);
-                blocksLost = res.lost;
-                updateTokenInList(attackerTokenBase.id, { stats: res.stats, status: res.status });
-                updateTokenInList(targetTokenBase.id, { velocidad: (targetTokenBase.velocidad || 0) + yellowCost });
                 const defWeaponName = event.reactionData.weapon?.nombre || event.reactionData.weapon?.name || 'su arma';
-                logText = `¡${targetToken.name} paró con ${defWeaponName} y contraatacó a ${attackerToken.name} por ${counterDamage} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques)!`;
+                if (defenderRange.value < distanceBetweenTokens) {
+                    counterPreventedByRange = true;
+                    finalDamage = 0;
+                    updateTokenInList(targetTokenBase.id, { velocidad: (targetTokenBase.velocidad || 0) + yellowCost });
+                    logText = `${targetToken.name} paró con ${defWeaponName}, pero no pudo contraatacar porque su alcance (${defenderRange.label}) no alcanza la distancia real entre ambos (${distanceBetweenTokens}).`;
+                } else {
+                    counterDamage = Math.abs(diff);
+                    const res = applyCombatCalculations(attackerToken, counterDamage, defenderWeapon);
+                    blocksLost = res.lost;
+                    baseBlocksLost = res.baseLost || baseBlocksLost;
+                    traitBonuses = res.traitBonuses || traitBonuses;
+                    statusEffectsApplied.attacker = res.appliedStatusEffects || [];
+                    updateTokenInList(attackerTokenBase.id, { stats: res.stats, status: res.status });
+                    updateTokenInList(targetTokenBase.id, { velocidad: (targetTokenBase.velocidad || 0) + yellowCost });
+                    logText = `¡${targetToken.name} paró con ${defWeaponName} y contraatacó a ${attackerToken.name} por ${counterDamage} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques)!`;
+                }
+                setAttackerFluidaState(null);
+                setTargetFluidaState(defenderHasFluida ? createFluidaState(attackerToken.id, defenderWeapon, 'parry') : null);
             }
         } else {
             finalDamage = event.attackerRollResult.total;
             const res = applyCombatCalculations(targetToken, event.attackerRollResult.total, event.weapon);
             blocksLost = res.lost;
+            baseBlocksLost = res.baseLost || baseBlocksLost;
+            traitBonuses = res.traitBonuses || traitBonuses;
+            statusEffectsApplied.target = res.appliedStatusEffects || [];
             updateTokenInList(targetTokenBase.id, { stats: res.stats, status: res.status });
             logText = `${targetToken.name} recibió el golpe directo de ${attackerToken.name} por ${event.attackerRollResult.total} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
+            setAttackerFluidaState(attackHasFluida ? createFluidaState(targetToken.id, event.weapon, 'attack') : null);
+            setTargetFluidaState(null);
         }
+
+        updateTokenInList(attackerTokenBase.id, { fluidaState: nextAttackerFluidaState });
+        updateTokenInList(targetTokenBase.id, { fluidaState: nextTargetFluidaState });
 
         const combatLogEntry = {
             sourceEventId: event.id,
@@ -4385,16 +4748,25 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             targetName: targetToken.name,
             weaponName: event.weapon?.nombre || event.weapon?.name || null,
             attackTotal: event.attackerRollResult.total,
+            attackTraits,
             attackerDice,
             defenderDice,
             defenderTotal,
+            defenderTraits,
             reactionType: event.reactionType || 'recibir',
             evadedDiceIds,
             evadedAll: event.reactionType === 'evadir' && finalDamage <= 0, // Flag para animación
+            counterPreventedByRange,
+            attackerRangeLabel,
+            defenderRangeLabel,
+            distanceBetweenTokens,
             finalDamage,
             counterDamage,
             defenderWeapon: event.reactionData?.weapon?.nombre || event.reactionData?.weapon?.name || null,
             blocksLost,
+            baseBlocksLost,
+            traitBonuses,
+            statusEffectsApplied,
             damage: finalDamage,
             negatedTraits: event.negatedTraits || [],
             armorProtectionSource: event.armorProtectionSource || null,
@@ -4405,14 +4777,27 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const updatedTarget = finalItems.find(i => i.id === targetTokenBase.id);
         const updatedAttacker = finalItems.find(i => i.id === attackerTokenBase.id);
 
-        await updateDoc(doc(db, 'combat_events', event.id), {
-            status: 'resuelto',
-            result: combatLogEntry,
-            tokenUpdates: {
-                target: updatedTarget ? { id: targetToken.id, stats: updatedTarget.stats, status: updatedTarget.status, velocidad: updatedTarget.velocidad } : null,
-                attacker: updatedAttacker ? { id: attackerToken.id, stats: updatedAttacker.stats, status: updatedAttacker.status, velocidad: updatedAttacker.velocidad } : null
+            await updateDoc(doc(db, 'combat_events', event.id), {
+                status: 'resuelto',
+                result: combatLogEntry,
+                tokenUpdates: {
+                    target: updatedTarget ? { id: targetToken.id, stats: updatedTarget.stats, status: updatedTarget.status, velocidad: updatedTarget.velocidad, fluidaState: updatedTarget.fluidaState ?? null } : null,
+                    attacker: updatedAttacker ? { id: attackerToken.id, stats: updatedAttacker.stats, status: updatedAttacker.status, velocidad: updatedAttacker.velocidad, fluidaState: updatedAttacker.fluidaState ?? null } : null
+                }
+            });
+        } catch (error) {
+            console.error('Error resolviendo evento de combate:', error, event);
+            try {
+                await updateDoc(doc(db, 'combat_events', event.id), {
+                    status: `${event.reactionType || 'recibir'}_pendiente`,
+                    resolutionError: error?.message || 'Error desconocido al resolver el evento'
+                });
+            } catch (revertError) {
+                console.error('No se pudo restaurar el estado pendiente del evento de combate:', revertError, event);
             }
-        });
+        } finally {
+            resolvingCombatEventsRef.current.delete(event.id);
+        }
     };
 
     const handleReaction = async (reaction) => {
@@ -4430,11 +4815,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         let currentItems = snap.data().items || [];
                         let changed = false;
                         if (ev.tokenUpdates.target) {
-                            currentItems = currentItems.map(item => item.id === ev.tokenUpdates.target.id ? { ...item, stats: ev.tokenUpdates.target.stats, status: ev.tokenUpdates.target.status, velocidad: ev.tokenUpdates.target.velocidad } : item);
+                            currentItems = currentItems.map(item => item.id === ev.tokenUpdates.target.id ? { ...item, stats: ev.tokenUpdates.target.stats, status: ev.tokenUpdates.target.status, velocidad: ev.tokenUpdates.target.velocidad, fluidaState: ev.tokenUpdates.target.fluidaState ?? null } : item);
                             changed = true;
                         }
                         if (ev.tokenUpdates.attacker) {
-                            currentItems = currentItems.map(item => item.id === ev.tokenUpdates.attacker.id ? { ...item, stats: ev.tokenUpdates.attacker.stats, status: ev.tokenUpdates.attacker.status, velocidad: ev.tokenUpdates.attacker.velocidad } : item);
+                            currentItems = currentItems.map(item => item.id === ev.tokenUpdates.attacker.id ? { ...item, stats: ev.tokenUpdates.attacker.stats, status: ev.tokenUpdates.attacker.status, velocidad: ev.tokenUpdates.attacker.velocidad, fluidaState: ev.tokenUpdates.attacker.fluidaState ?? null } : item);
                             changed = true;
                         }
                         if (changed) {
@@ -4454,7 +4839,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     }
 
                     // Escribir en combat_log para el sistema (también gatillará animaciones HTML)
-                    const logEntryToWrite = { ...ev.result, timestamp: serverTimestamp() };
+                    const logEntryToWrite = {
+                        ...ev.result,
+                        clientTimestamp: Date.now(),
+                        timestamp: serverTimestamp()
+                    };
                     delete logEntryToWrite.logText; // no es necesario guardar esto permanente
                     await addDoc(collection(db, 'combat_log'), logEntryToWrite);
 
@@ -4483,13 +4872,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }
 
         try {
+            const safeReactionData =
+                reaction.data == null
+                    ? null
+                    : JSON.parse(JSON.stringify(reaction.data));
+
             await updateDoc(doc(db, 'combat_events', currentEvent.event.id), {
                 status: `${reaction.type}_pendiente`,
                 reactionType: reaction.type,
-                reactionData: reaction.data
+                reactionData: safeReactionData
             });
         } catch (err) {
-            console.warn('Evento de combate ya procesado o eliminado:', currentEvent.event.id);
+            console.error('Error al guardar la reacción de combate:', err, currentEvent.event.id, reaction);
+            throw err;
         }
 
         // Ya NO quitamos el evento de la cola. Simplemente marcamos algo localmente si es necesario.
@@ -4506,6 +4901,17 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const pending = pendingTurnState && pendingTurnState.tokenId === tokenId ? pendingTurnState : null;
         const moveCost = pending ? pending.moveCost : 0;
         const actionCost = pending ? pending.actionCost : 0;
+        const isStandingUp = !!pending?.actions?.some(action => action.actionId === 'stand_up');
+        const currentFluidaState = getTokenFluidaState(token);
+        const shouldClearFluidaOnCommit = !!pending?.actions?.some((action) => {
+            if (action.actionId !== 'attack') return true;
+            if (!hasNativeCombatTrait(action.weapon, 'fluida')) return true;
+            if (!currentFluidaState) return false;
+            return (
+                action.targetId !== currentFluidaState.targetId ||
+                getCombatWeaponName(action.weapon) !== currentFluidaState.weaponName
+            );
+        });
 
         const finalCost = (moveCost + actionCost) || 1;
         const finalX = pending ? pending.x : token.x;
@@ -4513,7 +4919,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         // Crear eventos de combate
         if (pending && pending.actions) {
-            for (const action of pending.actions) {
+            for (const [actionIndex, action] of pending.actions.entries()) {
                 if (action.actionId === 'attack' && action.targetId) {
                     const targetToken = scenario.items.find(i => i.id === action.targetId);
                     if (targetToken) {
@@ -4534,46 +4940,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             effectiveWeapon,
                             attackerAttrs
                         );
-                        // Calcular distancia real (AABB) entre bordes de los tokens, no solo entre centros
-                        // Esto soluciona que atacar a tokens gigantes requiera estar "encima" de ellos
-                        const getDistanceInCells = (t1, t2) => {
-                            // Encontrar bordes en X
-                            const t1Left = t1.x;
-                            const t1Right = t1.x + t1.width;
-                            const t2Left = t2.x;
-                            const t2Right = t2.x + t2.width;
-
-                            // Encontrar bordes en Y
-                            const t1Top = t1.y;
-                            const t1Bottom = t1.y + t1.height;
-                            const t2Top = t2.y;
-                            const t2Bottom = t2.y + t2.height;
-
-                            // Calcular distancias entre bordes (0 si se solapan o están adyacentes tocándose sin grid gap)
-                            const dx = Math.max(0, t1Left - t2Right, t2Left - t1Right);
-                            const dy = Math.max(0, t1Top - t2Bottom, t2Top - t1Bottom);
-
-                            // Convertir a celdas
-                            const cellW = gridConfig.cellWidth || 50;
-                            const cellH = gridConfig.cellHeight || 50;
-
-                            // Si los bordes se tocan (dx=0, dy=0), la distancia es 1 celda (adyacente)
-                            // Si se solapan fuertemente, consideramos 0 (encima).
-                            // Redondeamos para acomodar imperfecciones de posicionamiento.
-                            let distCells = Math.max(Math.ceil(dx / cellW), Math.ceil(dy / cellH));
-
-                            // Fix: si no están encima pero se tocan los bordes, la distancia euclidiana de casillas de rol es 1.
-                            if (distCells === 0) {
-                                // Double check if they are actually exactly adjacent vs overlapping
-                                if (t1Right === t2Left || t1Left === t2Right || t1Bottom === t2Top || t1Top === t2Bottom) {
-                                    distCells = 1;
-                                }
-                            }
-
-                            return distCells;
-                        };
-
-                        const actualDistance = getDistanceInCells(token, targetToken);
+                        const actualDistance = getTokenDistanceInCells(token, targetToken, gridConfig);
+                        const currentActionWeaponName = getCombatWeaponName(action.weapon);
+                        const laterActionBreaksChain = pending.actions
+                            .slice(actionIndex + 1)
+                            .some((queuedAction) =>
+                                queuedAction.actionId !== 'attack' ||
+                                !hasNativeCombatTrait(queuedAction.weapon, 'fluida') ||
+                                queuedAction.targetId !== action.targetId ||
+                                getCombatWeaponName(queuedAction.weapon) !== currentActionWeaponName
+                            );
 
                         await addDoc(collection(db, 'combat_events'), {
                             attackerId: token.id,
@@ -4592,18 +4968,51 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             attackerVel: token.velocidad || 0,
                             targetVel: targetToken.velocidad || 0,
                             diffVelocidad: Math.abs((token.velocidad || 0) - (targetToken.velocidad || 0)),
-                            distanceBetweenTokens: actualDistance
+                            distanceBetweenTokens: actualDistance,
+                            fluidaMeta: {
+                                hasTrait: !!action.hasFluidaTrait,
+                                hasNativeTrait: !!action.hasNativeFluidaTrait,
+                                hasManualTrait: !!action.hasManualFluidaTrait,
+                                baseCost: action.baseCost ?? Math.max(1, getSpeedConsumption(action.weapon)),
+                                discountApplied: !!action.fluidaDiscountApplied,
+                                discountMode: action.fluidaDiscountMode || null,
+                                laterActionBreaksChain
+                            }
                         });
                     }
                 }
             }
         }
 
-        const newItems = scenario.items.map(i =>
-            i.id === tokenId
-                ? { ...i, x: finalX, y: finalY, velocidad: (token.velocidad || 0) + finalCost }
-                : i
-        );
+        const newItems = scenario.items.map(i => {
+            if (i.id !== tokenId) return i;
+
+            let nextItem = { ...i, x: finalX, y: finalY, velocidad: (token.velocidad || 0) + finalCost };
+
+             if (shouldClearFluidaOnCommit) {
+                nextItem = {
+                    ...nextItem,
+                    fluidaState: null
+                };
+            }
+
+            if (isStandingUp) {
+                const posturaMax = Number(i?.stats?.postura?.max ?? i?.stats?.postura?.current ?? 0);
+                nextItem = {
+                    ...nextItem,
+                    status: (Array.isArray(i.status) ? i.status : []).filter(statusId => !PRONE_STATUS_IDS.includes(statusId)),
+                    stats: {
+                        ...i.stats,
+                        postura: {
+                            ...(i.stats?.postura || {}),
+                            current: posturaMax
+                        }
+                    }
+                };
+            }
+
+            return nextItem;
+        });
 
         setActiveScenario(prev => ({ ...prev, items: newItems }));
         setPendingTurnState(null);
@@ -4947,8 +5356,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             ) : (
                                                 combatLog.map((entry) => {
                                                     const isCounter = entry.reactionType === 'parar' && entry.counterDamage > 0;
-                                                    const isPerfect = entry.reactionType === 'parar' && entry.damage === 0 && !isCounter;
+                                                    const isCounterPreventedByRange = entry.reactionType === 'parar' && entry.counterPreventedByRange;
+                                                    const isPerfect = entry.reactionType === 'parar' && entry.damage === 0 && !isCounter && !isCounterPreventedByRange;
                                                     const totalBlocks = (entry.blocksLost?.postura || 0) + (entry.blocksLost?.armadura || 0) + (entry.blocksLost?.vida || 0);
+                                                    const basePosturaLost = entry.baseBlocksLost?.postura || 0;
+                                                    const baseArmaduraLost = entry.baseBlocksLost?.armadura || 0;
+                                                    const traitPosturaBonus = entry.traitBonuses?.postura?.blocks || 0;
+                                                    const traitArmaduraBonus = entry.traitBonuses?.armadura?.blocks || 0;
 
                                                     const accentColor = entry.reactionType === 'evadir' ? '#eab308' :
                                                         entry.reactionType === 'parar' ? '#3b82f6' : '#ef4444';
@@ -4996,6 +5410,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                         </span>
                                                                     </div>
                                                                 )}
+                                                                <CombatTraitLine
+                                                                    label="Ataque"
+                                                                    traits={entry.attackTraits}
+                                                                    accent="red"
+                                                                />
                                                             </div>
 
                                                             {/* Results Section */}
@@ -5057,10 +5476,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                     </div>
                                                                 </div>
 
-                                                                {entry.reactionType === 'parar' && entry.defenderDice && (
-                                                                    <div className="flex items-center gap-4 px-1 border-t border-slate-900/30 pt-2">
-                                                                        <div className="flex gap-1.5">
-                                                                            {entry.defenderDice.map((die, i) => {
+                                                                 {entry.reactionType === 'parar' && entry.defenderDice && (
+                                                                     <div className="flex items-center gap-4 px-1 border-t border-slate-900/30 pt-2">
+                                                                         <div className="flex gap-1.5">
+                                                                             {entry.defenderDice.map((die, i) => {
                                                                                 const matchedAttr = typeof die.matchedAttr === 'string' ? die.matchedAttr.trim().toLowerCase() : null;
                                                                                 const attrColorMap = {
                                                                                     destreza: { color: '#4ade80' },
@@ -5093,13 +5512,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                             })}
                                                                         </div>
                                                                         <div className="h-4 w-[1px] bg-slate-800" />
-                                                                        <div className="flex items-center gap-1.5">
-                                                                            <span className="text-[9px] text-blue-500/60 uppercase font-bold tracking-widest">Parada</span>
-                                                                            <span className="text-blue-400 text-xs font-bold">{entry.defenderTotal}</span>
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                            </div>
+                                                                         <div className="flex items-center gap-1.5">
+                                                                             <span className="text-[9px] text-blue-500/60 uppercase font-bold tracking-widest">Parada</span>
+                                                                             <span className="text-blue-400 text-xs font-bold">{entry.defenderTotal}</span>
+                                                                         </div>
+                                                                     </div>
+                                                                 )}
+                                                                 <CombatTraitLine
+                                                                     label="Parada"
+                                                                     traits={entry.reactionType === 'parar' ? entry.defenderTraits : []}
+                                                                     accent="blue"
+                                                                 />
+                                                             </div>
 
                                                             {/* Reaction Descriptive Text */}
                                                             <div className="px-1 text-[11px] leading-relaxed">
@@ -5114,6 +5538,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                         <span className="text-blue-400/80 mr-1.5 italic font-bold">Parada:</span>
                                                                         {isPerfect ? `Desvió completamente el ataque con ${entry.defenderWeapon || 'su arma'}.` :
                                                                             isCounter ? `Devolvió ${entry.counterDamage} de daño al atacante con ${entry.defenderWeapon || 'su arma'}.` :
+                                                                                isCounterPreventedByRange ? `Desvió el ataque con ${entry.defenderWeapon || 'su arma'}, pero no alcanza la distancia real para devolver el golpe.` :
                                                                                 `Parada parcial con ${entry.defenderWeapon || 'su arma'}, recibió ${entry.finalDamage} de daño.`}
                                                                     </p>
                                                                 )}
@@ -5128,8 +5553,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                             {/* Damage Badges */}
                                                             {totalBlocks > 0 ? (
                                                                 <div className="flex gap-2 px-1 pt-1 opacity-80">
-                                                                    {entry.blocksLost?.postura > 0 && <span className="text-[9px] text-emerald-500/80 border-b border-emerald-900/40 pb-0.5">-{entry.blocksLost.postura} Postura</span>}
-                                                                    {entry.blocksLost?.armadura > 0 && <span className="text-[9px] text-slate-400/80 border-b border-slate-800/40 pb-0.5">-{entry.blocksLost.armadura} Armadura</span>}
+                                                                    {basePosturaLost > 0 && <span className="text-[9px] text-emerald-500/80 border-b border-emerald-900/40 pb-0.5">-{basePosturaLost} Postura</span>}
+                                                                    {traitPosturaBonus > 0 && <span className="text-[9px] text-green-300 border-b border-green-500/40 pb-0.5">-{traitPosturaBonus} Postura</span>}
+                                                                    {baseArmaduraLost > 0 && <span className="text-[9px] text-slate-400/80 border-b border-slate-800/40 pb-0.5">-{baseArmaduraLost} Armadura</span>}
+                                                                    {traitArmaduraBonus > 0 && <span className="text-[9px] text-slate-300 border-b border-slate-400/50 pb-0.5">-{traitArmaduraBonus} Armadura</span>}
                                                                     {entry.blocksLost?.vida > 0 && <span className="text-[9px] text-red-500/80 border-b border-red-900/40 pb-0.5">-{entry.blocksLost.vida} Vida</span>}
                                                                 </div>
                                                             ) : totalBlocks === 0 && entry.reactionType !== 'parar' && (

@@ -1,11 +1,20 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Shield, FastForward, Sword, Swords, Zap, X, Check } from 'lucide-react';
-import { getSpeedConsumption, rollAttack } from '../utils/combatSystem';
+import { getSpeedConsumption, hasCombatTrait, hasManualCombatTrait, hasNativeCombatTrait, rollAttack } from '../utils/combatSystem';
 import CombatModifiersPanel, { applyModifiersToWeapon } from './CombatModifiersPanel';
 import DiceSvg from './DiceSvg';
 import { useCustomEquipmentImages, getCustomImage } from '../hooks/useCustomEquipmentImages';
+import { DEFAULT_STATUS_EFFECTS, PRONE_STATUS_IDS } from '../utils/statusEffects';
 
 const normalizeKey = (name) => (name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+const getCombatWeaponName = (weapon) => String(weapon?.nombre || weapon?.name || '').trim().toLowerCase();
+const formatCombatTraitLabel = (trait = '') => {
+    const normalized = trait.toString().trim().toLowerCase();
+    if (normalized === 'derribado' || normalized === 'derribar' || normalized === 'derribo') return 'Derribo';
+    if (normalized === 'conmocionante') return 'Conmocionante';
+    if (normalized === 'fluida') return 'Fluida';
+    return trait;
+};
 
 const getArmorProtectionMeta = (payload) => ({
     traits: payload?.negatedTraits || payload?.blockedTraits || [],
@@ -22,8 +31,59 @@ const ArmorProtectionBanner = ({ source, traits = [] }) => {
             </p>
             <p className="text-xs text-emerald-100 mt-1">
                 {source ? <span className="font-semibold">{source}</span> : 'La armadura equipada'} anula{' '}
-                <span className="font-semibold">{traits.join(', ')}</span>
+                <span className="font-semibold">{traits.map((trait) => formatCombatTraitLabel(trait)).join(', ')}</span>
             </p>
+        </div>
+    );
+};
+
+const ProneDefenseBanner = ({ statusLabel = 'Derribado', standUpCost = 1 }) => (
+    <div className="rounded-lg border border-amber-500/30 bg-amber-900/20 px-3 py-2 text-center">
+        <p className="text-[10px] uppercase tracking-[0.2em] text-amber-300 font-bold">
+            {statusLabel}
+        </p>
+        <p className="text-xs text-amber-100 mt-1">
+            Estás {statusLabel.toLowerCase()} y no puedes evadir ni parar. Solo puedes recibir el golpe.
+            {standUpCost > 1 ? ` Levantarte costará ${standUpCost} de velocidad.` : ''}
+        </p>
+    </div>
+);
+
+const CombatTraitRow = ({ label, traits = [], accent = 'slate' }) => {
+    if (!Array.isArray(traits) || traits.length === 0) return null;
+
+    const accentStyles = {
+        slate: {
+            label: 'text-slate-500/80',
+            pill: 'border-slate-700/80 bg-slate-900/50 text-slate-300',
+        },
+        red: {
+            label: 'text-red-400/70',
+            pill: 'border-red-900/50 bg-red-950/30 text-red-200/90',
+        },
+        blue: {
+            label: 'text-blue-400/70',
+            pill: 'border-blue-900/50 bg-blue-950/30 text-blue-200/90',
+        },
+    };
+
+    const palette = accentStyles[accent] || accentStyles.slate;
+
+    return (
+        <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+            {label && (
+                <span className={`text-[8px] uppercase tracking-[0.22em] font-bold ${palette.label}`}>
+                    {label}
+                </span>
+            )}
+            {traits.map((trait, index) => (
+                <span
+                    key={`${label || 'trait'}-${trait}-${index}`}
+                    className={`rounded border px-1.5 py-0.5 text-[8px] uppercase tracking-[0.18em] ${palette.pill}`}
+                >
+                    {formatCombatTraitLabel(trait)}
+                </span>
+            ))}
         </div>
     );
 };
@@ -36,6 +96,15 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
     const [customModifiers, setCustomModifiers] = useState({ extraDice: {}, activeTraits: [] });
     const [modifiersExpanded, setModifiersExpanded] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const proneStatusId = useMemo(() => {
+        const statuses = Array.isArray(targetToken?.status) ? targetToken.status : [];
+        return PRONE_STATUS_IDS.find((statusId) => statuses.includes(statusId)) || null;
+    }, [targetToken]);
+    const isTargetProne = useMemo(() => {
+        return !!proneStatusId;
+    }, [proneStatusId]);
+    const proneStatusLabel = DEFAULT_STATUS_EFFECTS[proneStatusId]?.label || 'Derribado';
+    const standUpCost = proneStatusId === 'conmocionado' ? 2 : 1;
 
     // Extraer dados del atacante (manteniendo individualidad de los críticos)
     const attackerDice = useMemo(() => {
@@ -81,12 +150,55 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
     }, [event]);
 
     const diffVelocidad = event?.diffVelocidad ?? 0;
-    const canEvade = diffVelocidad <= 1;
-    const canParryBySpeed = diffVelocidad <= 1;
+    const canEvade = diffVelocidad <= 1 && !isTargetProne;
+    const canParryBySpeed = diffVelocidad <= 1 && !isTargetProne;
 
     const weapons = useMemo(() => {
         return (targetToken?.equippedItems || []).filter(i => i.type === 'weapon');
     }, [targetToken]);
+
+    const getWeaponId = (w, idx) => `${w.nombre || w.name || 'Arma'}-${idx}`;
+
+    const selectedWeaponData = useMemo(() => {
+        return weapons.find((weapon, idx) => getWeaponId(weapon, idx) === selectedWeapon) || null;
+    }, [weapons, selectedWeapon]);
+
+    const modifiedParryWeapon = useMemo(() => {
+        if (!selectedWeaponData) return null;
+        return applyModifiersToWeapon(selectedWeaponData, customModifiers);
+    }, [selectedWeaponData, customModifiers]);
+
+    const parryCostMeta = useMemo(() => {
+        if (!modifiedParryWeapon) {
+            return {
+                baseCost: 0,
+                yellowCost: 0,
+                hasFluidaTrait: false,
+                fluidaDiscountApplied: false
+            };
+        }
+
+        const baseCost = Math.max(1, getSpeedConsumption(modifiedParryWeapon));
+        const hasNativeFluidaTrait = hasNativeCombatTrait(modifiedParryWeapon, 'fluida');
+        const hasManualFluidaTrait = !hasNativeFluidaTrait && hasManualCombatTrait(modifiedParryWeapon, 'fluida');
+        const selectedWeaponName = getCombatWeaponName(selectedWeaponData);
+        const canApplyAutomaticFluidaDiscount =
+            hasNativeFluidaTrait &&
+            targetToken?.fluidaState?.targetId &&
+            targetToken.fluidaState.targetId === event?.attackerId &&
+            targetToken?.fluidaState?.weaponName &&
+            targetToken.fluidaState.weaponName === selectedWeaponName &&
+            baseCost > 1;
+        const canApplyManualFluidaDiscount = hasManualFluidaTrait && baseCost > 1;
+        const canApplyFluidaDiscount = canApplyAutomaticFluidaDiscount || canApplyManualFluidaDiscount;
+
+        return {
+            baseCost,
+            yellowCost: canApplyFluidaDiscount ? Math.max(1, baseCost - 1) : baseCost,
+            hasFluidaTrait: hasNativeFluidaTrait || hasManualFluidaTrait,
+            fluidaDiscountApplied: canApplyFluidaDiscount
+        };
+    }, [modifiedParryWeapon, selectedWeaponData, targetToken, event]);
 
     const toggleDie = (dieId) => {
         setSelectedDiceIndices(prev =>
@@ -94,11 +206,17 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
         );
     };
 
-    const getWeaponId = (w, idx) => `${w.nombre || w.name || 'Arma'}-${idx}`;
-
     useEffect(() => {
         setIsSubmitting(false);
     }, [event?.id, event?.status]);
+
+    useEffect(() => {
+        setSelectedDiceIndices([]);
+        setSelectedWeapon('');
+        setCustomModifiers({ extraDice: {}, activeTraits: [] });
+        setModifiersExpanded(false);
+        setReactionType(isTargetProne ? 'recibir' : null);
+    }, [event?.id, event?.status, isTargetProne]);
 
     useEffect(() => {
         if (reactionType === 'evadir' && !canEvade) {
@@ -121,10 +239,16 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
             payload = { type: 'evadir', data: { evadedDiceIds: selectedDiceIndices, yellowCost: selectedDiceIndices.length } };
         } else if (reactionType === 'parar') {
             if (!canParryBySpeed) return;
-            const weapon = weapons.find((w, idx) => getWeaponId(w, idx) === selectedWeapon);
-            const modifiedWeapon = applyModifiersToWeapon(weapon, customModifiers);
-            const cost = getSpeedConsumption(modifiedWeapon);
-            payload = { type: 'parar', data: { weapon: modifiedWeapon, yellowCost: cost } };
+            if (!modifiedParryWeapon) return;
+            payload = {
+                type: 'parar',
+                data: {
+                    weapon: modifiedParryWeapon,
+                    yellowCost: parryCostMeta.yellowCost,
+                    baseYellowCost: parryCostMeta.baseCost,
+                    fluidaDiscountApplied: parryCostMeta.fluidaDiscountApplied
+                }
+            };
         } else {
             payload = { type: 'recibir', data: null };
         }
@@ -300,6 +424,11 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                                                 ¡<span className="text-blue-400">{event.result.targetName}</span> evadió <span className="text-yellow-500">{event.result.evadedDiceIds?.length || 0}</span> dados!
                                                             </p>
                                                             {renderResultDice(event.result.attackerDice, event.result.evadedDiceIds)}
+                                                            <CombatTraitRow
+                                                                label="Ataque"
+                                                                traits={event.result.attackTraits}
+                                                                accent="red"
+                                                            />
                                                         </div>
                                                     )}
                                                     {event.result.reactionType === 'parar' && (
@@ -311,11 +440,21 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                                             <div className="bg-black/20 p-2 rounded-lg border border-slate-700/30">
                                                                 <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Ataque ({event.result.attackTotal})</div>
                                                                 {renderResultDice(event.result.attackerDice)}
+                                                                <CombatTraitRow
+                                                                    label="Rasgos"
+                                                                    traits={event.result.attackTraits}
+                                                                    accent="red"
+                                                                />
                                                             </div>
-                                                            
+
                                                             <div className="bg-black/20 p-2 rounded-lg border border-slate-700/30">
                                                                 <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Defensa ({event.result.defenderTotal})</div>
                                                                 {renderResultDice(event.result.defenderDice)}
+                                                                <CombatTraitRow
+                                                                    label="Rasgos"
+                                                                    traits={event.result.defenderTraits}
+                                                                    accent="blue"
+                                                                />
                                                             </div>
 
                                                             <div className="text-sm flex justify-center items-center gap-4 mt-2 mb-1">
@@ -330,6 +469,11 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                                                 <span className="text-blue-400">{event.result.targetName}</span> recibió el golpe.
                                                             </p>
                                                             {renderResultDice(event.result.attackerDice)}
+                                                            <CombatTraitRow
+                                                                label="Ataque"
+                                                                traits={event.result.attackTraits}
+                                                                accent="red"
+                                                            />
                                                         </div>
                                                     )}
                                                 </div>
@@ -354,6 +498,20 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                                             </p>
                                                             <p className="text-xs text-slate-300">
                                                                 <span className="text-red-400">{event.result.attackerName}</span> recibe <span className="text-white font-bold">{event.result.counterDamage}</span> de daño.
+                                                            </p>
+                                                        </div>
+                                                    ) : event.result.reactionType === 'parar' && event.result.counterPreventedByRange ? (
+                                                        <div className="bg-blue-950/20 border border-blue-500/30 p-3 rounded">
+                                                            <p className="text-blue-300 font-bold uppercase tracking-wider text-sm mb-1">
+                                                                ¡Parada sin contraataque!
+                                                            </p>
+                                                            <p className="text-xs text-slate-300">
+                                                                El arma defensiva no alcanza al atacante a esta distancia.
+                                                                {event.result.distanceBetweenTokens && event.result.defenderRangeLabel
+                                                                    ? ` Distancia ${event.result.distanceBetweenTokens}, defensa ${event.result.defenderRangeLabel}.`
+                                                                    : event.result.defenderRangeLabel
+                                                                        ? ` Defensa ${event.result.defenderRangeLabel}.`
+                                                                        : ''}
                                                             </p>
                                                         </div>
                                                     ) : (
@@ -390,11 +548,12 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                     <p className="text-center text-slate-300 mb-6">
                                         <strong className="text-white">{event.attackerName}</strong> te está atacando con <strong className="text-red-400">{event.weapon?.nombre || 'su arma'}</strong>.
                                     </p>
-                                    <div className="mb-4">
+                                    <div className="mb-4 space-y-3">
                                         <ArmorProtectionBanner
                                             source={pendingProtection.source}
                                             traits={pendingProtection.traits}
                                         />
+                        {isTargetProne && <ProneDefenseBanner statusLabel={proneStatusLabel} standUpCost={standUpCost} />}
                                     </div>
                                 </div>
 
@@ -536,6 +695,7 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                             onChange={setCustomModifiers}
                                             isExpanded={modifiersExpanded}
                                             onToggleExpand={() => setModifiersExpanded(!modifiersExpanded)}
+                                            currentWeapon={selectedWeaponData}
                                         />
                                     )}
                                 </div>
@@ -548,10 +708,7 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Costo de Reacción</span>
                                 <div className="text-lg font-fantasy text-yellow-500 flex items-center gap-1.5 leading-none">
                                     {reactionType === 'evadir' ? `-${selectedDiceIndices.length}` :
-                                        reactionType === 'parar' && selectedWeapon ? `-${(() => {
-                                            const w = weapons.find((w, idx) => getWeaponId(w, idx) === selectedWeapon);
-                                            return getSpeedConsumption(w);
-                                        })()}` : '0'}
+                                        reactionType === 'parar' && selectedWeapon ? `-${parryCostMeta.yellowCost}` : '0'}
                                     <span className="text-base">🟡</span>
                                 </div>
                             </div>
@@ -744,7 +901,7 @@ const WeaponCard = ({ weapon, isSelected, onSelect, customEquipmentImages }) => 
                                 if (!tTrim) return null;
                                 return (
                                     <span key={idx} className="text-[8px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-700 uppercase">
-                                        {tTrim}
+                                        {formatCombatTraitLabel(tTrim)}
                                     </span>
                                 )
                             })}
