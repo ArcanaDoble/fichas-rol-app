@@ -1,9 +1,10 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sword, Footprints, Shield, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X, Zap } from 'lucide-react';
+import { Sword, ArrowUp, Shield, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X, Zap } from 'lucide-react';
 import { parseAttrBonuses, getSpeedConsumption } from '../utils/combatSystem';
 import CombatModifiersPanel, { applyModifiersToWeapon } from './CombatModifiersPanel';
 import { getCustomImage, useCustomEquipmentImages } from '../hooks/useCustomEquipmentImages';
+import { PRONE_STATUS_IDS } from '../utils/statusEffects';
 
 const ItemImage = ({ src, type, name }) => {
     const [error, setError] = React.useState(false);
@@ -91,10 +92,21 @@ const CombatHUD = ({
         setIsEndingTurn(false);
     }, []);
 
+    const tokenStatus = Array.isArray(token?.status) ? token.status : [];
+    const isProne = PRONE_STATUS_IDS.some((statusId) => tokenStatus.includes(statusId));
+
+    React.useEffect(() => {
+        if (!isProne) return;
+        setActiveCategory('ACCIONES');
+        setSelectedActionId(null);
+        setSelectedAttackItemIdx(null);
+        setAttackModifiersExpanded(false);
+    }, [isProne]);
+
     if (!token) return null;
 
     // Obtener opciones de ataque (Armas + Habilidades Ofensivas)
-    const items = Array.isArray(token.equippedItems) ? token.equippedItems : [];
+    const items = Array.isArray(token?.equippedItems) ? token.equippedItems : [];
     let attackOptions = items.filter(i =>
         i.type === 'weapon' ||
         i.type === 'ability' ||
@@ -134,6 +146,8 @@ const CombatHUD = ({
 
     const handleActionClick = (actionId) => {
         if (!isActive || !onAction) return;
+        if (isProne && actionId !== 'stand_up') return;
+        if (!isProne && actionId === 'stand_up') return;
 
         if (actionId === 'attack') {
             // Si ya está seleccionado (menú abierto), lo cerramos y notificamos cancelación
@@ -145,7 +159,6 @@ const CombatHUD = ({
             // Primer paso: informar al canvas que queremos iniciar un ataque (apuntar)
             onAction('attack');
         } else {
-            if (actionId === 'dash') return; // Temporarily disable Dash
             // Otras acciones directas
             onAction(actionId);
             setSelectedActionId(null);
@@ -160,7 +173,7 @@ const CombatHUD = ({
 
     const actions = [
         { id: 'attack', label: 'Atacar', icon: Sword },
-        { id: 'dash', label: 'Correr', icon: Footprints },
+        { id: 'stand_up', label: 'Levantarse', icon: ArrowUp },
         { id: 'dodge', label: 'Esquivar', icon: Shield },
     ];
 
@@ -452,14 +465,17 @@ const CombatHUD = ({
                                                                                     {Array.from({ length: bonus.mult }).map((_, mIdx) => (
                                                                                         <div
                                                                                             key={mIdx}
-                                                                                            className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-[1px] border flex items-center justify-center"
+                                                                                            className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-[1px] border flex items-center justify-center shrink-0 overflow-visible"
                                                                                             style={{
                                                                                                 borderColor: attrColorMap[bonus.attr] || '#94a3b8',
                                                                                                 color: attrColorMap[bonus.attr] || '#94a3b8',
                                                                                                 backgroundColor: `${attrColorMap[bonus.attr]}10` || 'transparent'
                                                                                             }}
                                                                                         >
-                                                                                            <span className="text-[6px] md:text-[7px] font-black">
+                                                                                            <span
+                                                                                                className="block text-[6px] md:text-[7px] font-black leading-none select-none"
+                                                                                                style={{ lineHeight: 1, transform: 'translateY(0.25px)' }}
+                                                                                            >
                                                                                                 {bonus.attr.charAt(0).toUpperCase()}
                                                                                             </span>
                                                                                         </div>
@@ -488,6 +504,7 @@ const CombatHUD = ({
                                                                                 onChange={setCustomAttackModifiers}
                                                                                 isExpanded={attackModifiersExpanded}
                                                                                 onToggleExpand={() => setAttackModifiersExpanded(!attackModifiersExpanded)}
+                                                                                currentWeapon={item}
                                                                             />
 
                                                                             <button
@@ -551,11 +568,12 @@ const CombatHUD = ({
                             {categories.map(cat => (
                                 <button
                                     key={cat.id}
+                                    disabled={isProne && cat.id !== 'ACCIONES'}
                                     onClick={() => setActiveCategory(cat.id)}
                                     className={`px-3 md:px-8 py-2 md:py-3 text-[10px] md:text-xs font-bold uppercase tracking-widest transition-all ${activeCategory === cat.id
                                         ? 'bg-[#c8aa6e] text-[#0b1120]'
                                         : 'text-[#c8aa6e] hover:bg-[#c8aa6e]/10'
-                                        }`}
+                                        } ${(isProne && cat.id !== 'ACCIONES') ? 'opacity-35 cursor-not-allowed hover:bg-transparent' : ''}`}
                                 >
                                     {cat.label}
                                 </button>
@@ -579,28 +597,45 @@ const CombatHUD = ({
                                 .custom-scrollbar::-webkit-scrollbar-thumb { background: #c8aa6e; border-radius: 10px; }
                             `}</style>
 
-                            {activeCategory === 'ACCIONES' && actions.map(action => (
-                                <div key={action.id} className="relative group flex-1 min-w-0">
-                                    <button
-                                        onClick={() => handleActionClick(action.id)}
-                                        className={`relative flex w-full flex-col items-center justify-center h-16 md:h-24 bg-[#161f32] border rounded-lg transition-all ${action.id === 'dash'
-                                            ? 'opacity-40 grayscale cursor-not-allowed border-slate-800' // Style for disabled Dash
-                                            : isActive
-                                                ? (selectedActionId === action.id ? 'border-[#c8aa6e] bg-[#c8aa6e]/20 shadow-[0_0_15px_rgba(200,170,110,0.3)]' : 'border-slate-700/50 hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 active:scale-95')
-                                                : 'cursor-not-allowed opacity-50 border-slate-700/50'
-                                            }`}
-                                    >
-                                        <action.icon className={`w-[18px] h-[18px] md:w-8 md:h-8 mb-1 md:mb-2 transition-colors ${isActive ? 'text-slate-400 group-hover:text-[#c8aa6e]' : 'text-slate-600'}`} />
-                                        <div className="flex flex-col items-center">
-                                            <span className={`text-[9px] md:text-[10px] font-bold uppercase tracking-wider transition-colors ${isActive ? 'text-slate-400 group-hover:text-[#f0e6d2]' : 'text-slate-600'}`}>
-                                                {action.label}
-                                            </span>
-                                            {/* Indicador de armas múltiples */}
+                            {activeCategory === 'ACCIONES' && actions.map(action => {
+                                const actionDisabled = !isActive ||
+                                    (isProne ? action.id !== 'stand_up' : action.id === 'stand_up');
+                                const iconClass = actionDisabled
+                                    ? 'text-slate-600'
+                                    : action.id === 'stand_up'
+                                        ? 'text-indigo-300 group-hover:text-indigo-200'
+                                        : 'text-slate-400 group-hover:text-[#c8aa6e]';
+                                const labelClass = actionDisabled
+                                    ? 'text-slate-600'
+                                    : action.id === 'stand_up'
+                                        ? 'text-indigo-200 group-hover:text-white'
+                                        : 'text-slate-400 group-hover:text-[#f0e6d2]';
 
-                                        </div>
-                                    </button>
-                                </div>
-                            ))}
+                                return (
+                                    <div key={action.id} className="relative group flex-1 min-w-0">
+                                        <button
+                                            onClick={() => handleActionClick(action.id)}
+                                            disabled={actionDisabled}
+                                            className={`relative flex w-full flex-col items-center justify-center h-16 md:h-24 bg-[#161f32] border rounded-lg transition-all ${
+                                                actionDisabled
+                                                    ? 'cursor-not-allowed opacity-50 border-slate-800'
+                                                    : selectedActionId === action.id
+                                                        ? 'border-[#c8aa6e] bg-[#c8aa6e]/20 shadow-[0_0_15px_rgba(200,170,110,0.3)]'
+                                                        : action.id === 'stand_up'
+                                                            ? 'border-indigo-500/40 hover:border-indigo-300 hover:bg-indigo-500/10 active:scale-95'
+                                                            : 'border-slate-700/50 hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 active:scale-95'
+                                            }`}
+                                        >
+                                            <action.icon className={`w-[18px] h-[18px] md:w-8 md:h-8 mb-1 md:mb-2 transition-colors ${iconClass}`} />
+                                            <div className="flex flex-col items-center">
+                                                <span className={`text-[9px] md:text-[10px] font-bold uppercase tracking-wider transition-colors ${labelClass}`}>
+                                                    {action.label}
+                                                </span>
+                                            </div>
+                                        </button>
+                                    </div>
+                                );
+                            })}
 
                             {activeCategory === 'CLASE' && (() => {
                                 const classAbilities = items.filter(i =>
@@ -622,7 +657,8 @@ const CombatHUD = ({
                                             <button
                                                 key={idx}
                                                 onClick={() => onAction('ability', ability)}
-                                                className="flex flex-col items-center justify-center min-w-[80px] md:min-w-[100px] h-16 md:h-20 bg-[#161f32] border border-purple-500/30 rounded-lg hover:bg-purple-900/20 transition-all shrink-0 group active:scale-95"
+                                                disabled={isProne}
+                                                className={`flex flex-col items-center justify-center min-w-[80px] md:min-w-[100px] h-16 md:h-20 bg-[#161f32] border rounded-lg transition-all shrink-0 group ${isProne ? 'border-slate-800 opacity-40 cursor-not-allowed' : 'border-purple-500/30 hover:bg-purple-900/20 active:scale-95'}`}
                                             >
                                                 <span className="text-[8px] md:text-[9px] font-bold text-slate-300 uppercase tracking-tighter truncate w-full px-2 text-center">
                                                     {ability.name || ability.nombre}
@@ -653,7 +689,8 @@ const CombatHUD = ({
                                             <button
                                                 key={idx}
                                                 onClick={() => onAction('use_item', obj)}
-                                                className="flex flex-col items-center justify-center min-w-[80px] md:min-w-[100px] h-16 md:h-20 bg-[#161f32] border border-blue-500/30 rounded-lg hover:bg-blue-900/20 transition-all shrink-0 group active:scale-95"
+                                                disabled={isProne}
+                                                className={`flex flex-col items-center justify-center min-w-[80px] md:min-w-[100px] h-16 md:h-20 bg-[#161f32] border rounded-lg transition-all shrink-0 group ${isProne ? 'border-slate-800 opacity-40 cursor-not-allowed' : 'border-blue-500/30 hover:bg-blue-900/20 active:scale-95'}`}
                                             >
                                                 <span className="text-[8px] md:text-[9px] font-bold text-slate-300 uppercase tracking-tighter truncate w-full px-2 text-center">
                                                     {obj.name || obj.nombre}

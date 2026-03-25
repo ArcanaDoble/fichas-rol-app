@@ -1,6 +1,97 @@
 import { rollExpression, parseAndRollFormula, rollExpressionCritical } from './dice';
 import { parseDieValue } from './damage';
 
+export const normalizeCombatTraitId = (trait = '') => {
+    const normalized = trait
+        .toString()
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+    if (!normalized) return '';
+    if (normalized === 'derribado' || normalized === 'derribar' || normalized === 'derribo') return 'derribo';
+    return normalized;
+};
+
+export const getCombatTraitIds = (equipment) => {
+    const rawTraits =
+        equipment?.rasgos ||
+        equipment?.traits ||
+        equipment?.trait ||
+        equipment?.properties ||
+        [];
+
+    const traitList = Array.isArray(rawTraits)
+        ? rawTraits
+        : rawTraits.toString().split(',');
+
+    return traitList
+        .map((trait) => normalizeCombatTraitId(trait))
+        .filter(Boolean);
+};
+
+export const hasCombatTrait = (equipment, traitId) => {
+    const normalizedTraitId = normalizeCombatTraitId(traitId);
+    if (!normalizedTraitId) return false;
+    return getCombatTraitIds(equipment).includes(normalizedTraitId);
+};
+
+export const getManualCombatTraitIds = (equipment) => {
+    const rawTraits = equipment?.manualCombatTraits || equipment?._manualCombatTraits || [];
+    const traitList = Array.isArray(rawTraits)
+        ? rawTraits
+        : String(rawTraits || '').split(',');
+
+    return traitList
+        .map((trait) => normalizeCombatTraitId(trait))
+        .filter(Boolean);
+};
+
+export const hasManualCombatTrait = (equipment, traitId) => {
+    const normalizedTraitId = normalizeCombatTraitId(traitId);
+    if (!normalizedTraitId) return false;
+    return getManualCombatTraitIds(equipment).includes(normalizedTraitId);
+};
+
+export const hasNativeCombatTrait = (equipment, traitId) => {
+    const normalizedTraitId = normalizeCombatTraitId(traitId);
+    if (!normalizedTraitId) return false;
+
+    const manualTraitIds = new Set(getManualCombatTraitIds(equipment));
+    return getCombatTraitIds(equipment)
+        .filter((trait) => !manualTraitIds.has(trait))
+        .includes(normalizedTraitId);
+};
+
+export const getCombatItemKey = (equipment) => {
+    if (!equipment) return '';
+
+    const explicitId =
+        equipment.id ||
+        equipment._id ||
+        equipment.itemId ||
+        equipment.item_id ||
+        equipment.uuid;
+
+    if (explicitId) return String(explicitId);
+
+    const name = String(equipment.nombre || equipment.name || equipment.label || 'item').trim().toLowerCase();
+    const type = String(equipment.type || equipment.category || 'item').trim().toLowerCase();
+    const damage = String(equipment.dano || equipment.damage || '').trim().toLowerCase();
+    const range = String(
+        equipment.alc ??
+        equipment.alcance ??
+        equipment.range ??
+        equipment.Alcance ??
+        equipment.Range ??
+        ''
+    ).trim().toLowerCase();
+    const speed = getSpeedConsumption(equipment);
+
+    return [type, name, damage, range, speed].join('|');
+};
+
 export const parseAttrBonuses = (rasgos = []) => {
     const result = [];
     const traitsArray = Array.isArray(rasgos) ? rasgos : rasgos.toString().split(',');

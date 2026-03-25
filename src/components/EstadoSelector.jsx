@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { db } from '../firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { ICON_MAP, DEFAULT_STATUS_EFFECTS } from '../utils/statusEffects';
+import { ICON_MAP, DEFAULT_STATUS_EFFECTS, NON_SELECTABLE_STATUS_EFFECT_IDS } from '../utils/statusEffects';
 
 function EstadoSelector({ selected = [], onToggle }) {
   const [effects, setEffects] = useState(DEFAULT_STATUS_EFFECTS);
+  const hasConmocionadoSelected = selected.includes('conmocionado') || selected.includes(DEFAULT_STATUS_EFFECTS.conmocionado?.label);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'status_effects_config'), (snapshot) => {
@@ -21,14 +22,39 @@ function EstadoSelector({ selected = [], onToggle }) {
     return () => unsub();
   }, []);
 
+  const visibleEffects = Object.entries(effects)
+    .filter(([id]) => !NON_SELECTABLE_STATUS_EFFECT_IDS.includes(id))
+    .map(([id, effect]) => {
+      if (id === 'derribado' && hasConmocionadoSelected) {
+        const conmocionadoEffect = effects.conmocionado || DEFAULT_STATUS_EFFECTS.conmocionado;
+        return [
+          id,
+          {
+            ...effect,
+            ...conmocionadoEffect,
+            _toggleId: 'conmocionado'
+          }
+        ];
+      }
+
+      return [
+        id,
+        {
+          ...effect,
+          _toggleId: id
+        }
+      ];
+    });
+
   return (
     <div className="grid grid-cols-3 gap-2">
-      {Object.entries(effects).map(([id, e]) => {
+      {visibleEffects.map(([id, e]) => {
         const Icon = ICON_MAP[e.iconName] || ICON_MAP.AlertCircle;
-        const active = selected.includes(id) || selected.includes(e.label);
+        const toggleId = e._toggleId || id;
+        const active = selected.includes(toggleId) || selected.includes(e.label);
 
         // Recuperar color hexadecimal (prioridad: data actual > default > fallback)
-        const colorHex = e.hex || DEFAULT_STATUS_EFFECTS[id]?.hex || '#c8aa6e';
+        const colorHex = e.hex || DEFAULT_STATUS_EFFECTS[toggleId]?.hex || DEFAULT_STATUS_EFFECTS[id]?.hex || '#c8aa6e';
 
         // Colores base para inactivo (gris apagado) vs activo (color del elemento)
         const borderColor = active ? colorHex : '#334155';
@@ -36,9 +62,9 @@ function EstadoSelector({ selected = [], onToggle }) {
 
         return (
           <button
-            key={id}
+            key={`${id}-${toggleId}`}
             type="button"
-            onClick={() => onToggle(id)}
+            onClick={() => onToggle(toggleId)}
             style={{
               borderColor: borderColor,
               color: textColor,

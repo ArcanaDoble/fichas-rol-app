@@ -109,6 +109,15 @@ export const DEFAULT_STATUS_EFFECTS = {
         hex: '#818cf8',
         desc: 'No puedes defenderte ni realizar acciones de movimiento hasta que tu u otro personaje realice la acción de LEVANTAR sobre tí.'
     },
+    'conmocionado': {
+        label: 'Conmocionado',
+        iconName: 'ArrowDown',
+        color: 'text-indigo-400',
+        bg: 'bg-indigo-400/10',
+        border: 'border-indigo-400/50',
+        hex: '#818cf8',
+        desc: 'No puedes defenderte ni realizar acciones de movimiento. Levantarte cuesta 2 de velocidad hasta que te incorpores al final del turno.'
+    },
     'enfermo': {
         label: 'Enfermo',
         iconName: 'Biohazard',
@@ -183,7 +192,12 @@ export const DEFAULT_STATUS_EFFECTS = {
     },
 };
 
-export const ESTADOS = Object.entries(DEFAULT_STATUS_EFFECTS).map(([id, config]) => ({
+export const PRONE_STATUS_IDS = ['derribado', 'conmocionado'];
+export const NON_SELECTABLE_STATUS_EFFECT_IDS = ['conmocionado'];
+
+export const ESTADOS = Object.entries(DEFAULT_STATUS_EFFECTS)
+    .filter(([id]) => !NON_SELECTABLE_STATUS_EFFECT_IDS.includes(id))
+    .map(([id, config]) => ({
     id,
     name: config.label,
     img: `/estados/${config.label}.png`,
