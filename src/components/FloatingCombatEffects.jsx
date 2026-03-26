@@ -26,6 +26,17 @@ const DAMAGE_BLOCK_HORIZONTAL_OFFSET = 28;
 const FLYOFF_DURATION_SECONDS = 4.0;
 const HIGHLIGHT_DURATION_SECONDS = 2.5;
 const STATE_EFFECT_DELAY_SECONDS = 1.6;
+const STATE_EFFECT_STAGGER_SECONDS = 1.5;
+const EFFECT_LIFETIME_SAFETY_BUFFER_SECONDS = 1.75;
+const STATUS_EFFECT_PRIORITY = {
+    conmocionado: 0,
+    derribado: 0,
+    sangrado: 1,
+};
+
+const STATUS_SOURCE_COLORS = {
+    sangrado: '#b91c1c',
+};
 
 const hashString = (value) => {
     const text = String(value || '');
@@ -71,10 +82,24 @@ const getDelayedSequenceLastStart = (count, baseDelay = 0) => {
     return baseDelay + ((count - 1) * DAMAGE_BLOCK_STAGGER_SECONDS);
 };
 
+const getStaggeredSequenceLastStart = (count, baseDelay = 0, stagger = STATE_EFFECT_STAGGER_SECONDS) => {
+    if (!count) return 0;
+    return baseDelay + ((count - 1) * stagger);
+};
+
 const getStatusSequenceDelay = (lastSequenceStart = 0, hasSequence = false) => {
     if (!hasSequence) return 0;
     return lastSequenceStart + STATE_EFFECT_DELAY_SECONDS;
 };
+
+const sortStatusEffects = (statusEffects = []) => (
+    [...statusEffects].sort((a, b) => {
+        const priorityA = STATUS_EFFECT_PRIORITY[a?.id] ?? 10;
+        const priorityB = STATUS_EFFECT_PRIORITY[b?.id] ?? 10;
+        if (priorityA !== priorityB) return priorityA - priorityB;
+        return String(a?.label || a?.id || '').localeCompare(String(b?.label || b?.id || ''));
+    })
+);
 
 export function getCombatEffectLifetimeMs(effect) {
     if (!effect) return 5500;
@@ -84,54 +109,100 @@ export function getCombatEffectLifetimeMs(effect) {
         finalDamage = 0,
         counterDamage = 0,
         blocksLost,
-        statusEffectsApplied
+        statusEffectsApplied,
+        postReactionSpeedLoss
     } = effect;
 
-    const blocks = getLostBlocks(blocksLost);
-    const hasBlocksLost = blocks.length > 0;
-    const resistedTargetHit = finalDamage > 0 && !hasBlocksLost;
+    const targetBlocks = getLostBlocks(
+        reactionType === 'parar' && counterDamage > 0 ? null : blocksLost
+    );
+    const attackerBlocks = getLostBlocks(
+        reactionType === 'parar' && counterDamage > 0 ? blocksLost : null
+    );
+    const targetAppliedStatusEffects = sortStatusEffects(
+        Array.isArray(statusEffectsApplied?.target) ? statusEffectsApplied.target : []
+    );
+    const attackerAppliedStatusEffects = sortStatusEffects(
+        Array.isArray(statusEffectsApplied?.attacker) ? statusEffectsApplied.attacker : []
+    );
+    const hasTargetBlocksLost = targetBlocks.length > 0;
+    const resistedTargetHit = finalDamage > 0 && !hasTargetBlocksLost;
     const hasCounterIntro = reactionType === 'parar' && counterDamage > 0;
-    const hasResistIntro = reactionType === 'parar' && finalDamage > 0;
-    const targetIntroCount = (
+    const hasTargetIntro = (
         (reactionType === 'parar') ||
         (reactionType === 'evadir') ||
         ((!reactionType || reactionType === 'recibir') && resistedTargetHit)
-    ) ? 1 : 0;
+    );
+    const targetIntroCount = hasTargetIntro ? 1 : 0;
     const targetIntroEnd = targetIntroCount ? FLYOFF_DURATION_SECONDS : 0;
-    const targetDamageDelay = hasResistIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0;
+    const targetDamageDelay = hasTargetIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0;
     const targetDamageLastStart = getDelayedSequenceLastStart(
-        getDamageFlyoffCount({ finalDamage, blocks, resistedTargetHit }),
+        getDamageFlyoffCount({ finalDamage, blocks: targetBlocks, resistedTargetHit }),
         targetDamageDelay
     );
     const attackerDamageDelay = hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0;
     const attackerDamageLastStart = getDelayedSequenceLastStart(
-        getDamageFlyoffCount({ finalDamage: counterDamage, blocks, resistedTargetHit: false }),
+        getDamageFlyoffCount({ finalDamage: counterDamage, blocks: attackerBlocks, resistedTargetHit: false }),
         attackerDamageDelay
     );
-
-    const targetStateDelay = Array.isArray(statusEffectsApplied?.target) && statusEffectsApplied.target.length > 0
+    const postReactionTargetBlocks = getLostBlocks(postReactionSpeedLoss?.target?.blocksLost);
+    const postReactionTargetDelay = postReactionTargetBlocks.length > 0
         ? getStatusSequenceDelay(
-            Math.max(targetDamageLastStart, hasResistIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0),
-            targetIntroCount > 0 || getDamageFlyoffCount({ finalDamage, blocks, resistedTargetHit }) > 0
+            Math.max(
+                targetDamageLastStart,
+                attackerDamageLastStart,
+                hasTargetIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0,
+                hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0
+            ),
+            targetIntroCount > 0 ||
+            getDamageFlyoffCount({ finalDamage, blocks: targetBlocks, resistedTargetHit }) > 0 ||
+            hasCounterIntro ||
+            getDamageFlyoffCount({ finalDamage: counterDamage, blocks: attackerBlocks, resistedTargetHit: false }) > 0
         )
         : 0;
-    const attackerStateDelay = Array.isArray(statusEffectsApplied?.attacker) && statusEffectsApplied.attacker.length > 0
+    const postReactionTargetLastStart = getDelayedSequenceLastStart(
+        postReactionTargetBlocks.length,
+        postReactionTargetDelay
+    );
+
+    const targetStateDelay = targetAppliedStatusEffects.length > 0
+        ? getStatusSequenceDelay(
+            Math.max(
+                targetDamageLastStart,
+                postReactionTargetLastStart,
+                hasTargetIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0
+            ),
+            targetIntroCount > 0 ||
+            getDamageFlyoffCount({ finalDamage, blocks: targetBlocks, resistedTargetHit }) > 0 ||
+            postReactionTargetBlocks.length > 0
+        )
+        : 0;
+    const attackerStateDelay = attackerAppliedStatusEffects.length > 0
         ? getStatusSequenceDelay(
             Math.max(attackerDamageLastStart, hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0),
-            hasCounterIntro || getDamageFlyoffCount({ finalDamage: counterDamage, blocks, resistedTargetHit: false }) > 0
+            hasCounterIntro || getDamageFlyoffCount({ finalDamage: counterDamage, blocks: attackerBlocks, resistedTargetHit: false }) > 0
         )
         : 0;
+    const targetStateLastStart = getStaggeredSequenceLastStart(
+        targetAppliedStatusEffects.length,
+        targetStateDelay
+    );
+    const attackerStateLastStart = getStaggeredSequenceLastStart(
+        attackerAppliedStatusEffects.length,
+        attackerStateDelay
+    );
     const latestEffectEnd = Math.max(
         targetIntroEnd,
         targetDamageLastStart ? targetDamageLastStart + FLYOFF_DURATION_SECONDS : 0,
         attackerDamageLastStart ? attackerDamageLastStart + FLYOFF_DURATION_SECONDS : 0,
-        targetStateDelay ? targetStateDelay + FLYOFF_DURATION_SECONDS : 0,
-        attackerStateDelay ? attackerStateDelay + FLYOFF_DURATION_SECONDS : 0,
-        hasBlocksLost ? targetDamageDelay + HIGHLIGHT_DURATION_SECONDS : 0,
-        counterDamage > 0 && hasBlocksLost ? attackerDamageDelay + HIGHLIGHT_DURATION_SECONDS : 0
+        postReactionTargetLastStart ? postReactionTargetLastStart + FLYOFF_DURATION_SECONDS : 0,
+        targetStateLastStart ? targetStateLastStart + FLYOFF_DURATION_SECONDS : 0,
+        attackerStateLastStart ? attackerStateLastStart + FLYOFF_DURATION_SECONDS : 0,
+        hasTargetBlocksLost ? targetDamageDelay + HIGHLIGHT_DURATION_SECONDS : 0,
+        counterDamage > 0 && attackerBlocks.length > 0 ? attackerDamageDelay + HIGHLIGHT_DURATION_SECONDS : 0
     );
 
-    return Math.max(5500, Math.ceil((latestEffectEnd + 0.3) * 1000));
+    return Math.max(6500, Math.ceil((latestEffectEnd + EFFECT_LIFETIME_SAFETY_BUFFER_SECONDS) * 1000));
 }
 
 export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
@@ -146,6 +217,7 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
         counterPreventedByRange,
         blocksLost,
         statusEffectsApplied,
+        postReactionSpeedLoss,
         attackerId,
         targetId,
         sourceEventId,
@@ -155,10 +227,19 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
     const effectKey = sourceEventId || `${timestamp || 'no-ts'}-${attackerId || 'no-att'}-${targetId || 'no-target'}-${reactionType || 'none'}`;
     const flyoffs = [];
     const highlights = [];
-    const blocks = getLostBlocks(blocksLost);
-    const hasBlocksLost = blocks.length > 0;
-    const targetAppliedStatusEffects = Array.isArray(statusEffectsApplied?.target) ? statusEffectsApplied.target : [];
-    const attackerAppliedStatusEffects = Array.isArray(statusEffectsApplied?.attacker) ? statusEffectsApplied.attacker : [];
+    const targetBlocks = getLostBlocks(
+        reactionType === 'parar' && counterDamage > 0 ? null : blocksLost
+    );
+    const attackerBlocks = getLostBlocks(
+        reactionType === 'parar' && counterDamage > 0 ? blocksLost : null
+    );
+    const hasTargetBlocksLost = targetBlocks.length > 0;
+    const targetAppliedStatusEffects = sortStatusEffects(
+        Array.isArray(statusEffectsApplied?.target) ? statusEffectsApplied.target : []
+    );
+    const attackerAppliedStatusEffects = sortStatusEffects(
+        Array.isArray(statusEffectsApplied?.attacker) ? statusEffectsApplied.attacker : []
+    );
 
     const addHighlight = (id, position, delay = 0) => {
         if (!position) return;
@@ -183,16 +264,16 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
         });
     };
 
-    const addDamageFlyoff = (id, position, fallbackValue, baseDelay = 0) => {
+    const addDamageFlyoff = (id, position, fallbackValue, baseDelay = 0, damageBlocks = targetBlocks) => {
         if (!position) return;
 
         const centerX = position.x + position.width / 2;
         const baseY = position.y - 10;
 
-        if (blocks.length > 1) {
-            blocks.forEach((block, idx) => {
+        if (damageBlocks.length > 1) {
+            damageBlocks.forEach((block, idx) => {
                 addFlyoff(`${id}-${idx}`, {
-                    x: centerX + (idx * DAMAGE_BLOCK_HORIZONTAL_OFFSET - ((blocks.length - 1) * DAMAGE_BLOCK_HORIZONTAL_OFFSET) / 2),
+                    x: centerX + (idx * DAMAGE_BLOCK_HORIZONTAL_OFFSET - ((damageBlocks.length - 1) * DAMAGE_BLOCK_HORIZONTAL_OFFSET) / 2),
                     y: baseY - (idx * 6),
                     text: `-${block.cantidad}`,
                     color: BLOCK_COLORS[block.tipo] || '#fff',
@@ -204,8 +285,8 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
             return;
         }
 
-        if (blocks.length === 1) {
-            const [block] = blocks;
+        if (damageBlocks.length === 1) {
+            const [block] = damageBlocks;
             addFlyoff(id, {
                 x: centerX,
                 y: baseY,
@@ -229,30 +310,42 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
         });
     };
 
-    const resistedTargetHit = finalDamage > 0 && !hasBlocksLost;
+    const resistedTargetHit = finalDamage > 0 && !hasTargetBlocksLost;
     const hasCounterIntro = reactionType === 'parar' && counterDamage > 0 && !!targetPos;
-    const hasResistIntro = reactionType === 'parar' && finalDamage > 0 && !!targetPos;
-    const targetDamageFlyoffCount = getDamageFlyoffCount({ finalDamage, blocks, resistedTargetHit });
-    const targetDamageLastStart = getDelayedSequenceLastStart(targetDamageFlyoffCount, hasResistIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0);
     const hasTargetIntro = (
         (reactionType === 'parar' && !!targetPos) ||
         (reactionType === 'evadir' && !!targetPos) ||
         ((!reactionType || reactionType === 'recibir') && !!targetPos && resistedTargetHit)
     );
-    const attackerDamageFlyoffCount = getDamageFlyoffCount({ finalDamage: counterDamage, blocks, resistedTargetHit: false });
+    const targetIntroDelay = hasTargetIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0;
+    const targetDamageFlyoffCount = getDamageFlyoffCount({ finalDamage, blocks: targetBlocks, resistedTargetHit });
+    const targetDamageLastStart = getDelayedSequenceLastStart(targetDamageFlyoffCount, targetIntroDelay);
+    const attackerDamageFlyoffCount = getDamageFlyoffCount({ finalDamage: counterDamage, blocks: attackerBlocks, resistedTargetHit: false });
     const attackerDamageLastStart = getDelayedSequenceLastStart(
         attackerDamageFlyoffCount,
         hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0
     );
+    const postReactionTargetBlocks = getLostBlocks(postReactionSpeedLoss?.target?.blocksLost);
+    const postReactionTargetDelay = postReactionTargetBlocks.length > 0
+        ? getStatusSequenceDelay(
+            Math.max(
+                targetDamageLastStart,
+                attackerDamageLastStart,
+                targetIntroDelay,
+                hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0
+            ),
+            hasTargetIntro || targetDamageFlyoffCount > 0 || hasCounterIntro || attackerDamageFlyoffCount > 0
+        )
+        : 0;
 
-    if (finalDamage > 0 && targetPos) {
-        const targetDamageDelay = hasResistIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0;
-        if (hasBlocksLost) {
+    if ((finalDamage > 0 || hasTargetBlocksLost) && targetPos) {
+        const targetDamageDelay = targetIntroDelay;
+        if (hasTargetBlocksLost) {
             addHighlight('target-highlight', targetPos, targetDamageDelay);
         }
 
-        if (!resistedTargetHit || hasBlocksLost) {
-            addDamageFlyoff('target-dmg', targetPos, finalDamage, targetDamageDelay);
+        if (!resistedTargetHit || hasTargetBlocksLost) {
+            addDamageFlyoff('target-dmg', targetPos, finalDamage, targetDamageDelay, targetBlocks);
         }
     }
 
@@ -321,11 +414,36 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
 
     if (counterDamage > 0 && attackerPos) {
         const counterDamageDelay = hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0;
-        if (hasBlocksLost) {
+        if (attackerBlocks.length > 0) {
             addHighlight('att-highlight', attackerPos, counterDamageDelay);
         }
 
-        addDamageFlyoff('att-dmg', attackerPos, counterDamage, counterDamageDelay);
+        addDamageFlyoff('att-dmg', attackerPos, counterDamage, counterDamageDelay, attackerBlocks);
+    }
+
+    if (targetPos && postReactionTargetBlocks.length > 0) {
+        const postReactionSource = postReactionSpeedLoss?.target?.source;
+        const postReactionValue = postReactionSpeedLoss?.target?.vida || postReactionTargetBlocks.reduce((sum, block) => sum + (block.cantidad || 0), 0);
+
+        if (postReactionSource === 'sangrado') {
+            addFlyoff('target-post-reaction-sangrado', {
+                x: targetPos.x + targetPos.width / 2,
+                y: targetPos.y - 10,
+                text: `-${postReactionValue}`,
+                color: STATUS_SOURCE_COLORS.sangrado,
+                label: 'Sangrado',
+                type: 'damage',
+                delay: postReactionTargetDelay
+            });
+        } else {
+            addDamageFlyoff(
+                'target-post-reaction-speed-loss',
+                targetPos,
+                postReactionValue,
+                postReactionTargetDelay,
+                postReactionTargetBlocks
+            );
+        }
     }
 
     targetAppliedStatusEffects.forEach((statusEffect, idx) => {
@@ -338,9 +456,13 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
             color: statusEffect.hex || '#818cf8',
             type: 'state',
             delay: getStatusSequenceDelay(
-                Math.max(targetDamageLastStart, hasResistIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0),
-                hasTargetIntro || targetDamageFlyoffCount > 0
-            ) + (idx * 0.2)
+                Math.max(
+                    targetDamageLastStart,
+                    getDelayedSequenceLastStart(postReactionTargetBlocks.length, postReactionTargetDelay),
+                    targetIntroDelay
+                ),
+                hasTargetIntro || targetDamageFlyoffCount > 0 || postReactionTargetBlocks.length > 0
+            ) + (idx * STATE_EFFECT_STAGGER_SECONDS)
         });
     });
 
@@ -356,7 +478,7 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
             delay: getStatusSequenceDelay(
                 Math.max(attackerDamageLastStart, hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0),
                 hasCounterIntro || attackerDamageFlyoffCount > 0
-            ) + (idx * 0.2)
+            ) + (idx * STATE_EFFECT_STAGGER_SECONDS)
         });
     });
 

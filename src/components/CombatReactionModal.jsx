@@ -13,6 +13,7 @@ const formatCombatTraitLabel = (trait = '') => {
     if (normalized === 'derribado' || normalized === 'derribar' || normalized === 'derribo') return 'Derribo';
     if (normalized === 'conmocionante') return 'Conmocionante';
     if (normalized === 'fluida') return 'Fluida';
+    if (normalized === 'sangrado') return 'Sangrado';
     return trait;
 };
 

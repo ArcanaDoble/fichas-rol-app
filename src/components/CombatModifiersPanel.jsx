@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Trash2, Zap, Target, Hammer, Shield, Plus, X, ArrowDown, Wind } from 'lucide-react';
+import { Sparkles, Trash2, Zap, Target, Hammer, Shield, Plus, X, ArrowDown, Wind, Droplet } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { getCombatTraitIds, getSpeedConsumption, hasCombatTrait, normalizeCombatTraitId } from '../utils/combatSystem';
 
@@ -10,6 +10,7 @@ const formatTraitLabel = (trait = '') => {
     if (normalized === 'derribado' || normalized === 'derribar' || normalized === 'derribo') return 'Derribo';
     if (normalized === 'conmocionante') return 'Conmocionante';
     if (normalized === 'fluida') return 'Fluida';
+    if (normalized === 'sangrado') return 'Sangrado';
     return trait.charAt(0).toUpperCase() + trait.slice(1);
 };
 
@@ -19,6 +20,7 @@ const AVAILABLE_TRAITS = [
     { id: 'derribo', label: 'Derribo', icon: Hammer, color: 'text-green-400', border: 'border-green-500/50', bg: 'bg-green-900/30' },
     { id: 'hendir', label: 'Hendir', icon: Shield, color: 'text-slate-300', border: 'border-slate-400/50', bg: 'bg-slate-700/30' },
     { id: 'conmocionante', label: 'Conmocionante', icon: ArrowDown, color: 'text-indigo-300', border: 'border-indigo-400/50', bg: 'bg-indigo-900/30' },
+    { id: 'sangrado', label: 'Sangrado', icon: Droplet, color: 'text-red-500', border: 'border-red-700/50', bg: 'bg-red-950/30' },
     { id: 'fluida', label: 'Fluida', icon: Wind, color: 'text-sky-300', border: 'border-sky-400/50', bg: 'bg-sky-900/30' },
     // Más rasgos se pueden añadir aquí fácilmente
 ];
