@@ -93,6 +93,7 @@ const CombatHUD = ({
     }, []);
 
     const tokenStatus = Array.isArray(token?.status) ? token.status : [];
+    const hasControllableStatus = tokenStatus.includes('sangrado');
     const isProne = PRONE_STATUS_IDS.some((statusId) => tokenStatus.includes(statusId));
 
     React.useEffect(() => {
@@ -174,7 +175,7 @@ const CombatHUD = ({
     const actions = [
         { id: 'attack', label: 'Atacar', icon: Sword },
         { id: 'stand_up', label: 'Levantarse', icon: ArrowUp },
-        { id: 'dodge', label: 'Esquivar', icon: Shield },
+        { id: 'control_status', label: 'Controlar', icon: Shield },
     ];
 
     const panelVariants = {
@@ -599,7 +600,8 @@ const CombatHUD = ({
 
                             {activeCategory === 'ACCIONES' && actions.map(action => {
                                 const actionDisabled = !isActive ||
-                                    (isProne ? action.id !== 'stand_up' : action.id === 'stand_up');
+                                    (isProne ? action.id !== 'stand_up' : action.id === 'stand_up') ||
+                                    (action.id === 'control_status' && !hasControllableStatus);
                                 const iconClass = actionDisabled
                                     ? 'text-slate-600'
                                     : action.id === 'stand_up'

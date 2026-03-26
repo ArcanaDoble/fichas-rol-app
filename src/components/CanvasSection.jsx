@@ -212,6 +212,7 @@ const formatCombatTraitLabel = (trait = '') => {
     if (normalized === 'derribado' || normalized === 'derribar' || normalized === 'derribo') return 'Derribo';
     if (normalized === 'conmocionante') return 'Conmocionante';
     if (normalized === 'fluida') return 'Fluida';
+    if (normalized === 'sangrado') return 'Sangrado';
     return trait;
 };
 
@@ -1566,6 +1567,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         return { x: e.clientX, y: e.clientY };
     };
 
+    const isUsablePendingTurnState = (state) => {
+        if (!state || !state.tokenId) return false;
+        return [state.x, state.y, state.startX, state.startY].every(value => Number.isFinite(value));
+    };
+
     // Helper para enriquecer tokens con datos de la ficha (armas, atributos, etc.)
     const enrichTokenWithCharacterData = useCallback((rawToken) => {
         if (!rawToken || !rawToken.linkedCharacterId || availableCharacters.length === 0) return rawToken;
@@ -1594,6 +1600,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [draggedTokenId, setDraggedTokenId] = useState(null); // ID del token principal being dragged (para referencia visual inmediata)
     const [tokenDragStart, setTokenDragStart] = useState({ x: 0, y: 0, identifier: null }); // Posición inicial del mouse/touch
     const [tokenOriginalPos, setTokenOriginalPos] = useState({}); // Mapa de posiciones originales { [id]: {x, y} }
+    const [dragVisualOrigin, setDragVisualOrigin] = useState({}); // Ancla visual fija del ghost/linea durante el drag
     const [selectedTokenIds, setSelectedTokenIds] = useState([]); // Array de IDs seleccionados
     const [rotatingTokenId, setRotatingTokenId] = useState(null);
     const [resizingTokenId, setResizingTokenId] = useState(null); // Nuevo estado para resize
@@ -1616,6 +1623,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [combatEventQueue, setCombatEventQueue] = useState([]);
     const [activeCombatAnimations, setActiveCombatAnimations] = useState([]);
     const seenAnimIdsRef = useRef(new Set()); // Persistent dedup set across renders
+    const seenSyncedEffectIdsRef = useRef(new Set()); // Dedup para efectos visuales compartidos
     const resolvingCombatEventsRef = useRef(new Set());
     const [resolvedEventCount, setResolvedEventCount] = useState(0);
     const locallyResolvedEventsRef = useRef(new Set()); // Track events resolved on THIS device
@@ -1649,6 +1657,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     useEffect(() => { resizingTokenIdRef.current = resizingTokenId; }, [resizingTokenId]);
     const pendingTurnStateRef = useRef(null);
     useEffect(() => { pendingTurnStateRef.current = pendingTurnState; }, [pendingTurnState]);
+    useEffect(() => {
+        if (pendingTurnState && !isUsablePendingTurnState(pendingTurnState)) {
+            pendingTurnStateRef.current = null;
+            setPendingTurnState(null);
+        }
+    }, [pendingTurnState]);
 
     // Fetch available characters for Master or Player linking
     useEffect(() => {
@@ -1814,6 +1828,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 // local para evitar saltos visuales (snap-back) y desincronización de turnos.
                 if (isPlayerView && activeScenarioRef.current && remoteData.lastModified > (activeScenarioRef.current.lastModified || 0)) {
                     const remoteItems = remoteData.items || [];
+                    const livePendingTurnState = isUsablePendingTurnState(pendingTurnStateRef.current) ? pendingTurnStateRef.current : null;
                     let hasConflict = false;
 
                     // 1. Conflicto con Arrastre (Individual o Múltiple)
@@ -1833,10 +1848,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                         if (movedExternally) {
                             console.warn("⚠️ Master movió fichas en drag. Cancelando.");
+                            draggedTokenIdRef.current = null;
                             setDraggedTokenId(null);
                             setRotatingTokenId(null);
                             setResizingTokenId(null);
                             setTokenOriginalPos({});
+                            setDragVisualOrigin({});
                             document.body.style.cursor = 'default';
                             triggerToast("Movimiento Interrumpido", "El Master ha movido las fichas", 'warning');
                             hasConflict = true;
@@ -1844,11 +1861,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     }
 
                     // 2. Conflicto con Turno Pendiente (Combat Mode)
-                    if (!hasConflict && pendingTurnStateRef.current) {
-                        const id = pendingTurnStateRef.current.tokenId;
+                    if (!hasConflict && livePendingTurnState) {
+                        const id = livePendingTurnState.tokenId;
                         const remoteItem = remoteItems.find(i => i.id === id);
-                        const startX = pendingTurnStateRef.current.startX;
-                        const startY = pendingTurnStateRef.current.startY;
+                        const startX = livePendingTurnState.startX;
+                        const startY = livePendingTurnState.startY;
                         const localCurrent = activeScenarioRef.current?.items.find(i => i.id === id);
 
                         if (remoteItem && localCurrent && (remoteItem.x !== startX || remoteItem.y !== startY)) {
@@ -1856,6 +1873,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             // Si coinciden, es que nosotros mismos hemos subido el cambio (ej: al abrir una puerta)
                             // y no debemos reiniciar el turno.
                             if (remoteItem.x !== localCurrent.x || remoteItem.y !== localCurrent.y) {
+                                pendingTurnStateRef.current = null;
                                 setPendingTurnState(null);
                                 triggerToast("Turno Reiniciado", "El Master ha movido tu ficha", 'warning');
                                 hasConflict = true;
@@ -1883,6 +1901,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     if (!current || current.id !== docSnap.id) return current;
 
                     const remoteItems = remoteData.items || [];
+                    const livePendingTurnState = isUsablePendingTurnState(pendingTurnStateRef.current) ? pendingTurnStateRef.current : null;
 
                     // Si somos jugadores, protegemos los tokens que estamos manipulando localmente
                     // para que los snapshots remotos no nos "borren" el movimiento de un turno pendiente
@@ -1892,7 +1911,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         if (!localItem) return remote;
 
                         // Caso 1: Mi ficha en un Turno Pendiente (Preservamos posición/velocidad local)
-                        if (pendingTurnStateRef.current && remote.id === pendingTurnStateRef.current.tokenId) {
+                        if (livePendingTurnState && remote.id === livePendingTurnState.tokenId) {
                             return {
                                 ...remote,
                                 x: localItem.x,
@@ -2099,6 +2118,58 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const entries = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             setCombatLog(entries);
         });
+        return () => unsub();
+    }, [activeScenario?.id]);
+
+    useEffect(() => {
+        if (!activeScenario?.id) return;
+
+        seenSyncedEffectIdsRef.current.clear();
+
+        const q = query(
+            collection(db, 'combat_effects'),
+            where('scenarioId', '==', activeScenario.id)
+        );
+
+        const unsub = onSnapshot(q, (snapshot) => {
+            const newAnims = [];
+            const now = Date.now();
+
+            snapshot.docChanges().forEach((change) => {
+                if (change.type === 'removed') return;
+
+                const entry = { id: change.doc.id, ...change.doc.data() };
+                const animId = `synced_effect_${entry.id}`;
+
+                if (seenSyncedEffectIdsRef.current.has(animId)) return;
+
+                const entryTime = entry.timestamp?.toMillis
+                    ? entry.timestamp.toMillis()
+                    : (typeof entry.timestamp === 'number'
+                        ? entry.timestamp
+                        : (typeof entry.clientTimestamp === 'number' ? entry.clientTimestamp : 0));
+
+                if (!entryTime || now - entryTime >= 10000) {
+                    deleteDoc(doc(db, 'combat_effects', entry.id)).catch(() => {});
+                    return;
+                }
+
+                seenSyncedEffectIdsRef.current.add(animId);
+                newAnims.push({ id: animId, effect: entry });
+            });
+
+            if (newAnims.length > 0) {
+                setActiveCombatAnimations(prev => [...prev, ...newAnims]);
+
+                newAnims.forEach((anim) => {
+                    const lifetimeMs = getCombatEffectLifetimeMs(anim.effect);
+                    setTimeout(() => {
+                        setActiveCombatAnimations(prev => prev.filter(a => a.id !== anim.id));
+                    }, lifetimeMs);
+                });
+            }
+        });
+
         return () => unsub();
     }, [activeScenario?.id]);
     // --- Manejo del Zoom (Rueda del Mouse - Igual que MinimapV2) ---
@@ -2606,6 +2677,49 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const currentScenario = activeScenarioRef.current;
             let finalItems = currentScenario.items;
 
+            if (draggedTokenId) {
+                const { x: releaseX, y: releaseY } = getEventCoords(e, tokenDragStart.identifier);
+                const deltaX = (releaseX - tokenDragStart.x) / zoom;
+                const deltaY = (releaseY - tokenDragStart.y) / zoom;
+
+                finalItems = currentScenario.items.map(item => {
+                    if (!selectedTokenIds.includes(item.id)) return item;
+
+                    const original = tokenOriginalPos[item.id] || { x: item.x, y: item.y };
+                    let newX = original.x + deltaX;
+                    let newY = original.y + deltaY;
+
+                    if (!Number.isFinite(newX) || !Number.isFinite(newY)) return item;
+
+                    const shouldSnap = item.snapToGrid !== undefined ? item.snapToGrid : gridConfig.snapToGrid;
+                    if (shouldSnap) {
+                        const snappedPosition = snapWorldPositionToGrid(
+                            { x: newX, y: newY },
+                            gridConfig,
+                            { width: item.width, height: item.height }
+                        );
+                        newX = snappedPosition.x;
+                        newY = snappedPosition.y;
+                    }
+
+                    if (item.type === 'wall') {
+                        const dx = newX - item.x;
+                        const dy = newY - item.y;
+                        return {
+                            ...item,
+                            x: newX,
+                            y: newY,
+                            x1: item.x1 + dx,
+                            y1: item.y1 + dy,
+                            x2: item.x2 + dx,
+                            y2: item.y2 + dy
+                        };
+                    }
+
+                    return { ...item, x: newX, y: newY };
+                });
+            }
+
             // Si estábamos arrastrando tokens en la capa de mesa, comprobar colisiones
             if (draggedTokenId && activeLayer === 'TABLETOP') {
                 const walls = currentScenario.items.filter(i =>
@@ -2638,6 +2752,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 });
 
                 if (hasCollision) {
+                    setActiveScenario(prev => ({ ...prev, items: finalItems }));
+                }
+                else {
                     setActiveScenario(prev => ({ ...prev, items: finalItems }));
                 }
 
@@ -2676,12 +2793,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                         setDraggedTokenId(null);
                         setTokenOriginalPos({});
+                        setDragVisualOrigin({});
                         document.body.style.cursor = 'default';
                         return; // No persistimos a Firebase aún
                     }
                 }
 
                 // --- ACUMULACIÓN DE VELOCIDAD POR MOVIMIENTO (MODO NORMAL O MASTER) ---
+                const sangradoMovementAnimations = [];
                 finalItems = finalItems.map(item => {
                     if (selectedTokenIds.includes(item.id) && item.type !== 'wall' && item.type !== 'light') {
                         const original = tokenOriginalPos[item.id];
@@ -2694,12 +2813,27 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 const distance = Math.max(Math.round(dx / cellW), Math.round(dy / cellH));
 
                                 if (distance > 0) {
-                                    return { ...item, velocidad: (item.velocidad || 0) + distance };
+                                    const movedItem = { ...item, velocidad: (item.velocidad || 0) + distance };
+                                    if (gridConfig.isCombatActive) {
+                                        const sangradoPenalty = applySangradoSpeedPenalty(movedItem, distance);
+                                        if (sangradoPenalty.lostVida > 0) {
+                                            sangradoMovementAnimations.push({
+                                                token: sangradoPenalty.token,
+                                                lostVida: sangradoPenalty.lostVida
+                                            });
+                                        }
+                                        return sangradoPenalty.token;
+                                    }
+                                    return movedItem;
                                 }
                             }
                         }
                     }
                     return item;
+                });
+
+                sangradoMovementAnimations.forEach(({ token, lostVida }) => {
+                    queueSangradoSpeedAnimation(token, lostVida, { shared: true });
                 });
             }
 
@@ -2731,6 +2865,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             setRotatingTokenId(null);
             setResizingTokenId(null);
             setTokenOriginalPos({});
+            setDragVisualOrigin({});
 
             // Si el master mueve un token que tenía un estado de turno pendiente, lo limpiamos
             if (!isPlayerView && pendingTurnState) {
@@ -2747,6 +2882,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setResizingTokenId(null);
         setDraggingWallHandle(null);
         setTokenOriginalPos({});
+        setDragVisualOrigin({});
         document.body.style.cursor = 'default';
     };
 
@@ -3562,16 +3698,36 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const touchId = (isTouch && e.touches && e.touches[0]) ? e.touches[0].identifier : null;
             setTokenDragStart({ x: curX, y: curY, identifier: touchId });
 
+            const pendingForToken = (
+                isPlayerView &&
+                isUsablePendingTurnState(pendingTurnStateRef.current) &&
+                pendingTurnStateRef.current.tokenId === token.id
+            ) ? pendingTurnStateRef.current : null;
+
             // Guardar posiciones originales de TODOS los seleccionados
             const originals = {};
+            const visualOrigins = {};
             if (currentScenario) {
                 currentScenario.items.forEach(i => {
                     if (newSelection.includes(i.id)) {
-                        originals[i.id] = { x: i.x, y: i.y };
+                        if (pendingForToken && i.id === token.id) {
+                            originals[i.id] = {
+                                x: pendingForToken.x ?? i.x,
+                                y: pendingForToken.y ?? i.y
+                            };
+                            visualOrigins[i.id] = {
+                                x: pendingForToken.startX ?? pendingForToken.x ?? i.x,
+                                y: pendingForToken.startY ?? pendingForToken.y ?? i.y
+                            };
+                        } else {
+                            originals[i.id] = { x: i.x, y: i.y };
+                            visualOrigins[i.id] = { x: i.x, y: i.y };
+                        }
                     }
                 });
             }
             setTokenOriginalPos(originals);
+            setDragVisualOrigin(visualOrigins);
         }
     };
 
@@ -3838,6 +3994,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     // para evitar que los nodos DOM se destruyan y reconstruyan en cada renderizado (lo cual rompe el double-click).
     const renderItemJSX = (item) => {
         const original = tokenOriginalPos[item.id];
+        const dragOrigin = dragVisualOrigin[item.id];
+        const pendingStateForItem = isUsablePendingTurnState(pendingTurnState) && pendingTurnState.tokenId === item.id
+            ? pendingTurnState
+            : null;
         const isSelected = selectedTokenIds.includes(item.id);
         const isLight = item.type === 'light';
         const isWall = item.type === 'wall';
@@ -4106,16 +4266,23 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         return (
             <React.Fragment key={item.id}>
                 {/* GHOST TOKEN & LINE (DRAG O TURNO PENDIENTE) */}
-                {(original || (isPlayerView && pendingTurnState && pendingTurnState.tokenId === item.id)) && canInteract && (
+                {(dragOrigin || original || (isPlayerView && pendingStateForItem)) && canInteract && (
                     <>
                         {(() => {
                             // PRIORIDAD: Si hay un estado pendiente, el inicio del turno es SIEMPRE startX del estado pendiente.
                             // Si estamos arrastrando por primera vez (sin estado pendiente previo), usamos original.x
                             let startX, startY;
+                            const isDraggingThisToken = draggedTokenId === item.id;
 
-                            if (pendingTurnState && pendingTurnState.tokenId === item.id) {
-                                startX = pendingTurnState.startX;
-                                startY = pendingTurnState.startY;
+                            if (isDraggingThisToken && dragOrigin) {
+                                startX = dragOrigin.x;
+                                startY = dragOrigin.y;
+                            } else if (isDraggingThisToken && original) {
+                                startX = original.x;
+                                startY = original.y;
+                            } else if (pendingStateForItem) {
+                                startX = pendingStateForItem.startX;
+                                startY = pendingStateForItem.startY;
                             } else if (original) {
                                 startX = original.x;
                                 startY = original.y;
@@ -4124,7 +4291,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             const currentX = item.x;
                             const currentY = item.y;
 
-                            if (startX === undefined || (startX === currentX && startY === currentY)) return null;
+                            if (![startX, startY, currentX, currentY].every(value => Number.isFinite(value))) return null;
+                            if (startX === currentX && startY === currentY) return null;
 
                             return (
                                 <>
@@ -4149,7 +4317,17 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             height: `${item.height}px`,
                                         }}
                                     >
-                                        {!isLight && !isGeometry && <img src={item.img} className="w-full h-full object-contain" draggable={false} alt="" />}
+                                        {!isLight && !isGeometry && (
+                                            <div
+                                                className="w-full h-full"
+                                                style={{
+                                                    backgroundImage: item.img ? `url("${item.img}")` : 'none',
+                                                    backgroundPosition: 'center',
+                                                    backgroundRepeat: 'no-repeat',
+                                                    backgroundSize: item.isCircular ? 'cover' : 'contain'
+                                                }}
+                                            />
+                                        )}
                                         {isGeometry && (
                                             <div
                                                 className={`w-full h-full flex items-center justify-center font-bold text-white shadow-inner uppercase text-[10px] tracking-widest break-words overflow-hidden p-2 text-center`}
@@ -4227,8 +4405,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             {/* Indicador de Velocidad (Derecha) */}
                             {item.type !== 'geometry' && item.type !== 'light' && item.type !== 'wall' && (() => {
                                 const currentVel = item.velocidad || 0;
-                                const pendingVel = (isPlayerView && pendingTurnState && pendingTurnState.tokenId === item.id)
-                                    ? (pendingTurnState.moveCost + pendingTurnState.actionCost)
+                                const pendingVel = (isPlayerView && pendingStateForItem)
+                                    ? (pendingStateForItem.moveCost + pendingStateForItem.actionCost)
                                     : 0;
                                 const totalVel = currentVel + pendingVel;
 
@@ -4746,6 +4924,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             return;
         }
 
+        if (actionId === 'control_status') {
+            const tokenStatuses = Array.isArray(token.status) ? token.status : [];
+            if (!tokenStatuses.includes('sangrado')) {
+                triggerToast("Sin control posible", "Ahora mismo no tienes ningun estado basico que controlar", 'info');
+                return;
+            }
+
+            updatePendingTurnActions(tokenId, token, "Controlar Sangrado", 1, {
+                actionId: 'control_status',
+                controlledStatusId: 'sangrado'
+            });
+            triggerToast("Controlar", `${token.name} controlará el sangrado al final del turno (1 de velocidad)`, 'info');
+            return;
+        }
+
         if (actionId === 'attack') {
             // Fase 1: Iniciar targeting si no hay nada en marcha
             if (!targetingState) {
@@ -4767,10 +4960,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         let cost = 0;
         let actionName = "";
 
-        if (actionId === 'dodge') {
-            cost = 2;
-            actionName = "Esquivar";
-        } else if (actionId === 'help') {
+        if (actionId === 'help') {
             cost = 1;
             actionName = "Ayudar";
         }
@@ -4867,6 +5057,137 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         });
     };
 
+    const getPendingSangradoControlCount = (pendingState) => {
+        const actions = Array.isArray(pendingState?.actions) ? pendingState.actions : [];
+        return actions.reduce((total, action) => (
+            action?.actionId === 'control_status' && action?.controlledStatusId === 'sangrado'
+                ? total + 1
+                : total
+        ), 0);
+    };
+
+    const applySangradoSpeedPenalty = (tokenLike, spentSpeed = 0, options = {}) => {
+        const normalizedSpentSpeed = Math.max(0, Math.floor(Number(spentSpeed) || 0));
+        if (!tokenLike || normalizedSpentSpeed <= 0) {
+            return { token: tokenLike, lostVida: 0, preventedVida: 0 };
+        }
+
+        const statuses = Array.isArray(tokenLike.status) ? tokenLike.status : [];
+        if (!statuses.includes('sangrado')) {
+            return { token: tokenLike, lostVida: 0, preventedVida: 0 };
+        }
+
+        const mitigation = Math.max(0, Math.floor(Number(options?.sangradoMitigation) || 0));
+        const effectiveSpentSpeed = Math.max(0, normalizedSpentSpeed - mitigation);
+        const currentVida = Math.max(0, Number(tokenLike?.stats?.vida?.current ?? 0));
+        const lostVida = Math.min(currentVida, effectiveSpentSpeed);
+        if (lostVida <= 0) {
+            return {
+                token: tokenLike,
+                lostVida: 0,
+                preventedVida: Math.min(normalizedSpentSpeed, mitigation)
+            };
+        }
+
+        return {
+            token: {
+                ...tokenLike,
+                stats: {
+                    ...tokenLike.stats,
+                    vida: {
+                        ...(tokenLike?.stats?.vida || {}),
+                        current: currentVida - lostVida
+                    }
+                }
+            },
+            lostVida,
+            preventedVida: Math.min(normalizedSpentSpeed, mitigation)
+        };
+    };
+
+    const queueLocalCombatAnimation = (effect, delayMs = 0) => {
+        if (!effect) return;
+
+        const normalizedDelay = Math.max(0, Number(delayMs) || 0);
+        const enqueue = () => {
+            const animId = `local_anim_${nanoid(8)}`;
+            setActiveCombatAnimations(prev => [...prev, { id: animId, effect }]);
+
+            const lifetimeMs = getCombatEffectLifetimeMs(effect);
+            setTimeout(() => {
+                setActiveCombatAnimations(prev => prev.filter(a => a.id !== animId));
+            }, lifetimeMs);
+        };
+
+        if (normalizedDelay > 0) {
+            setTimeout(enqueue, normalizedDelay);
+            return;
+        }
+
+        enqueue();
+    };
+
+    const buildSangradoSpeedEffect = (tokenLike, lostVida) => ({
+        scenarioId: activeScenarioRef.current?.id || activeScenario?.id || null,
+        attackerId: null,
+        attackerName: null,
+        targetId: tokenLike.id,
+        targetName: tokenLike.name || 'Token',
+        weaponName: null,
+        reactionType: 'status_tick',
+        finalDamage: 0,
+        counterDamage: 0,
+        blocksLost: { postura: 0, armadura: 0, vida: lostVida },
+        baseBlocksLost: { postura: 0, armadura: 0, vida: lostVida },
+        traitBonuses: { postura: null, armadura: null },
+        statusEffectsApplied: { target: [], attacker: [] },
+        damage: 0,
+        statusTickSource: 'sangrado',
+        clientTimestamp: Date.now()
+    });
+
+    const publishSyncedCombatEffect = async (effect) => {
+        if (!effect?.scenarioId) {
+            queueLocalCombatAnimation(effect);
+            return;
+        }
+
+        try {
+            const docRef = await addDoc(collection(db, 'combat_effects'), {
+                ...effect,
+                timestamp: serverTimestamp()
+            });
+
+            setTimeout(() => {
+                deleteDoc(doc(db, 'combat_effects', docRef.id)).catch(() => {});
+            }, 12000);
+        } catch (err) {
+            console.warn('Error publicando efecto visual compartido:', err);
+            queueLocalCombatAnimation(effect);
+        }
+    };
+
+    const queueSangradoSpeedAnimation = (tokenLike, lostVida, options = {}) => {
+        if (!tokenLike?.id || lostVida <= 0) return;
+
+        const effect = buildSangradoSpeedEffect(tokenLike, lostVida);
+        const normalizedDelay = Math.max(0, Number(options.delayMs) || 0);
+        const enqueue = () => {
+            if (options.shared) {
+                publishSyncedCombatEffect(effect);
+                return;
+            }
+            queueLocalCombatAnimation(effect);
+        };
+
+        if (normalizedDelay > 0) {
+            setTimeout(enqueue, normalizedDelay);
+            return;
+        }
+
+        enqueue();
+    };
+
     const applyCombatCalculations = (token, damage, weapon) => {
         const attributeDice = {
             destreza: token.attributes?.destreza || 'd6',
@@ -4885,6 +5206,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const hasDerribado = normalizedTraits.some((t) => t.includes('derribado') || t.includes('derribar') || t.includes('derribo'));
         const hasHendir = normalizedTraits.some((t) => t.includes('hendir'));
         const hasConmocionante = normalizedTraits.some((t) => t.includes('conmocionante'));
+        const hasSangrado = normalizedTraits.some((t) => t.includes('sangrado'));
 
         const reduceDieStep = (dieStr) => {
             if (!dieStr || typeof dieStr !== 'string') return dieStr;
@@ -4965,11 +5287,20 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         lostVida = consumeDamageBlocks(currentVida, vidaUmbral);
         currentVida -= lostVida;
 
+        const newStatus = [...(token.status || [])];
+        if (hasSangrado && lostVida > 0 && !newStatus.includes('sangrado')) {
+            newStatus.push('sangrado');
+            appliedStatusEffects.push({
+                id: 'sangrado',
+                label: DEFAULT_STATUS_EFFECTS.sangrado?.label || 'Sangrado',
+                hex: DEFAULT_STATUS_EFFECTS.sangrado?.hex || '#b91c1c'
+            });
+        }
+
         const wasAlreadyProne = PRONE_STATUS_IDS.some((statusId) => Array.isArray(token.status) && token.status.includes(statusId));
         const fellProneByPostureBreak = posturaInicial > 0 && currentPostura === 0;
         const fellProneByBodyDamageWithoutPosture = posturaInicial === 0 && (lostArmadura > 0 || lostVida > 0);
 
-        const newStatus = [...(token.status || [])];
         const appliedProneNow = !wasAlreadyProne && (fellProneByPostureBreak || fellProneByBodyDamageWithoutPosture);
         const proneStatusId = hasConmocionante ? 'conmocionado' : 'derribado';
         if (appliedProneNow && !newStatus.includes(proneStatusId)) {
@@ -5302,19 +5633,51 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 const ev = currentEvent.event;
                 
                 // 1. APLICAR CAMBIOS DIFERIDOS DE TOKENS (Stats, Velocidad, etc)
+                let postReactionSpeedLoss = null;
                 if (ev.tokenUpdates) {
                     const snap = await getDoc(doc(db, 'canvas_scenarios', activeScenarioRef.current?.id || ev.scenarioId));
                     if (snap.exists()) {
                         let currentItems = snap.data().items || [];
                         let changed = false;
+                        const reactionSpeedCost = Math.max(0, Number(ev.reactionData?.yellowCost) || 0);
+
                         if (ev.tokenUpdates.target) {
-                            currentItems = currentItems.map(item => item.id === ev.tokenUpdates.target.id ? { ...item, stats: ev.tokenUpdates.target.stats, status: ev.tokenUpdates.target.status, velocidad: ev.tokenUpdates.target.velocidad, fluidaState: ev.tokenUpdates.target.fluidaState ?? null } : item);
+                            const sangradoPenalty = applySangradoSpeedPenalty(ev.tokenUpdates.target, reactionSpeedCost);
+                            const targetUpdate = {
+                                ...sangradoPenalty.token,
+                                fluidaState: sangradoPenalty.token?.fluidaState ?? null
+                            };
+
+                            currentItems = currentItems.map(item => item.id === ev.tokenUpdates.target.id ? {
+                                ...item,
+                                stats: targetUpdate.stats,
+                                status: targetUpdate.status,
+                                velocidad: targetUpdate.velocidad,
+                                fluidaState: targetUpdate.fluidaState ?? null
+                            } : item);
                             changed = true;
+
+                            if (sangradoPenalty.lostVida > 0) {
+                                postReactionSpeedLoss = {
+                                    target: {
+                                        id: ev.tokenUpdates.target.id,
+                                        source: 'sangrado',
+                                        vida: sangradoPenalty.lostVida,
+                                        blocksLost: {
+                                            postura: 0,
+                                            armadura: 0,
+                                            vida: sangradoPenalty.lostVida
+                                        }
+                                    }
+                                };
+                            }
                         }
+
                         if (ev.tokenUpdates.attacker) {
                             currentItems = currentItems.map(item => item.id === ev.tokenUpdates.attacker.id ? { ...item, stats: ev.tokenUpdates.attacker.stats, status: ev.tokenUpdates.attacker.status, velocidad: ev.tokenUpdates.attacker.velocidad, fluidaState: ev.tokenUpdates.attacker.fluidaState ?? null } : item);
                             changed = true;
                         }
+
                         if (changed) {
                             await updateDoc(doc(db, 'canvas_scenarios', snap.id), { items: currentItems, lastModified: Date.now() });
                         }
@@ -5334,6 +5697,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     // Escribir en combat_log para el sistema (también gatillará animaciones HTML)
                     const logEntryToWrite = {
                         ...ev.result,
+                        postReactionSpeedLoss,
                         clientTimestamp: Date.now(),
                         timestamp: serverTimestamp()
                     };
@@ -5395,6 +5759,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const moveCost = pending ? pending.moveCost : 0;
         const actionCost = pending ? pending.actionCost : 0;
         const isStandingUp = !!pending?.actions?.some(action => action.actionId === 'stand_up');
+        const pendingSangradoControl = getPendingSangradoControlCount(pending);
         const currentFluidaState = getTokenFluidaState(token);
         const shouldClearFluidaOnCommit = !!pending?.actions?.some((action) => {
             if (action.actionId !== 'attack') return true;
@@ -5477,6 +5842,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             }
         }
 
+        let endTurnSangradoAnimation = null;
         const newItems = scenario.items.map(i => {
             if (i.id !== tokenId) return i;
 
@@ -5504,7 +5870,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 };
             }
 
-            return nextItem;
+            const sangradoPenalty = applySangradoSpeedPenalty(nextItem, finalCost, {
+                sangradoMitigation: pendingSangradoControl
+            });
+            if (sangradoPenalty.lostVida > 0) {
+                endTurnSangradoAnimation = {
+                    token: {
+                        ...sangradoPenalty.token,
+                        name: i.name
+                    },
+                    lostVida: sangradoPenalty.lostVida
+                };
+            }
+            return sangradoPenalty.token;
         });
 
         setActiveScenario(prev => ({ ...prev, items: newItems }));
@@ -5515,6 +5893,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 items: newItems,
                 lastModified: Date.now()
             });
+            if (endTurnSangradoAnimation) {
+                queueSangradoSpeedAnimation(endTurnSangradoAnimation.token, endTurnSangradoAnimation.lostVida, { shared: true });
+            }
             triggerToast("Turno Finalizado", `Total: +${finalCost} 🟡`, 'success');
         } catch (error) {
             console.error("Error ending turn:", error);
@@ -7796,11 +8177,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 {/* Los items se renderizan aquí, entre el fondo y la niebla superior */}
                                 <div className="absolute inset-0 z-10 pointer-events-none" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
                                     {(() => {
+                                        const livePendingTurnState = isUsablePendingTurnState(pendingTurnState) ? pendingTurnState : null;
                                         const items = (activeScenario?.items || []).map(item => {
                                             // Si hay estado pendiente y NO lo estamos arrastrando, mostramos el estado pendiente
-                                            if (isPlayerView && pendingTurnState && pendingTurnState.tokenId === item.id) {
+                                            if (isPlayerView && livePendingTurnState && livePendingTurnState.tokenId === item.id) {
                                                 if (draggedTokenId !== item.id) {
-                                                    return { ...item, x: pendingTurnState.x, y: pendingTurnState.y };
+                                                    return { ...item, x: livePendingTurnState.x, y: livePendingTurnState.y };
                                                 }
                                             }
                                             return item;
