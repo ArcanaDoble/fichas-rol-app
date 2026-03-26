@@ -379,6 +379,131 @@ const getAttackSpeedCostMeta = ({ attackerToken, targetId, weapon, pendingState 
     };
 };
 
+const isAttributeCombatTrait = (trait = '') => /(vigor|destreza|intelecto|voluntad)\s*(?:\(x?\d+\))?/i.test(String(trait || ''));
+
+const buildSweepWeapon = (weapon) => {
+    if (!weapon) return null;
+
+    const rawTraits =
+        weapon.rasgos ||
+        weapon.traits ||
+        weapon.trait ||
+        weapon.properties ||
+        [];
+
+    const traitList = Array.isArray(rawTraits)
+        ? rawTraits
+        : String(rawTraits || '').split(',');
+
+    const preservedTraits = traitList.filter((trait) => isAttributeCombatTrait(trait));
+    const sanitizedWeapon = {
+        ...weapon,
+        rasgos: preservedTraits,
+        traits: preservedTraits,
+        trait: preservedTraits,
+        properties: preservedTraits,
+        manualCombatTraits: [],
+        _manualCombatTraits: [],
+        sweepSourceWeaponName: weapon?.nombre || weapon?.name || null,
+        sweepMode: true,
+    };
+
+    if ('extraDamageString' in sanitizedWeapon) {
+        delete sanitizedWeapon.extraDamageString;
+    }
+
+    return sanitizedWeapon;
+};
+
+const isSweepEligibleWeapon = (weapon) => {
+    if (!weapon || weapon.type !== 'weapon') return false;
+    const rangeData = getCombatRangeData(weapon);
+    return rangeData.value <= 1 && getSpeedConsumption(weapon) >= 2;
+};
+
+const getTokenGridBounds = (token, config = {}) => {
+    const cellW = config.cellWidth || 50;
+    const cellH = config.cellHeight || 50;
+    const gridRect = getGridWorldRect(config);
+
+    return {
+        x: Math.round(((token?.x || 0) - gridRect.x) / cellW),
+        y: Math.round(((token?.y || 0) - gridRect.y) / cellH),
+        w: Math.max(1, Math.round((token?.width || cellW) / cellW)),
+        h: Math.max(1, Math.round((token?.height || cellH) / cellH)),
+    };
+};
+
+const isGridCellInsideBounds = (cell, config = {}) => {
+    if (config.isInfinite) return true;
+    const columns = Math.max(1, Math.round(Number(config.columns) || 1));
+    const rows = Math.max(1, Math.round(Number(config.rows) || 1));
+    return cell.x >= 0 && cell.y >= 0 && cell.x < columns && cell.y < rows;
+};
+
+const getSweepAreaCells = (token, side, config = {}) => {
+    if (!token || !side) return [];
+
+    const bounds = getTokenGridBounds(token, config);
+    const centerX = Math.round(bounds.x + ((bounds.w - 1) / 2));
+    const centerY = Math.round(bounds.y + ((bounds.h - 1) / 2));
+
+    let cells = [];
+
+    if (side === 'north' || side === 'south') {
+        const rowY = side === 'north' ? bounds.y - 1 : bounds.y + bounds.h;
+        const startX = centerX - 1;
+        cells = Array.from({ length: 3 }, (_, index) => ({
+            x: startX + index,
+            y: rowY
+        }));
+    } else if (side === 'west' || side === 'east') {
+        const colX = side === 'west' ? bounds.x - 1 : bounds.x + bounds.w;
+        const startY = centerY - 1;
+        cells = Array.from({ length: 3 }, (_, index) => ({
+            x: colX,
+            y: startY + index
+        }));
+    }
+
+    return cells.filter((cell) => isGridCellInsideBounds(cell, config));
+};
+
+const getGridCellWorldRect = (cell, config = {}) => {
+    const cellW = config.cellWidth || 50;
+    const cellH = config.cellHeight || 50;
+    const gridRect = getGridWorldRect(config);
+    return {
+        x: gridRect.x + (cell.x * cellW),
+        y: gridRect.y + (cell.y * cellH),
+        width: cellW,
+        height: cellH,
+    };
+};
+
+const getSweepTargetsForCells = (items = [], attackerId, cells = [], config = {}) => {
+    if (!Array.isArray(items) || cells.length === 0) return [];
+
+    const cellKeys = new Set(cells.map((cell) => `${cell.x}:${cell.y}`));
+
+    return items.filter((item) => {
+        if (!item || item.id === attackerId) return false;
+        if (item.type === 'light' || item.type === 'wall' || item.type === 'geometry') return false;
+        if (!(item.isCircular || item.stats || item.name)) return false;
+
+        const bounds = getTokenGridBounds(item, config);
+        for (let x = bounds.x; x < bounds.x + bounds.w; x += 1) {
+            for (let y = bounds.y; y < bounds.y + bounds.h; y += 1) {
+                if (cellKeys.has(`${x}:${y}`)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    });
+};
+
 const CombatTraitLine = ({ label, traits = [], accent = 'slate' }) => {
     if (!Array.isArray(traits) || traits.length === 0) return null;
     void label;
@@ -1638,7 +1763,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
     // --- TARGETING STATE ---
     const [targetingState, setTargetingState] = useState(null);
-    // { attackerId, actionId, data, phase: 'targeting' | 'weapon_selection' }
+    // { attackerId, actionId, data, phase: 'targeting' | 'weapon_selection' | 'sweep_selection' }
+    const [sweepHoverSide, setSweepHoverSide] = useState(null);
 
     const [focusedTargetId, setFocusedTargetId] = useState(null); // ID del token fijado como objetivo
 
@@ -1663,6 +1789,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             setPendingTurnState(null);
         }
     }, [pendingTurnState]);
+    useEffect(() => {
+        if (targetingState?.phase !== 'sweep_selection') {
+            setSweepHoverSide(null);
+        }
+    }, [targetingState]);
 
     // Fetch available characters for Master or Player linking
     useEffect(() => {
@@ -3620,6 +3751,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             return;
         }
 
+        if (targetingState?.phase === 'sweep_selection') {
+            return;
+        }
+
         // Si click izquierdo o touch, seleccionamos y preparamos arrastre
         if (isTouch || e.button === 0) {
             // Restricción de Jugador: No permitir interactuar con tokens ajenos
@@ -4890,6 +5025,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         if (actionId === 'cancel_targeting') {
             setTargetingState(null);
             setFocusedTargetId(null);
+            setSweepHoverSide(null);
             return;
         }
 
@@ -4957,6 +5093,24 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             }
         }
 
+        if (actionId === 'sweep') {
+            if (!isSweepEligibleWeapon(data)) {
+                triggerToast("Barrido no disponible", "Necesitas un arma a toque de coste 2 o más para usar Barrido", 'warning');
+                return;
+            }
+
+            setFocusedTargetId(null);
+            setSweepHoverSide(null);
+            setTargetingState({
+                attackerId: tokenId,
+                actionId,
+                phase: 'sweep_selection',
+                weapon: data
+            });
+            triggerToast("Barrido", "Elige el frente del barrido alrededor de la ficha", 'info');
+            return;
+        }
+
         let cost = 0;
         let actionName = "";
 
@@ -5011,9 +5165,88 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             return;
         }
 
+        if (actionId === 'sweep') {
+            const weapon = data?.weapon || data;
+            const targetIds = Array.isArray(data?.targetIds) ? data.targetIds.filter(Boolean) : [];
+            if (!weapon || targetIds.length === 0) {
+                triggerToast("Barrido incompleto", "Debes elegir un frente con al menos un objetivo para preparar Barrido", 'warning');
+                return;
+            }
+
+            cost = Math.max(1, getSpeedConsumption(weapon)) + 1;
+            actionName = `Barrido (${weapon?.nombre || weapon?.name || 'Arma'})`;
+
+            triggerToast(
+                "¡Barrido!",
+                `${attackerToken.name} prepara un barrido sobre ${targetIds.length} objetivo${targetIds.length !== 1 ? 's' : ''}`,
+                'success'
+            );
+
+            updatePendingTurnActions(attackerId, attackerToken, actionName, cost, {
+                actionId: 'sweep',
+                weapon,
+                targetIds,
+                sweepSide: data?.side || null,
+                sweepCells: Array.isArray(data?.sweepCells) ? data.sweepCells : [],
+                abilityName: 'Barrido',
+                baseCost: Math.max(1, getSpeedConsumption(weapon)),
+                yellowSurcharge: 1
+            });
+
+            return;
+        }
+
         if (cost > 0) {
             updatePendingTurnActions(attackerId, attackerToken, actionName, cost, { targetId: targetToken.id, actionId, weapon: actionId === 'attack' ? (data || (attackerToken.equippedItems || []).find(i => i.type === 'weapon')) : null });
         }
+    };
+
+    const confirmSweepSelection = (attackerId, side) => {
+        const scenario = activeScenarioRef.current || activeScenario;
+        if (!scenario || !targetingState?.weapon) return;
+
+        const attackerToken = scenario.items.find((item) => item.id === attackerId);
+        if (!attackerToken) return;
+
+        const sweepCells = getSweepAreaCells(attackerToken, side, gridConfig);
+        const targetIds = getSweepTargetsForCells(scenario.items, attackerId, sweepCells, gridConfig)
+            .slice(0, 3)
+            .map((target) => target.id);
+
+        if (targetIds.length === 0) {
+            triggerToast("Barrido sin objetivos", "No hay objetivos a toque en ese frente", 'warning');
+            return;
+        }
+
+        completeCombatAction(attackerId, 'sweep', null, {
+            weapon: targetingState.weapon,
+            side,
+            sweepCells,
+            targetIds
+        });
+        setTargetingState(null);
+        setFocusedTargetId(null);
+        setSweepHoverSide(null);
+    };
+
+    const consumeSweepTemplateEvent = (event) => {
+        if (!event) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof event.nativeEvent?.stopImmediatePropagation === 'function') {
+            event.nativeEvent.stopImmediatePropagation();
+        }
+    };
+
+    const handleSweepTemplateCancel = (event) => {
+        consumeSweepTemplateEvent(event);
+        setTargetingState(null);
+        setSweepHoverSide(null);
+    };
+
+    const handleSweepTemplateClick = (event, attackerId, side) => {
+        consumeSweepTemplateEvent(event);
+        confirmSweepSelection(attackerId, side);
     };
 
     const updatePendingTurnActions = (tokenId, token, actionName, cost, metadata = {}) => {
@@ -5062,6 +5295,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         return actions.reduce((total, action) => (
             action?.actionId === 'control_status' && action?.controlledStatusId === 'sangrado'
                 ? total + 1
+                : total
+        ), 0);
+    };
+
+    const getPendingSangradoControlSpeedCost = (pendingState) => {
+        const actions = Array.isArray(pendingState?.actions) ? pendingState.actions : [];
+        return actions.reduce((total, action) => (
+            action?.actionId === 'control_status' && action?.controlledStatusId === 'sangrado'
+                ? total + Math.max(0, Number(action?.cost) || 0)
                 : total
         ), 0);
     };
@@ -5411,6 +5653,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         let defenderRangeLabel = null;
         let distanceBetweenTokens = null;
         const attackTraits = getItemTraits(event.weapon);
+        const isSweepAttack = event.attackMode === 'barrido';
+        const attackModeLabel = isSweepAttack ? (event.abilityName || 'Barrido') : null;
+        const attackSourceLabel = isSweepAttack
+            ? (event.sweepMeta?.sourceWeaponName || event.weapon?.sweepSourceWeaponName || event.weapon?.nombre || event.weapon?.name || null)
+            : null;
         const attackHasFluida = hasNativeCombatTrait(event.weapon, 'fluida');
         const laterActionBreaksAttackerFluida =
             !!event.fluidaMeta?.laterActionBreaksChain ||
@@ -5452,9 +5699,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             statusEffectsApplied.target = res.appliedStatusEffects || [];
             updateTokenInList(targetTokenBase.id, { stats: res.stats, status: res.status, velocidad: (targetTokenBase.velocidad || 0) + (event.reactionData.yellowCost || 0) });
             if (evadedAll) {
-                logText = `¡${targetToken.name} evadió completamente el ataque de ${attackerToken.name}!`;
+                logText = `¡${targetToken.name} evadió completamente ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : `el ataque de ${attackerToken.name}`}!`;
             } else {
-                logText = `${targetToken.name} evadió parcialmente a ${attackerToken.name} y recibió ${newTotal} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
+                logText = `${targetToken.name} evadió parcialmente ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'} de ${attackerToken.name}` : `a ${attackerToken.name}`} y recibió ${newTotal} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
             }
             setAttackerFluidaState(attackHasFluida ? createFluidaState(targetToken.id, event.weapon, 'attack') : null);
             setTargetFluidaState(null);
@@ -5511,7 +5758,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 finalDamage = 0;
                 updateTokenInList(targetTokenBase.id, { velocidad: (targetTokenBase.velocidad || 0) + yellowCost });
                 const defWeaponName = event.reactionData.weapon?.nombre || event.reactionData.weapon?.name || 'su arma';
-                logText = `${targetToken.name} realizó una parada perfecta con ${defWeaponName}.`;
+                logText = `${targetToken.name} realizó una parada perfecta ${isSweepAttack ? `contra ${attackModeLabel?.toLowerCase() || 'el barrido'}` : ''} con ${defWeaponName}.`;
                 setAttackerFluidaState(null);
                 setTargetFluidaState(defenderHasFluida ? createFluidaState(attackerToken.id, defenderWeapon, 'parry') : null);
             } else if (diff > 0) {
@@ -5523,7 +5770,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 statusEffectsApplied.target = res.appliedStatusEffects || [];
                 updateTokenInList(targetTokenBase.id, { stats: res.stats, status: res.status, velocidad: (targetTokenBase.velocidad || 0) + yellowCost });
                 const defWeaponName = event.reactionData.weapon?.nombre || event.reactionData.weapon?.name || 'su arma';
-                logText = `${targetToken.name} paró con ${defWeaponName} pero recibió ${diff} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
+                logText = `${targetToken.name} paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName} pero recibió ${diff} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
                 setAttackerFluidaState(attackHasFluida ? createFluidaState(targetToken.id, event.weapon, 'attack') : null);
                 setTargetFluidaState(defenderHasFluida ? createFluidaState(attackerToken.id, defenderWeapon, 'parry') : null);
             } else {
@@ -5532,7 +5779,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     counterPreventedByRange = true;
                     finalDamage = 0;
                     updateTokenInList(targetTokenBase.id, { velocidad: (targetTokenBase.velocidad || 0) + yellowCost });
-                    logText = `${targetToken.name} paró con ${defWeaponName}, pero no pudo contraatacar porque su alcance (${defenderRange.label}) no alcanza la distancia real entre ambos (${distanceBetweenTokens}).`;
+                    logText = `${targetToken.name} paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName}, pero no pudo contraatacar porque su alcance (${defenderRange.label}) no alcanza la distancia real entre ambos (${distanceBetweenTokens}).`;
                 } else {
                     counterDamage = Math.abs(diff);
                     const res = applyCombatCalculations(attackerToken, counterDamage, defenderWeapon);
@@ -5542,7 +5789,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     statusEffectsApplied.attacker = res.appliedStatusEffects || [];
                     updateTokenInList(attackerTokenBase.id, { stats: res.stats, status: res.status });
                     updateTokenInList(targetTokenBase.id, { velocidad: (targetTokenBase.velocidad || 0) + yellowCost });
-                    logText = `¡${targetToken.name} paró con ${defWeaponName} y contraatacó a ${attackerToken.name} por ${counterDamage} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques)!`;
+                    logText = `¡${targetToken.name} paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName} y contraatacó a ${attackerToken.name} por ${counterDamage} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques)!`;
                 }
                 setAttackerFluidaState(null);
                 setTargetFluidaState(defenderHasFluida ? createFluidaState(attackerToken.id, defenderWeapon, 'parry') : null);
@@ -5555,7 +5802,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             traitBonuses = res.traitBonuses || traitBonuses;
             statusEffectsApplied.target = res.appliedStatusEffects || [];
             updateTokenInList(targetTokenBase.id, { stats: res.stats, status: res.status });
-            logText = `${targetToken.name} recibió el golpe directo de ${attackerToken.name} por ${event.attackerRollResult.total} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
+            logText = `${targetToken.name} recibió ${isSweepAttack ? `${attackModeLabel?.toLowerCase() || 'el barrido'} de ${attackerToken.name}` : `el golpe directo de ${attackerToken.name}`} por ${event.attackerRollResult.total} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
             setAttackerFluidaState(attackHasFluida ? createFluidaState(targetToken.id, event.weapon, 'attack') : null);
             setTargetFluidaState(null);
         }
@@ -5571,6 +5818,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             attackerName: attackerToken.name,
             targetName: targetToken.name,
             weaponName: event.weapon?.nombre || event.weapon?.name || null,
+            attackMode: event.attackMode || null,
+            abilityName: attackModeLabel,
+            attackSourceLabel,
             attackTotal: event.attackerRollResult.total,
             attackTraits,
             attackerDice,
@@ -5760,6 +6010,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const actionCost = pending ? pending.actionCost : 0;
         const isStandingUp = !!pending?.actions?.some(action => action.actionId === 'stand_up');
         const pendingSangradoControl = getPendingSangradoControlCount(pending);
+        const pendingSangradoControlSpeedCost = getPendingSangradoControlSpeedCost(pending);
         const currentFluidaState = getTokenFluidaState(token);
         const shouldClearFluidaOnCommit = !!pending?.actions?.some((action) => {
             if (action.actionId !== 'attack') return true;
@@ -5839,6 +6090,54 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         });
                     }
                 }
+
+                if (action.actionId === 'sweep' && Array.isArray(action.targetIds) && action.targetIds.length > 0) {
+                    const attackerToken = enrichTokenWithCharacterData(token);
+                    const attackerAttrs =
+                        attackerToken.attributes || attackerToken.atributos || {};
+                    const sweepWeapon = buildSweepWeapon(action.weapon);
+                    const attackerRollResult = rollAttack(
+                        sweepWeapon,
+                        attackerAttrs
+                    );
+                    const sweepId = nanoid();
+
+                    for (const targetId of action.targetIds.slice(0, 3)) {
+                        const targetToken = scenario.items.find((item) => item.id === targetId);
+                        if (!targetToken) continue;
+
+                        const actualDistance = getTokenDistanceInCells(token, targetToken, gridConfig);
+
+                        await addDoc(collection(db, 'combat_events'), {
+                            attackerId: token.id,
+                            attackerName: token.name,
+                            targetId: targetToken.id,
+                            targetName: targetToken.name,
+                            attackerRollResult,
+                            weapon: sweepWeapon || null,
+                            negatedTraits: [],
+                            armorProtectionSource: null,
+                            status: 'esperando_reaccion',
+                            scenarioId: scenario.id,
+                            clientTimestamp: Date.now(),
+                            timestamp: serverTimestamp(),
+                            attackerVel: token.velocidad || 0,
+                            targetVel: targetToken.velocidad || 0,
+                            diffVelocidad: Math.abs((token.velocidad || 0) - (targetToken.velocidad || 0)),
+                            distanceBetweenTokens: actualDistance,
+                            attackMode: 'barrido',
+                            abilityName: 'Barrido',
+                            sweepMeta: {
+                                sweepId,
+                                side: action.sweepSide || null,
+                                areaCells: Array.isArray(action.sweepCells) ? action.sweepCells : [],
+                                sourceWeaponName: action.weapon?.nombre || action.weapon?.name || null,
+                                targetIds: action.targetIds.slice(0, 3)
+                            },
+                            fluidaMeta: null
+                        });
+                    }
+                }
             }
         }
 
@@ -5870,7 +6169,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 };
             }
 
-            const sangradoPenalty = applySangradoSpeedPenalty(nextItem, finalCost, {
+            const effectiveSangradoSpentSpeed = Math.max(0, finalCost - pendingSangradoControlSpeedCost);
+            const sangradoPenalty = applySangradoSpeedPenalty(nextItem, effectiveSangradoSpentSpeed, {
                 sangradoMitigation: pendingSangradoControl
             });
             if (sangradoPenalty.lostVida > 0) {
@@ -6276,11 +6576,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                     <span className="text-blue-400 font-fantasy text-sm uppercase tracking-wide">{entry.targetName}</span>
                                                                 </div>
 
-                                                                {entry.weaponName && (
+                                                                {(entry.weaponName || entry.abilityName) && (
                                                                     <div className="flex items-center gap-2">
                                                                         <div className="w-3 h-[1px] bg-slate-800" />
                                                                         <span className="text-[9px] text-slate-500 italic lowercase tracking-wider">
-                                                                            usando {entry.weaponName}
+                                                                            {entry.attackMode === 'barrido'
+                                                                                ? `usando ${entry.abilityName || 'barrido'}${entry.attackSourceLabel ? ` con ${entry.attackSourceLabel}` : ''}`
+                                                                                : `usando ${entry.weaponName}`}
                                                                         </span>
                                                                     </div>
                                                                 )}
@@ -8196,6 +8498,104 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     })()}
                                 </div>
 
+                                {targetingState?.phase === 'sweep_selection' && (() => {
+                                    const items = activeScenario?.items || [];
+                                    const attacker = items.find((item) => item.id === targetingState.attackerId);
+                                    if (!attacker) return null;
+
+                                    const sideDefs = [
+                                        { id: 'north', label: 'Arriba' },
+                                        { id: 'east', label: 'Derecha' },
+                                        { id: 'south', label: 'Abajo' },
+                                        { id: 'west', label: 'Izquierda' },
+                                    ].map((side) => {
+                                        const cells = getSweepAreaCells(attacker, side.id, gridConfig);
+                                        const targets = getSweepTargetsForCells(items, attacker.id, cells, gridConfig).slice(0, 3);
+                                        return { ...side, cells, targets };
+                                    });
+
+                                    const attackerCenterX = attacker.x + (attacker.width / 2);
+                                    const attackerCenterY = attacker.y + (attacker.height / 2);
+
+                                    return (
+                                        <div className="absolute inset-0 z-[15] pointer-events-none">
+                                            <div
+                                                className="absolute pointer-events-auto z-[16] -translate-x-1/2 -translate-y-1/2"
+                                                style={{ left: attackerCenterX, top: attackerCenterY }}
+                                            >
+                                                <div className="flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 shadow-xl border border-[#c8aa6e]/30">
+                                                    <button
+                                                        onMouseDown={consumeSweepTemplateEvent}
+                                                        onPointerDown={consumeSweepTemplateEvent}
+                                                        onTouchStart={consumeSweepTemplateEvent}
+                                                        onClick={handleSweepTemplateCancel}
+                                                        className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"
+                                                        title="Cancelar Barrido"
+                                                    >
+                                                        <X size={12} />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {sideDefs.map((side) => (
+                                                <React.Fragment key={`sweep-side-${side.id}`}>
+                                                    {side.cells.map((cell, index) => {
+                                                        const rect = getGridCellWorldRect(cell, gridConfig);
+                                                        const isHovered = sweepHoverSide === side.id;
+                                                        const showTargets = isHovered || (!sweepHoverSide && side.targets.length > 0);
+                                                        const isMiddleCell = index === Math.floor(side.cells.length / 2);
+
+                                                        return (
+                                                            <button
+                                                                key={`sweep-cell-${side.id}-${cell.x}-${cell.y}`}
+                                                                type="button"
+                                                                onMouseEnter={() => setSweepHoverSide(side.id)}
+                                                                onMouseLeave={() => setSweepHoverSide((prev) => prev === side.id ? null : prev)}
+                                                                onMouseDown={consumeSweepTemplateEvent}
+                                                                onPointerDown={consumeSweepTemplateEvent}
+                                                                onTouchStart={consumeSweepTemplateEvent}
+                                                                onClick={(event) => handleSweepTemplateClick(event, attacker.id, side.id)}
+                                                                className={`absolute z-[15] rounded-sm border transition-all duration-150 pointer-events-auto ${
+                                                                    isHovered
+                                                                        ? 'border-[#f0e6d2] bg-red-500/20 shadow-[0_0_14px_rgba(239,68,68,0.35)]'
+                                                                        : showTargets
+                                                                            ? 'border-red-500/60 bg-red-500/12'
+                                                                            : 'border-[#c8aa6e]/35 bg-[#c8aa6e]/6 hover:border-red-400/70 hover:bg-red-500/10'
+                                                                }`}
+                                                                style={{
+                                                                    left: rect.x,
+                                                                    top: rect.y,
+                                                                    width: rect.width,
+                                                                    height: rect.height,
+                                                                }}
+                                                                title={`Barrido ${side.label.toLowerCase()}${side.targets.length > 0 ? ` · ${side.targets.length} objetivo${side.targets.length !== 1 ? 's' : ''}` : ''}`}
+                                                            >
+                                                                {isMiddleCell && (
+                                                                    <span className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px] font-black uppercase tracking-wider ${isHovered ? 'text-red-100' : 'text-[#f0e6d2]/80'}`}>
+                                                                        {side.targets.length > 0 ? side.targets.length : ''}
+                                                                    </span>
+                                                                )}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                    {(sweepHoverSide === side.id ? side.targets : []).map((target) => (
+                                                        <div
+                                                            key={`sweep-target-${side.id}-${target.id}`}
+                                                            className={`absolute pointer-events-none z-[14] rounded-full border-2 border-red-400/80 shadow-[0_0_18px_rgba(239,68,68,0.3)] ${target.isCircular ? 'rounded-full' : 'rounded-sm'}`}
+                                                            style={{
+                                                                left: target.x,
+                                                                top: target.y,
+                                                                width: target.width,
+                                                                height: target.height,
+                                                            }}
+                                                        />
+                                                    ))}
+                                                </React.Fragment>
+                                            ))}
+                                        </div>
+                                    );
+                                })()}
+
                                 {/* --- CAPA SUPERIOR: NIEBLA Y OSCURIDAD (SVG) --- */}
                                 {/* Movemos la niebla aquí para que tape a los tokens y muros también */}
                                 <div className="absolute inset-0 z-20 pointer-events-none" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
@@ -9073,13 +9473,20 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 if (attacker) {
                                                     const uniqueTargetIds = new Set();
                                                     pendingTurnState.actions.forEach(a => {
-                                                        if (a.targetId && !uniqueTargetIds.has(a.targetId)) {
-                                                            const target = items.find(i => i.id === a.targetId);
+                                                        const actionTargetIds = a.targetId
+                                                            ? [a.targetId]
+                                                            : Array.isArray(a.targetIds)
+                                                                ? a.targetIds
+                                                                : [];
+
+                                                        actionTargetIds.forEach((targetId) => {
+                                                            if (!targetId || uniqueTargetIds.has(targetId)) return;
+                                                            const target = items.find(i => i.id === targetId);
                                                             if (target) {
                                                                 attackPairs.push({ attacker, target, isFocused: false });
-                                                                uniqueTargetIds.add(a.targetId);
+                                                                uniqueTargetIds.add(targetId);
                                                             }
-                                                        }
+                                                        });
                                                     });
                                                 }
                                             }

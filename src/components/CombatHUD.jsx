@@ -1,25 +1,132 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sword, ArrowUp, Shield, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X, Zap } from 'lucide-react';
+import { Sword, ArrowUp, Shield, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X, Zap, RotateCw } from 'lucide-react';
 import { parseAttrBonuses, getSpeedConsumption } from '../utils/combatSystem';
 import CombatModifiersPanel, { applyModifiersToWeapon } from './CombatModifiersPanel';
 import { getCustomImage, useCustomEquipmentImages } from '../hooks/useCustomEquipmentImages';
 import { PRONE_STATUS_IDS } from '../utils/statusEffects';
 
+const RANGE_MAP = {
+    toque: 1,
+    cercano: 2,
+    intermedio: 3,
+    lejano: 4,
+    extremo: 5
+};
+
+const getRangeValue = (item) => {
+    const alcRaw = item?.alc || item?.alcance || item?.range || item?.Alcance || item?.Range || item?.payload?.range || item?.payload?.alcance || item?.payload?.alc;
+    if (alcRaw === undefined || alcRaw === null || alcRaw === '') return 1;
+
+    const alcValue = alcRaw.toString().toLowerCase().trim();
+    if (alcValue.includes('toque')) return RANGE_MAP.toque;
+    if (alcValue.includes('cercano')) return RANGE_MAP.cercano;
+    if (alcValue.includes('intermedio')) return RANGE_MAP.intermedio;
+    if (alcValue.includes('lejano')) return RANGE_MAP.lejano;
+    if (alcValue.includes('extremo')) return RANGE_MAP.extremo;
+
+    const digitMatch = alcValue.match(/\d+/);
+    if (digitMatch) {
+        return parseInt(digitMatch[0], 10);
+    }
+
+    return 1;
+};
+
+const isSweepEligibleWeapon = (item) => {
+    if (!item || item.type !== 'weapon') return false;
+    return getRangeValue(item) <= 1 && getSpeedConsumption(item) >= 2;
+};
+
+const resolveCombatItemImage = (item, customEquipmentImages) => {
+    if (item?.img && (item.img.startsWith('data:') || item.img.startsWith('http') || item.img.startsWith('/'))) return item.img;
+    if (item?.icon && (item.icon.startsWith('data:') || item.icon.startsWith('http') || item.icon.startsWith('/'))) return item.icon;
+
+    if (customEquipmentImages && customEquipmentImages.size > 0) {
+        const custom = getCustomImage(item, customEquipmentImages);
+        if (custom) return custom;
+    }
+
+    const name = (item?.name || item?.nombre || '').toLowerCase();
+
+    if (name.includes('llave inglesa')) return '/armas/llave_inglesa.png';
+    if (name.includes('gancho de alcantarilla')) return '/armas/gancho_de_alcantarilla.png';
+    if (name.includes('antorcha')) return '/armas/antorcha.png';
+    if (name.includes('porra de jade')) return '/armas/Porra de jade.png';
+    if (name.includes('sanguinaria')) return '/armas/la_sanguinaria.png';
+    if (name.includes('mazo glacial')) return '/armas/mazo_glacial.png';
+    if (name.includes('mordisco') || name.includes('fauces')) return '/armas/fauces.png';
+    if (name.includes('garras')) return '/armas/garras.png';
+    if (name.includes('cuchillo')) return '/armas/cuchillo.png';
+    if (name.includes('tuberia') || name.includes('tubería')) return '/armas/tuberia.png';
+    if (name.includes('revolver') || name.includes('revólver')) return '/armas/revolver.png';
+    if (name.includes('pistola')) return '/armas/pistola.png';
+    if (name.includes('rifle')) return '/armas/rifle.png';
+    if (name.includes('escopeta')) return '/armas/escopeta.png';
+    if (name.includes('granarco')) return '/armas/arco_largo.png';
+    if (name.includes('arco')) return '/armas/arco_corto.png';
+    if (name.includes('gran clava') || name.includes('granclava')) return '/armas/gran_clava.png';
+    if (name.includes('clava')) return '/armas/clava.png';
+    if (name.includes('jabalina')) return '/armas/jabalina.png';
+    if (name.includes('lanza')) return '/armas/lanza.png';
+    if (name.includes('daga')) return '/armas/daga.png';
+    if (name.includes('hacha de mano')) return '/armas/hacha_de_mano.png';
+    if (name.includes('hacha')) return '/armas/hacha_de_mano.png';
+    if (name.includes('honda')) return '/armas/honda.png';
+    if (name.includes('tirachinas')) return '/armas/tirachinas.png';
+    if (name.includes('estoque')) return '/armas/estoque.png';
+    if (name.includes('alabarda')) return '/armas/alabarda.png';
+    if (name.includes('ballesta pesada') || name.includes('granballesta')) return '/armas/ballesta_pesada.png';
+    if (name.includes('ultraballesta')) return '/armas/ultraballesta.jpg';
+    if (name.includes('ballesta de mano')) return '/armas/ballesta_de_mano.png';
+    if (name.includes('ballesta')) return '/armas/ballesta_ligera.png';
+    if (name.includes('martillo de mano')) return '/armas/martillo_de_mano.png';
+    if (name.includes('martillo de guerra')) return '/armas/martillo_de_guerra.png';
+    if (name.includes('gran martillo')) return '/armas/gran_martillo.png';
+    if (name.includes('ultramartillo')) return '/armas/ultramartillo.png';
+    if (name.includes('espada bastarda')) return '/armas/espada_bastarda.png';
+    if (name.includes('espada larga')) return '/armas/espada_larga.png';
+    if (name.includes('espada corta')) return '/armas/espada_corta.png';
+    if (name.includes('mandoble')) return '/armas/mandoble.png';
+    if (name.includes('cimitarra')) return '/armas/cimitarra.png';
+    if (name.includes('espada')) return '/armas/espada_de_acero.png';
+
+    return null;
+};
+
 const ItemImage = ({ src, type, name }) => {
-    const [error, setError] = React.useState(false);
-    if (!src || error) {
+    const [status, setStatus] = React.useState(src ? 'loading' : 'idle');
+
+    React.useEffect(() => {
+        setStatus(src ? 'loading' : 'idle');
+    }, [src]);
+
+    if (!src || status === 'error') {
         return type === 'ability'
             ? <Sparkles size={16} className="text-purple-400 md:w-5 md:h-5" />
             : <Sword size={16} className="text-slate-600 md:w-5 md:h-5" />;
     }
+
     return (
-        <img
-            src={src}
-            alt={name}
-            onError={() => setError(true)}
-            className="w-full h-full object-cover group-hover/item:scale-110 transition-transform"
-        />
+        <>
+            <img
+                src={src}
+                alt=""
+                aria-label={name || undefined}
+                draggable={false}
+                onLoad={() => setStatus('loaded')}
+                onError={() => setStatus('error')}
+                className={`w-full h-full object-cover group-hover/item:scale-110 transition-transform transition-opacity duration-500 ${status === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
+            />
+            {status === 'loading' && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#0b1120]/95 via-black/70 to-[#161f32]/90">
+                    <div className="relative flex items-center justify-center">
+                        <div className="absolute inset-[-7px] rounded-full border border-[#c8aa6e]/15 animate-pulse" />
+                        <RotateCw className="w-4 h-4 text-[#c8aa6e]/80 animate-spin drop-shadow-[0_0_8px_rgba(200,170,110,0.35)]" />
+                    </div>
+                </div>
+            )}
+        </>
     );
 };
 
@@ -46,15 +153,7 @@ const CombatHUD = ({
     const [selectedAttackItemIdx, setSelectedAttackItemIdx] = useState(null);
     const [customAttackModifiers, setCustomAttackModifiers] = useState({ extraDice: {}, activeTraits: [] });
     const [attackModifiersExpanded, setAttackModifiersExpanded] = useState(false);
-
-    // Mapa de alcances según la especificación del usuario
-    const RANGE_MAP = {
-        'toque': 1,
-        'cercano': 2,
-        'intermedio': 3,
-        'lejano': 4,
-        'extremo': 5
-    };
+    const [selectedSweepWeaponIdx, setSelectedSweepWeaponIdx] = useState(null);
 
     // Efecto para forzar la apertura del menú de armas si se solicita externamente (ej: tras seleccionar objetivo)
     React.useEffect(() => {
@@ -113,6 +212,7 @@ const CombatHUD = ({
         i.type === 'ability' ||
         (i._category === 'abilities' && (i.damage || i.dano))
     );
+    const sweepWeapons = items.filter((item) => isSweepEligibleWeapon(item));
 
     if (targetDistance !== null) {
         attackOptions = attackOptions.filter(item => {
@@ -170,6 +270,15 @@ const CombatHUD = ({
         { id: 'ACCIONES', label: 'Acciones' },
         { id: 'CLASE', label: 'Clase' },
         { id: 'OBJETOS', label: 'Objetos' }
+    ];
+
+    const classActions = [
+        {
+            id: 'sweep',
+            label: 'Barrido',
+            icon: Zap,
+            disabled: !isActive || isProne
+        }
     ];
 
     const actions = [
@@ -324,7 +433,7 @@ const CombatHUD = ({
                                         exit="exit"
                                         className="relative pointer-events-auto translate-y-[12px] md:translate-y-[1px] focus:outline-none overflow-hidden"
                                     >
-                                        <div className="w-[200px] md:w-80 bg-[#0b1120]/98 backdrop-blur-3xl border-t-2 border-x-2 border-[#c8aa6e] border-b-0 rounded-t-2xl overflow-hidden flex flex-col shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
+                                        <div className="w-[200px] md:w-80 bg-[#0b1120]/98 border-t-2 border-x-2 border-[#c8aa6e] border-b-0 rounded-t-2xl overflow-hidden flex flex-col shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
                                             <div className="bg-[#c8aa6e] px-3 py-2 md:px-4 md:py-3 flex justify-between items-center shrink-0 shadow-lg">
                                                 <div className="flex items-center gap-2">
                                                     <Sword size={14} className="text-[#0b1120]" />
@@ -351,66 +460,7 @@ const CombatHUD = ({
                                                         if (r.includes('poco com')) return 'text-green-400';
                                                         return 'text-[#f0e6d2]';
                                                     };
-                                                    const getItemImage = (i) => {
-                                                        if (i.img && (i.img.startsWith('data:') || i.img.startsWith('http') || i.img.startsWith('/'))) return i.img;
-                                                        if (i.icon && (i.icon.startsWith('data:') || i.icon.startsWith('http') || i.icon.startsWith('/'))) return i.icon;
-
-                                                        if (customEquipmentImages && customEquipmentImages.size > 0) {
-                                                            const custom = getCustomImage(i, customEquipmentImages);
-                                                            if (custom) return custom;
-                                                        }
-
-                                                        // Prioridad 2: resolver por nombre (misma lógica que getObjectImage de CanvasSection)
-                                                        const name = (i.name || i.nombre || '').toLowerCase();
-
-                                                        // Armas especiales (primero las más específicas)
-                                                        if (name.includes('llave inglesa')) return '/armas/llave_inglesa.png';
-                                                        if (name.includes('gancho de alcantarilla')) return '/armas/gancho_de_alcantarilla.png';
-                                                        if (name.includes('antorcha')) return '/armas/antorcha.png';
-                                                        if (name.includes('porra de jade')) return '/armas/Porra de jade.png';
-                                                        if (name.includes('sanguinaria')) return '/armas/la_sanguinaria.png';
-                                                        if (name.includes('mazo glacial')) return '/armas/mazo_glacial.png';
-                                                        if (name.includes('mordisco') || name.includes('fauces')) return '/armas/fauces.png';
-                                                        if (name.includes('garras')) return '/armas/garras.png';
-                                                        if (name.includes('cuchillo')) return '/armas/cuchillo.png';
-                                                        if (name.includes('tuberia') || name.includes('tubería')) return '/armas/tuberia.png';
-                                                        if (name.includes('revolver') || name.includes('revólver')) return '/armas/revolver.png';
-                                                        if (name.includes('pistola')) return '/armas/pistola.png';
-                                                        if (name.includes('rifle')) return '/armas/rifle.png';
-                                                        if (name.includes('escopeta')) return '/armas/escopeta.png';
-                                                        if (name.includes('granarco')) return '/armas/arco_largo.png';
-                                                        if (name.includes('arco')) return '/armas/arco_corto.png';
-                                                        if (name.includes('gran clava') || name.includes('granclava')) return '/armas/gran_clava.png';
-                                                        if (name.includes('clava')) return '/armas/clava.png';
-                                                        if (name.includes('jabalina')) return '/armas/jabalina.png';
-                                                        if (name.includes('lanza')) return '/armas/lanza.png';
-                                                        if (name.includes('daga')) return '/armas/daga.png';
-                                                        if (name.includes('hacha de mano')) return '/armas/hacha_de_mano.png';
-                                                        if (name.includes('hacha')) return '/armas/hacha_de_mano.png';
-                                                        if (name.includes('honda')) return '/armas/honda.png';
-                                                        if (name.includes('tirachinas')) return '/armas/tirachinas.png';
-                                                        if (name.includes('estoque')) return '/armas/estoque.png';
-                                                        if (name.includes('alabarda')) return '/armas/alabarda.png';
-                                                        if (name.includes('ballesta pesada') || name.includes('granballesta')) return '/armas/ballesta_pesada.png';
-                                                        if (name.includes('ultraballesta')) return '/armas/ultraballesta.jpg';
-                                                        if (name.includes('ballesta de mano')) return '/armas/ballesta_de_mano.png';
-                                                        if (name.includes('ballesta')) return '/armas/ballesta_ligera.png';
-                                                        if (name.includes('martillo de mano')) return '/armas/martillo_de_mano.png';
-                                                        if (name.includes('martillo de guerra')) return '/armas/martillo_de_guerra.png';
-                                                        if (name.includes('gran martillo')) return '/armas/gran_martillo.png';
-                                                        if (name.includes('ultramartillo')) return '/armas/ultramartillo.png';
-                                                        if (name.includes('espada bastarda')) return '/armas/espada_bastarda.png';
-                                                        if (name.includes('espada larga')) return '/armas/espada_larga.png';
-                                                        if (name.includes('espada corta')) return '/armas/espada_corta.png';
-                                                        if (name.includes('mandoble')) return '/armas/mandoble.png';
-                                                        if (name.includes('cimitarra')) return '/armas/cimitarra.png';
-                                                        if (name.includes('espada')) return '/armas/espada_de_acero.png';
-
-                                                        return null;
-                                                    };
-
-
-                                                    const itemImg = getItemImage(item);
+                                                    const itemImg = resolveCombatItemImage(item, customEquipmentImages);
                                                     const nameColorClass = getRarityHeaderColor(item.rareza || '');
 
                                                     // Parse traits for attribute dice visualization
@@ -532,6 +582,111 @@ const CombatHUD = ({
                                 )}
                             </AnimatePresence>
 
+                            <AnimatePresence>
+                                {selectedActionId === 'sweep' && (
+                                    <motion.div
+                                        key="sweep-selector"
+                                        variants={panelVariants}
+                                        initial="initial"
+                                        animate="animate"
+                                        exit="exit"
+                                        className="relative pointer-events-auto translate-y-[12px] md:translate-y-[1px] focus:outline-none overflow-hidden"
+                                    >
+                                        <div className="w-[220px] md:w-[360px] bg-[#0b1120]/98 border-t-2 border-x-2 border-[#c8aa6e] border-b-0 rounded-t-2xl overflow-hidden flex flex-col shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
+                                            <div className="bg-[#c8aa6e] px-3 py-2 md:px-4 md:py-3 flex justify-between items-center shrink-0 shadow-lg">
+                                                <div className="flex items-center gap-2">
+                                                    <Zap size={14} className="text-[#0b1120]" />
+                                                    <span className="text-[#0b1120] text-[10px] md:text-[11px] font-black uppercase tracking-widest">
+                                                        Barrido
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedActionId(null);
+                                                        setSelectedSweepWeaponIdx(null);
+                                                    }}
+                                                    className="text-[#0b1120]/60 hover:text-[#0b1120] p-1 transition-colors"
+                                                >
+                                                    <X size={16} className="md:w-[18px] md:h-[18px]" />
+                                                </button>
+                                            </div>
+                                            <div className="px-3 pt-3 pb-2 border-b border-[#c8aa6e]/15 bg-black/30">
+                                                <p className="text-[10px] text-[#f0e6d2] font-bold uppercase tracking-[0.18em] text-center">
+                                                    Requisito
+                                                </p>
+                                                <p className="text-[10px] text-slate-400 mt-1 leading-relaxed text-center">
+                                                    Requiere un arma cuerpo a cuerpo de coste 2 o m&aacute;s. Cuesta el arma + 1{' '}
+                                                    <span className="inline-flex align-middle translate-y-[-1px]">
+                                                        <span className="w-2 h-2 rounded-full bg-[#facc15] shadow-[0_0_6px_rgba(250,204,21,0.65)]" />
+                                                    </span>
+                                                    {' '}y usa una sola tirada compartida.
+                                                </p>
+                                            </div>
+                                            <div className="p-1.5 md:p-2 pb-3 md:pb-4 flex flex-col gap-1.5 md:gap-2 max-h-[280px] md:max-h-[420px] overflow-y-auto custom-scrollbar bg-black/40 border-b border-[#c8aa6e]/20">
+                                                {sweepWeapons.length === 0 ? (
+                                                    <div className="flex flex-col items-center justify-center p-6 text-center text-[#c8aa6e]/60 italic gap-3 mt-4 mb-4">
+                                                        <Zap size={32} className="opacity-30" />
+                                                        <span className="text-xs">Necesitas un arma a toque de coste 2 o m&aacute;s para usar Barrido.</span>
+                                                    </div>
+                                                ) : sweepWeapons.map((item, idx) => {
+                                                    const itemImg = resolveCombatItemImage(item, customEquipmentImages);
+                                                    const isSelected = selectedSweepWeaponIdx === idx;
+                                                    return (
+                                                        <button
+                                                            key={`${item.nombre || item.name || 'barrido'}-${idx}`}
+                                                            onClick={() => setSelectedSweepWeaponIdx(idx)}
+                                                            className={`flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-xl transition-all text-left group/item border shadow-lg ${
+                                                                isSelected
+                                                                    ? 'border-[#c8aa6e] bg-[#c8aa6e]/10'
+                                                                    : 'border-white/5 hover:border-[#c8aa6e]/30 hover:bg-[#c8aa6e]/5'
+                                                            }`}
+                                                        >
+                                                            <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg border border-slate-700 bg-black/60 flex items-center justify-center shrink-0 overflow-hidden relative shadow-inner">
+                                                                <ItemImage src={itemImg} type={item.type} name={item.name || item.nombre} />
+                                                            </div>
+                                                            <div className="flex flex-col flex-1 min-w-0">
+                                                                <span className="text-xs md:text-[13px] font-bold truncate mb-0.5 md:mb-1 text-[#f0e6d2]">
+                                                                    {item.name || item.nombre}
+                                                                </span>
+                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                    <span className="text-[8px] md:text-[10px] text-yellow-500 bg-black/40 px-1.5 py-0.5 rounded border border-white/5 font-bold whitespace-nowrap">
+                                                                        {getSpeedConsumption(item)} + 1🟡
+                                                                    </span>
+                                                                    {(item.damage || item.dano) && (
+                                                                        <span className="text-[8px] md:text-[10px] text-red-400 font-bold bg-red-950/30 px-1.5 py-0.5 rounded border border-red-500/10 whitespace-nowrap">
+                                                                            {item.damage || item.dano}
+                                                                        </span>
+                                                                    )}
+                                                                    <span className="text-[8px] md:text-[10px] text-slate-400 bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-700/40 whitespace-nowrap">
+                                                                        Sin rasgos del arma
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                            {sweepWeapons.length > 0 && (
+                                                <div className="p-3 bg-black/40">
+                                                    <button
+                                                        onClick={() => {
+                                                            const weapon = sweepWeapons[selectedSweepWeaponIdx ?? 0];
+                                                            if (!weapon) return;
+                                                            onAction('sweep', weapon);
+                                                            setSelectedActionId(null);
+                                                            setSelectedSweepWeaponIdx(null);
+                                                        }}
+                                                        className="w-full py-2 md:py-2.5 bg-gradient-to-r from-red-700 to-red-900 hover:from-red-600 hover:to-red-800 text-white text-[10px] md:text-xs font-fantasy uppercase tracking-[0.1em] md:tracking-[0.2em] font-bold rounded shadow-lg transition-colors flex items-center justify-center gap-1.5 md:gap-2"
+                                                    >
+                                                        <Zap size={14} className="hidden md:block" /> Elegir Frente del Barrido
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+
                             {/* 2. Notificaciones Pendientes (Unificado) */}
                             <div
                                 className={`flex flex-col-reverse items-center gap-2 pointer-events-auto w-[200px] md:w-full max-w-sm px-0 md:px-4 transition-all duration-500 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] ${selectedActionId === 'attack' ? 'mb-0' : 'mb-2.5 md:mb-4'}`}
@@ -640,34 +795,54 @@ const CombatHUD = ({
                             })}
 
                             {activeCategory === 'CLASE' && (() => {
-                                const classAbilities = items.filter(i =>
-                                    (i.type === 'ability' || i._category === 'abilities') &&
-                                    !(i.damage || i.dano || i.actionType === 'attack')
-                                );
-
-                                if (classAbilities.length === 0) {
-                                    return (
-                                        <div className="w-full flex flex-col items-center justify-center text-slate-500 py-4">
-                                            <span className="text-[10px] uppercase tracking-widest italic">Sin habilidades de clase</span>
-                                        </div>
-                                    );
-                                }
+                                const classSlots = [
+                                    { id: 'placeholder-left', label: 'Habilidad 1', icon: Sparkles, disabled: true },
+                                    { id: 'sweep', label: 'Barrido', icon: Zap, disabled: !isActive || isProne, interactive: true },
+                                    { id: 'placeholder-right', label: 'Habilidad 3', icon: Sparkles, disabled: true }
+                                ];
 
                                 return (
-                                    <div className="flex gap-3 overflow-x-auto pb-2 px-2 scrollbar-hide w-full">
-                                        {classAbilities.map((ability, idx) => (
-                                            <button
-                                                key={idx}
-                                                onClick={() => onAction('ability', ability)}
-                                                disabled={isProne}
-                                                className={`flex flex-col items-center justify-center min-w-[80px] md:min-w-[100px] h-16 md:h-20 bg-[#161f32] border rounded-lg transition-all shrink-0 group ${isProne ? 'border-slate-800 opacity-40 cursor-not-allowed' : 'border-purple-500/30 hover:bg-purple-900/20 active:scale-95'}`}
-                                            >
-                                                <span className="text-[8px] md:text-[9px] font-bold text-slate-300 uppercase tracking-tighter truncate w-full px-2 text-center">
-                                                    {ability.name || ability.nombre}
-                                                </span>
-                                            </button>
-                                        ))}
-                                    </div>
+                                    <>
+                                        {classSlots.map((slot) => {
+                                            const SlotIcon = slot.icon;
+                                            const slotDisabled = slot.disabled;
+                                            const isSelected = slot.id === 'sweep' && selectedActionId === 'sweep';
+                                            const iconClass = slot.interactive
+                                                ? (slotDisabled ? 'text-slate-600' : 'text-slate-400 group-hover:text-[#c8aa6e]')
+                                                : 'text-slate-600';
+                                            const labelClass = slot.interactive
+                                                ? (slotDisabled ? 'text-slate-600' : 'text-slate-400 group-hover:text-[#f0e6d2]')
+                                                : 'text-slate-600';
+
+                                            return (
+                                                <div key={slot.id} className="relative group flex-1 min-w-0">
+                                                    <button
+                                                        onClick={() => {
+                                                            if (!slot.interactive || slotDisabled) return;
+                                                            setSelectedActionId((prev) => prev === slot.id ? null : slot.id);
+                                                        }}
+                                                        disabled={slotDisabled}
+                                                        className={`relative flex w-full flex-col items-center justify-center h-16 md:h-24 bg-[#161f32] border rounded-lg transition-all ${
+                                                            slot.interactive
+                                                                ? slotDisabled
+                                                                    ? 'cursor-not-allowed opacity-50 border-slate-800'
+                                                                    : isSelected
+                                                                        ? 'border-[#c8aa6e] bg-[#c8aa6e]/20 shadow-[0_0_15px_rgba(200,170,110,0.3)]'
+                                                                        : 'border-slate-700/50 hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 active:scale-95'
+                                                                : 'cursor-not-allowed opacity-45 border-slate-800'
+                                                        }`}
+                                                    >
+                                                        <SlotIcon className={`w-[18px] h-[18px] md:w-8 md:h-8 mb-1 md:mb-2 transition-colors ${iconClass}`} />
+                                                        <div className="flex flex-col items-center">
+                                                            <span className={`text-[9px] md:text-[10px] font-bold uppercase tracking-wider transition-colors text-center px-1 ${labelClass}`}>
+                                                                {slot.label}
+                                                            </span>
+                                                        </div>
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </>
                                 );
                             })()}
 

@@ -282,6 +282,9 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
     const isResolved = event.status === 'resuelto';
     const pendingProtection = getArmorProtectionMeta(event);
     const resolvedProtection = getArmorProtectionMeta(event.result);
+    const attackLabel = event.attackMode === 'barrido'
+        ? `${event.abilityName || 'Barrido'}${event.sweepMeta?.sourceWeaponName ? ` con ${event.sweepMeta.sourceWeaponName}` : ''}`
+        : (event.weapon?.nombre || event.weapon?.name || 'su arma');
     const renderResultDice = (diceList, evadedIds = []) => {
         if (!diceList || diceList.length === 0) return null;
         return (
@@ -412,6 +415,11 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                                     <Swords className="w-5 h-5 text-slate-500" />
                                                     <span className="text-blue-400 font-fantasy uppercase tracking-wide break-words">{event.result.targetName}</span>
                                                 </div>
+                                                {event.result.attackMode === 'barrido' && (
+                                                    <p className="text-[10px] uppercase tracking-[0.24em] text-[#c8aa6e] font-bold">
+                                                        {event.result.abilityName || 'Barrido'}{event.result.attackSourceLabel ? ` con ${event.result.attackSourceLabel}` : ''}
+                                                    </p>
+                                                )}
 
                                                 <ArmorProtectionBanner
                                                     source={resolvedProtection.source}
@@ -547,7 +555,7 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                         ¡Ataque Inminente!
                                     </h2>
                                     <p className="text-center text-slate-300 mb-6">
-                                        <strong className="text-white">{event.attackerName}</strong> te está atacando con <strong className="text-red-400">{event.weapon?.nombre || 'su arma'}</strong>.
+                                        <strong className="text-white">{event.attackerName}</strong> te está atacando con <strong className="text-red-400">{attackLabel}</strong>.
                                     </p>
                                     <div className="mb-4 space-y-3">
                                         <ArmorProtectionBanner
