@@ -14,6 +14,7 @@ const formatCombatTraitLabel = (trait = '') => {
     if (normalized === 'conmocionante') return 'Conmocionante';
     if (normalized === 'fluida') return 'Fluida';
     if (normalized === 'sangrado') return 'Sangrado';
+    if (normalized === 'sin guardia' || normalized === 'singuardia' || normalized === 'sin_guardia') return 'Sin guardia';
     return trait;
 };
 
@@ -160,6 +161,20 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
 
     const getWeaponId = (w, idx) => `${w.nombre || w.name || 'Arma'}-${idx}`;
 
+    const weaponSelectionMeta = useMemo(() => {
+        return weapons.map((weapon, idx) => ({
+            id: getWeaponId(weapon, idx),
+            weapon,
+            blockedByNoGuard: hasCombatTrait(weapon, 'sin guardia'),
+        }));
+    }, [weapons]);
+
+    const defaultParryWeaponId = useMemo(() => {
+        return weaponSelectionMeta.find((entry) => !entry.blockedByNoGuard)?.id || '';
+    }, [weaponSelectionMeta]);
+
+    const canParry = canParryBySpeed && weaponSelectionMeta.some((entry) => !entry.blockedByNoGuard);
+
     const selectedWeaponData = useMemo(() => {
         return weapons.find((weapon, idx) => getWeaponId(weapon, idx) === selectedWeapon) || null;
     }, [weapons, selectedWeapon]);
@@ -168,6 +183,11 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
         if (!selectedWeaponData) return null;
         return applyModifiersToWeapon(selectedWeaponData, customModifiers);
     }, [selectedWeaponData, customModifiers]);
+
+    const selectedWeaponBlockedByNoGuard = useMemo(() => {
+        if (!modifiedParryWeapon) return false;
+        return hasCombatTrait(modifiedParryWeapon, 'sin guardia');
+    }, [modifiedParryWeapon]);
 
     const parryCostMeta = useMemo(() => {
         if (!modifiedParryWeapon) {
@@ -224,12 +244,19 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
             setReactionType(null);
             setSelectedDiceIndices([]);
         }
-        if (reactionType === 'parar' && !canParryBySpeed) {
+        if (reactionType === 'parar' && !canParry) {
             setReactionType(null);
             setSelectedWeapon('');
             setSelectedDiceIndices([]);
         }
-    }, [reactionType, canEvade, canParryBySpeed]);
+    }, [reactionType, canEvade, canParry]);
+
+    useEffect(() => {
+        if (reactionType !== 'parar') return;
+        if (!selectedWeapon && defaultParryWeaponId) {
+            setSelectedWeapon(defaultParryWeaponId);
+        }
+    }, [reactionType, selectedWeapon, defaultParryWeaponId]);
 
     const handleConfirm = async () => {
         if (isSubmitting) return;
@@ -239,8 +266,9 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
             if (!canEvade) return;
             payload = { type: 'evadir', data: { evadedDiceIds: selectedDiceIndices, yellowCost: selectedDiceIndices.length } };
         } else if (reactionType === 'parar') {
-            if (!canParryBySpeed) return;
+            if (!canParry) return;
             if (!modifiedParryWeapon) return;
+            if (selectedWeaponBlockedByNoGuard) return;
             payload = {
                 type: 'parar',
                 data: {
@@ -651,17 +679,19 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                 <button
                                     onClick={() => {
                                         setReactionType('parar');
-                                        setSelectedWeapon(weapons[0] ? getWeaponId(weapons[0], 0) : '');
+                                        setSelectedWeapon(defaultParryWeaponId);
                                         setSelectedDiceIndices([]);
                                     }}
-                                    disabled={weapons.length === 0 || !canParryBySpeed}
+                                    disabled={!canParry}
                                     className={`flex flex-col items-center justify-center p-3 rounded border transition-all ${reactionType === 'parar' ? 'bg-[#c8aa6e]/20 border-[#c8aa6e]' : 'bg-black/40 border-slate-700 hover:border-slate-500'
-                                        } ${!canParryBySpeed ? 'opacity-50 cursor-not-allowed hidden' : ''} ${weapons.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        } ${!canParryBySpeed ? 'opacity-50 cursor-not-allowed hidden' : ''} ${!canParry ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                     <div className="flex items-center gap-2 text-[#c8aa6e] font-bold uppercase tracking-wider">
                                         <Sword size={18} /> Parar
                                     </div>
-                                    <span className="text-xs text-slate-400 mt-1">Requiere V.Diff ≤ 1</span>
+                                    <span className="text-xs text-slate-400 mt-1">
+                                        {!canParryBySpeed ? 'Requiere V.Diff ≤ 1' : !canParry ? 'Ningún arma apta para parar' : 'Requiere V.Diff ≤ 1'}
+                                    </span>
                                 </button>
 
                                 {/* BOTÓN RECIBIR */}
@@ -682,20 +712,32 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                             Selecciona el arma para parar:
                                         </label>
                                         <div className="flex flex-col gap-2">
-                                            {weapons.map((w, idx) => {
-                                                const currentId = getWeaponId(w, idx);
+                                            {weaponSelectionMeta.map(({ weapon, id, blockedByNoGuard }) => {
                                                 return (
                                                     <WeaponCard
-                                                        key={currentId}
-                                                        weapon={w}
-                                                        isSelected={selectedWeapon === currentId}
-                                                        onSelect={() => setSelectedWeapon(currentId)}
+                                                        key={id}
+                                                        weapon={weapon}
+                                                        isSelected={selectedWeapon === id}
+                                                        onSelect={() => setSelectedWeapon(id)}
+                                                        disabled={blockedByNoGuard}
+                                                        helperText={blockedByNoGuard ? 'Sin guardia: no puedes parar con esta arma.' : ''}
                                                         customEquipmentImages={customEquipmentImages}
                                                     />
                                                 );
                                             })}
                                         </div>
                                     </div>
+
+                                    {selectedWeaponBlockedByNoGuard && (
+                                        <div className="rounded-lg border border-rose-500/30 bg-rose-900/20 px-3 py-2 text-center">
+                                            <p className="text-[10px] uppercase tracking-[0.2em] text-rose-300 font-bold">
+                                                Sin guardia
+                                            </p>
+                                            <p className="text-xs text-rose-100 mt-1">
+                                                Esta arma no puede usarse para parar.
+                                            </p>
+                                        </div>
+                                    )}
 
                                     {/* Panel de Modificadores Creativos / DM */}
                                     {selectedWeapon && (
@@ -723,7 +765,7 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                             </div>
                             <button
                                 onClick={handleConfirm}
-                                disabled={isSubmitting || !reactionType || (reactionType === 'parar' && (!selectedWeapon || !canParryBySpeed))}
+                                disabled={isSubmitting || !reactionType || (reactionType === 'parar' && (!selectedWeapon || !canParry || selectedWeaponBlockedByNoGuard))}
                                 className="px-8 py-2.5 bg-gradient-to-r from-red-600 to-red-800 text-white font-fantasy text-sm uppercase tracking-[0.2em] rounded shadow-lg hover:shadow-red-600/20 active:scale-95 disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed transition-all"
                             >
                                 {isSubmitting ? 'Procesando...' : 'Confirmar'}
@@ -738,7 +780,7 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
     );
 };
 
-const WeaponCard = ({ weapon, isSelected, onSelect, customEquipmentImages }) => {
+const WeaponCard = ({ weapon, isSelected, onSelect, customEquipmentImages, disabled = false, helperText = '' }) => {
     const [imgError, setImgError] = useState(false);
 
     // Reset imgError when the resolved image URL changes (e.g., custom image loads from Firestore)
@@ -839,7 +881,9 @@ const WeaponCard = ({ weapon, isSelected, onSelect, customEquipmentImages }) => 
     return (
         <button
             onClick={onSelect}
-            className={`relative bg-[#161f32] border ${borderColor} rounded-lg overflow-hidden group hover:border-[#c8aa6e]/60 transition-all duration-300 w-full text-left p-0 m-0 ${isSelected ? 'shadow-[0_0_15px_rgba(200,170,110,0.3)] ring-1 ring-[#c8aa6e]' : ''}`}
+            disabled={disabled}
+            title={helperText || undefined}
+            className={`relative bg-[#161f32] border ${borderColor} rounded-lg overflow-hidden group transition-all duration-300 w-full text-left p-0 m-0 ${disabled ? 'opacity-55 cursor-not-allowed' : 'hover:border-[#c8aa6e]/60'} ${isSelected ? 'shadow-[0_0_15px_rgba(200,170,110,0.3)] ring-1 ring-[#c8aa6e]' : ''}`}
         >
             <div className={`absolute inset-0 bg-gradient-to-r ${isSelected ? 'from-[#c8aa6e]/20' : rarity.glow} via-transparent to-transparent opacity-0 group-hover:opacity-100 ${isSelected ? 'opacity-100' : ''} transition-opacity duration-500 z-0`}></div>
             <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${isSelected ? 'bg-[#c8aa6e]' : rarity.stripe} z-10`} />
@@ -915,6 +959,12 @@ const WeaponCard = ({ weapon, isSelected, onSelect, customEquipmentImages }) => 
                                 )
                             })}
                         </div>
+                    )}
+
+                    {helperText && (
+                        <p className="mt-1.5 text-[9px] text-rose-300/85">
+                            {helperText}
+                        </p>
                     )}
                 </div>
             </div>
