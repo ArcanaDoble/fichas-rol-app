@@ -8,9 +8,11 @@ export const normalizeCombatTraitId = (trait = '') => {
         .toLowerCase()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '');
+    const compact = normalized.replace(/[\s_-]+/g, '');
 
     if (!normalized) return '';
     if (normalized === 'derribado' || normalized === 'derribar' || normalized === 'derribo') return 'derribo';
+    if (compact === 'singuardia') return 'sin guardia';
     return normalized;
 };
 
@@ -112,16 +114,28 @@ export const parseAttrBonuses = (rasgos = []) => {
 };
 
 export const parseDamage = (val) => {
-    if (!val) return '';
-    return String(val).split(/[ (]/)[0];
+    if (val === undefined || val === null) return '';
+    const normalized = String(val).trim();
+    if (!normalized) return '';
+    return normalized.split(/[ (]/)[0];
 };
 
 export const rollAttack = (weapon, attributes) => {
     const itemDamage = weapon?.dano ?? weapon?.poder ?? weapon?.damage ?? '';
-    let baseFormula = parseDamage(itemDamage) || '1d20';
+    const parsedBaseDamage = parseDamage(itemDamage);
+    const hasExplicitZeroBase =
+        parsedBaseDamage === '0' ||
+        /^(\d*)d0$/i.test(parsedBaseDamage);
+    let baseFormula = hasExplicitZeroBase ? '' : parsedBaseDamage;
+    if (!baseFormula && !hasExplicitZeroBase) {
+        baseFormula = '1d20';
+    }
 
+    let rolledBaseFormula = baseFormula;
     if (weapon?.extraDamageString) {
-        baseFormula += ` + ${weapon.extraDamageString}`;
+        rolledBaseFormula = rolledBaseFormula
+            ? `${rolledBaseFormula} + ${weapon.extraDamageString}`
+            : weapon.extraDamageString;
     }
 
     const allTraits = weapon?.rasgos || weapon?.traits || weapon?.trait || weapon?.properties || [];
@@ -188,11 +202,13 @@ export const rollAttack = (weapon, attributes) => {
     });
 
     // 1. Roll Base Damage
-    let baseRes;
-    if (hasCritical) {
-        baseRes = rollExpressionCritical(baseFormula);
-    } else {
-        baseRes = rollExpression(baseFormula);
+    let baseRes = { formula: rolledBaseFormula || '', total: 0, details: [] };
+    if (rolledBaseFormula) {
+        if (hasCritical) {
+            baseRes = rollExpressionCritical(rolledBaseFormula);
+        } else {
+            baseRes = rollExpression(rolledBaseFormula);
+        }
     }
 
     // 2. Roll Attribute Dice individually to tag them
@@ -217,9 +233,14 @@ export const rollAttack = (weapon, attributes) => {
         });
     });
 
-    const formula = attrDiceArray.length > 0
-        ? `${baseFormula} + ${attrDiceArray.map(d => d.dieStr).join(' + ')}`
-        : baseFormula;
+    const formulaParts = [];
+    if (rolledBaseFormula) {
+        formulaParts.push(rolledBaseFormula);
+    }
+    if (attrDiceArray.length > 0) {
+        formulaParts.push(attrDiceArray.map(d => d.dieStr).join(' + '));
+    }
+    const formula = formulaParts.join(' + ');
 
     return {
         formula,

@@ -11,6 +11,7 @@ const formatTraitLabel = (trait = '') => {
     if (normalized === 'conmocionante') return 'Conmocionante';
     if (normalized === 'fluida') return 'Fluida';
     if (normalized === 'sangrado') return 'Sangrado';
+    if (normalized === 'sin guardia' || normalized === 'singuardia' || normalized === 'sin_guardia') return 'Sin guardia';
     return trait.charAt(0).toUpperCase() + trait.slice(1);
 };
 
@@ -22,6 +23,7 @@ const AVAILABLE_TRAITS = [
     { id: 'conmocionante', label: 'Conmocionante', icon: ArrowDown, color: 'text-indigo-300', border: 'border-indigo-400/50', bg: 'bg-indigo-900/30' },
     { id: 'sangrado', label: 'Sangrado', icon: Droplet, color: 'text-red-500', border: 'border-red-700/50', bg: 'bg-red-950/30' },
     { id: 'fluida', label: 'Fluida', icon: Wind, color: 'text-sky-300', border: 'border-sky-400/50', bg: 'bg-sky-900/30' },
+    { id: 'sin guardia', label: 'Sin guardia', icon: Shield, color: 'text-rose-300', border: 'border-rose-500/50', bg: 'bg-rose-900/30' },
     // Más rasgos se pueden añadir aquí fácilmente
 ];
 

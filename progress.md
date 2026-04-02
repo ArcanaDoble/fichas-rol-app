@@ -87,4 +87,6 @@ Original prompt: Perfecto. Ahora necesito que vayas implementando cada cambio qu
 - `CombatHUD` deja de renderizar texto/alt feo mientras cargan miniaturas remotas de arma: `ItemImage` espera a `onLoad`, muestra un spinner dorado durante la carga y solo revela la imagen cuando está lista.
 - `Barrido` deja de usar un resolvedor parcial de imagen y pasa a reutilizar exactamente el mismo que el selector de ataque normal, manteniendo tanto las artes locales del proyecto como el loader de carga en ambos flujos.
 - Corregido `Controlar Sangrado` al cerrar turno: el coste de la propia acción deja de contar como velocidad que drena vida y cada uso sigue mitigando además `1` tick extra del resto de velocidad gastada en ese turno.
+- `rollAttack` deja de convertir armas con daño base `0` o `1d0` en un `1d20` por defecto: ahora esas armas tiran solo los dados extra o de atributo que procedan, manteniendo el fallback `1d20` únicamente cuando el arma no define daño en absoluto.
+- Añadido `Sin guardia` como rasgo negativo del combate SVG: ya se puede aplicar desde modificadores, se normaliza en logs/resultados y cualquier arma que lo tenga queda bloqueada para `Parar`, con aviso visual en el modal de reacción.
 - No se ha lanzado `npm test -- --watchAll=false` por peticion explicita del usuario.

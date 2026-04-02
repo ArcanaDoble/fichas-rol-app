@@ -213,6 +213,7 @@ const formatCombatTraitLabel = (trait = '') => {
     if (normalized === 'conmocionante') return 'Conmocionante';
     if (normalized === 'fluida') return 'Fluida';
     if (normalized === 'sangrado') return 'Sangrado';
+    if (normalized === 'sin guardia' || normalized === 'singuardia' || normalized === 'sin_guardia') return 'Sin guardia';
     return trait;
 };
 
@@ -5979,6 +5980,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }
 
         try {
+            if (reaction.type === 'parar' && hasCombatTrait(reaction.data?.weapon, 'sin guardia')) {
+                triggerToast("Sin guardia", "Esa arma no puede usarse para parar.", 'warning');
+                return;
+            }
+
             const safeReactionData =
                 reaction.data == null
                     ? null
