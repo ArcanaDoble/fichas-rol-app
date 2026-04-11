@@ -23,27 +23,29 @@ export const sortCombatQueueEntries = (queue) => {
     .map(({ entry }) => entry);
 };
 
-export const getCombatQueueDisplayState = ({ queue, resolvedCount = 0 }) => {
+export const getCombatQueueDisplayState = ({ queue, resolvedCount = 0, activeEventId = null }) => {
   const safeQueue = sortCombatQueueEntries(queue);
 
   const isWaitingReaction = (entry) => entry?.event?.status === 'esperando_reaccion';
   const isPendingResult = (entry) => typeof entry?.event?.status === 'string' && entry.event.status.endsWith('_pendiente');
   const isResolvedResult = (entry) => entry?.event?.status === 'resuelto';
 
-  let activeIndex = safeQueue.findIndex(isWaitingReaction);
+  let activeIndex = activeEventId
+    ? safeQueue.findIndex((entry) => entry?.event?.id === activeEventId)
+    : -1;
+  if (activeIndex === -1) activeIndex = safeQueue.findIndex(isWaitingReaction);
   if (activeIndex === -1) activeIndex = safeQueue.findIndex(isPendingResult);
   if (activeIndex === -1) activeIndex = safeQueue.findIndex(isResolvedResult);
   if (activeIndex === -1 && safeQueue.length > 0) activeIndex = 0;
 
   const activeEntry = activeIndex >= 0 ? safeQueue[activeIndex] : null;
-  const completedBeforeActive = activeIndex >= 0 ? activeIndex : 0;
-  const trackerIndex = resolvedCount + completedBeforeActive;
+  const trackerIndex = resolvedCount + (activeIndex >= 0 ? activeIndex : 0);
 
   return {
     activeEntry,
     activeIndex,
     queueTotal: safeQueue.length + resolvedCount,
-    queueResolved: trackerIndex,
+    queueResolved: resolvedCount,
     queueCurrent: trackerIndex,
   };
 };

@@ -42,16 +42,37 @@ const PRESET_COLORS = [
     '#3b82f6', '#a855f7'  // Blue, Purple
 ];
 
+const DEFAULT_FINITE_COLUMNS = 12;
+const DEFAULT_FINITE_ROWS = 8;
+const TARGET_GRID_CELL_SIZE = 256;
+const DEFAULT_TOKEN_CELL_SCALE = 0.5;
+const MIN_GRID_CELL_SIZE = 10;
+const MAX_GRID_CELL_SIZE = 500;
+const MIN_GRID_COUNT = 1;
+const MAX_GRID_COUNT = 100;
+
+const clampGridCount = (rawValue, fallback = DEFAULT_FINITE_COLUMNS) => {
+    const numericValue = Number(rawValue);
+    if (!Number.isFinite(numericValue)) return fallback;
+    return Math.min(MAX_GRID_COUNT, Math.max(MIN_GRID_COUNT, Math.round(numericValue)));
+};
+
+const clampCellSize = (rawValue, fallback = TARGET_GRID_CELL_SIZE) => {
+    const numericValue = Number(rawValue);
+    if (!Number.isFinite(numericValue)) return fallback;
+    return Math.min(MAX_GRID_CELL_SIZE, Math.max(MIN_GRID_CELL_SIZE, Math.round(numericValue)));
+};
+
 const DEFAULT_GRID_CONFIG = {
-    cellWidth: 50,
-    cellHeight: 50,
+    cellWidth: TARGET_GRID_CELL_SIZE,
+    cellHeight: TARGET_GRID_CELL_SIZE,
     color: '#334155',
     opacity: 0.3,
     lineWidth: 1,
     lineType: 'solid',
     isInfinite: true,
-    columns: 20,
-    rows: 15,
+    columns: DEFAULT_FINITE_COLUMNS,
+    rows: DEFAULT_FINITE_ROWS,
     backgroundImage: null,
     backgroundImageHash: null,
     imageWidth: null,
@@ -60,14 +81,16 @@ const DEFAULT_GRID_CONFIG = {
     ambientDarkness: 0,
     fogOfWar: false,
     isCombatActive: false,
-    lockFiniteMapSize: true,
+    lockFiniteMapSize: false,
 };
 
 const normalizeGridConfig = (config = {}) => ({
     ...DEFAULT_GRID_CONFIG,
     ...(config || {}),
-    columns: Math.max(1, Math.round(Number(config?.columns ?? DEFAULT_GRID_CONFIG.columns) || DEFAULT_GRID_CONFIG.columns)),
-    rows: Math.max(1, Math.round(Number(config?.rows ?? DEFAULT_GRID_CONFIG.rows) || DEFAULT_GRID_CONFIG.rows)),
+    columns: clampGridCount(config?.columns ?? DEFAULT_GRID_CONFIG.columns, DEFAULT_GRID_CONFIG.columns),
+    rows: clampGridCount(config?.rows ?? DEFAULT_GRID_CONFIG.rows, DEFAULT_GRID_CONFIG.rows),
+    cellWidth: clampCellSize(config?.cellWidth ?? DEFAULT_GRID_CONFIG.cellWidth, DEFAULT_GRID_CONFIG.cellWidth),
+    cellHeight: clampCellSize(config?.cellHeight ?? DEFAULT_GRID_CONFIG.cellHeight, DEFAULT_GRID_CONFIG.cellHeight),
 });
 
 const roundGridValue = (value) => {
@@ -77,20 +100,9 @@ const roundGridValue = (value) => {
 };
 
 const getFiniteMapDimensions = (config = {}) => {
-    const safeColumns = Number(config.columns) || DEFAULT_GRID_CONFIG.columns;
-    const safeRows = Number(config.rows) || DEFAULT_GRID_CONFIG.rows;
-    const safeCellWidth = Number(config.cellWidth) || DEFAULT_GRID_CONFIG.cellWidth;
-    const safeCellHeight = Number(config.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight;
-    const imageWidth = Number(config.imageWidth);
-    const imageHeight = Number(config.imageHeight);
-
     return {
-        width: Number.isFinite(imageWidth) && imageWidth > 0
-            ? imageWidth
-            : safeColumns * safeCellWidth,
-        height: Number.isFinite(imageHeight) && imageHeight > 0
-            ? imageHeight
-            : safeRows * safeCellHeight,
+        width: (Number(config.columns) || DEFAULT_GRID_CONFIG.columns) * (Number(config.cellWidth) || DEFAULT_GRID_CONFIG.cellWidth),
+        height: (Number(config.rows) || DEFAULT_GRID_CONFIG.rows) * (Number(config.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight),
     };
 };
 
@@ -99,42 +111,31 @@ const getGridPixelDimensions = (config = {}) => ({
     height: (Number(config.rows) || DEFAULT_GRID_CONFIG.rows) * (Number(config.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight),
 });
 
-const fitCellSizeIntoFrame = (frameSize, cellCount) => {
-    const safeFrameSize = Number(frameSize);
-    const safeCellCount = Math.max(1, Math.round(Number(cellCount) || 1));
+const buildBackgroundGridPreset = (imageWidth, imageHeight, rawColumns, rawRows) => {
+    const columns = clampGridCount(rawColumns);
+    const rows = clampGridCount(rawRows, DEFAULT_FINITE_ROWS);
+    const aspectRatio = imageWidth / imageHeight;
+    const cellWidthFromImage = imageWidth / columns;
+    const cellHeightFromImage = imageHeight / rows;
+    const cellSize = clampCellSize((cellWidthFromImage + cellHeightFromImage) / 2);
+    const frameWidth = columns * cellSize;
+    const frameHeight = rows * cellSize;
+    const aspectDelta = Math.abs((frameWidth / frameHeight) - aspectRatio) / aspectRatio;
+    const cellDelta = Math.abs(cellSize - TARGET_GRID_CELL_SIZE);
 
-    if (!Number.isFinite(safeFrameSize) || safeFrameSize <= 0) {
-        return DEFAULT_GRID_CONFIG.cellWidth;
-    }
-
-    return Math.max(1, Math.floor(safeFrameSize / safeCellCount));
+    return {
+        columns,
+        rows,
+        cellSize,
+        frameWidth,
+        frameHeight,
+        aspectDelta,
+        cellDelta,
+        score: (aspectDelta * 1000) + cellDelta,
+    };
 };
 
-const fitGridCountIntoFrame = (frameSize, cellSize) => {
-    const safeFrameSize = Number(frameSize);
-    const safeCellSize = Math.max(1, Number(cellSize) || DEFAULT_GRID_CONFIG.cellWidth);
-
-    if (!Number.isFinite(safeFrameSize) || safeFrameSize <= 0) {
-        return 1;
-    }
-
-    return Math.max(1, Math.floor(safeFrameSize / safeCellSize));
-};
-
-const getGreatestCommonDivisor = (a, b) => {
-    let x = Math.abs(Math.round(Number(a) || 0));
-    let y = Math.abs(Math.round(Number(b) || 0));
-
-    while (y !== 0) {
-        const remainder = x % y;
-        x = y;
-        y = remainder;
-    }
-
-    return x || 1;
-};
-
-const getExactBackgroundGridPresets = (config = {}, minimumCellSize = 10) => {
+const getExactBackgroundGridPresets = (config = {}, minimumCellSize = MIN_GRID_CELL_SIZE) => {
     const imageWidth = Math.round(Number(config.imageWidth) || 0);
     const imageHeight = Math.round(Number(config.imageHeight) || 0);
 
@@ -142,24 +143,46 @@ const getExactBackgroundGridPresets = (config = {}, minimumCellSize = 10) => {
         return [];
     }
 
-    const gcd = getGreatestCommonDivisor(imageWidth, imageHeight);
-    const divisors = new Set();
+    const aspectRatio = imageWidth / imageHeight;
+    const approxColumns = clampGridCount(imageWidth / TARGET_GRID_CELL_SIZE, DEFAULT_FINITE_COLUMNS);
+    const approxRows = clampGridCount(imageHeight / TARGET_GRID_CELL_SIZE, DEFAULT_FINITE_ROWS);
+    const candidates = new globalThis.Map();
 
-    for (let i = 1; i <= Math.sqrt(gcd); i += 1) {
-        if (gcd % i !== 0) continue;
-        divisors.add(i);
-        divisors.add(gcd / i);
+    const addCandidate = (columns, rows) => {
+        if (columns < MIN_GRID_COUNT || rows < MIN_GRID_COUNT) return;
+        const preset = buildBackgroundGridPreset(imageWidth, imageHeight, columns, rows);
+        if (preset.cellSize < minimumCellSize) return;
+        const key = `${preset.columns}x${preset.rows}`;
+        const existingPreset = candidates.get(key);
+        if (!existingPreset || preset.score < existingPreset.score) {
+            candidates.set(key, preset);
+        }
+    };
+
+    for (let delta = -18; delta <= 18; delta += 1) {
+        const columns = approxColumns + delta;
+        const derivedRows = Math.max(1, Math.round(columns / aspectRatio));
+        addCandidate(columns, derivedRows - 1);
+        addCandidate(columns, derivedRows);
+        addCandidate(columns, derivedRows + 1);
     }
 
-    const sortedDivisors = Array.from(divisors).sort((a, b) => a - b);
-    const preferredDivisors = sortedDivisors.filter((value) => value >= minimumCellSize);
-    const usableDivisors = preferredDivisors.length > 0 ? preferredDivisors : sortedDivisors;
+    for (let delta = -12; delta <= 12; delta += 1) {
+        const rows = approxRows + delta;
+        const derivedColumns = Math.max(1, Math.round(rows * aspectRatio));
+        addCandidate(derivedColumns - 1, rows);
+        addCandidate(derivedColumns, rows);
+        addCandidate(derivedColumns + 1, rows);
+    }
 
-    return usableDivisors.map((cellSize) => ({
-        cellSize,
-        columns: imageWidth / cellSize,
-        rows: imageHeight / cellSize,
-    }));
+    addCandidate(DEFAULT_FINITE_COLUMNS, DEFAULT_FINITE_ROWS);
+    addCandidate(approxColumns, approxRows);
+
+    return Array.from(candidates.values()).sort((a, b) => {
+        if (b.cellSize !== a.cellSize) return b.cellSize - a.cellSize;
+        if (a.aspectDelta !== b.aspectDelta) return a.aspectDelta - b.aspectDelta;
+        return a.cellDelta - b.cellDelta;
+    });
 };
 
 const findClosestBackgroundGridPreset = (presets = [], key, rawTarget) => {
@@ -184,6 +207,58 @@ const findClosestBackgroundGridPreset = (presets = [], key, rawTarget) => {
             ? currentPreset
             : bestPreset;
     }, null);
+};
+
+const resolveBackgroundGridChange = (config = {}, key, rawValue) => {
+    const imageWidth = Math.round(Number(config.imageWidth) || 0);
+    const imageHeight = Math.round(Number(config.imageHeight) || 0);
+
+    if (imageWidth <= 0 || imageHeight <= 0) {
+        return {
+            columns: clampGridCount(config.columns, DEFAULT_GRID_CONFIG.columns),
+            rows: clampGridCount(config.rows, DEFAULT_GRID_CONFIG.rows),
+            cellWidth: clampCellSize(config.cellWidth, DEFAULT_GRID_CONFIG.cellWidth),
+            cellHeight: clampCellSize(config.cellHeight, DEFAULT_GRID_CONFIG.cellHeight),
+        };
+    }
+
+    const presets = getExactBackgroundGridPresets({ imageWidth, imageHeight }, MIN_GRID_CELL_SIZE);
+    const aspectRatio = imageWidth / imageHeight;
+
+    if (key === 'columns') {
+        const columns = clampGridCount(rawValue, clampGridCount(config.columns, DEFAULT_GRID_CONFIG.columns));
+        const rows = clampGridCount(Math.round(columns / aspectRatio), DEFAULT_FINITE_ROWS);
+        const preset = buildBackgroundGridPreset(imageWidth, imageHeight, columns, rows);
+        return {
+            columns: preset.columns,
+            rows: preset.rows,
+            cellWidth: preset.cellSize,
+            cellHeight: preset.cellSize,
+        };
+    }
+
+    if (key === 'rows') {
+        const rows = clampGridCount(rawValue, clampGridCount(config.rows, DEFAULT_GRID_CONFIG.rows));
+        const columns = clampGridCount(Math.round(rows * aspectRatio), DEFAULT_FINITE_COLUMNS);
+        const preset = buildBackgroundGridPreset(imageWidth, imageHeight, columns, rows);
+        return {
+            columns: preset.columns,
+            rows: preset.rows,
+            cellWidth: preset.cellSize,
+            cellHeight: preset.cellSize,
+        };
+    }
+
+    const targetCellSize = clampCellSize(rawValue, TARGET_GRID_CELL_SIZE);
+    const matchedPreset = findClosestBackgroundGridPreset(presets, 'cellSize', targetCellSize)
+        || buildBackgroundGridPreset(imageWidth, imageHeight, imageWidth / targetCellSize, imageHeight / targetCellSize);
+
+    return {
+        columns: matchedPreset.columns,
+        rows: matchedPreset.rows,
+        cellWidth: matchedPreset.cellSize,
+        cellHeight: matchedPreset.cellSize,
+    };
 };
 
 const getBackgroundGridPresetIndex = (config = {}, presets = []) => {
@@ -218,11 +293,11 @@ const formatCombatTraitLabel = (trait = '') => {
 };
 
 const COMBAT_RANGE_MAP = {
-    toque: 1,
-    cercano: 2,
-    intermedio: 3,
-    lejano: 4,
-    extremo: 5
+    toque: 0,
+    cercano: 1,
+    intermedio: 2,
+    lejano: 3,
+    extremo: 999
 };
 
 const getCombatRangeData = (item) => {
@@ -237,7 +312,7 @@ const getCombatRangeData = (item) => {
         item?.payload?.alc;
 
     if (rawRange === undefined || rawRange === null || rawRange === '') {
-        return { value: 1, label: 'Toque' };
+        return { value: COMBAT_RANGE_MAP.toque, label: 'Toque' };
     }
 
     const label = rawRange.toString().trim();
@@ -254,7 +329,91 @@ const getCombatRangeData = (item) => {
         return { value: parseInt(digitMatch[0], 10), label };
     }
 
-    return { value: 1, label };
+    return { value: COMBAT_RANGE_MAP.toque, label };
+};
+
+const isCombatTokenItem = (item) => !!item && item.type !== 'light' && item.type !== 'wall' && item.type !== 'geometry';
+
+const normalizeCombatSideKey = (value = '') => value
+    .toString()
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const getTokenCombatSideKeys = (token) => {
+    const sideKeys = new Set();
+    const teamId = normalizeCombatSideKey(token?.teamId || '');
+    if (teamId) {
+        sideKeys.add(`team:${teamId}`);
+    }
+
+    const controlledBy = Array.isArray(token?.controlledBy) ? token.controlledBy : [];
+    controlledBy
+        .map((entry) => normalizeCombatSideKey(entry))
+        .filter(Boolean)
+        .forEach((entry) => {
+            sideKeys.add(`control:${entry}`);
+        });
+
+    if (!teamId && controlledBy.length === 0) {
+        sideKeys.add('control:master');
+    }
+
+    return sideKeys;
+};
+
+const areTokensAllied = (tokenA, tokenB) => {
+    if (!isCombatTokenItem(tokenA) || !isCombatTokenItem(tokenB)) return false;
+
+    const teamIdA = normalizeCombatSideKey(tokenA?.teamId || '');
+    const teamIdB = normalizeCombatSideKey(tokenB?.teamId || '');
+
+    if (teamIdA || teamIdB) {
+        return !!teamIdA && teamIdA === teamIdB;
+    }
+
+    const sideKeysA = getTokenCombatSideKeys(tokenA);
+    const sideKeysB = getTokenCombatSideKeys(tokenB);
+
+    for (const key of sideKeysA) {
+        if (sideKeysB.has(key)) return true;
+    }
+
+    return false;
+};
+
+const getDefaultTokenDimensions = (config = {}) => {
+    const cellW = Number(config.cellWidth) || DEFAULT_GRID_CONFIG.cellWidth;
+    const cellH = Number(config.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight;
+    return {
+        width: roundGridValue(cellW * DEFAULT_TOKEN_CELL_SCALE),
+        height: roundGridValue(cellH * DEFAULT_TOKEN_CELL_SCALE),
+    };
+};
+
+const canTokenShareCombatCell = (token, config = {}) => {
+    const cellW = Number(config.cellWidth) || DEFAULT_GRID_CONFIG.cellWidth;
+    const cellH = Number(config.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight;
+    const width = Number(token?.width) || cellW;
+    const height = Number(token?.height) || cellH;
+
+    return width <= (cellW * 0.55) && height <= (cellH * 0.55);
+};
+
+const isSmallCombatToken = (token, config = {}) => {
+    if (!isCombatTokenItem(token)) return false;
+    const cellW = Number(config.cellWidth) || DEFAULT_GRID_CONFIG.cellWidth;
+    const cellH = Number(config.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight;
+    const width = Number(token?.width) || cellW;
+    const height = Number(token?.height) || cellH;
+
+    return width < (cellW * DEFAULT_TOKEN_CELL_SCALE) && height < (cellH * DEFAULT_TOKEN_CELL_SCALE);
+};
+
+const isLockedCombatToken = (token, config = {}) => {
+    if (!isCombatTokenItem(token)) return false;
+    return !canTokenShareCombatCell(token, config);
 };
 
 const getTokenDistanceInCells = (t1, t2, gridConfig = {}) => {
@@ -278,6 +437,27 @@ const getTokenDistanceInCells = (t1, t2, gridConfig = {}) => {
     const distY = Math.max(0, t2y - (t1y + t1h - 1), t1y - (t2y + t2h - 1));
 
     return Math.max(distX, distY);
+};
+
+const canUseTouchAgainstAdjacentLockedTarget = (attacker, target, gridConfig = {}) => {
+    if (!attacker || !target) return false;
+    const actualDistance = getTokenDistanceInCells(attacker, target, gridConfig);
+    if (actualDistance !== 1) return false;
+    return isLockedCombatToken(attacker, gridConfig) || isLockedCombatToken(target, gridConfig);
+};
+
+const isWeaponWithinCombatRange = (weapon, attacker, target, gridConfig = {}, precomputedDistance = null) => {
+    if (!weapon || !attacker || !target) return false;
+    const rangeData = getCombatRangeData(weapon);
+    const actualDistance = Number.isFinite(Number(precomputedDistance))
+        ? Number(precomputedDistance)
+        : getTokenDistanceInCells(attacker, target, gridConfig);
+
+    if (rangeData.value >= actualDistance) return true;
+
+    return rangeData.value === COMBAT_RANGE_MAP.toque &&
+        actualDistance === 1 &&
+        canUseTouchAgainstAdjacentLockedTarget(attacker, target, gridConfig);
 };
 
 const getTokenProneStatusId = (token) => {
@@ -380,6 +560,183 @@ const getAttackSpeedCostMeta = ({ attackerToken, targetId, weapon, pendingState 
     };
 };
 
+const getReactionBudgetForEvent = (event) => {
+    const explicitBudget = Number(event?.reactionBudget);
+    if (Number.isFinite(explicitBudget) && explicitBudget >= 0) {
+        return Math.max(0, Math.round(explicitBudget));
+    }
+
+    const fluidaBaseCost = Number(event?.fluidaMeta?.baseCost);
+    if (Number.isFinite(fluidaBaseCost) && fluidaBaseCost > 0) {
+        return Math.max(1, Math.round(event?.fluidaMeta?.discountApplied ? fluidaBaseCost - 1 : fluidaBaseCost));
+    }
+
+    return Math.max(1, getSpeedConsumption(event?.weapon));
+};
+
+const getReactionSpeedSpentByEvent = (event) => {
+    if (!event || event.status === 'esperando_reaccion') return 0;
+    const explicitCost = Number(event.reactionData?.yellowCost);
+    if (Number.isFinite(explicitCost) && explicitCost > 0) {
+        return Math.max(0, Math.round(explicitCost));
+    }
+    if (event.reactionType === 'parar') {
+        return buildLegacyParrySteps(event.reactionData)
+            .reduce((sum, step) => sum + Math.max(0, Number(step?.yellowCost) || 0), 0);
+    }
+    if (event.reactionType === 'evadir') {
+        return Array.isArray(event.reactionData?.evadedDiceIds)
+            ? event.reactionData.evadedDiceIds.length
+            : 0;
+    }
+    return 0;
+};
+
+const buildLegacyParrySteps = (reactionData) => {
+    if (!reactionData) return [];
+    if (Array.isArray(reactionData.parrySteps) && reactionData.parrySteps.length > 0) {
+        return reactionData.parrySteps;
+    }
+
+    if (!reactionData.weapon) return [];
+
+    const yellowCost = Math.max(
+        1,
+        Number(reactionData.yellowCost) ||
+        Number(reactionData.baseYellowCost) ||
+        getSpeedConsumption(reactionData.weapon)
+    );
+
+    return [{
+        id: 'legacy-parry-step',
+        weapon: reactionData.weapon,
+        yellowCost,
+        baseYellowCost: Math.max(1, Number(reactionData.baseYellowCost) || yellowCost),
+        fluidaDiscountApplied: !!reactionData.fluidaDiscountApplied,
+    }];
+};
+
+const extractCombatRollDice = (rollResult, idPrefix = 'roll') => {
+    const dice = [];
+    (rollResult?.details || []).forEach((detail, dIdx) => {
+        if (detail.type === 'dice') {
+            const match = detail.formula?.match(/d(\d+)/i);
+            const faces = match ? parseInt(match[1], 10) : 20;
+
+            detail.rolls.forEach((r, rIdx) => {
+                dice.push({
+                    value: typeof r === 'object' ? r.value : r,
+                    critical: typeof r === 'object' ? r.critical : false,
+                    matchedAttr: detail.matchedAttr || null,
+                    id: `${idPrefix}-${dIdx}-${rIdx}`,
+                    faces
+                });
+            });
+        } else if (detail.matchedAttr && (detail.type === 'calc' || detail.type === 'modifier')) {
+            dice.push({
+                value: detail.value || detail.total || 0,
+                matchedAttr: detail.matchedAttr,
+                critical: false,
+                id: `${idPrefix}-${dIdx}-0`,
+                faces: 6
+            });
+        }
+    });
+
+    return dice.sort((a, b) => {
+        const rankA = a.critical ? 1 : a.matchedAttr ? 2 : 0;
+        const rankB = b.critical ? 1 : b.matchedAttr ? 2 : 0;
+        return rankA - rankB;
+    });
+};
+
+const buildParryWeaponSummaryLabel = (steps = []) => {
+    const counts = new globalThis.Map();
+    steps.forEach((step) => {
+        const name = step?.weaponName || step?.weapon?.nombre || step?.weapon?.name;
+        if (!name) return;
+        counts.set(name, (counts.get(name) || 0) + 1);
+    });
+
+    if (counts.size === 0) return null;
+
+    return Array.from(counts.entries())
+        .map(([name, count]) => (count > 1 ? `${name} x${count}` : name))
+        .join(' · ');
+};
+
+const GLOBAL_PARRY_TRAIT_IDS = new Set([
+    'agudeza',
+    'derribo',
+    'hendir',
+    'conmocionante',
+    'sangrado'
+]);
+
+const buildAggregateCombatWeapon = (steps = []) => {
+    const firstWeapon = steps.find((step) => step?.weapon)?.weapon;
+    if (!firstWeapon) return null;
+
+    const mergedTraits = Array.from(new Set(
+        steps
+            .flatMap((step) => getItemTraits(step?.weapon))
+            .filter((traitId) => GLOBAL_PARRY_TRAIT_IDS.has(traitId))
+    ));
+    const summaryName = buildParryWeaponSummaryLabel(steps) || firstWeapon?.nombre || firstWeapon?.name || 'Parada';
+
+    return {
+        ...firstWeapon,
+        nombre: summaryName,
+        name: summaryName,
+        rasgos: mergedTraits,
+        traits: mergedTraits,
+        trait: mergedTraits,
+        properties: mergedTraits,
+    };
+};
+
+const buildAggregateAttackWeapon = (steps = []) => {
+    const firstWeapon = steps.find((step) => step?.weapon)?.weapon;
+    if (!firstWeapon) return null;
+
+    const mergedTraits = Array.from(new Set(
+        steps.flatMap((step) => getItemTraits(step?.weapon))
+    ));
+    const summaryName = buildParryWeaponSummaryLabel(steps) || firstWeapon?.nombre || firstWeapon?.name || 'Ataque';
+
+    return {
+        ...firstWeapon,
+        nombre: summaryName,
+        name: summaryName,
+        rasgos: mergedTraits,
+        traits: mergedTraits,
+        trait: mergedTraits,
+        properties: mergedTraits,
+    };
+};
+
+const combineAttackRollResults = (steps = []) => {
+    const rollResults = steps.map((step) => step?.rollResult).filter(Boolean);
+
+    return {
+        formula: rollResults.map((roll) => roll.formula).filter(Boolean).join(' + '),
+        total: rollResults.reduce((sum, roll) => sum + (Number(roll.total) || 0), 0),
+        details: rollResults.flatMap((roll, attackIndex) => (
+            (roll.details || []).map((detail) => ({
+                ...detail,
+                rolls: Array.isArray(detail.rolls)
+                    ? detail.rolls.map((rollValue) => (
+                        typeof rollValue === 'object' && rollValue !== null
+                            ? { ...rollValue }
+                            : rollValue
+                    ))
+                    : [],
+                attackIndex,
+            }))
+        )),
+    };
+};
+
 const isAttributeCombatTrait = (trait = '') => /(vigor|destreza|intelecto|voluntad)\s*(?:\(x?\d+\))?/i.test(String(trait || ''));
 
 const buildSweepWeapon = (weapon) => {
@@ -435,6 +792,208 @@ const getTokenGridBounds = (token, config = {}) => {
     };
 };
 
+const getTokenOccupiedGridCells = (token, config = {}) => {
+    const bounds = getTokenGridBounds(token, config);
+    const cells = [];
+
+    for (let x = bounds.x; x < bounds.x + bounds.w; x += 1) {
+        for (let y = bounds.y; y < bounds.y + bounds.h; y += 1) {
+            cells.push({ x, y });
+        }
+    }
+
+    return cells;
+};
+
+const getTokenPrimaryGridCell = (token, config = {}) => {
+    const bounds = getTokenGridBounds(token, config);
+    return {
+        x: bounds.x,
+        y: bounds.y,
+    };
+};
+
+const getCellOccupants = (items = [], cell, config = {}, excludeIds = []) => {
+    const excluded = new Set(excludeIds);
+    return (items || []).filter((item) => {
+        if (!isCombatTokenItem(item) || excluded.has(item.id)) return false;
+        const occupiedCells = getTokenOccupiedGridCells(item, config);
+        return occupiedCells.some((occupiedCell) => occupiedCell.x === cell.x && occupiedCell.y === cell.y);
+    });
+};
+
+const getTokenCombatCellContext = (token, items = [], config = {}) => {
+    if (!isCombatTokenItem(token)) {
+        return { mode: 'solo', cell: null, occupants: [], pairedOccupants: [] };
+    }
+
+    const bounds = getTokenGridBounds(token, config);
+    if (!canTokenShareCombatCell(token, config) || bounds.w !== 1 || bounds.h !== 1) {
+        return { mode: 'solo', cell: getTokenPrimaryGridCell(token, config), occupants: [token], pairedOccupants: [] };
+    }
+
+    const cell = getTokenPrimaryGridCell(token, config);
+    const occupants = getCellOccupants(items, cell, config);
+    const pairedOccupants = occupants.filter((occupant) => occupant.id !== token.id);
+
+    if (pairedOccupants.length === 0) {
+        return { mode: 'solo', cell, occupants, pairedOccupants };
+    }
+
+    const hasEnemy = pairedOccupants.some((occupant) => !areTokensAllied(token, occupant));
+    const mode = hasEnemy ? 'duel' : 'formation';
+
+    return { mode, cell, occupants, pairedOccupants };
+};
+
+const getTokenDuelContextAgainstAttacker = (targetToken, attackerToken, items = [], config = {}) => {
+    if (!targetToken || !attackerToken) {
+        return { mode: 'solo', cell: null, occupants: [], pairedOccupants: [], isDuelWithAttacker: false };
+    }
+
+    const targetContext = getTokenCombatCellContext(targetToken, items, config);
+    const attackerInTargetCell = targetContext.pairedOccupants.some((occupant) => occupant.id === attackerToken.id);
+    const isDuelWithAttacker =
+        targetContext.mode === 'duel' &&
+        attackerInTargetCell &&
+        !areTokensAllied(targetToken, attackerToken);
+
+    return {
+        ...targetContext,
+        mode: isDuelWithAttacker ? 'duel' : 'solo',
+        isDuelWithAttacker,
+    };
+};
+
+const getCombatRenderPlacement = (token, items = [], config = {}) => {
+    const cellW = Number(config.cellWidth) || DEFAULT_GRID_CONFIG.cellWidth;
+    const cellH = Number(config.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight;
+    const width = Number(token?.width) || cellW;
+    const height = Number(token?.height) || cellH;
+    const bounds = getTokenGridBounds(token, config);
+    const cell = getTokenPrimaryGridCell(token, config);
+    const cellRect = getGridCellWorldRect(cell, config);
+    const occupiesSingleCell = bounds.w === 1 && bounds.h === 1;
+    const basePlacement = occupiesSingleCell
+        ? {
+            x: cellRect.x + ((cellW - width) / 2),
+            y: cellRect.y + ((cellH - height) / 2),
+        }
+        : {
+            x: cellRect.x,
+            y: cellRect.y,
+        };
+
+    if (!canTokenShareCombatCell(token, config) || !occupiesSingleCell) {
+        return basePlacement;
+    }
+
+    const context = getTokenCombatCellContext(token, items, config);
+    if (context.occupants.length !== 2) {
+        return basePlacement;
+    }
+
+    const orderedOccupants = [...context.occupants].sort((a, b) => {
+        const sideA = Array.from(getTokenCombatSideKeys(a)).sort().join('|');
+        const sideB = Array.from(getTokenCombatSideKeys(b)).sort().join('|');
+        const sideDelta = sideA.localeCompare(sideB);
+        if (sideDelta !== 0) return sideDelta;
+        return String(a.id).localeCompare(String(b.id));
+    });
+    const slotIndex = orderedOccupants.findIndex((occupant) => occupant.id === token.id);
+
+    if (slotIndex < 0) {
+        return basePlacement;
+    }
+
+    return {
+        x: cellRect.x + (slotIndex === 0 ? (cellW - width) : 0),
+        y: cellRect.y + ((cellH - height) / 2),
+    };
+};
+
+const getCombatRenderPlacementAtPosition = (token, position = {}, items = [], config = {}) => {
+    if (!isCombatTokenItem(token) || !config?.isCombatActive) {
+        return {
+            x: Number(position.x) || 0,
+            y: Number(position.y) || 0,
+        };
+    }
+
+    const simulatedToken = {
+        ...token,
+        x: Number(position.x),
+        y: Number(position.y),
+    };
+    const simulatedItems = (items || []).map((item) => (item.id === token.id ? simulatedToken : item));
+    return getCombatRenderPlacement(simulatedToken, simulatedItems, config);
+};
+
+const getCombatCellOccupancyIssue = ({ movingToken, nextX, nextY, items = [], config = {}, excludeIds = [] }) => {
+    if (!config?.isCombatActive || !isCombatTokenItem(movingToken)) return null;
+
+    const movedToken = { ...movingToken, x: nextX, y: nextY };
+    const movedBounds = getTokenGridBounds(movedToken, config);
+    const movedCells = [];
+    for (let x = movedBounds.x; x < movedBounds.x + movedBounds.w; x += 1) {
+        for (let y = movedBounds.y; y < movedBounds.y + movedBounds.h; y += 1) {
+            movedCells.push({ x, y });
+        }
+    }
+
+    const excluded = new Set([movingToken.id, ...excludeIds]);
+    const movingCanShare = canTokenShareCombatCell(movedToken, config) && movedBounds.w === 1 && movedBounds.h === 1;
+
+    for (const cell of movedCells) {
+        const occupants = getCellOccupants(items, cell, config, Array.from(excluded));
+
+        if (occupants.length === 0) continue;
+
+        if (occupants.length >= 2) {
+            return { cell, reason: 'Casilla ocupada' };
+        }
+
+        if (!movingCanShare) {
+            return { cell, reason: 'No cabe en duelo' };
+        }
+
+        if (occupants.length === 1) {
+            const other = occupants[0];
+            const otherBounds = getTokenGridBounds(other, config);
+            const otherCanShare = canTokenShareCombatCell(other, config) && otherBounds.w === 1 && otherBounds.h === 1;
+            if (!otherCanShare) {
+                return { cell, reason: 'Ficha grande bloquea' };
+            }
+        }
+    }
+
+    return null;
+};
+
+const canOccupyCombatCell = (params) => !getCombatCellOccupancyIssue(params);
+
+const areCombatOccupancyFeedbacksEqual = (a, b) => (
+    (a?.tokenId || null) === (b?.tokenId || null) &&
+    (a?.reason || null) === (b?.reason || null) &&
+    (a?.cell?.x ?? null) === (b?.cell?.x ?? null) &&
+    (a?.cell?.y ?? null) === (b?.cell?.y ?? null) &&
+    (a?.targetX ?? null) === (b?.targetX ?? null) &&
+    (a?.targetY ?? null) === (b?.targetY ?? null)
+);
+
+const getCombatOccupancyFeedbackForMove = ({ tokenId, movingToken, nextX, nextY, items = [], config = {}, excludeIds = [] }) => {
+    const issue = getCombatCellOccupancyIssue({ movingToken, nextX, nextY, items, config, excludeIds });
+    if (!issue) return null;
+
+    return {
+        tokenId,
+        cell: issue.cell,
+        reason: issue.reason,
+        targetX: nextX,
+        targetY: nextY,
+    };
+};
+
 const isGridCellInsideBounds = (cell, config = {}) => {
     if (config.isInfinite) return true;
     const columns = Math.max(1, Math.round(Number(config.columns) || 1));
@@ -486,11 +1045,13 @@ const getSweepTargetsForCells = (items = [], attackerId, cells = [], config = {}
     if (!Array.isArray(items) || cells.length === 0) return [];
 
     const cellKeys = new Set(cells.map((cell) => `${cell.x}:${cell.y}`));
+    const attacker = items.find((item) => item?.id === attackerId) || null;
 
     return items.filter((item) => {
         if (!item || item.id === attackerId) return false;
         if (item.type === 'light' || item.type === 'wall' || item.type === 'geometry') return false;
         if (!(item.isCircular || item.stats || item.name)) return false;
+        if (attacker && areTokensAllied(attacker, item)) return false;
 
         const bounds = getTokenGridBounds(item, config);
         for (let x = bounds.x; x < bounds.x + bounds.w; x += 1) {
@@ -546,17 +1107,21 @@ const getEffectiveItemSnap = (item, config = {}) => {
     return !!config.snapToGrid;
 };
 
-const snapWorldPositionToGrid = (worldPos = {}, config = {}, itemSize = {}) => {
+const snapWorldPositionToGrid = (worldPos = {}, config = {}, itemSize = {}, options = {}) => {
     const cellWidth = Number(config.cellWidth) || DEFAULT_GRID_CONFIG.cellWidth;
     const cellHeight = Number(config.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight;
     const gridRect = getGridWorldRect(config);
+    const itemWidth = Math.max(0, Number(itemSize.width) || 0);
+    const itemHeight = Math.max(0, Number(itemSize.height) || 0);
+    const shouldCenterInCell = !!options.centerInCell;
 
-    let x = gridRect.x + Math.round(((Number(worldPos.x) || 0) - gridRect.x) / cellWidth) * cellWidth;
-    let y = gridRect.y + Math.round(((Number(worldPos.y) || 0) - gridRect.y) / cellHeight) * cellHeight;
+    const compactOffsetX = shouldCenterInCell && itemWidth > 0 && itemWidth < cellWidth ? (cellWidth - itemWidth) / 2 : 0;
+    const compactOffsetY = shouldCenterInCell && itemHeight > 0 && itemHeight < cellHeight ? (cellHeight - itemHeight) / 2 : 0;
+
+    let x = gridRect.x + Math.round(((Number(worldPos.x) || 0) - gridRect.x - compactOffsetX) / cellWidth) * cellWidth + compactOffsetX;
+    let y = gridRect.y + Math.round(((Number(worldPos.y) || 0) - gridRect.y - compactOffsetY) / cellHeight) * cellHeight + compactOffsetY;
 
     if (!config.isInfinite) {
-        const itemWidth = Math.max(0, Number(itemSize.width) || 0);
-        const itemHeight = Math.max(0, Number(itemSize.height) || 0);
         x = clampToRange(x, gridRect.x, gridRect.x + gridRect.width - itemWidth);
         y = clampToRange(y, gridRect.y, gridRect.y + gridRect.height - itemHeight);
     }
@@ -567,7 +1132,7 @@ const snapWorldPositionToGrid = (worldPos = {}, config = {}, itemSize = {}) => {
     };
 };
 
-const getCenteredSpawnPosition = (config = {}, itemSize = {}) => {
+const getCenteredSpawnPosition = (config = {}, itemSize = {}, options = {}) => {
     const width = Number(itemSize.width) || Number(config.cellWidth) || DEFAULT_GRID_CONFIG.cellWidth;
     const height = Number(itemSize.height) || Number(config.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight;
     const centeredPosition = {
@@ -576,7 +1141,7 @@ const getCenteredSpawnPosition = (config = {}, itemSize = {}) => {
     };
 
     return getEffectiveItemSnap({ snapToGrid: config.snapToGrid }, config)
-        ? snapWorldPositionToGrid(centeredPosition, config, { width, height })
+        ? snapWorldPositionToGrid(centeredPosition, config, { width, height }, options)
         : centeredPosition;
 };
 
@@ -1727,6 +2292,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [tokenDragStart, setTokenDragStart] = useState({ x: 0, y: 0, identifier: null }); // Posición inicial del mouse/touch
     const [tokenOriginalPos, setTokenOriginalPos] = useState({}); // Mapa de posiciones originales { [id]: {x, y} }
     const [dragVisualOrigin, setDragVisualOrigin] = useState({}); // Ancla visual fija del ghost/linea durante el drag
+    const [combatOccupancyFeedback, setCombatOccupancyFeedback] = useState(null);
     const [selectedTokenIds, setSelectedTokenIds] = useState([]); // Array de IDs seleccionados
     const [rotatingTokenId, setRotatingTokenId] = useState(null);
     const [resizingTokenId, setResizingTokenId] = useState(null); // Nuevo estado para resize
@@ -1747,6 +2313,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     // --- ESTADO DE TURNO PENDIENTE (MODO COMBATE) ---
     const [pendingTurnState, setPendingTurnState] = useState(null);
     const [combatEventQueue, setCombatEventQueue] = useState([]);
+    const [activeCombatEventId, setActiveCombatEventId] = useState(null);
     const [activeCombatAnimations, setActiveCombatAnimations] = useState([]);
     const seenAnimIdsRef = useRef(new Set()); // Persistent dedup set across renders
     const seenSyncedEffectIdsRef = useRef(new Set()); // Dedup para efectos visuales compartidos
@@ -1756,11 +2323,56 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [combatLog, setCombatLog] = useState([]);
     // { tokenId, x, y, startX, startY, moveCost, actionCost, actionNames: [] }
 
+    const effectiveCombatEventQueue = useMemo(() => {
+        const scenarioItems = activeScenario?.items || [];
+
+        return combatEventQueue.map((entry) => {
+            const event = entry?.event;
+            if (!event?.targetId) return entry;
+
+            const targetToken = scenarioItems.find((item) => item.id === event.targetId) || entry.targetToken;
+            const targetBaseVelocity = Math.max(0, Number(targetToken?.velocidad) || 0);
+            const previousReactionSpent = combatEventQueue.reduce((sum, queuedEntry) => {
+                const queuedEvent = queuedEntry?.event;
+                if (!queuedEvent || queuedEvent.id === event.id || queuedEvent.targetId !== event.targetId) {
+                    return sum;
+                }
+
+                return sum + getReactionSpeedSpentByEvent(queuedEvent);
+            }, 0);
+            const attackerFinalVel = Number(event.attackerFinalVel);
+            const effectiveReactionBudget = Number.isFinite(attackerFinalVel)
+                ? Math.max(0, Math.round(attackerFinalVel - targetBaseVelocity - previousReactionSpent))
+                : Math.max(0, getReactionBudgetForEvent(event) - previousReactionSpent);
+
+            return {
+                ...entry,
+                event: {
+                    ...event,
+                    reactionBudget: effectiveReactionBudget,
+                    baseReactionBudget: getReactionBudgetForEvent(event),
+                    reactionSpeedAlreadyCommitted: previousReactionSpent,
+                },
+            };
+        });
+    }, [combatEventQueue, activeScenario?.items]);
+
     const combatQueueDisplay = useMemo(
-        () => getCombatQueueDisplayState({ queue: combatEventQueue, resolvedCount: resolvedEventCount }),
-        [combatEventQueue, resolvedEventCount]
+        () => getCombatQueueDisplayState({
+            queue: effectiveCombatEventQueue,
+            resolvedCount: resolvedEventCount,
+            activeEventId: activeCombatEventId
+        }),
+        [effectiveCombatEventQueue, resolvedEventCount, activeCombatEventId]
     );
     const activeCombatQueueEntry = combatQueueDisplay.activeEntry;
+
+    useEffect(() => {
+        if (!activeCombatEventId) return;
+        if (!effectiveCombatEventQueue.some((entry) => entry?.event?.id === activeCombatEventId)) {
+            setActiveCombatEventId(null);
+        }
+    }, [activeCombatEventId, effectiveCombatEventQueue]);
 
     // --- TARGETING STATE ---
     const [targetingState, setTargetingState] = useState(null);
@@ -1986,6 +2598,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             setResizingTokenId(null);
                             setTokenOriginalPos({});
                             setDragVisualOrigin({});
+                            setCombatOccupancyFeedback(null);
                             document.body.style.cursor = 'default';
                             triggerToast("Movimiento Interrumpido", "El Master ha movido las fichas", 'warning');
                             hasConflict = true;
@@ -2566,6 +3179,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const deltaX = (curX - tokenDragStart.x) / zoom;
             const deltaY = (curY - tokenDragStart.y) / zoom;
 
+            let nextCombatOccupancyFeedback = null;
             const newItems = currentScenario.items.map(item => {
                 if (selectedTokenIds.includes(item.id)) {
                     const original = tokenOriginalPos[item.id] || { x: item.x, y: item.y };
@@ -2582,10 +3196,34 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         const snappedPosition = snapWorldPositionToGrid(
                             { x: newX, y: newY },
                             gridConfig,
-                            { width: item.width, height: item.height }
+                            { width: item.width, height: item.height },
+                            { centerInCell: isCombatTokenItem(item) }
                         );
                         newX = snappedPosition.x;
                         newY = snappedPosition.y;
+                    }
+
+                    if (
+                        activeLayer === 'TABLETOP' &&
+                        gridConfig.isCombatActive &&
+                        isCombatTokenItem(item)
+                    ) {
+                        const occupancyFeedback = getCombatOccupancyFeedbackForMove({
+                            tokenId: item.id,
+                            movingToken: item,
+                            nextX: newX,
+                            nextY: newY,
+                            items: currentScenario.items,
+                            config: gridConfig,
+                            excludeIds: selectedTokenIds.filter((id) => id !== item.id),
+                        });
+
+                        if (occupancyFeedback) {
+                            if (!nextCombatOccupancyFeedback || item.id === draggedTokenId) {
+                                nextCombatOccupancyFeedback = occupancyFeedback;
+                            }
+                            return { ...item, x: newX, y: newY };
+                        }
                     }
 
                     // Si es un muro, desplazamos sus puntos
@@ -2607,13 +3245,17 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 }
                 return item;
             });
+            setCombatOccupancyFeedback(prev => (
+                areCombatOccupancyFeedbacksEqual(prev, nextCombatOccupancyFeedback) ? prev : nextCombatOccupancyFeedback
+            ));
 
             // LOGIC ADDED: Update pending cost LIVE while dragging (ONLY for players)
             if (gridConfig.isCombatActive && isPlayerView && draggedTokenId) {
                 const draggedItem = newItems.find(i => i.id === draggedTokenId);
                 const original = tokenOriginalPos[draggedTokenId];
+                const isBlockedCombatDestination = nextCombatOccupancyFeedback?.tokenId === draggedTokenId;
 
-                if (draggedItem && original) {
+                if (draggedItem && original && !isBlockedCombatDestination) {
                     setPendingTurnState(prev => {
                         const isSameToken = prev && prev.tokenId === draggedTokenId;
                         const turnStartX = isSameToken ? prev.startX : original.x;
@@ -2624,20 +3266,28 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         const cellW = gridConfig.cellWidth || 50;
                         const cellH = gridConfig.cellHeight || 50;
                         const distance = Math.max(Math.round(dx / cellW), Math.round(dy / cellH));
+                        const actionCost = isSameToken ? (Number(prev.actionCost) || 0) : 0;
+                        const hasActions = isSameToken && Array.isArray(prev.actions) && prev.actions.length > 0;
+
+                        if (distance <= 0 && actionCost <= 0 && !hasActions) return null;
 
                         const base = isSameToken ? prev : {
                             tokenId: draggedTokenId,
                             startX: original.x,
                             startY: original.y,
-                            actionCost: 0,
+                            x: original.x,
+                            y: original.y,
+                            actionCost,
                             actions: []
                         };
 
                         // Avoid update if cost hasn't changed to key performance reasonable
-                        if (isSameToken && prev.moveCost === distance) return prev;
+                        if (isSameToken && prev.moveCost === distance && prev.x === draggedItem.x && prev.y === draggedItem.y) return prev;
 
                         return {
                             ...base,
+                            x: draggedItem.x,
+                            y: draggedItem.y,
                             moveCost: distance
                         };
                     });
@@ -2817,6 +3467,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 finalItems = currentScenario.items.map(item => {
                     if (!selectedTokenIds.includes(item.id)) return item;
 
+                    if (item.type === 'wall') {
+                        return item;
+                    }
+
                     const original = tokenOriginalPos[item.id] || { x: item.x, y: item.y };
                     let newX = original.x + deltaX;
                     let newY = original.y + deltaY;
@@ -2828,24 +3482,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         const snappedPosition = snapWorldPositionToGrid(
                             { x: newX, y: newY },
                             gridConfig,
-                            { width: item.width, height: item.height }
+                            { width: item.width, height: item.height },
+                            { centerInCell: isCombatTokenItem(item) }
                         );
                         newX = snappedPosition.x;
                         newY = snappedPosition.y;
-                    }
-
-                    if (item.type === 'wall') {
-                        const dx = newX - item.x;
-                        const dy = newY - item.y;
-                        return {
-                            ...item,
-                            x: newX,
-                            y: newY,
-                            x1: item.x1 + dx,
-                            y1: item.y1 + dy,
-                            x2: item.x2 + dx,
-                            y2: item.y2 + dy
-                        };
                     }
 
                     return { ...item, x: newX, y: newY };
@@ -2859,11 +3500,28 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 );
                 let hasCollision = false;
 
-                finalItems = currentScenario.items.map(item => {
+                finalItems = finalItems.map(item => {
                     // Solo chequear colisión para tokens (no muros) que estaban seleccionados
                     if (selectedTokenIds.includes(item.id) && item.type !== 'wall') {
                         const original = tokenOriginalPos[item.id];
                         if (original) {
+                            const occupancyBlocked = activeLayer === 'TABLETOP' &&
+                                gridConfig.isCombatActive &&
+                                isCombatTokenItem(item) &&
+                                !canOccupyCombatCell({
+                                    movingToken: item,
+                                    nextX: item.x,
+                                    nextY: item.y,
+                                    items: currentScenario.items,
+                                    config: gridConfig,
+                                    excludeIds: selectedTokenIds.filter((id) => id !== item.id),
+                                });
+
+                            if (occupancyBlocked) {
+                                hasCollision = true;
+                                return { ...item, x: original.x, y: original.y };
+                            }
+
                             const charCenterStart = { x: original.x + item.width / 2, y: original.y + item.height / 2 };
                             const charCenterEnd = { x: item.x + item.width / 2, y: item.y + item.height / 2 };
 
@@ -2885,6 +3543,36 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                 if (hasCollision) {
                     setActiveScenario(prev => ({ ...prev, items: finalItems }));
+
+                    if (gridConfig.isCombatActive && isPlayerView) {
+                        const original = tokenOriginalPos[draggedTokenId];
+                        const token = finalItems.find(i => i.id === draggedTokenId);
+                        if (original && token && token.x === original.x && token.y === original.y) {
+                            setPendingTurnState(prev => {
+                                if (!prev || prev.tokenId !== draggedTokenId) return prev;
+
+                                const cellW = gridConfig.cellWidth || 50;
+                                const cellH = gridConfig.cellHeight || 50;
+                                const turnStartX = Number.isFinite(Number(prev.startX)) ? Number(prev.startX) : original.x;
+                                const turnStartY = Number.isFinite(Number(prev.startY)) ? Number(prev.startY) : original.y;
+                                const distance = Math.max(
+                                    Math.round(Math.abs(original.x - turnStartX) / cellW),
+                                    Math.round(Math.abs(original.y - turnStartY) / cellH)
+                                );
+                                const hasActions = Array.isArray(prev.actions) && prev.actions.length > 0;
+                                const actionCost = Number(prev.actionCost) || 0;
+
+                                if (distance <= 0 && actionCost <= 0 && !hasActions) return null;
+
+                                return {
+                                    ...prev,
+                                    x: original.x,
+                                    y: original.y,
+                                    moveCost: distance
+                                };
+                            });
+                        }
+                    }
                 }
                 else {
                     setActiveScenario(prev => ({ ...prev, items: finalItems }));
@@ -2926,6 +3614,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         setDraggedTokenId(null);
                         setTokenOriginalPos({});
                         setDragVisualOrigin({});
+                        setCombatOccupancyFeedback(null);
                         document.body.style.cursor = 'default';
                         return; // No persistimos a Firebase aún
                     }
@@ -2998,6 +3687,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             setResizingTokenId(null);
             setTokenOriginalPos({});
             setDragVisualOrigin({});
+            setCombatOccupancyFeedback(null);
 
             // Si el master mueve un token que tenía un estado de turno pendiente, lo limpiamos
             if (!isPlayerView && pendingTurnState) {
@@ -3015,6 +3705,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setDraggingWallHandle(null);
         setTokenOriginalPos({});
         setDragVisualOrigin({});
+        setCombatOccupancyFeedback(null);
         document.body.style.cursor = 'default';
     };
 
@@ -3052,6 +3743,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
     // Estado de configuración del Grid
     const [gridConfig, setGridConfig] = useState(DEFAULT_GRID_CONFIG);
+    const [gridInputDrafts, setGridInputDrafts] = useState(() => ({
+        columns: String(DEFAULT_GRID_CONFIG.columns),
+        rows: String(DEFAULT_GRID_CONFIG.rows),
+        cellWidth: String(DEFAULT_GRID_CONFIG.cellWidth),
+        cellHeight: String(DEFAULT_GRID_CONFIG.cellHeight),
+    }));
 
     // --- CAMPOS DE MAPA CALCULADOS ---
     const finiteMapFrameDimensions = !gridConfig.isInfinite ? getFiniteMapDimensions(gridConfig) : null;
@@ -3066,12 +3763,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             return [];
         }
 
-        return getExactBackgroundGridPresets(gridConfig, 10).sort((a, b) => b.cellSize - a.cellSize);
+        return getExactBackgroundGridPresets(gridConfig, MIN_GRID_CELL_SIZE).sort((a, b) => b.cellSize - a.cellSize);
     }, [gridConfig.isInfinite, gridConfig.backgroundImage, gridConfig.imageWidth, gridConfig.imageHeight]);
     const currentBackgroundGridPresetIndex = useMemo(
         () => getBackgroundGridPresetIndex(gridConfig, backgroundGridPresets),
         [gridConfig, backgroundGridPresets]
     );
+
+    useEffect(() => {
+        setGridInputDrafts({
+            columns: String(gridConfig.columns),
+            rows: String(gridConfig.rows),
+            cellWidth: String(gridConfig.cellWidth),
+            cellHeight: String(gridConfig.cellHeight),
+        });
+    }, [gridConfig.columns, gridConfig.rows, gridConfig.cellWidth, gridConfig.cellHeight]);
     const mapBounds = {
         width: gridConfig.isInfinite
             ? (gridConfig.columns * gridConfig.cellWidth)
@@ -3114,11 +3820,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 const exactPresets = getExactBackgroundGridPresets({
                     imageWidth: img.width,
                     imageHeight: img.height,
-                }, 10);
-                const matchedPreset = findClosestBackgroundGridPreset(exactPresets, 'cellSize', gridConfig.cellWidth);
-                const cols = matchedPreset?.columns ?? fitGridCountIntoFrame(img.width, gridConfig.cellWidth);
-                const rows = matchedPreset?.rows ?? fitGridCountIntoFrame(img.height, gridConfig.cellHeight);
-                const cellSize = matchedPreset?.cellSize ?? gridConfig.cellWidth;
+                }, MIN_GRID_CELL_SIZE);
+                const matchedPreset = findClosestBackgroundGridPreset(exactPresets, 'cellSize', TARGET_GRID_CELL_SIZE)
+                    || buildBackgroundGridPreset(img.width, img.height, DEFAULT_FINITE_COLUMNS, DEFAULT_FINITE_ROWS);
 
                 setGridConfig(prev => ({
                     ...prev,
@@ -3126,10 +3830,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     imageWidth: img.width,
                     imageHeight: img.height,
                     isInfinite: false,
-                    columns: cols,
-                    rows: rows,
-                    cellWidth: cellSize,
-                    cellHeight: cellSize,
+                    lockFiniteMapSize: false,
+                    columns: matchedPreset.columns,
+                    rows: matchedPreset.rows,
+                    cellWidth: matchedPreset.cellSize,
+                    cellHeight: matchedPreset.cellSize,
                 }));
             };
         };
@@ -3284,7 +3989,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             lastModified: Date.now(),
             ownerId: currentUserId,
             preview: null,
-            config: { ...DEFAULT_GRID_CONFIG },
+            config: { ...DEFAULT_GRID_CONFIG, isInfinite: false },
             items: [], // Inicializamos array de tokens
             camera: { zoom: 1, offset: { x: 0, y: 0 } }
         };
@@ -3379,17 +4084,20 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     }
                 } else {
                     // El token NO existe en el servidor → crearlo (spawn nuevo)
+                    const defaultTokenDimensions = getDefaultTokenDimensions(gridConfig);
                     const spawnPosition = getCenteredSpawnPosition(gridConfig, {
-                        width: gridConfig.cellWidth,
-                        height: gridConfig.cellHeight,
+                        width: defaultTokenDimensions.width,
+                        height: defaultTokenDimensions.height,
+                    }, {
+                        centerInCell: true
                     });
 
                     const baseToken = {
                         id: `token-${Date.now()}-${playerName}`,
                         x: spawnPosition.x,
                         y: spawnPosition.y,
-                        width: gridConfig.cellWidth,
-                        height: gridConfig.cellHeight,
+                        width: defaultTokenDimensions.width,
+                        height: defaultTokenDimensions.height,
                         rotation: 0,
                         layer: 'TOKEN',
                         hasVision: true,
@@ -3413,8 +4121,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     const playerZoom = 1.2;
                     setZoom(playerZoom);
                     setOffset({
-                        x: -(spawnPosition.x + gridConfig.cellWidth / 2 - WORLD_SIZE / 2) * playerZoom,
-                        y: -(spawnPosition.y + gridConfig.cellHeight / 2 - WORLD_SIZE / 2) * playerZoom,
+                        x: -(spawnPosition.x + defaultTokenDimensions.width / 2 - WORLD_SIZE / 2) * playerZoom,
+                        y: -(spawnPosition.y + defaultTokenDimensions.height / 2 - WORLD_SIZE / 2) * playerZoom,
                     });
 
                     await updateDoc(doc(db, 'canvas_scenarios', scenarioId), {
@@ -3695,20 +4403,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const centerY = (WORLD_SIZE / 2) - (offset.y / zoom);
 
         // Centrar el token en ese punto (restando la mitad de su tamaño)
-        const w = gridConfig.cellWidth;
-        const h = gridConfig.cellHeight;
+        const defaultTokenDimensions = getDefaultTokenDimensions(gridConfig);
+        const w = defaultTokenDimensions.width;
+        const h = defaultTokenDimensions.height;
 
         const centeredSpawn = { x: centerX - (w / 2), y: centerY - (h / 2) };
         const spawnPosition = gridConfig.snapToGrid
-            ? snapWorldPositionToGrid(centeredSpawn, gridConfig, { width: w, height: h })
+            ? snapWorldPositionToGrid(centeredSpawn, gridConfig, { width: w, height: h }, { centerInCell: true })
             : centeredSpawn;
 
         const newToken = {
             id: `token-${Date.now()}`,
             x: spawnPosition.x,
             y: spawnPosition.y,
-            width: gridConfig.cellWidth, // Tamaño por defecto: 1 celda
-            height: gridConfig.cellHeight,
+            width: w,
+            height: h,
             img: tokenUrl,
             rotation: 0,
             layer: 'TOKEN',
@@ -3847,23 +4556,35 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 currentScenario.items.forEach(i => {
                     if (newSelection.includes(i.id)) {
                         if (pendingForToken && i.id === token.id) {
+                            const startPosition = {
+                                x: pendingForToken.startX ?? pendingForToken.x ?? i.x,
+                                y: pendingForToken.startY ?? pendingForToken.y ?? i.y
+                            };
                             originals[i.id] = {
                                 x: pendingForToken.x ?? i.x,
                                 y: pendingForToken.y ?? i.y
                             };
-                            visualOrigins[i.id] = {
-                                x: pendingForToken.startX ?? pendingForToken.x ?? i.x,
-                                y: pendingForToken.startY ?? pendingForToken.y ?? i.y
-                            };
+                            visualOrigins[i.id] = getCombatRenderPlacementAtPosition(
+                                i,
+                                startPosition,
+                                currentScenario.items,
+                                gridConfig
+                            );
                         } else {
                             originals[i.id] = { x: i.x, y: i.y };
-                            visualOrigins[i.id] = { x: i.x, y: i.y };
+                            visualOrigins[i.id] = getCombatRenderPlacementAtPosition(
+                                i,
+                                { x: i.x, y: i.y },
+                                currentScenario.items,
+                                gridConfig
+                            );
                         }
                     }
                 });
             }
             setTokenOriginalPos(originals);
             setDragVisualOrigin(visualOrigins);
+            setCombatOccupancyFeedback(null);
         }
     };
 
@@ -4131,6 +4852,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const renderItemJSX = (item) => {
         const original = tokenOriginalPos[item.id];
         const dragOrigin = dragVisualOrigin[item.id];
+        const occupancyFeedbackForItem = combatOccupancyFeedback?.tokenId === item.id ? combatOccupancyFeedback : null;
         const pendingStateForItem = isUsablePendingTurnState(pendingTurnState) && pendingTurnState.tokenId === item.id
             ? pendingTurnState
             : null;
@@ -4145,6 +4867,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const itemMotionTransition = isToken && !isLocallyInteracting
             ? { type: 'tween', duration: 0.42, ease: [0.22, 1, 0.36, 1] }
             : { duration: 0 };
+        const combatPlacementItems = combatOccupancyFeedback?.tokenId && tokenOriginalPos[combatOccupancyFeedback.tokenId]
+            ? (activeScenario?.items || []).map((placementItem) => (
+                placementItem.id === combatOccupancyFeedback.tokenId
+                    ? { ...placementItem, ...tokenOriginalPos[combatOccupancyFeedback.tokenId] }
+                    : placementItem
+            ))
+            : (activeScenario?.items || []);
+        const renderPlacementToken = occupancyFeedbackForItem && original
+            ? { ...item, x: original.x, y: original.y }
+            : item;
+        const renderPlacement = isToken && gridConfig.isCombatActive
+            ? getCombatRenderPlacement(renderPlacementToken, combatPlacementItems, gridConfig)
+            : { x: item.x, y: item.y };
 
         // Lógica de visibilidad y bloqueo por capas
         const isLightingLayer = activeLayer === 'LIGHTING';
@@ -4183,6 +4918,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             }
             else opacity = 1;
         }
+        const motionOpacity = occupancyFeedbackForItem && draggedTokenId === item.id ? 0 : opacity;
 
         // --- RENDERIZADO DE MURO ---
         if (isWall) {
@@ -4402,49 +5138,141 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         return (
             <React.Fragment key={item.id}>
                 {/* GHOST TOKEN & LINE (DRAG O TURNO PENDIENTE) */}
-                {(dragOrigin || original || (isPlayerView && pendingStateForItem)) && canInteract && (
+                {(dragOrigin || original || occupancyFeedbackForItem || (isPlayerView && pendingStateForItem)) && canInteract && (
                     <>
                         {(() => {
                             // PRIORIDAD: Si hay un estado pendiente, el inicio del turno es SIEMPRE startX del estado pendiente.
                             // Si estamos arrastrando por primera vez (sin estado pendiente previo), usamos original.x
-                            let startX, startY;
+                            let logicalStartX, logicalStartY;
                             const isDraggingThisToken = draggedTokenId === item.id;
 
                             if (isDraggingThisToken && dragOrigin) {
-                                startX = dragOrigin.x;
-                                startY = dragOrigin.y;
+                                logicalStartX = dragOrigin.x;
+                                logicalStartY = dragOrigin.y;
                             } else if (isDraggingThisToken && original) {
-                                startX = original.x;
-                                startY = original.y;
+                                logicalStartX = original.x;
+                                logicalStartY = original.y;
                             } else if (pendingStateForItem) {
-                                startX = pendingStateForItem.startX;
-                                startY = pendingStateForItem.startY;
+                                logicalStartX = pendingStateForItem.startX;
+                                logicalStartY = pendingStateForItem.startY;
                             } else if (original) {
-                                startX = original.x;
-                                startY = original.y;
+                                logicalStartX = original.x;
+                                logicalStartY = original.y;
                             }
 
-                            const currentX = item.x;
-                            const currentY = item.y;
+                            const feedbackCellRect = occupancyFeedbackForItem?.cell
+                                ? getGridCellWorldRect(occupancyFeedbackForItem.cell, gridConfig)
+                                : null;
+                            const blockedPlacement = occupancyFeedbackForItem
+                                ? (
+                                    feedbackCellRect && item.width <= feedbackCellRect.width && item.height <= feedbackCellRect.height
+                                        ? {
+                                            x: feedbackCellRect.x + ((feedbackCellRect.width - item.width) / 2),
+                                            y: feedbackCellRect.y + ((feedbackCellRect.height - item.height) / 2),
+                                        }
+                                        : getCombatRenderPlacementAtPosition(
+                                            item,
+                                            { x: occupancyFeedbackForItem.targetX, y: occupancyFeedbackForItem.targetY },
+                                            activeScenario?.items || [],
+                                            gridConfig
+                                        )
+                                )
+                                : null;
+                            const currentX = blockedPlacement ? blockedPlacement.x : renderPlacement.x;
+                            const currentY = blockedPlacement ? blockedPlacement.y : renderPlacement.y;
+                            const startPlacement = dragOrigin
+                                ? dragOrigin
+                                : getCombatRenderPlacementAtPosition(
+                                    item,
+                                    { x: logicalStartX, y: logicalStartY },
+                                    activeScenario?.items || [],
+                                    gridConfig
+                                );
+                            const startX = startPlacement.x;
+                            const startY = startPlacement.y;
 
                             if (![startX, startY, currentX, currentY].every(value => Number.isFinite(value))) return null;
                             if (startX === currentX && startY === currentY) return null;
 
+                            const isBlockedMove = !!blockedPlacement;
+                            const lineColor = isBlockedMove ? '#ef4444' : '#c8aa6e';
+
                             return (
                                 <>
-                                    <svg className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible z-0">
+                                    <svg className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible z-[80]">
+                                        {feedbackCellRect && (
+                                            <>
+                                                <rect
+                                                    x={feedbackCellRect.x}
+                                                    y={feedbackCellRect.y}
+                                                    width={feedbackCellRect.width}
+                                                    height={feedbackCellRect.height}
+                                                    fill="#ef4444"
+                                                    fillOpacity="0.16"
+                                                    stroke="#ef4444"
+                                                    strokeWidth="2"
+                                                    strokeDasharray="7 4"
+                                                    rx="6"
+                                                />
+                                                <line
+                                                    x1={feedbackCellRect.x + (feedbackCellRect.width * 0.35)}
+                                                    y1={feedbackCellRect.y + (feedbackCellRect.height * 0.35)}
+                                                    x2={feedbackCellRect.x + (feedbackCellRect.width * 0.65)}
+                                                    y2={feedbackCellRect.y + (feedbackCellRect.height * 0.65)}
+                                                    stroke="#fecaca"
+                                                    strokeWidth="2"
+                                                    strokeLinecap="round"
+                                                    opacity="0.9"
+                                                />
+                                                <line
+                                                    x1={feedbackCellRect.x + (feedbackCellRect.width * 0.65)}
+                                                    y1={feedbackCellRect.y + (feedbackCellRect.height * 0.35)}
+                                                    x2={feedbackCellRect.x + (feedbackCellRect.width * 0.35)}
+                                                    y2={feedbackCellRect.y + (feedbackCellRect.height * 0.65)}
+                                                    stroke="#fecaca"
+                                                    strokeWidth="2"
+                                                    strokeLinecap="round"
+                                                    opacity="0.9"
+                                                />
+                                            </>
+                                        )}
                                         <line
                                             x1={startX + item.width / 2}
                                             y1={startY + item.height / 2}
                                             x2={currentX + item.width / 2}
                                             y2={currentY + item.height / 2}
-                                            stroke="#c8aa6e"
+                                            stroke={lineColor}
                                             strokeWidth="1.5"
                                             strokeDasharray="6 4"
-                                            opacity="0.6"
+                                            opacity={isBlockedMove ? "0.85" : "0.6"}
                                         />
-                                        <circle cx={startX + item.width / 2} cy={startY + item.height / 2} r="3" fill="#c8aa6e" opacity="0.5" />
+                                        <circle cx={startX + item.width / 2} cy={startY + item.height / 2} r="3" fill={lineColor} opacity="0.5" />
                                     </svg>
+                                    {isBlockedMove && (
+                                        <div
+                                            className={`absolute top-0 left-0 z-[70] pointer-events-none border-2 border-dashed border-red-400/80 bg-red-950/20 ${item.isCircular ? 'rounded-full' : 'rounded-sm'} overflow-hidden`}
+                                            style={{
+                                                transform: `translate(${currentX}px, ${currentY}px) rotate(${item.rotation}deg)`,
+                                                width: `${item.width}px`,
+                                                height: `${item.height}px`,
+                                                boxShadow: '0 0 18px rgba(239, 68, 68, 0.45)',
+                                            }}
+                                        />
+                                    )}
+                                    {isBlockedMove && (
+                                        <div
+                                            className="absolute z-[90] pointer-events-none"
+                                            style={{
+                                                left: currentX + (item.width / 2),
+                                                top: currentY,
+                                                transform: 'translate(-50%, calc(-100% - 0.5rem))',
+                                            }}
+                                        >
+                                            <div className="rounded-full border border-red-400/50 bg-black/85 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-red-100 shadow-[0_0_14px_rgba(239,68,68,0.35)] whitespace-nowrap">
+                                                {occupancyFeedbackForItem.reason}
+                                            </div>
+                                        </div>
+                                    )}
                                     <div
                                         className={`absolute top-0 left-0 z-10 pointer-events-none grayscale opacity-40 border-2 border-dashed border-[#c8aa6e]/50 ${item.isCircular ? 'rounded-full' : 'rounded-sm'} overflow-hidden`}
                                         style={{
@@ -4505,10 +5333,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     }}
                     initial={false}
                     animate={{
-                        x: item.x,
-                        y: item.y,
+                        x: renderPlacement.x,
+                        y: renderPlacement.y,
                         rotate: item.rotation || 0,
-                        opacity,
+                        opacity: motionOpacity,
                     }}
                     transition={itemMotionTransition}
                     style={{
@@ -4829,103 +5657,63 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 Number(prev.imageWidth) > 0 &&
                 Number(prev.imageHeight) > 0;
 
-            const safeCellSize = (rawValue) => Math.max(10, Number(rawValue) || DEFAULT_GRID_CONFIG.cellWidth);
-            const safeGridCount = (rawValue) => Math.max(1, Math.round(Number(rawValue) || 1));
-
-            if (hasBackgroundFrame) {
-                const exactPresets = getExactBackgroundGridPresets(prev, 10);
-                const presetKey =
-                    key === 'rows'
-                        ? 'rows'
-                        : (key === 'cellWidth' || key === 'cellHeight')
-                            ? 'cellSize'
-                            : 'columns';
-                const matchedPreset = findClosestBackgroundGridPreset(exactPresets, presetKey, value);
-
-                if (matchedPreset) {
-                    newConfig.columns = matchedPreset.columns;
-                    newConfig.rows = matchedPreset.rows;
-                    newConfig.cellWidth = matchedPreset.cellSize;
-                    newConfig.cellHeight = matchedPreset.cellSize;
-                } else {
-                    const { width: baseMapWidth, height: baseMapHeight } = getFiniteMapDimensions(prev);
-                    if (key === 'columns') {
-                        const nextColumns = safeGridCount(value);
-                        const nextSquareSize = fitCellSizeIntoFrame(baseMapWidth, nextColumns);
-                        newConfig.columns = nextColumns;
-                        newConfig.cellWidth = nextSquareSize;
-                        newConfig.cellHeight = nextSquareSize;
-                        newConfig.rows = fitGridCountIntoFrame(baseMapHeight, nextSquareSize);
-                    } else if (key === 'rows') {
-                        const nextRows = safeGridCount(value);
-                        const nextSquareSize = fitCellSizeIntoFrame(baseMapHeight, nextRows);
-                        newConfig.rows = nextRows;
-                        newConfig.cellHeight = nextSquareSize;
-                        newConfig.cellWidth = nextSquareSize;
-                        newConfig.columns = fitGridCountIntoFrame(baseMapWidth, nextSquareSize);
-                    } else if (key === 'cellWidth') {
-                        const nextSquareSize = Math.min(
-                            safeCellSize(value),
-                            Math.max(1, Math.floor(Math.min(baseMapWidth, baseMapHeight)))
-                        );
-                        newConfig.cellWidth = nextSquareSize;
-                        newConfig.cellHeight = nextSquareSize;
-                        newConfig.columns = fitGridCountIntoFrame(baseMapWidth, nextSquareSize);
-                        newConfig.rows = fitGridCountIntoFrame(baseMapHeight, nextSquareSize);
-                    } else if (key === 'cellHeight') {
-                        const nextSquareSize = Math.min(
-                            safeCellSize(value),
-                            Math.max(1, Math.floor(Math.min(baseMapWidth, baseMapHeight)))
-                        );
-                        newConfig.cellHeight = nextSquareSize;
-                        newConfig.cellWidth = nextSquareSize;
-                        newConfig.rows = fitGridCountIntoFrame(baseMapHeight, nextSquareSize);
-                        newConfig.columns = fitGridCountIntoFrame(baseMapWidth, nextSquareSize);
-                    }
-                }
+            if (hasBackgroundFrame && ['columns', 'rows', 'cellWidth', 'cellHeight'].includes(key)) {
+                const resolvedConfig = resolveBackgroundGridChange(prev, key, value);
+                newConfig.columns = resolvedConfig.columns;
+                newConfig.rows = resolvedConfig.rows;
+                newConfig.cellWidth = resolvedConfig.cellWidth;
+                newConfig.cellHeight = resolvedConfig.cellHeight;
             // Si el mapa es finito sin imagen y el bloqueo está activo, sincronizar dimensiones para mantener el tamaño del mapa
             } else if (shouldLockFiniteMapSize) {
                 const { width: baseMapWidth, height: baseMapHeight } = getFiniteMapDimensions(prev);
                 if (key === 'columns') {
-                    const nextColumns = safeGridCount(value);
+                    const nextColumns = clampGridCount(value, prev.columns);
                     const nextSquareSize = roundGridValue(baseMapWidth / nextColumns);
                     newConfig.columns = nextColumns;
                     newConfig.cellWidth = nextSquareSize;
                     if (shouldLockSquareCells) {
                         newConfig.cellHeight = nextSquareSize;
-                        newConfig.rows = safeGridCount(baseMapHeight / nextSquareSize);
+                        newConfig.rows = clampGridCount(baseMapHeight / nextSquareSize, prev.rows);
                     }
                 } else if (key === 'rows') {
-                    const nextRows = safeGridCount(value);
+                    const nextRows = clampGridCount(value, prev.rows);
                     const nextSquareSize = roundGridValue(baseMapHeight / nextRows);
                     newConfig.rows = nextRows;
                     newConfig.cellHeight = nextSquareSize;
                     if (shouldLockSquareCells) {
                         newConfig.cellWidth = nextSquareSize;
-                        newConfig.columns = safeGridCount(baseMapWidth / nextSquareSize);
+                        newConfig.columns = clampGridCount(baseMapWidth / nextSquareSize, prev.columns);
                     }
                 } else if (key === 'cellWidth') {
-                    const nextSquareSize = safeCellSize(value);
+                    const nextSquareSize = clampCellSize(value, prev.cellWidth);
                     newConfig.cellWidth = nextSquareSize;
-                    newConfig.columns = safeGridCount(baseMapWidth / nextSquareSize);
+                    newConfig.columns = clampGridCount(baseMapWidth / nextSquareSize, prev.columns);
                     if (shouldLockSquareCells) {
                         newConfig.cellHeight = nextSquareSize;
-                        newConfig.rows = safeGridCount(baseMapHeight / nextSquareSize);
+                        newConfig.rows = clampGridCount(baseMapHeight / nextSquareSize, prev.rows);
                     }
                 } else if (key === 'cellHeight') {
-                    const nextSquareSize = safeCellSize(value);
+                    const nextSquareSize = clampCellSize(value, prev.cellHeight);
                     newConfig.cellHeight = nextSquareSize;
-                    newConfig.rows = safeGridCount(baseMapHeight / nextSquareSize);
+                    newConfig.rows = clampGridCount(baseMapHeight / nextSquareSize, prev.rows);
                     if (shouldLockSquareCells) {
                         newConfig.cellWidth = nextSquareSize;
-                        newConfig.columns = safeGridCount(baseMapWidth / nextSquareSize);
+                        newConfig.columns = clampGridCount(baseMapWidth / nextSquareSize, prev.columns);
                     }
                 }
             } else if (shouldLockSquareCells) {
                 if (key === 'cellWidth') {
-                    newConfig.cellHeight = safeCellSize(value);
+                    const nextSquareSize = clampCellSize(value, prev.cellWidth);
+                    newConfig.cellWidth = nextSquareSize;
+                    newConfig.cellHeight = nextSquareSize;
                 } else if (key === 'cellHeight') {
-                    newConfig.cellWidth = safeCellSize(value);
+                    const nextSquareSize = clampCellSize(value, prev.cellHeight);
+                    newConfig.cellHeight = nextSquareSize;
+                    newConfig.cellWidth = nextSquareSize;
+                } else if (key === 'columns') {
+                    newConfig.columns = clampGridCount(value, prev.columns);
+                } else if (key === 'rows') {
+                    newConfig.rows = clampGridCount(value, prev.rows);
                 }
             }
 
@@ -4948,6 +5736,47 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             return newConfig;
         });
     };
+
+    const handleGridDraftChange = useCallback((key, rawValue) => {
+        setGridInputDrafts(prev => ({ ...prev, [key]: rawValue }));
+    }, []);
+
+    const resetGridDraft = useCallback((key) => {
+        setGridInputDrafts(prev => ({
+            ...prev,
+            [key]: String(gridConfig[key] ?? ''),
+        }));
+    }, [gridConfig]);
+
+    const commitGridDraft = useCallback((key) => {
+        const rawValue = gridInputDrafts[key]?.trim?.() ?? '';
+        if (rawValue === '') {
+            resetGridDraft(key);
+            return;
+        }
+
+        const numericValue = Number(rawValue);
+        if (!Number.isFinite(numericValue)) {
+            resetGridDraft(key);
+            return;
+        }
+
+        handleConfigChange(key, numericValue);
+    }, [gridInputDrafts, handleConfigChange, resetGridDraft]);
+
+    const handleGridDraftKeyDown = useCallback((key, event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            event.currentTarget.blur();
+            return;
+        }
+
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            resetGridDraft(key);
+            event.currentTarget.blur();
+        }
+    }, [commitGridDraft, resetGridDraft]);
 
     const applyBackgroundGridPreset = useCallback((presetIndex) => {
         if (!backgroundGridPresets.length) return;
@@ -5600,39 +6429,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
             const attackerToken = enrichTokenWithCharacterData(attackerTokenBase);
             const targetToken = enrichTokenWithCharacterData(targetTokenBase);
+            const getTargetVelocityAfterReaction = (reactionCost = 0) => {
+                const committedBaseVelocity = Number(event.reactionData?.effectiveTargetVelBeforeReaction);
+                const baseVelocity = Number.isFinite(committedBaseVelocity)
+                    ? committedBaseVelocity
+                    : (targetTokenBase.velocidad || 0);
+                return baseVelocity + Math.max(0, Number(reactionCost) || 0);
+            };
 
             // Extraer dados individuales del atacante para el log visual
-            const attackerDice = [];
-            (event.attackerRollResult?.details || []).forEach((detail, dIdx) => {
-                if (detail.type === 'dice') {
-                    const match = detail.formula?.match(/d(\d+)/i);
-                    const faces = match ? parseInt(match[1]) : 20;
-
-                    detail.rolls.forEach((r, rIdx) => {
-                        attackerDice.push({
-                            value: typeof r === 'object' ? r.value : r,
-                            critical: typeof r === 'object' ? r.critical : false,
-                            matchedAttr: detail.matchedAttr || null,
-                            id: `${dIdx}-${rIdx}`,
-                            faces
-                        });
-                    });
-                } else if (detail.matchedAttr && (detail.type === 'calc' || detail.type === 'modifier')) {
-                    attackerDice.push({
-                        value: detail.value || detail.total || 0,
-                        matchedAttr: detail.matchedAttr,
-                        critical: false,
-                        id: `${dIdx}-0`,
-                        faces: 6
-                    });
-                }
-            });
-
-            attackerDice.sort((a, b) => {
-                const rankA = a.critical ? 1 : a.matchedAttr ? 2 : 0;
-                const rankB = b.critical ? 1 : b.matchedAttr ? 2 : 0;
-                return rankA - rankB;
-            });
+            const attackerDice = extractCombatRollDice(event.attackerRollResult, 'atk');
 
             let logText = "";
             let finalItems = [...scenario.items];
@@ -5648,6 +6454,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         let traitBonuses = { postura: null, armadura: null };
         let evadedDiceIds = [];
         let defenderDice = [];
+        let defenderSteps = [];
         let defenderTotal = 0;
         let counterPreventedByRange = false;
         let attackerRangeLabel = null;
@@ -5659,11 +6466,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const attackSourceLabel = isSweepAttack
             ? (event.sweepMeta?.sourceWeaponName || event.weapon?.sweepSourceWeaponName || event.weapon?.nombre || event.weapon?.name || null)
             : null;
-        const attackHasFluida = hasNativeCombatTrait(event.weapon, 'fluida');
+        const attackHasFluida = !!event.fluidaMeta?.hasNativeTrait || hasNativeCombatTrait(event.weapon, 'fluida');
         const laterActionBreaksAttackerFluida =
             !!event.fluidaMeta?.laterActionBreaksChain ||
             !!event.fluidaMeta?.laterNonAttackBreaksChain;
         let defenderTraits = [];
+        let defenderWeaponSummary = null;
         let statusEffectsApplied = { target: [], attacker: [] };
         let nextAttackerFluidaState = getTokenFluidaState(attackerTokenBase);
         let nextTargetFluidaState = getTokenFluidaState(targetTokenBase);
@@ -5698,70 +6506,78 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             baseBlocksLost = res.baseLost || baseBlocksLost;
             traitBonuses = res.traitBonuses || traitBonuses;
             statusEffectsApplied.target = res.appliedStatusEffects || [];
-            updateTokenInList(targetTokenBase.id, { stats: res.stats, status: res.status, velocidad: (targetTokenBase.velocidad || 0) + (event.reactionData.yellowCost || 0) });
+            updateTokenInList(targetTokenBase.id, { stats: res.stats, status: res.status, velocidad: getTargetVelocityAfterReaction(event.reactionData.yellowCost || 0) });
             if (evadedAll) {
                 logText = `¡${targetToken.name} evadió completamente ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : `el ataque de ${attackerToken.name}`}!`;
             } else {
                 logText = `${targetToken.name} evadió parcialmente ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'} de ${attackerToken.name}` : `a ${attackerToken.name}`} y recibió ${newTotal} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
             }
-            setAttackerFluidaState(attackHasFluida ? createFluidaState(targetToken.id, event.weapon, 'attack') : null);
+            setAttackerFluidaState(attackHasFluida ? createFluidaState(targetToken.id, event.fluidaMeta?.sourceWeapon || event.weapon, 'attack') : null);
             setTargetFluidaState(null);
         } else if (event.reactionType === 'parar') {
             const defenderAttrs = targetToken.attributes || targetToken.atributos || {};
-            const counterArmorProtection = getArmorProtection(attackerToken, event.reactionData.weapon, { armaduras });
-            const defenderWeapon = applyNegatedTraitsToItem(
-                event.reactionData.weapon,
-                counterArmorProtection.negatedTraits
-            );
-            defenderTraits = getItemTraits(defenderWeapon);
-            const defenderHasFluida = hasNativeCombatTrait(defenderWeapon, 'fluida');
-            const defenderRoll = rollAttack(defenderWeapon, defenderAttrs);
-            defenderTotal = defenderRoll.total;
+            const parryStepsData = buildLegacyParrySteps(event.reactionData);
             const attackerRange = getCombatRangeData(event.weapon);
-            const defenderRange = getCombatRangeData(defenderWeapon);
             const storedDistance = Number(event.distanceBetweenTokens);
             distanceBetweenTokens = Number.isFinite(storedDistance)
                 ? storedDistance
                 : getTokenDistanceInCells(attackerTokenBase, targetTokenBase, gridConfig);
             attackerRangeLabel = attackerRange.label;
-            defenderRangeLabel = defenderRange.label;
 
-            // Extract defender dice details
-            (defenderRoll.details || []).forEach((detail, dIdx) => {
-                if (detail.type === 'dice') {
-                    const match = detail.formula?.match(/d(\d+)/i);
-                    const faces = match ? parseInt(match[1]) : 20;
+            defenderSteps = parryStepsData.map((step, stepIndex) => {
+                const counterArmorProtection = getArmorProtection(attackerToken, step.weapon, { armaduras });
+                const defenderWeapon = applyNegatedTraitsToItem(
+                    step.weapon,
+                    counterArmorProtection.negatedTraits
+                );
+                const stepTraits = getItemTraits(defenderWeapon);
+                const defenderRoll = rollAttack(defenderWeapon, defenderAttrs);
+                const stepDice = extractCombatRollDice(defenderRoll, `def-${stepIndex}`);
+                const defenderRange = getCombatRangeData(defenderWeapon);
+                const reachesAttacker = isWeaponWithinCombatRange(
+                    defenderWeapon,
+                    targetTokenBase,
+                    attackerTokenBase,
+                    gridConfig,
+                    distanceBetweenTokens
+                );
 
-                    detail.rolls.forEach((r, rIdx) => {
-                        defenderDice.push({
-                            value: typeof r === 'object' ? r.value : r,
-                            matchedAttr: detail.matchedAttr || null,
-                            critical: typeof r === 'object' && r.critical,
-                            id: `def-${dIdx}-${rIdx}`,
-                            faces
-                        });
-                    });
-                } else if (detail.matchedAttr && (detail.type === 'calc' || detail.type === 'modifier')) {
-                    defenderDice.push({
-                        value: detail.value || detail.total || 0,
-                        matchedAttr: detail.matchedAttr,
-                        critical: false,
-                        id: `def-${dIdx}-0`,
-                        faces: 6
-                    });
-                }
+                defenderDice.push(...stepDice);
+                defenderTotal += defenderRoll.total;
+
+                return {
+                    ...step,
+                    weapon: defenderWeapon,
+                    weaponName: defenderWeapon?.nombre || defenderWeapon?.name || step.weaponName || 'Arma',
+                    total: defenderRoll.total,
+                    dice: stepDice,
+                    traits: stepTraits,
+                    rangeLabel: defenderRange.label,
+                    reachesAttacker,
+                };
             });
 
-            const diff = event.attackerRollResult.total - defenderRoll.total;
-            const yellowCost = event.reactionData.yellowCost || 0;
+            defenderTraits = Array.from(new Set(defenderSteps.flatMap((step) => step.traits || [])));
+            defenderWeaponSummary = buildParryWeaponSummaryLabel(defenderSteps)
+                || event.reactionData?.weapon?.nombre
+                || event.reactionData?.weapon?.name
+                || 'su arma';
+            defenderRangeLabel = Array.from(new Set(defenderSteps.map((step) => step.rangeLabel).filter(Boolean))).join(' · ') || null;
+
+            const reachableCounterSteps = defenderSteps.filter((step) => step.reachesAttacker);
+            const counterWeapon = buildAggregateCombatWeapon(reachableCounterSteps);
+            const lastNativeFluidaStep = [...defenderSteps].reverse().find((step) => hasNativeCombatTrait(step.weapon, 'fluida'));
+            const diff = event.attackerRollResult.total - defenderTotal;
+            const yellowCost = event.reactionData.yellowCost
+                || defenderSteps.reduce((sum, step) => sum + Math.max(0, Number(step.yellowCost) || 0), 0);
 
             if (diff === 0) {
                 finalDamage = 0;
-                updateTokenInList(targetTokenBase.id, { velocidad: (targetTokenBase.velocidad || 0) + yellowCost });
-                const defWeaponName = event.reactionData.weapon?.nombre || event.reactionData.weapon?.name || 'su arma';
+                updateTokenInList(targetTokenBase.id, { velocidad: getTargetVelocityAfterReaction(yellowCost) });
+                const defWeaponName = defenderWeaponSummary || 'su arma';
                 logText = `${targetToken.name} realizó una parada perfecta ${isSweepAttack ? `contra ${attackModeLabel?.toLowerCase() || 'el barrido'}` : ''} con ${defWeaponName}.`;
                 setAttackerFluidaState(null);
-                setTargetFluidaState(defenderHasFluida ? createFluidaState(attackerToken.id, defenderWeapon, 'parry') : null);
+                setTargetFluidaState(lastNativeFluidaStep ? createFluidaState(attackerToken.id, lastNativeFluidaStep.weapon, 'parry') : null);
             } else if (diff > 0) {
                 finalDamage = diff;
                 const res = applyCombatCalculations(targetToken, diff, event.weapon);
@@ -5769,31 +6585,31 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 baseBlocksLost = res.baseLost || baseBlocksLost;
                 traitBonuses = res.traitBonuses || traitBonuses;
                 statusEffectsApplied.target = res.appliedStatusEffects || [];
-                updateTokenInList(targetTokenBase.id, { stats: res.stats, status: res.status, velocidad: (targetTokenBase.velocidad || 0) + yellowCost });
-                const defWeaponName = event.reactionData.weapon?.nombre || event.reactionData.weapon?.name || 'su arma';
+                updateTokenInList(targetTokenBase.id, { stats: res.stats, status: res.status, velocidad: getTargetVelocityAfterReaction(yellowCost) });
+                const defWeaponName = defenderWeaponSummary || 'su arma';
                 logText = `${targetToken.name} paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName} pero recibió ${diff} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
-                setAttackerFluidaState(attackHasFluida ? createFluidaState(targetToken.id, event.weapon, 'attack') : null);
-                setTargetFluidaState(defenderHasFluida ? createFluidaState(attackerToken.id, defenderWeapon, 'parry') : null);
+                setAttackerFluidaState(attackHasFluida ? createFluidaState(targetToken.id, event.fluidaMeta?.sourceWeapon || event.weapon, 'attack') : null);
+                setTargetFluidaState(lastNativeFluidaStep ? createFluidaState(attackerToken.id, lastNativeFluidaStep.weapon, 'parry') : null);
             } else {
-                const defWeaponName = event.reactionData.weapon?.nombre || event.reactionData.weapon?.name || 'su arma';
-                if (defenderRange.value < distanceBetweenTokens) {
+                const defWeaponName = defenderWeaponSummary || 'su arma';
+                if (!counterWeapon || reachableCounterSteps.length === 0) {
                     counterPreventedByRange = true;
                     finalDamage = 0;
-                    updateTokenInList(targetTokenBase.id, { velocidad: (targetTokenBase.velocidad || 0) + yellowCost });
-                    logText = `${targetToken.name} paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName}, pero no pudo contraatacar porque su alcance (${defenderRange.label}) no alcanza la distancia real entre ambos (${distanceBetweenTokens}).`;
+                    updateTokenInList(targetTokenBase.id, { velocidad: getTargetVelocityAfterReaction(yellowCost) });
+                    logText = `${targetToken.name} paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName}, pero no pudo contraatacar porque su alcance (${defenderRangeLabel || 'desconocido'}) no alcanza la distancia real entre ambos (${distanceBetweenTokens}).`;
                 } else {
                     counterDamage = Math.abs(diff);
-                    const res = applyCombatCalculations(attackerToken, counterDamage, defenderWeapon);
+                    const res = applyCombatCalculations(attackerToken, counterDamage, counterWeapon);
                     blocksLost = res.lost;
                     baseBlocksLost = res.baseLost || baseBlocksLost;
                     traitBonuses = res.traitBonuses || traitBonuses;
                     statusEffectsApplied.attacker = res.appliedStatusEffects || [];
                     updateTokenInList(attackerTokenBase.id, { stats: res.stats, status: res.status });
-                    updateTokenInList(targetTokenBase.id, { velocidad: (targetTokenBase.velocidad || 0) + yellowCost });
+                    updateTokenInList(targetTokenBase.id, { velocidad: getTargetVelocityAfterReaction(yellowCost) });
                     logText = `¡${targetToken.name} paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName} y contraatacó a ${attackerToken.name} por ${counterDamage} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques)!`;
                 }
                 setAttackerFluidaState(null);
-                setTargetFluidaState(defenderHasFluida ? createFluidaState(attackerToken.id, defenderWeapon, 'parry') : null);
+                setTargetFluidaState(lastNativeFluidaStep ? createFluidaState(attackerToken.id, lastNativeFluidaStep.weapon, 'parry') : null);
             }
         } else {
             finalDamage = event.attackerRollResult.total;
@@ -5804,7 +6620,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             statusEffectsApplied.target = res.appliedStatusEffects || [];
             updateTokenInList(targetTokenBase.id, { stats: res.stats, status: res.status });
             logText = `${targetToken.name} recibió ${isSweepAttack ? `${attackModeLabel?.toLowerCase() || 'el barrido'} de ${attackerToken.name}` : `el golpe directo de ${attackerToken.name}`} por ${event.attackerRollResult.total} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
-            setAttackerFluidaState(attackHasFluida ? createFluidaState(targetToken.id, event.weapon, 'attack') : null);
+            setAttackerFluidaState(attackHasFluida ? createFluidaState(targetToken.id, event.fluidaMeta?.sourceWeapon || event.weapon, 'attack') : null);
             setTargetFluidaState(null);
         }
 
@@ -5822,10 +6638,23 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             attackMode: event.attackMode || null,
             abilityName: attackModeLabel,
             attackSourceLabel,
+            attackSequence: Array.isArray(event.attackSequence) ? event.attackSequence : [],
             attackTotal: event.attackerRollResult.total,
             attackTraits,
             attackerDice,
             defenderDice,
+            defenderSteps: defenderSteps.map((step, stepIndex) => ({
+                id: step.id || `parry-step-${stepIndex + 1}`,
+                weaponName: step.weaponName || step.weapon?.nombre || step.weapon?.name || 'Arma',
+                yellowCost: Math.max(0, Number(step.yellowCost) || 0),
+                baseYellowCost: Math.max(0, Number(step.baseYellowCost) || Number(step.yellowCost) || 0),
+                fluidaDiscountApplied: !!step.fluidaDiscountApplied,
+                total: step.total || 0,
+                dice: step.dice || [],
+                traits: step.traits || [],
+                rangeLabel: step.rangeLabel || null,
+                reachesAttacker: !!step.reachesAttacker
+            })),
             defenderTotal,
             defenderTraits,
             reactionType: event.reactionType || 'recibir',
@@ -5837,7 +6666,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             distanceBetweenTokens,
             finalDamage,
             counterDamage,
-            defenderWeapon: event.reactionData?.weapon?.nombre || event.reactionData?.weapon?.name || null,
+            defenderWeapon: defenderWeaponSummary || event.reactionData?.weapon?.nombre || event.reactionData?.weapon?.name || null,
             blocksLost,
             baseBlocksLost,
             traitBonuses,
@@ -5875,6 +6704,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }
     };
 
+    const handleSelectCombatQueueIndex = (queueIndex) => {
+        const numericIndex = Number(queueIndex);
+        if (!Number.isInteger(numericIndex) || numericIndex < 0) return;
+        const nextEntry = effectiveCombatEventQueue[numericIndex];
+        if (!nextEntry?.event?.id) return;
+        setActiveCombatEventId(nextEntry.event.id);
+    };
+
     const handleReaction = async (reaction) => {
         if (!activeCombatQueueEntry) return;
         const currentEvent = activeCombatQueueEntry;
@@ -5903,7 +6740,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 ...item,
                                 stats: targetUpdate.stats,
                                 status: targetUpdate.status,
-                                velocidad: targetUpdate.velocidad,
+                                velocidad: Math.max(Number(item.velocidad) || 0, Number(targetUpdate.velocidad) || 0),
                                 fluidaState: targetUpdate.fluidaState ?? null
                             } : item);
                             changed = true;
@@ -5980,20 +6817,77 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }
 
         try {
-            if (reaction.type === 'parar' && hasCombatTrait(reaction.data?.weapon, 'sin guardia')) {
-                triggerToast("Sin guardia", "Esa arma no puede usarse para parar.", 'warning');
-                return;
+            const reactionBudget = getReactionBudgetForEvent(currentEvent.event);
+
+            if (reaction.type === 'parar') {
+                const parrySteps = buildLegacyParrySteps(reaction.data);
+                const totalParryCost = parrySteps.reduce((sum, step) => sum + Math.max(0, Number(step?.yellowCost) || 0), 0);
+
+                if (reactionBudget <= 0) {
+                    triggerToast("Sin reacción", "Ya igualas o superas la velocidad final del atacante.", 'warning');
+                    return;
+                }
+
+                if (parrySteps.length === 0) {
+                    triggerToast("Parada", "Debes añadir al menos una parada antes de confirmar.", 'warning');
+                    return;
+                }
+
+                if (parrySteps.some((step) => hasCombatTrait(step?.weapon, 'sin guardia'))) {
+                    triggerToast("Sin guardia", "Esa arma no puede usarse para parar.", 'warning');
+                    return;
+                }
+
+                if (totalParryCost > reactionBudget) {
+                    triggerToast("Reacción insuficiente", `Solo puedes gastar hasta ${reactionBudget} de velocidad en esta reacción.`, 'warning');
+                    return;
+                }
+            }
+
+            if (reaction.type === 'evadir') {
+                const evadedDiceIds = Array.isArray(reaction.data?.evadedDiceIds) ? reaction.data.evadedDiceIds : [];
+                if (reactionBudget <= 0) {
+                    triggerToast("Sin reacción", "Ya igualas o superas la velocidad final del atacante.", 'warning');
+                    return;
+                }
+
+                if (evadedDiceIds.length > reactionBudget) {
+                    triggerToast("Reacción insuficiente", `Solo puedes evadir hasta ${reactionBudget} dados en esta reacción.`, 'warning');
+                    return;
+                }
+
+                const scenarioItems = activeScenarioRef.current?.items || activeScenario?.items || [];
+                const liveTargetToken = scenarioItems.find((item) => item.id === currentEvent.event.targetId) || currentEvent.targetToken;
+                const liveAttackerToken = scenarioItems.find((item) => item.id === currentEvent.event.attackerId);
+                const targetCombatContext = getTokenDuelContextAgainstAttacker(liveTargetToken, liveAttackerToken, scenarioItems, gridConfig);
+                if (targetCombatContext.isDuelWithAttacker && !isSmallCombatToken(liveTargetToken, gridConfig)) {
+                    triggerToast("Duelo", "No puedes evadir contra el atacante con el que estás en duelo.", 'warning');
+                    return;
+                }
             }
 
             const safeReactionData =
                 reaction.data == null
                     ? null
                     : JSON.parse(JSON.stringify(reaction.data));
+            const scenarioItems = activeScenarioRef.current?.items || activeScenario?.items || [];
+            const liveTargetToken = scenarioItems.find((item) => item.id === currentEvent.event.targetId) || currentEvent.targetToken;
+            const reactionSpeedAlreadyCommitted = Math.max(0, Number(currentEvent.event.reactionSpeedAlreadyCommitted) || 0);
+            const effectiveTargetVelBeforeReaction = (liveTargetToken?.velocidad || 0) + reactionSpeedAlreadyCommitted;
 
             await updateDoc(doc(db, 'combat_events', currentEvent.event.id), {
                 status: `${reaction.type}_pendiente`,
                 reactionType: reaction.type,
                 reactionData: safeReactionData
+                    ? {
+                        ...safeReactionData,
+                        effectiveTargetVelBeforeReaction,
+                        reactionSpeedAlreadyCommitted,
+                    }
+                    : {
+                        effectiveTargetVelBeforeReaction,
+                        reactionSpeedAlreadyCommitted,
+                    }
             });
         } catch (err) {
             console.error('Error al guardar la reacción de combate:', err, currentEvent.event.id, reaction);
@@ -6034,7 +6928,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         // Crear eventos de combate
         if (pending && pending.actions) {
+            const groupedAttackEvents = new globalThis.Map();
+
             for (const [actionIndex, action] of pending.actions.entries()) {
+                const speedSpentThroughAction = moveCost + pending.actions
+                    .slice(0, actionIndex + 1)
+                    .reduce((sum, queuedAction) => sum + Math.max(0, Number(queuedAction?.cost) || 0), 0);
+                const attackerFinalVelForAction = (token.velocidad || 0) + speedSpentThroughAction;
+
                 if (action.actionId === 'attack' && action.targetId) {
                     const targetToken = scenario.items.find(i => i.id === action.targetId);
                     if (targetToken) {
@@ -6056,6 +6957,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             attackerAttrs
                         );
                         const actualDistance = getTokenDistanceInCells(token, targetToken, gridConfig);
+                        const targetCurrentVel = targetToken.velocidad || 0;
+                        const reactionBudget = Math.max(0, Math.round(attackerFinalVelForAction - targetCurrentVel));
                         const currentActionWeaponName = getCombatWeaponName(action.weapon);
                         const laterActionBreaksChain = pending.actions
                             .slice(actionIndex + 1)
@@ -6066,34 +6969,52 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 getCombatWeaponName(queuedAction.weapon) !== currentActionWeaponName
                             );
 
-                        await addDoc(collection(db, 'combat_events'), {
-                            attackerId: token.id,
-                            attackerName: token.name,
-                            targetId: targetToken.id,
-                            targetName: targetToken.name,
-                            attackerRollResult,
+                        const groupKey = `${token.id}:${targetToken.id}`;
+                        const previousGroup = groupedAttackEvents.get(groupKey);
+                        const attackStep = {
+                            id: `attack-step-${actionIndex + 1}`,
                             weapon: effectiveWeapon || null,
+                            weaponName: effectiveWeapon?.nombre || effectiveWeapon?.name || action.weapon?.nombre || action.weapon?.name || 'Arma',
+                            rollResult: attackerRollResult,
+                            cost: Math.max(0, Number(action.cost) || 0),
                             negatedTraits: armorProtection.negatedTraits || [],
-                            armorProtectionSource:
-                                armorProtection.armorProtectionSource || null,
-                            status: 'esperando_reaccion',
-                            scenarioId: scenario.id,
-                            clientTimestamp: Date.now(),
-                            timestamp: serverTimestamp(),
-                            attackerVel: token.velocidad || 0,
-                            targetVel: targetToken.velocidad || 0,
-                            diffVelocidad: Math.abs((token.velocidad || 0) - (targetToken.velocidad || 0)),
-                            distanceBetweenTokens: actualDistance,
+                            armorProtectionSource: armorProtection.armorProtectionSource || null,
                             fluidaMeta: {
                                 hasTrait: !!action.hasFluidaTrait,
                                 hasNativeTrait: !!action.hasNativeFluidaTrait,
                                 hasManualTrait: !!action.hasManualFluidaTrait,
+                                sourceWeapon: action.weapon || null,
                                 baseCost: action.baseCost ?? Math.max(1, getSpeedConsumption(action.weapon)),
                                 discountApplied: !!action.fluidaDiscountApplied,
                                 discountMode: action.fluidaDiscountMode || null,
                                 laterActionBreaksChain
                             }
-                        });
+                        };
+
+                        if (previousGroup) {
+                            previousGroup.attackSteps.push(attackStep);
+                            previousGroup.attackerFinalVel = attackerFinalVelForAction;
+                            previousGroup.diffVelocidad = Math.abs(attackerFinalVelForAction - targetCurrentVel);
+                            previousGroup.reactionBudget = reactionBudget;
+                            previousGroup.distanceBetweenTokens = actualDistance;
+                            previousGroup.fluidaMeta = attackStep.fluidaMeta;
+                        } else {
+                            groupedAttackEvents.set(groupKey, {
+                                attackerId: token.id,
+                                attackerName: token.name,
+                                targetId: targetToken.id,
+                                targetName: targetToken.name,
+                                scenarioId: scenario.id,
+                                attackerVel: token.velocidad || 0,
+                                targetVel: targetCurrentVel,
+                                attackerFinalVel: attackerFinalVelForAction,
+                                diffVelocidad: Math.abs(attackerFinalVelForAction - targetCurrentVel),
+                                reactionBudget,
+                                distanceBetweenTokens: actualDistance,
+                                fluidaMeta: attackStep.fluidaMeta,
+                                attackSteps: [attackStep],
+                            });
+                        }
                     }
                 }
 
@@ -6113,6 +7034,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         if (!targetToken) continue;
 
                         const actualDistance = getTokenDistanceInCells(token, targetToken, gridConfig);
+                        const targetCurrentVel = targetToken.velocidad || 0;
+                        const reactionBudget = Math.max(0, Math.round(attackerFinalVelForAction - targetCurrentVel));
 
                         await addDoc(collection(db, 'combat_events'), {
                             attackerId: token.id,
@@ -6129,7 +7052,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             timestamp: serverTimestamp(),
                             attackerVel: token.velocidad || 0,
                             targetVel: targetToken.velocidad || 0,
-                            diffVelocidad: Math.abs((token.velocidad || 0) - (targetToken.velocidad || 0)),
+                            attackerFinalVel: attackerFinalVelForAction,
+                            diffVelocidad: Math.abs(attackerFinalVelForAction - targetCurrentVel),
+                            reactionBudget,
                             distanceBetweenTokens: actualDistance,
                             attackMode: 'barrido',
                             abilityName: 'Barrido',
@@ -6144,6 +7069,46 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         });
                     }
                 }
+            }
+
+            for (const groupedAttack of groupedAttackEvents.values()) {
+                const attackSteps = groupedAttack.attackSteps || [];
+                const aggregateWeapon = buildAggregateAttackWeapon(attackSteps);
+                const attackerRollResult = combineAttackRollResults(attackSteps);
+                const negatedTraits = Array.from(new Set(attackSteps.flatMap((step) => step.negatedTraits || [])));
+                const armorProtectionSource = attackSteps
+                    .map((step) => step.armorProtectionSource)
+                    .filter(Boolean)
+                    .join(' · ') || null;
+
+                await addDoc(collection(db, 'combat_events'), {
+                    attackerId: groupedAttack.attackerId,
+                    attackerName: groupedAttack.attackerName,
+                    targetId: groupedAttack.targetId,
+                    targetName: groupedAttack.targetName,
+                    attackerRollResult,
+                    weapon: aggregateWeapon || null,
+                    negatedTraits,
+                    armorProtectionSource,
+                    status: 'esperando_reaccion',
+                    scenarioId: groupedAttack.scenarioId,
+                    clientTimestamp: Date.now(),
+                    timestamp: serverTimestamp(),
+                    attackerVel: groupedAttack.attackerVel,
+                    targetVel: groupedAttack.targetVel,
+                    attackerFinalVel: groupedAttack.attackerFinalVel,
+                    diffVelocidad: groupedAttack.diffVelocidad,
+                    reactionBudget: groupedAttack.reactionBudget,
+                    distanceBetweenTokens: groupedAttack.distanceBetweenTokens,
+                    attackSequence: attackSteps.map((step) => ({
+                        id: step.id,
+                        weaponName: step.weaponName,
+                        cost: step.cost,
+                        total: step.rollResult?.total || 0,
+                        traits: getItemTraits(step.weapon),
+                    })),
+                    fluidaMeta: groupedAttack.fluidaMeta,
+                });
             }
         }
 
@@ -6973,11 +7938,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors">Columnas</span>
                                                         <div className="flex items-center justify-between">
                                                             <input
-                                                                type="number"
-                                                                value={gridConfig.columns}
-                                                                onChange={(e) => handleConfigChange('columns', Number(e.target.value))}
+                                                                type="text"
+                                                                inputMode="numeric"
+                                                                value={gridInputDrafts.columns}
+                                                                onChange={(e) => handleGridDraftChange('columns', e.target.value)}
+                                                                onBlur={() => commitGridDraft('columns')}
+                                                                onKeyDown={(e) => handleGridDraftKeyDown('columns', e)}
                                                                 className="w-full bg-transparent text-[#f0e6d2] text-sm font-bold focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                                min="1" max="100"
                                                             />
                                                             <div className="flex flex-col gap-0.5 ml-2">
                                                                 <button onClick={() => handleConfigChange('columns', Math.min(100, gridConfig.columns + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
@@ -6989,11 +7956,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors">Filas</span>
                                                         <div className="flex items-center justify-between">
                                                             <input
-                                                                type="number"
-                                                                value={gridConfig.rows}
-                                                                onChange={(e) => handleConfigChange('rows', Number(e.target.value))}
+                                                                type="text"
+                                                                inputMode="numeric"
+                                                                value={gridInputDrafts.rows}
+                                                                onChange={(e) => handleGridDraftChange('rows', e.target.value)}
+                                                                onBlur={() => commitGridDraft('rows')}
+                                                                onKeyDown={(e) => handleGridDraftKeyDown('rows', e)}
                                                                 className="w-full bg-transparent text-[#f0e6d2] text-sm font-bold focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                                min="1" max="100"
                                                             />
                                                             <div className="flex flex-col gap-0.5 ml-2">
                                                                 <button onClick={() => handleConfigChange('rows', Math.min(100, gridConfig.rows + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
@@ -7057,11 +8026,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors font-sans">Ancho (PX)</span>
                                                     <div className="flex items-center justify-between">
                                                         <input
-                                                            type="number"
-                                                            value={gridConfig.cellWidth}
-                                                            onChange={(e) => handleConfigChange('cellWidth', Number(e.target.value))}
+                                                            type="text"
+                                                            inputMode="numeric"
+                                                            value={gridInputDrafts.cellWidth}
+                                                            onChange={(e) => handleGridDraftChange('cellWidth', e.target.value)}
+                                                            onBlur={() => commitGridDraft('cellWidth')}
+                                                            onKeyDown={(e) => handleGridDraftKeyDown('cellWidth', e)}
                                                             className="w-full bg-transparent text-[#f0e6d2] text-sm font-bold focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                            min="10" max="500"
                                                         />
                                                         <div className="flex flex-col gap-0.5 ml-2">
                                                             <button onClick={() => handleConfigChange('cellWidth', Math.min(500, gridConfig.cellWidth + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
@@ -7073,11 +8044,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1 group-hover:text-[#c8aa6e]/60 transition-colors font-sans">Alto (PX)</span>
                                                     <div className="flex items-center justify-between">
                                                         <input
-                                                            type="number"
-                                                            value={gridConfig.cellHeight}
-                                                            onChange={(e) => handleConfigChange('cellHeight', Number(e.target.value))}
+                                                            type="text"
+                                                            inputMode="numeric"
+                                                            value={gridInputDrafts.cellHeight}
+                                                            onChange={(e) => handleGridDraftChange('cellHeight', e.target.value)}
+                                                            onBlur={() => commitGridDraft('cellHeight')}
+                                                            onKeyDown={(e) => handleGridDraftKeyDown('cellHeight', e)}
                                                             className="w-full bg-transparent text-[#f0e6d2] text-sm font-bold focus:outline-none font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                            min="10" max="500"
                                                         />
                                                         <div className="flex flex-col gap-0.5 ml-2">
                                                             <button onClick={() => handleConfigChange('cellHeight', Math.min(500, gridConfig.cellHeight + 1))} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-0.5 bg-slate-800/50 rounded-sm hover:bg-[#c8aa6e]/20"><FiChevronUp size={14} /></button>
@@ -7573,6 +8546,24 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                 <p className="text-[8px] text-slate-600 uppercase text-center italic">No hay jugadores disponibles</p>
                                                             )}
                                                         </div>
+
+                                                        {isMaster && (
+                                                            <div className="space-y-2">
+                                                                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                                                                    Team ID
+                                                                </label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={token.teamId || ''}
+                                                                    onChange={(e) => updateItem(token.id, { teamId: e.target.value.trim() || null })}
+                                                                    placeholder="Opcional para alianzas y excepciones"
+                                                                    className="w-full bg-[#111827] border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-[#c8aa6e] outline-none transition-colors"
+                                                                />
+                                                                <p className="text-[8px] text-slate-600 italic">
+                                                                    Si defines Team ID, prevalece sobre controlledBy. Sin Team ID, compartir jugador en controlledBy cuenta como alianza.
+                                                                </p>
+                                                            </div>
+                                                        )}
 
                                                         {/* Vínculo de Entidad / Vinculación */}
                                                         {(isMaster || (token.controlledBy?.includes(playerName) && playerName)) && (
@@ -8561,12 +9552,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                 onPointerDown={consumeSweepTemplateEvent}
                                                                 onTouchStart={consumeSweepTemplateEvent}
                                                                 onClick={(event) => handleSweepTemplateClick(event, attacker.id, side.id)}
-                                                                className={`absolute z-[15] rounded-sm border transition-all duration-150 pointer-events-auto ${
+                                                                className={`absolute z-[15] overflow-hidden rounded-md border-2 border-dashed transition-all duration-150 pointer-events-auto focus:outline-none ${
                                                                     isHovered
-                                                                        ? 'border-[#f0e6d2] bg-red-500/20 shadow-[0_0_14px_rgba(239,68,68,0.35)]'
+                                                                        ? 'border-red-300/90 bg-red-500/20 shadow-[0_0_18px_rgba(239,68,68,0.45)]'
                                                                         : showTargets
-                                                                            ? 'border-red-500/60 bg-red-500/12'
-                                                                            : 'border-[#c8aa6e]/35 bg-[#c8aa6e]/6 hover:border-red-400/70 hover:bg-red-500/10'
+                                                                            ? 'border-red-500/60 bg-red-500/10'
+                                                                            : 'border-red-500/30 bg-red-500/10 hover:border-red-400/70 hover:bg-red-500/20'
                                                                 }`}
                                                                 style={{
                                                                     left: rect.x,
@@ -8576,9 +9567,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                 }}
                                                                 title={`Barrido ${side.label.toLowerCase()}${side.targets.length > 0 ? ` · ${side.targets.length} objetivo${side.targets.length !== 1 ? 's' : ''}` : ''}`}
                                                             >
-                                                                {isMiddleCell && (
-                                                                    <span className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[9px] font-black uppercase tracking-wider ${isHovered ? 'text-red-100' : 'text-[#f0e6d2]/80'}`}>
-                                                                        {side.targets.length > 0 ? side.targets.length : ''}
+                                                                <span
+                                                                    className={`absolute left-1/2 top-1/2 h-[2px] w-[30%] -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-full bg-red-100 transition-opacity ${
+                                                                        isHovered ? 'opacity-90' : 'opacity-40'
+                                                                    }`}
+                                                                />
+                                                                <span
+                                                                    className={`absolute left-1/2 top-1/2 h-[2px] w-[30%] -translate-x-1/2 -translate-y-1/2 -rotate-45 rounded-full bg-red-100 transition-opacity ${
+                                                                        isHovered ? 'opacity-90' : 'opacity-40'
+                                                                    }`}
+                                                                />
+                                                                {isMiddleCell && side.targets.length > 0 && (
+                                                                    <span className={`absolute left-1/2 top-1/2 z-[1] -translate-x-1/2 -translate-y-1/2 rounded-full border border-red-300/30 bg-black/80 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider shadow-[0_0_10px_rgba(239,68,68,0.35)] ${isHovered ? 'text-red-100' : 'text-red-100/80'}`}>
+                                                                        {side.targets.length}
                                                                     </span>
                                                                 )}
                                                             </button>
@@ -9499,10 +10500,17 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                             return attackPairs.map((pair, idx) => {
                                                 const { attacker, target, isFocused } = pair;
-                                                const x1 = attacker.x + attacker.width / 2;
-                                                const y1 = attacker.y + attacker.height / 2;
-                                                const x2 = target.x + target.width / 2;
-                                                const y2 = target.y + target.height / 2;
+                                                const attackerPlacement = !attacker.type || (attacker.type !== 'light' && attacker.type !== 'wall' && attacker.type !== 'geometry')
+                                                    ? getCombatRenderPlacement(attacker, items, gridConfig)
+                                                    : { x: attacker.x, y: attacker.y };
+                                                const targetPlacement = !target.type || (target.type !== 'light' && target.type !== 'wall' && target.type !== 'geometry')
+                                                    ? getCombatRenderPlacement(target, items, gridConfig)
+                                                    : { x: target.x, y: target.y };
+
+                                                const x1 = attackerPlacement.x + attacker.width / 2;
+                                                const y1 = attackerPlacement.y + attacker.height / 2;
+                                                const x2 = targetPlacement.x + target.width / 2;
+                                                const y2 = targetPlacement.y + target.height / 2;
 
                                                 const cellW = gridConfig.cellWidth || 50;
                                                 const cellH = gridConfig.cellHeight || 50;
@@ -9564,6 +10572,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                         if (!isFocused && !isPendingTarget) return null;
 
+                                        const itemPlacement = gridConfig.isCombatActive
+                                            ? getCombatRenderPlacement(item, activeScenario?.items || [], gridConfig)
+                                            : { x: item.x, y: item.y };
+
                                         return (
                                             <motion.div
                                                 key={`global-targeting-${item.id}`}
@@ -9576,8 +10588,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 `}
                                                 initial={false}
                                                 animate={{
-                                                    x: item.x,
-                                                    y: item.y,
+                                                    x: itemPlacement.x,
+                                                    y: itemPlacement.y,
                                                     rotate: item.rotation || 0,
                                                 }}
                                                 transition={{ type: 'tween', duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
@@ -9617,12 +10629,32 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         const items = activeScenario?.items || [];
                                         const targetToken = items.find(i => i.id === effect.targetId);
                                         const attackerToken = items.find(i => i.id === effect.attackerId);
+                                        const targetPlacement = targetToken && gridConfig.isCombatActive
+                                            ? getCombatRenderPlacement(targetToken, items, gridConfig)
+                                            : targetToken
+                                                ? { x: targetToken.x, y: targetToken.y }
+                                                : null;
+                                        const attackerPlacement = attackerToken && gridConfig.isCombatActive
+                                            ? getCombatRenderPlacement(attackerToken, items, gridConfig)
+                                            : attackerToken
+                                                ? { x: attackerToken.x, y: attackerToken.y }
+                                                : null;
                                         return (
                                             <FloatingCombatEffects
                                                 key={id}
                                                 effect={effect}
-                                                targetPos={targetToken ? { x: targetToken.x, y: targetToken.y, width: targetToken.width, height: targetToken.height } : null}
-                                                attackerPos={attackerToken ? { x: attackerToken.x, y: attackerToken.y, width: attackerToken.width, height: attackerToken.height } : null}
+                                                targetPos={targetToken && targetPlacement ? {
+                                                    x: targetPlacement.x,
+                                                    y: targetPlacement.y,
+                                                    width: targetToken.width,
+                                                    height: targetToken.height
+                                                } : null}
+                                                attackerPos={attackerToken && attackerPlacement ? {
+                                                    x: attackerPlacement.x,
+                                                    y: attackerPlacement.y,
+                                                    width: attackerToken.width,
+                                                    height: attackerToken.height
+                                                } : null}
                                             />
                                         );
                                     })}
@@ -9670,24 +10702,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             const attacker = items.find(i => i.id === targetingState.attackerId);
                             const target = items.find(i => i.id === focusedTargetId);
                             if (!attacker || !target) return null;
-                            const cellW = gridConfig.cellWidth || 50;
-                            const cellH = gridConfig.cellHeight || 50;
-
-                            const ax = Math.round(attacker.x / cellW);
-                            const ay = Math.round(attacker.y / cellH);
-                            const aw = Math.max(1, Math.round((attacker.width || cellW) / cellW));
-                            const ah = Math.max(1, Math.round((attacker.height || cellH) / cellH));
-
-                            const tx = Math.round(target.x / cellW);
-                            const ty = Math.round(target.y / cellH);
-                            const tw = Math.max(1, Math.round((target.width || cellW) / cellW));
-                            const th = Math.max(1, Math.round((target.height || cellH) / cellH));
-
-                            const distX = Math.max(0, tx - (ax + aw - 1), ax - (tx + tw - 1));
-                            const distY = Math.max(0, ty - (ay + ah - 1), ay - (ty + th - 1));
-                            return Math.max(distX, distY);
+                            return getTokenDistanceInCells(attacker, target, gridConfig);
                         })()
                         : null;
+                    const allowAdjacentTouchTargeting = (targetingState?.phase === 'weapon_selection' && focusedTargetId)
+                        ? (() => {
+                            const items = activeScenario?.items || [];
+                            const attacker = items.find(i => i.id === targetingState.attackerId);
+                            const target = items.find(i => i.id === focusedTargetId);
+                            if (!attacker || !target) return false;
+                            return canUseTouchAgainstAdjacentLockedTarget(attacker, target, gridConfig);
+                        })()
+                        : false;
 
                     return (
                         <CombatHUD
@@ -9701,6 +10727,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             onCancelAction={(idx) => handleCancelAction(hudToken.id, idx)}
                             forceWeaponMenu={targetingState?.phase === 'weapon_selection' && targetingState.attackerId === hudToken.id}
                             targetDistance={targetDistance}
+                            allowAdjacentTouchTargeting={allowAdjacentTouchTargeting}
                             isActive={(() => {
                                 if (!gridConfig.isCombatActive) return true;
                                 const combatTokens = activeScenario.items.filter(i => i.type !== 'wall' && i.type !== 'light' && (i.isCircular || i.stats));
@@ -9806,24 +10833,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         const attacker = items.find(i => i.id === targetingState.attackerId);
                                         const target = items.find(i => i.id === focusedTargetId);
                                         if (!attacker || !target) return null;
-                                        const cellW = gridConfig.cellWidth || 50;
-                                        const cellH = gridConfig.cellHeight || 50;
-
-                                        const ax = Math.round(attacker.x / cellW);
-                                        const ay = Math.round(attacker.y / cellH);
-                                        const aw = Math.max(1, Math.round((attacker.width || cellW) / cellW));
-                                        const ah = Math.max(1, Math.round((attacker.height || cellH) / cellH));
-
-                                        const tx = Math.round(target.x / cellW);
-                                        const ty = Math.round(target.y / cellH);
-                                        const tw = Math.max(1, Math.round((target.width || cellW) / cellW));
-                                        const th = Math.max(1, Math.round((target.height || cellH) / cellH));
-
-                                        const distX = Math.max(0, tx - (ax + aw - 1), ax - (tx + tw - 1));
-                                        const distY = Math.max(0, ty - (ay + ah - 1), ay - (ty + th - 1));
-                                        return Math.max(distX, distY);
+                                        return getTokenDistanceInCells(attacker, target, gridConfig);
                                     })()
                                     : null;
+                                const allowAdjacentTouchTargeting = (targetingState?.phase === 'weapon_selection' && focusedTargetId)
+                                    ? (() => {
+                                        const items = activeScenario?.items || [];
+                                        const attacker = items.find(i => i.id === targetingState.attackerId);
+                                        const target = items.find(i => i.id === focusedTargetId);
+                                        if (!attacker || !target) return false;
+                                        return canUseTouchAgainstAdjacentLockedTarget(attacker, target, gridConfig);
+                                    })()
+                                    : false;
 
                                 return (
                                     <motion.div
@@ -9855,6 +10876,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             onCancelAction={(index) => handleCancelAction(hudToken.id, index)}
                                             forceWeaponMenu={targetingState?.phase === 'weapon_selection' && targetingState.attackerId === hudToken.id}
                                             targetDistance={targetDistance}
+                                            allowAdjacentTouchTargeting={allowAdjacentTouchTargeting}
                                             isActive={(() => {
                                                 if (!gridConfig.isCombatActive) return true;
                                                 const combatTokens = activeScenario.items.filter(i => i.type !== 'wall' && i.type !== 'light' && (i.isCircular || i.stats));
@@ -9872,15 +10894,33 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
             <AnimatePresence>
                 {activeCombatQueueEntry && (
-                    <CombatReactionModal
-                        key={activeCombatQueueEntry.event.id}
-                        event={activeCombatQueueEntry.event}
-                        targetToken={enrichTokenWithCharacterData(activeCombatQueueEntry.targetToken)}
-                        onReact={handleReaction}
-                        queueTotal={combatQueueDisplay.queueTotal}
-                        queueResolved={combatQueueDisplay.queueResolved}
-                        queueCurrent={combatQueueDisplay.queueCurrent}
-                    />
+                    (() => {
+                        const scenarioItems = activeScenario?.items || [];
+                        const liveTargetToken = scenarioItems.find((item) => item.id === activeCombatQueueEntry.event.targetId)
+                            || activeCombatQueueEntry.targetToken;
+                        const liveAttackerToken = scenarioItems.find((item) => item.id === activeCombatQueueEntry.event.attackerId);
+                        const targetCombatContext = getTokenDuelContextAgainstAttacker(
+                            liveTargetToken,
+                            liveAttackerToken,
+                            scenarioItems,
+                            gridConfig
+                        );
+                        const targetCanEvadeInDuel = isSmallCombatToken(liveTargetToken, gridConfig);
+                        return (
+                            <CombatReactionModal
+                                key={activeCombatQueueEntry.event.id}
+                                event={activeCombatQueueEntry.event}
+                                targetToken={enrichTokenWithCharacterData(liveTargetToken)}
+                                targetCombatMode={targetCombatContext.mode}
+                                targetCanEvadeInDuel={targetCanEvadeInDuel}
+                                onReact={handleReaction}
+                                onSelectQueueIndex={handleSelectCombatQueueIndex}
+                                queueTotal={combatQueueDisplay.queueTotal}
+                                queueResolved={combatQueueDisplay.queueResolved}
+                                queueCurrent={combatQueueDisplay.queueCurrent}
+                            />
+                        );
+                    })()
                 )}
             </AnimatePresence>
 

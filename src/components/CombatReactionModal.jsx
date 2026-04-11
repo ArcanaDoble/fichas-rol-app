@@ -8,6 +8,43 @@ import { DEFAULT_STATUS_EFFECTS, PRONE_STATUS_IDS } from '../utils/statusEffects
 
 const normalizeKey = (name) => (name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
 const getCombatWeaponName = (weapon) => String(weapon?.nombre || weapon?.name || '').trim().toLowerCase();
+const getEventReactionBudget = (event) => {
+    const explicitBudget = Number(event?.reactionBudget);
+    if (Number.isFinite(explicitBudget) && explicitBudget >= 0) {
+        return Math.max(0, Math.round(explicitBudget));
+    }
+
+    const fluidaBaseCost = Number(event?.fluidaMeta?.baseCost);
+    if (Number.isFinite(fluidaBaseCost) && fluidaBaseCost > 0) {
+        return Math.max(1, Math.round(event?.fluidaMeta?.discountApplied ? fluidaBaseCost - 1 : fluidaBaseCost));
+    }
+
+    return Math.max(1, getSpeedConsumption(event?.weapon));
+};
+
+const buildLegacyParrySteps = (reactionData) => {
+    if (!reactionData) return [];
+    if (Array.isArray(reactionData.parrySteps) && reactionData.parrySteps.length > 0) {
+        return reactionData.parrySteps;
+    }
+
+    if (!reactionData.weapon) return [];
+
+    const yellowCost = Math.max(
+        1,
+        Number(reactionData.yellowCost) ||
+        Number(reactionData.baseYellowCost) ||
+        getSpeedConsumption(reactionData.weapon)
+    );
+
+    return [{
+        id: 'legacy-parry-step',
+        weapon: reactionData.weapon,
+        yellowCost,
+        baseYellowCost: Math.max(1, Number(reactionData.baseYellowCost) || yellowCost),
+        fluidaDiscountApplied: !!reactionData.fluidaDiscountApplied,
+    }];
+};
 const formatCombatTraitLabel = (trait = '') => {
     const normalized = trait.toString().trim().toLowerCase();
     if (normalized === 'derribado' || normalized === 'derribar' || normalized === 'derribo') return 'Derribo';
@@ -27,26 +64,39 @@ const ArmorProtectionBanner = ({ source, traits = [] }) => {
     if (!traits.length) return null;
 
     return (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-900/20 px-3 py-2 text-center">
-            <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-300 font-bold">
+        <div className="border-y border-slate-800/70 bg-black/10 px-2 py-2 text-center">
+            <p className="text-[9px] uppercase tracking-[0.28em] text-[#c8aa6e] font-bold">
                 Armadura activa
             </p>
-            <p className="text-xs text-emerald-100 mt-1">
-                {source ? <span className="font-semibold">{source}</span> : 'La armadura equipada'} anula{' '}
-                <span className="font-semibold">{traits.map((trait) => formatCombatTraitLabel(trait)).join(', ')}</span>
+            <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                {source ? <span className="font-semibold text-[#f0e6d2]">{source}</span> : 'La armadura equipada'} anula{' '}
+                <span className="font-semibold text-[#f0e6d2]">{traits.map((trait) => formatCombatTraitLabel(trait)).join(', ')}</span>
             </p>
         </div>
     );
 };
 
 const ProneDefenseBanner = ({ statusLabel = 'Derribado', standUpCost = 1 }) => (
-    <div className="rounded-lg border border-amber-500/30 bg-amber-900/20 px-3 py-2 text-center">
-        <p className="text-[10px] uppercase tracking-[0.2em] text-amber-300 font-bold">
+    <div className="border-y border-slate-800/70 bg-black/10 px-2 py-2 text-center">
+        <p className="text-[9px] uppercase tracking-[0.28em] text-[#c8aa6e] font-bold">
             {statusLabel}
         </p>
-        <p className="text-xs text-amber-100 mt-1">
+        <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
             Estás {statusLabel.toLowerCase()} y no puedes evadir ni parar. Solo puedes recibir el golpe.
             {standUpCost > 1 ? ` Levantarte costará ${standUpCost} de velocidad.` : ''}
+        </p>
+    </div>
+);
+
+const DuelDefenseBanner = ({ canEvade = false }) => (
+    <div className="border-y border-slate-800/70 bg-black/10 px-2 py-2 text-center">
+        <p className="text-[9px] uppercase tracking-[0.28em] text-[#c8aa6e] font-bold">
+            Duelo
+        </p>
+        <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+            {canEvade
+                ? <>Estás en duelo, pero puedes evadir por ser <strong className="font-semibold text-[#f0e6d2]">pequeño</strong>.</>
+                : 'Estás en duelo y no puedes evadir. Solo puedes parar o recibir el golpe.'}
         </p>
     </div>
 );
@@ -90,11 +140,12 @@ const CombatTraitRow = ({ label, traits = [], accent = 'slate' }) => {
     );
 };
 
-const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queueResolved = 0, queueCurrent = 0 }) => {
+const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', targetCanEvadeInDuel = false, onReact, onSelectQueueIndex, queueTotal = 1, queueResolved = 0, queueCurrent = 0 }) => {
     const customEquipmentImages = useCustomEquipmentImages();
     const [selectedDiceIndices, setSelectedDiceIndices] = useState([]);
     const [reactionType, setReactionType] = useState(null); // 'evadir', 'parar', 'recibir'
     const [selectedWeapon, setSelectedWeapon] = useState('');
+    const [parrySteps, setParrySteps] = useState([]);
     const [customModifiers, setCustomModifiers] = useState({ extraDice: {}, activeTraits: [] });
     const [modifiersExpanded, setModifiersExpanded] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -105,8 +156,11 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
     const isTargetProne = useMemo(() => {
         return !!proneStatusId;
     }, [proneStatusId]);
+    const reactionBudget = useMemo(() => getEventReactionBudget(event), [event]);
     const proneStatusLabel = DEFAULT_STATUS_EFFECTS[proneStatusId]?.label || 'Derribado';
     const standUpCost = proneStatusId === 'conmocionado' ? 2 : 1;
+    const isTargetInDuel = targetCombatMode === 'duel';
+    const isDuelEvadeBlocked = isTargetInDuel && !targetCanEvadeInDuel;
 
     // Extraer dados del atacante (manteniendo individualidad de los críticos)
     const attackerDice = useMemo(() => {
@@ -151,29 +205,46 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
         });
     }, [event]);
 
-    const diffVelocidad = event?.diffVelocidad ?? 0;
-    const canEvade = diffVelocidad <= 1 && !isTargetProne;
-    const canParryBySpeed = diffVelocidad <= 1 && !isTargetProne;
+    const canReactWithBudget = reactionBudget > 0 && !isTargetProne;
+    const canEvade = canReactWithBudget && !isDuelEvadeBlocked;
+    const canParryByBudget = canReactWithBudget;
 
     const weapons = useMemo(() => {
         return (targetToken?.equippedItems || []).filter(i => i.type === 'weapon');
     }, [targetToken]);
 
     const getWeaponId = (w, idx) => `${w.nombre || w.name || 'Arma'}-${idx}`;
+    const getParryWeaponCostMeta = (weapon, sourceWeapon = weapon) => {
+        if (!weapon) {
+            return {
+                baseCost: 0,
+                yellowCost: 0,
+                hasFluidaTrait: false,
+                fluidaDiscountApplied: false
+            };
+        }
 
-    const weaponSelectionMeta = useMemo(() => {
-        return weapons.map((weapon, idx) => ({
-            id: getWeaponId(weapon, idx),
-            weapon,
-            blockedByNoGuard: hasCombatTrait(weapon, 'sin guardia'),
-        }));
-    }, [weapons]);
+        const baseCost = Math.max(1, getSpeedConsumption(sourceWeapon || weapon));
+        const hasNativeFluidaTrait = hasNativeCombatTrait(weapon, 'fluida');
+        const hasManualFluidaTrait = !hasNativeFluidaTrait && hasManualCombatTrait(weapon, 'fluida');
+        const weaponName = getCombatWeaponName(sourceWeapon || weapon);
+        const canApplyAutomaticFluidaDiscount =
+            hasNativeFluidaTrait &&
+            targetToken?.fluidaState?.targetId &&
+            targetToken.fluidaState.targetId === event?.attackerId &&
+            targetToken?.fluidaState?.weaponName &&
+            targetToken.fluidaState.weaponName === weaponName &&
+            baseCost > 1;
+        const canApplyManualFluidaDiscount = hasManualFluidaTrait && baseCost > 1;
+        const canApplyFluidaDiscount = canApplyAutomaticFluidaDiscount || canApplyManualFluidaDiscount;
 
-    const defaultParryWeaponId = useMemo(() => {
-        return weaponSelectionMeta.find((entry) => !entry.blockedByNoGuard)?.id || '';
-    }, [weaponSelectionMeta]);
-
-    const canParry = canParryBySpeed && weaponSelectionMeta.some((entry) => !entry.blockedByNoGuard);
+        return {
+            baseCost,
+            yellowCost: canApplyFluidaDiscount ? Math.max(1, baseCost - 1) : baseCost,
+            hasFluidaTrait: hasNativeFluidaTrait || hasManualFluidaTrait,
+            fluidaDiscountApplied: canApplyFluidaDiscount
+        };
+    };
 
     const selectedWeaponData = useMemo(() => {
         return weapons.find((weapon, idx) => getWeaponId(weapon, idx) === selectedWeapon) || null;
@@ -199,32 +270,59 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
             };
         }
 
-        const baseCost = Math.max(1, getSpeedConsumption(modifiedParryWeapon));
-        const hasNativeFluidaTrait = hasNativeCombatTrait(modifiedParryWeapon, 'fluida');
-        const hasManualFluidaTrait = !hasNativeFluidaTrait && hasManualCombatTrait(modifiedParryWeapon, 'fluida');
-        const selectedWeaponName = getCombatWeaponName(selectedWeaponData);
-        const canApplyAutomaticFluidaDiscount =
-            hasNativeFluidaTrait &&
-            targetToken?.fluidaState?.targetId &&
-            targetToken.fluidaState.targetId === event?.attackerId &&
-            targetToken?.fluidaState?.weaponName &&
-            targetToken.fluidaState.weaponName === selectedWeaponName &&
-            baseCost > 1;
-        const canApplyManualFluidaDiscount = hasManualFluidaTrait && baseCost > 1;
-        const canApplyFluidaDiscount = canApplyAutomaticFluidaDiscount || canApplyManualFluidaDiscount;
-
-        return {
-            baseCost,
-            yellowCost: canApplyFluidaDiscount ? Math.max(1, baseCost - 1) : baseCost,
-            hasFluidaTrait: hasNativeFluidaTrait || hasManualFluidaTrait,
-            fluidaDiscountApplied: canApplyFluidaDiscount
-        };
+        return getParryWeaponCostMeta(modifiedParryWeapon, selectedWeaponData || modifiedParryWeapon);
     }, [modifiedParryWeapon, selectedWeaponData, targetToken, event]);
 
+    const totalParryCost = useMemo(() => (
+        parrySteps.reduce((sum, step) => sum + Math.max(0, Number(step.yellowCost) || 0), 0)
+    ), [parrySteps]);
+    const remainingReactionBudget = Math.max(0, reactionBudget - totalParryCost);
+
+    const weaponSelectionMeta = useMemo(() => {
+        return weapons.map((weapon, idx) => {
+            const costMeta = getParryWeaponCostMeta(weapon, weapon);
+            const blockedByNoGuard = hasCombatTrait(weapon, 'sin guardia');
+            const blockedByBudget = costMeta.yellowCost > remainingReactionBudget;
+
+            return {
+                id: getWeaponId(weapon, idx),
+                weapon,
+                blockedByNoGuard,
+                blockedByBudget,
+                costMeta,
+            };
+        });
+    }, [weapons, targetToken, event, remainingReactionBudget]);
+
+    const defaultParryWeaponId = useMemo(() => {
+        return weaponSelectionMeta.find((entry) => !entry.blockedByNoGuard && !entry.blockedByBudget)?.id || '';
+    }, [weaponSelectionMeta]);
+
+    const hasAnyParryWeapon = weaponSelectionMeta.some((entry) => !entry.blockedByNoGuard);
+    const canParry = canParryByBudget && hasAnyParryWeapon;
+
+    const currentReactionCost = reactionType === 'evadir'
+        ? selectedDiceIndices.length
+        : reactionType === 'parar'
+            ? totalParryCost
+            : 0;
+    const canAddCurrentParryStep =
+        reactionType === 'parar' &&
+        !!modifiedParryWeapon &&
+        !selectedWeaponBlockedByNoGuard &&
+        parryCostMeta.yellowCost > 0 &&
+        parryCostMeta.yellowCost <= remainingReactionBudget;
+
     const toggleDie = (dieId) => {
-        setSelectedDiceIndices(prev =>
-            prev.includes(dieId) ? prev.filter(id => id !== dieId) : [...prev, dieId]
-        );
+        setSelectedDiceIndices(prev => {
+            if (prev.includes(dieId)) {
+                return prev.filter(id => id !== dieId);
+            }
+            if (prev.length >= reactionBudget) {
+                return prev;
+            }
+            return [...prev, dieId];
+        });
     };
 
     useEffect(() => {
@@ -234,6 +332,7 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
     useEffect(() => {
         setSelectedDiceIndices([]);
         setSelectedWeapon('');
+        setParrySteps([]);
         setCustomModifiers({ extraDice: {}, activeTraits: [] });
         setModifiersExpanded(false);
         setReactionType(isTargetProne ? 'recibir' : null);
@@ -248,15 +347,48 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
             setReactionType(null);
             setSelectedWeapon('');
             setSelectedDiceIndices([]);
+            setParrySteps([]);
         }
     }, [reactionType, canEvade, canParry]);
 
     useEffect(() => {
         if (reactionType !== 'parar') return;
+        const selectedEntry = weaponSelectionMeta.find((entry) => entry.id === selectedWeapon);
+        if (selectedEntry && (selectedEntry.blockedByNoGuard || selectedEntry.blockedByBudget)) {
+            setSelectedWeapon(defaultParryWeaponId || '');
+            return;
+        }
         if (!selectedWeapon && defaultParryWeaponId) {
             setSelectedWeapon(defaultParryWeaponId);
         }
-    }, [reactionType, selectedWeapon, defaultParryWeaponId]);
+    }, [reactionType, selectedWeapon, defaultParryWeaponId, weaponSelectionMeta]);
+
+    useEffect(() => {
+        if (selectedDiceIndices.length > reactionBudget) {
+            setSelectedDiceIndices(prev => prev.slice(0, reactionBudget));
+        }
+    }, [selectedDiceIndices.length, reactionBudget]);
+
+    const handleAddParryStep = () => {
+        if (!canAddCurrentParryStep || !modifiedParryWeapon) return;
+
+        const stepWeapon = JSON.parse(JSON.stringify(modifiedParryWeapon));
+        setParrySteps(prev => [
+            ...prev,
+            {
+                id: `parry-step-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                weapon: stepWeapon,
+                weaponName: stepWeapon?.nombre || stepWeapon?.name || selectedWeaponData?.nombre || selectedWeaponData?.name || 'Arma',
+                yellowCost: parryCostMeta.yellowCost,
+                baseYellowCost: parryCostMeta.baseCost,
+                fluidaDiscountApplied: parryCostMeta.fluidaDiscountApplied
+            }
+        ]);
+    };
+
+    const removeParryStep = (stepId) => {
+        setParrySteps(prev => prev.filter((step) => step.id !== stepId));
+    };
 
     const handleConfirm = async () => {
         if (isSubmitting) return;
@@ -266,16 +398,15 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
             if (!canEvade) return;
             payload = { type: 'evadir', data: { evadedDiceIds: selectedDiceIndices, yellowCost: selectedDiceIndices.length } };
         } else if (reactionType === 'parar') {
-            if (!canParry) return;
-            if (!modifiedParryWeapon) return;
-            if (selectedWeaponBlockedByNoGuard) return;
+            if (!canParryByBudget) return;
+            if (parrySteps.length === 0) return;
             payload = {
                 type: 'parar',
                 data: {
-                    weapon: modifiedParryWeapon,
-                    yellowCost: parryCostMeta.yellowCost,
-                    baseYellowCost: parryCostMeta.baseCost,
-                    fluidaDiscountApplied: parryCostMeta.fluidaDiscountApplied
+                    weapon: parrySteps[0]?.weapon || null,
+                    parrySteps,
+                    yellowCost: totalParryCost,
+                    reactionBudget
                 }
             };
         } else {
@@ -313,6 +444,10 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
     const attackLabel = event.attackMode === 'barrido'
         ? `${event.abilityName || 'Barrido'}${event.sweepMeta?.sourceWeaponName ? ` con ${event.sweepMeta.sourceWeaponName}` : ''}`
         : (event.weapon?.nombre || event.weapon?.name || 'su arma');
+    const attackSequence = Array.isArray(event?.attackSequence) ? event.attackSequence : [];
+    const resolvedParrySteps = Array.isArray(event?.result?.defenderSteps) && event.result.defenderSteps.length > 0
+        ? event.result.defenderSteps
+        : buildLegacyParrySteps(event?.result);
     const renderResultDice = (diceList, evadedIds = []) => {
         if (!diceList || diceList.length === 0) return null;
         return (
@@ -388,26 +523,32 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                             </p>
                             <div className="flex items-center justify-center gap-1.5 flex-wrap">
                                 {Array.from({ length: queueTotal }, (_, i) => {
-                                    const isResolved = i < queueResolved;
                                     const isCurrent = i === queueCurrent;
-                                    const isPending = i > queueCurrent;
+                                    const isMarkerResolved = i < queueResolved || (isCurrent && isResolved);
+                                    const canSelect = !isMarkerResolved && typeof onSelectQueueIndex === 'function';
 
                                     return (
-                                        <div
+                                        <button
                                             key={i}
+                                            type="button"
+                                            onClick={() => {
+                                                if (canSelect) onSelectQueueIndex(i - queueResolved);
+                                            }}
+                                            disabled={!canSelect}
                                             className={`
                                                 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border-2 transition-all duration-300
-                                                ${isResolved
+                                                ${isMarkerResolved
                                                     ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
                                                     : isCurrent
                                                         ? 'bg-red-500/20 border-red-500 text-red-300 shadow-[0_0_10px_rgba(239,68,68,0.4)] animate-pulse'
                                                         : 'bg-slate-800/50 border-slate-700 text-slate-600'
                                                 }
+                                                ${canSelect ? 'cursor-pointer hover:border-[#c8aa6e] hover:text-[#c8aa6e]' : 'cursor-default'}
                                             `}
-                                            title={isResolved ? `Ataque ${i + 1} — Resuelto` : isCurrent ? `Ataque ${i + 1} — Actual` : `Ataque ${i + 1} — Pendiente`}
+                                            title={isMarkerResolved ? `Ataque ${i + 1} — Resuelto` : isCurrent ? `Ataque ${i + 1} — Actual` : `Ataque ${i + 1} — Pendiente`}
                                         >
-                                            {isResolved ? <Check size={13} strokeWidth={3} /> : i + 1}
-                                        </div>
+                                            {isMarkerResolved ? <Check size={13} strokeWidth={3} /> : i + 1}
+                                        </button>
                                     );
                                 })}
                             </div>
@@ -484,15 +625,48 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                                                 />
                                                             </div>
 
-                                                            <div className="bg-black/20 p-2 rounded-lg border border-slate-700/30">
-                                                                <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Defensa ({event.result.defenderTotal})</div>
-                                                                {renderResultDice(event.result.defenderDice)}
-                                                                <CombatTraitRow
-                                                                    label="Rasgos"
-                                                                    traits={event.result.defenderTraits}
-                                                                    accent="blue"
-                                                                />
-                                                            </div>
+                                                            {resolvedParrySteps.length > 0 ? (
+                                                                <div className="space-y-2">
+                                                                    {resolvedParrySteps.map((step, stepIndex) => (
+                                                                        <div key={step.id || `${step.weaponName || 'step'}-${stepIndex}`} className="bg-black/20 p-2 rounded-lg border border-slate-700/30">
+                                                                            <div className="flex items-center justify-between gap-3 mb-1">
+                                                                                <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                                                                                    Parada {stepIndex + 1} · {step.weaponName || 'Arma'}
+                                                                                </div>
+                                                                                <div className="text-[10px] font-bold text-yellow-400">
+                                                                                    -{Math.max(0, Number(step.yellowCost) || 0)} 🟡
+                                                                                </div>
+                                                                            </div>
+                                                                            {renderResultDice(step.dice)}
+                                                                            <CombatTraitRow
+                                                                                label="Rasgos"
+                                                                                traits={step.traits}
+                                                                                accent="blue"
+                                                                            />
+                                                                            <div className="mt-2 flex items-center justify-center gap-1.5">
+                                                                                <span className="text-[10px] uppercase tracking-[0.18em] text-blue-500/70 font-bold">Resultado</span>
+                                                                                <span className="text-sm font-bold text-blue-300">{step.total}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                    <div className="bg-black/20 p-2 rounded-lg border border-blue-500/20">
+                                                                        <div className="text-[10px] text-blue-400/80 font-bold uppercase tracking-widest mb-1 text-center">
+                                                                            Defensa acumulada
+                                                                        </div>
+                                                                        <div className="text-center text-lg font-bold text-blue-300">{event.result.defenderTotal}</div>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="bg-black/20 p-2 rounded-lg border border-slate-700/30">
+                                                                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Defensa ({event.result.defenderTotal})</div>
+                                                                    {renderResultDice(event.result.defenderDice)}
+                                                                    <CombatTraitRow
+                                                                        label="Rasgos"
+                                                                        traits={event.result.defenderTraits}
+                                                                        accent="blue"
+                                                                    />
+                                                                </div>
+                                                            )}
 
                                                             <div className="text-sm flex justify-center items-center gap-4 mt-2 mb-1">
                                                                 <div><span className="text-slate-400 uppercase tracking-widest text-[10px] mr-1">Atq:</span><span className="text-red-400 font-bold">{event.result.attackTotal}</span></div>
@@ -585,12 +759,18 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                     <p className="text-center text-slate-300 mb-6">
                                         <strong className="text-white">{event.attackerName}</strong> te está atacando con <strong className="text-red-400">{attackLabel}</strong>.
                                     </p>
+                                    {attackSequence.length > 1 && (
+                                        <p className="text-center text-[10px] uppercase tracking-[0.22em] text-[#c8aa6e] -mt-4 mb-5 font-bold">
+                                            {attackSequence.length} ataques acumulados
+                                        </p>
+                                    )}
                                     <div className="mb-4 space-y-3">
                                         <ArmorProtectionBanner
                                             source={pendingProtection.source}
                                             traits={pendingProtection.traits}
                                         />
                         {isTargetProne && <ProneDefenseBanner statusLabel={proneStatusLabel} standUpCost={standUpCost} />}
+                    {!isTargetProne && isTargetInDuel && <DuelDefenseBanner canEvade={targetCanEvadeInDuel} />}
                                     </div>
                                 </div>
 
@@ -657,14 +837,42 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                     })}
                                 </div>
                                 {reactionType === 'evadir' && (
-                                    <p className="text-center text-xs text-slate-400 mt-3">Toca los dados que quieras eludir (Coste: 1🟡 por dado)</p>
+                                    <p className="text-center text-xs text-slate-400 mt-3">
+                                        Toca los dados que quieras eludir. Maximo: {reactionBudget} dado{reactionBudget === 1 ? '' : 's'}.
+                                    </p>
                                 )}
+                            </div>
+
+                            <div className="flex items-center justify-between gap-3 border-y border-slate-800/70 bg-black/10 px-1 py-2">
+                                <div className="min-w-0">
+                                    <p className="text-[9px] uppercase tracking-[0.24em] text-slate-500 font-bold">
+                                        Reacción
+                                    </p>
+                                    <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                                        {reactionBudget > 0 ? (
+                                            <>Puedes gastar hasta <span className="font-semibold text-[#f0e6d2]">{reactionBudget}</span> de velocidad sin superar al atacante.</>
+                                        ) : (
+                                            'Ya igualas o superas la velocidad final del atacante.'
+                                        )}
+                                    </p>
+                                </div>
+                                <div className="shrink-0 text-right">
+                                    <div className="text-lg font-fantasy text-yellow-500 leading-none">{remainingReactionBudget}</div>
+                                    <div className="text-[9px] uppercase tracking-[0.18em] text-slate-500 font-bold mt-1">
+                                        rest.
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-1 gap-3">
                                 {/* BOTÓN EVADIR */}
                                 <button
-                                    onClick={() => { setReactionType('evadir'); setSelectedWeapon(''); setSelectedDiceIndices([]); }}
+                                    onClick={() => {
+                                        setReactionType('evadir');
+                                        setSelectedWeapon('');
+                                        setSelectedDiceIndices([]);
+                                        setParrySteps([]);
+                                    }}
                                     disabled={!canEvade}
                                     className={`flex flex-col items-center justify-center p-3 rounded border transition-all ${reactionType === 'evadir' ? 'bg-[#c8aa6e]/20 border-[#c8aa6e]' : 'bg-black/40 border-slate-700 hover:border-slate-500'
                                         } ${!canEvade ? 'opacity-50 cursor-not-allowed hidden' : ''}`}
@@ -672,31 +880,39 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                                     <div className="flex items-center gap-2 text-[#c8aa6e] font-bold uppercase tracking-wider">
                                         <FastForward size={18} /> Evadir
                                     </div>
-                                    <span className="text-xs text-slate-400 mt-1">Requiere V.Diff ≤ 1</span>
+                                    <span className="text-xs text-slate-400 mt-1">Hasta igualar la velocidad</span>
                                 </button>
 
                                 {/* BOTÓN PARAR */}
                                 <button
                                     onClick={() => {
+                                        if (reactionType !== 'parar') {
+                                            setParrySteps([]);
+                                        }
                                         setReactionType('parar');
                                         setSelectedWeapon(defaultParryWeaponId);
                                         setSelectedDiceIndices([]);
                                     }}
                                     disabled={!canParry}
                                     className={`flex flex-col items-center justify-center p-3 rounded border transition-all ${reactionType === 'parar' ? 'bg-[#c8aa6e]/20 border-[#c8aa6e]' : 'bg-black/40 border-slate-700 hover:border-slate-500'
-                                        } ${!canParryBySpeed ? 'opacity-50 cursor-not-allowed hidden' : ''} ${!canParry ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        } ${!canParryByBudget ? 'opacity-50 cursor-not-allowed hidden' : ''} ${!canParry ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                     <div className="flex items-center gap-2 text-[#c8aa6e] font-bold uppercase tracking-wider">
                                         <Sword size={18} /> Parar
                                     </div>
                                     <span className="text-xs text-slate-400 mt-1">
-                                        {!canParryBySpeed ? 'Requiere V.Diff ≤ 1' : !canParry ? 'Ningún arma apta para parar' : 'Requiere V.Diff ≤ 1'}
+                                        {!canParryByBudget ? 'Sin reacción disponible' : !canParry ? 'Ningún arma apta para parar' : 'Hasta igualar la velocidad'}
                                     </span>
                                 </button>
 
                                 {/* BOTÓN RECIBIR */}
                                 <button
-                                    onClick={() => { setReactionType('recibir'); setSelectedWeapon(''); setSelectedDiceIndices([]); }}
+                                    onClick={() => {
+                                        setReactionType('recibir');
+                                        setSelectedWeapon('');
+                                        setSelectedDiceIndices([]);
+                                        setParrySteps([]);
+                                    }}
                                     className={`flex items-center justify-center gap-2 p-3 rounded border transition-all ${reactionType === 'recibir' ? 'bg-red-900/40 border-red-500 text-red-200' : 'bg-black/40 border-slate-700 hover:border-slate-500 text-slate-300'
                                         }`}
                                 >
@@ -705,28 +921,64 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                             </div>
 
                             {/* SELECTOR DE ARMA (Si es Parar) */}
-                            {reactionType === 'parar' && weapons.length > 0 && canParryBySpeed && (
+                            {reactionType === 'parar' && weapons.length > 0 && canParryByBudget && (
                                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                                     <div>
                                         <label className="block text-[10px] text-[#c8aa6e] font-bold uppercase tracking-[0.2em] mb-3">
                                             Selecciona el arma para parar:
                                         </label>
                                         <div className="flex flex-col gap-2">
-                                            {weaponSelectionMeta.map(({ weapon, id, blockedByNoGuard }) => {
+                                            {weaponSelectionMeta.map(({ weapon, id, blockedByNoGuard, blockedByBudget, costMeta }) => {
+                                                const helperText = blockedByNoGuard
+                                                    ? 'Sin guardia: no puedes parar con esta arma.'
+                                                    : blockedByBudget
+                                                        ? `Esta arma cuesta ${costMeta.yellowCost} de velocidad y supera la reacción disponible.`
+                                                        : '';
+
                                                 return (
                                                     <WeaponCard
                                                         key={id}
                                                         weapon={weapon}
                                                         isSelected={selectedWeapon === id}
                                                         onSelect={() => setSelectedWeapon(id)}
-                                                        disabled={blockedByNoGuard}
-                                                        helperText={blockedByNoGuard ? 'Sin guardia: no puedes parar con esta arma.' : ''}
+                                                        disabled={blockedByNoGuard || blockedByBudget}
+                                                        helperText={helperText}
                                                         customEquipmentImages={customEquipmentImages}
                                                     />
                                                 );
                                             })}
                                         </div>
                                     </div>
+
+                                    {parrySteps.length > 0 && (
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <p className="text-[9px] uppercase tracking-[0.22em] text-slate-500 font-bold">
+                                                    Paradas añadidas
+                                                </p>
+                                                <p className="text-[9px] uppercase tracking-[0.18em] text-[#c8aa6e] font-bold">
+                                                    {totalParryCost}/{reactionBudget} velocidad
+                                                </p>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {parrySteps.map((step, stepIndex) => (
+                                                    <div key={step.id} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-700/80 bg-black/25 px-2.5 py-1 text-[10px] text-slate-300">
+                                                        <span className="shrink-0 text-slate-500">#{stepIndex + 1}</span>
+                                                        <span className="max-w-[9rem] truncate font-semibold text-slate-200">{step.weaponName || 'Arma'}</span>
+                                                        <span className="shrink-0 font-bold text-yellow-400">-{step.yellowCost} 🟡</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeParryStep(step.id)}
+                                                            className="ml-0.5 rounded-full text-slate-500 hover:text-red-200 transition-all"
+                                                            title="Quitar parada"
+                                                        >
+                                                            <X size={11} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {selectedWeaponBlockedByNoGuard && (
                                         <div className="rounded-lg border border-rose-500/30 bg-rose-900/20 px-3 py-2 text-center">
@@ -741,13 +993,30 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
 
                                     {/* Panel de Modificadores Creativos / DM */}
                                     {selectedWeapon && (
-                                        <CombatModifiersPanel
-                                            modifiers={customModifiers}
-                                            onChange={setCustomModifiers}
-                                            isExpanded={modifiersExpanded}
-                                            onToggleExpand={() => setModifiersExpanded(!modifiersExpanded)}
-                                            currentWeapon={selectedWeaponData}
-                                        />
+                                        <>
+                                            <CombatModifiersPanel
+                                                modifiers={customModifiers}
+                                                onChange={setCustomModifiers}
+                                                isExpanded={modifiersExpanded}
+                                                onToggleExpand={() => setModifiersExpanded(!modifiersExpanded)}
+                                                currentWeapon={selectedWeaponData}
+                                            />
+                                            <div className="space-y-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleAddParryStep}
+                                                    disabled={!canAddCurrentParryStep}
+                                                    className="w-full rounded-full border border-slate-700 bg-slate-900/50 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-300 transition-all hover:border-[#c8aa6e]/70 hover:text-[#c8aa6e] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-slate-700 disabled:hover:text-slate-300"
+                                                >
+                                                    Añadir parada · -{parryCostMeta.yellowCost} 🟡
+                                                </button>
+                                                {reactionType === 'parar' && remainingReactionBudget <= 0 && (
+                                                    <p className="text-center text-[11px] text-slate-500">
+                                                        Ya has agotado toda tu reacción disponible para esta parada.
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </>
                                     )}
                                 </div>
                             )}
@@ -758,14 +1027,16 @@ const CombatReactionModal = ({ event, targetToken, onReact, queueTotal = 1, queu
                             <div className="flex flex-col">
                                 <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Costo de Reacción</span>
                                 <div className="text-lg font-fantasy text-yellow-500 flex items-center gap-1.5 leading-none">
-                                    {reactionType === 'evadir' ? `-${selectedDiceIndices.length}` :
-                                        reactionType === 'parar' && selectedWeapon ? `-${parryCostMeta.yellowCost}` : '0'}
+                                    {`-${currentReactionCost}`}
                                     <span className="text-base">🟡</span>
                                 </div>
+                                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.18em] mt-1">
+                                    Limite: {reactionBudget} de velocidad
+                                </span>
                             </div>
                             <button
                                 onClick={handleConfirm}
-                                disabled={isSubmitting || !reactionType || (reactionType === 'parar' && (!selectedWeapon || !canParry || selectedWeaponBlockedByNoGuard))}
+                                disabled={isSubmitting || !reactionType || (reactionType === 'parar' && parrySteps.length === 0)}
                                 className="px-8 py-2.5 bg-gradient-to-r from-red-600 to-red-800 text-white font-fantasy text-sm uppercase tracking-[0.2em] rounded shadow-lg hover:shadow-red-600/20 active:scale-95 disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed transition-all"
                             >
                                 {isSubmitting ? 'Procesando...' : 'Confirmar'}

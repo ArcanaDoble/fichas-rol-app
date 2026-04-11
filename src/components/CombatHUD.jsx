@@ -7,16 +7,16 @@ import { getCustomImage, useCustomEquipmentImages } from '../hooks/useCustomEqui
 import { PRONE_STATUS_IDS } from '../utils/statusEffects';
 
 const RANGE_MAP = {
-    toque: 1,
-    cercano: 2,
-    intermedio: 3,
-    lejano: 4,
-    extremo: 5
+    toque: 0,
+    cercano: 1,
+    intermedio: 2,
+    lejano: 3,
+    extremo: 999
 };
 
 const getRangeValue = (item) => {
     const alcRaw = item?.alc || item?.alcance || item?.range || item?.Alcance || item?.Range || item?.payload?.range || item?.payload?.alcance || item?.payload?.alc;
-    if (alcRaw === undefined || alcRaw === null || alcRaw === '') return 1;
+    if (alcRaw === undefined || alcRaw === null || alcRaw === '') return RANGE_MAP.toque;
 
     const alcValue = alcRaw.toString().toLowerCase().trim();
     if (alcValue.includes('toque')) return RANGE_MAP.toque;
@@ -30,7 +30,7 @@ const getRangeValue = (item) => {
         return parseInt(digitMatch[0], 10);
     }
 
-    return 1;
+    return RANGE_MAP.toque;
 };
 
 const isSweepEligibleWeapon = (item) => {
@@ -141,7 +141,8 @@ const CombatHUD = ({
     pendingActions = [], // Array de nombres de acciones pendientes
     onCancelAction, // Función para cancelar una acción pendiente
     forceWeaponMenu = false, // Nueva prop para forzar la apertura del menú de armas
-    targetDistance = null // Distancia al objetivo actual (en casillas)
+    targetDistance = null, // Distancia al objetivo actual (en casillas)
+    allowAdjacentTouchTargeting = false
 }) => {
     const customEquipmentImages = useCustomEquipmentImages();
     const [activeCategory, setActiveCategory] = useState('ACCIONES'); // ACCIONES | CLASE | OBJETOS
@@ -217,7 +218,11 @@ const CombatHUD = ({
     if (targetDistance !== null) {
         attackOptions = attackOptions.filter(item => {
             const alcRaw = item.alc || item.alcance || item.range || item.Alcance || item.Range || item.payload?.range || item.payload?.alcance || item.payload?.alc;
-            if (!alcRaw) return true; // Si no tiene alcance definido, asumimos que es especial/siempre disponible (o de toque)
+            if (!alcRaw) {
+                return item.type === 'ability'
+                    ? true
+                    : (RANGE_MAP.toque >= targetDistance || (targetDistance === 1 && allowAdjacentTouchTargeting));
+            }
 
             const alcValue = alcRaw.toString().toLowerCase().trim();
 
@@ -230,7 +235,11 @@ const CombatHUD = ({
 
             // Check if string contains one of the keywords
             if (mappedRange !== undefined) {
-                return mappedRange >= targetDistance;
+                return mappedRange >= targetDistance || (
+                    mappedRange === RANGE_MAP.toque &&
+                    targetDistance === 1 &&
+                    allowAdjacentTouchTargeting
+                );
             }
 
             // 1. Si es un número directo o lo contiene
@@ -239,9 +248,10 @@ const CombatHUD = ({
                 return parseInt(digitMatch[0], 10) >= targetDistance;
             }
 
-            // Fallback: Si no se reconoce pero es una habilidad, permitimos (pueden ser efectos de área o especiales)
-            // Si es arma y no se reconoce el texto, por seguridad permitimos 1 casilla
-            return item.type === 'ability' ? true : 1 >= targetDistance;
+            // Fallback: si no se reconoce, una habilidad sigue disponible y un arma se trata como Toque.
+            return item.type === 'ability'
+                ? true
+                : (RANGE_MAP.toque >= targetDistance || (targetDistance === 1 && allowAdjacentTouchTargeting));
         });
     }
 
