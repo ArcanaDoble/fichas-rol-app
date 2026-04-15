@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Trash2, Zap, Target, Hammer, Shield, Plus, X, ArrowDown, Wind, Droplet } from 'lucide-react';
+import { Sparkles, Trash2, Zap, ZapOff, Target, Hammer, Shield, Plus, X, ArrowDown, Wind, Droplet, MoveRight } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { getCombatTraitIds, getSpeedConsumption, hasCombatTrait, normalizeCombatTraitId } from '../utils/combatSystem';
 
@@ -11,6 +11,9 @@ const formatTraitLabel = (trait = '') => {
     if (normalized === 'conmocionante') return 'Conmocionante';
     if (normalized === 'fluida') return 'Fluida';
     if (normalized === 'sangrado') return 'Sangrado';
+    if (normalized === 'ralentizado' || normalized === 'ralentizar') return 'Ralentizado';
+    if (normalized === 'penetrante' || normalized === 'perforante') return 'Penetrante';
+    if (normalized === 'empuje' || normalized === 'empujar') return 'Empuje';
     if (normalized === 'sin guardia' || normalized === 'singuardia' || normalized === 'sin_guardia') return 'Sin guardia';
     return trait.charAt(0).toUpperCase() + trait.slice(1);
 };
@@ -22,6 +25,9 @@ const AVAILABLE_TRAITS = [
     { id: 'hendir', label: 'Hendir', icon: Shield, color: 'text-slate-300', border: 'border-slate-400/50', bg: 'bg-slate-700/30' },
     { id: 'conmocionante', label: 'Conmocionante', icon: ArrowDown, color: 'text-indigo-300', border: 'border-indigo-400/50', bg: 'bg-indigo-900/30' },
     { id: 'sangrado', label: 'Sangrado', icon: Droplet, color: 'text-red-500', border: 'border-red-700/50', bg: 'bg-red-950/30' },
+    { id: 'ralentizado', label: 'Ralentizado', icon: ZapOff, color: 'text-amber-300', border: 'border-amber-300/50', bg: 'bg-amber-900/25' },
+    { id: 'penetrante', label: 'Penetrante', icon: Target, color: 'text-amber-300', border: 'border-amber-400/50', bg: 'bg-amber-900/25' },
+    { id: 'empuje', label: 'Empuje', icon: MoveRight, color: 'text-sky-300', border: 'border-sky-400/50', bg: 'bg-sky-900/25' },
     { id: 'fluida', label: 'Fluida', icon: Wind, color: 'text-sky-300', border: 'border-sky-400/50', bg: 'bg-sky-900/30' },
     { id: 'sin guardia', label: 'Sin guardia', icon: Shield, color: 'text-rose-300', border: 'border-rose-500/50', bg: 'bg-rose-900/30' },
     // Más rasgos se pueden añadir aquí fácilmente
@@ -439,7 +445,10 @@ export const applyModifiersToWeapon = (weapon, customModifiers) => {
     // Apply Damage
     let addedDamage = [];
     Object.entries(customModifiers.extraDice).forEach(([die, count]) => {
-        if (count > 0) addedDamage.push(`${count}${die}`);
+        const safeCount = Math.max(0, Number(count) || 0);
+        for (let i = 0; i < safeCount; i += 1) {
+            addedDamage.push(`1${die}`);
+        }
     });
 
     if (addedDamage.length > 0) {

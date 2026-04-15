@@ -24,7 +24,8 @@ export const parseAndRollFormula = (formula) => {
     });
   }
 
-  const modifiers = cleanFormula.match(modifierRegex) || [];
+  const formulaWithoutDice = cleanFormula.replace(/(\d*)d(\d+)/g, '');
+  const modifiers = formulaWithoutDice.match(modifierRegex) || [];
   modifiers.forEach((mod) => {
     const value = parseInt(mod);
     total += value;
@@ -65,7 +66,8 @@ export const parseAndRollFormulaCritical = (formula) => {
     });
   }
 
-  const modifiers = cleanFormula.match(modifierRegex) || [];
+  const formulaWithoutDice = cleanFormula.replace(/(\d*)d(\d+)/g, '');
+  const modifiers = formulaWithoutDice.match(modifierRegex) || [];
   modifiers.forEach((mod) => {
     const value = parseInt(mod);
     total += value;
