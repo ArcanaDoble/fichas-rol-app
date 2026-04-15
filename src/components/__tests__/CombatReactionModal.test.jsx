@@ -3,7 +3,11 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CombatReactionModal from '../CombatReactionModal';
 
-jest.mock('../CombatModifiersPanel', () => () => null);
+jest.mock('../CombatModifiersPanel', () => ({
+  __esModule: true,
+  default: () => null,
+  applyModifiersToWeapon: (weapon) => ({ ...weapon }),
+}));
 jest.mock('../../hooks/useCustomEquipmentImages', () => ({
   useCustomEquipmentImages: () => new Map(),
   getCustomImage: () => null,
@@ -146,4 +150,68 @@ test('keeps resolved modal constrained to the viewport-friendly mobile layout', 
   const modalCard = screen.getByTestId('combat-reaction-modal-card');
   expect(modalCard).toHaveClass('flex', 'flex-col', 'max-h-[calc(100dvh-1rem)]');
   expect(screen.getByRole('button', { name: /continuar/i })).toBeInTheDocument();
+});
+
+test('permite combinar evasión y parada dentro del mismo presupuesto de reacción', async () => {
+  const onReact = jest.fn();
+  const targetToken = {
+    ...baseTargetToken,
+    equippedItems: [
+      {
+        type: 'weapon',
+        nombre: 'Escudo',
+        consumo: 2,
+        dano: '1d6',
+      },
+    ],
+  };
+
+  const event = {
+    ...baseEvent,
+    reactionBudget: 3,
+    attackerRollResult: {
+      total: 15,
+      details: [
+        {
+          type: 'dice',
+          formula: '3d6',
+          rolls: [4, 5, 6],
+        },
+      ],
+    },
+  };
+
+  render(
+    <CombatReactionModal
+      event={event}
+      targetToken={targetToken}
+      onReact={onReact}
+    />
+  );
+
+  await userEvent.click(screen.getByRole('button', { name: /evadir/i }));
+  await userEvent.click(screen.getAllByTitle(/dado de arma/i)[0]);
+  await userEvent.click(screen.getByRole('button', { name: /parar/i }));
+
+  const addParryButton = await screen.findByRole('button', { name: /añadir parada/i });
+  await waitFor(() => expect(addParryButton).toBeEnabled());
+  await userEvent.click(addParryButton);
+  await userEvent.click(screen.getByRole('button', { name: /confirmar/i }));
+
+  expect(onReact).toHaveBeenCalledWith({
+    type: 'parar',
+    data: expect.objectContaining({
+      evadedDiceIds: ['0-0'],
+      yellowCost: 3,
+      parryCost: 2,
+      evadeCost: 1,
+      reactionBudget: 3,
+      parrySteps: expect.arrayContaining([
+        expect.objectContaining({
+          weaponName: 'Escudo',
+          yellowCost: 2,
+        }),
+      ]),
+    }),
+  });
 });

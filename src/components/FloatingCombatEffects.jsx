@@ -34,8 +34,32 @@ const STATUS_EFFECT_PRIORITY = {
     sangrado: 1,
 };
 
+const NON_STATUS_COMBAT_EFFECT_IDS = new Set(['ralentizado', 'empuje']);
+
 const STATUS_SOURCE_COLORS = {
     sangrado: '#b91c1c',
+};
+
+const TRAIT_EFFECT_COLORS = {
+    hendir: {
+        armadura: '#cbd5e1',
+        default: '#cbd5e1',
+    },
+    penetrante: {
+        armadura: '#f59e0b',
+        vida: '#fb7185',
+        default: '#fbbf24',
+    },
+};
+
+const SPEED_EFFECT_COLORS = {
+    ralentizado: '#fcd34d',
+    default: '#fde68a',
+};
+
+const PUSH_EFFECT_COLORS = {
+    empuje: '#38bdf8',
+    default: '#7dd3fc',
 };
 
 const hashString = (value) => {
@@ -93,12 +117,97 @@ const getStatusSequenceDelay = (lastSequenceStart = 0, hasSequence = false) => {
 };
 
 const sortStatusEffects = (statusEffects = []) => (
-    [...statusEffects].sort((a, b) => {
-        const priorityA = STATUS_EFFECT_PRIORITY[a?.id] ?? 10;
-        const priorityB = STATUS_EFFECT_PRIORITY[b?.id] ?? 10;
-        if (priorityA !== priorityB) return priorityA - priorityB;
-        return String(a?.label || a?.id || '').localeCompare(String(b?.label || b?.id || ''));
-    })
+    [...statusEffects]
+        .filter((statusEffect) => !NON_STATUS_COMBAT_EFFECT_IDS.has(statusEffect?.id))
+        .sort((a, b) => {
+            const priorityA = STATUS_EFFECT_PRIORITY[a?.id] ?? 10;
+            const priorityB = STATUS_EFFECT_PRIORITY[b?.id] ?? 10;
+            if (priorityA !== priorityB) return priorityA - priorityB;
+            return String(a?.label || a?.id || '').localeCompare(String(b?.label || b?.id || ''));
+        })
+);
+
+const normalizeTraitEffects = (traitEffects = []) => (
+    Array.isArray(traitEffects)
+        ? traitEffects
+            .map((traitEffect) => ({
+                ...traitEffect,
+                blocks: Math.max(0, Number(traitEffect?.blocks) || 0),
+                layer: typeof traitEffect?.layer === 'string' ? traitEffect.layer.toLowerCase() : traitEffect?.layer,
+                id: traitEffect?.id || 'trait',
+            }))
+            .filter((traitEffect) => traitEffect.blocks > 0)
+        : []
+);
+
+const normalizeSpeedEffects = (speedEffects = []) => (
+    Array.isArray(speedEffects)
+        ? speedEffects
+            .map((speedEffect) => ({
+                ...speedEffect,
+                id: speedEffect?.id || 'speed',
+                delta: Math.max(0, Number(speedEffect?.delta) || 0),
+                label: speedEffect?.label || 'Velocidad',
+            }))
+            .filter((speedEffect) => speedEffect.delta > 0)
+        : []
+);
+
+const normalizePushEffects = (pushEffects = []) => (
+    Array.isArray(pushEffects)
+        ? pushEffects
+            .map((pushEffect) => ({
+                ...pushEffect,
+                id: pushEffect?.id || 'push',
+                label: pushEffect?.label || 'Empuje',
+                applied: pushEffect?.applied !== false,
+            }))
+            .filter((pushEffect) => pushEffect.applied)
+        : []
+);
+
+const getBlocksLostWithoutTraitEffects = (blocksLost, traitEffects = []) => {
+    if (!blocksLost || traitEffects.length === 0) return blocksLost;
+
+    const adjustedBlocks = { ...blocksLost };
+    traitEffects.forEach((traitEffect) => {
+        const layer = traitEffect?.layer;
+        if (!layer || adjustedBlocks[layer] == null) return;
+        adjustedBlocks[layer] = Math.max(
+            0,
+            (Number(adjustedBlocks[layer]) || 0) - (Number(traitEffect.blocks) || 0)
+        );
+    });
+
+    return adjustedBlocks;
+};
+
+const getTraitEffectColor = (traitEffect) => {
+    if (traitEffect?.hex) return traitEffect.hex;
+
+    const traitId = traitEffect?.id || 'trait';
+    const layer = traitEffect?.layer || 'default';
+    return TRAIT_EFFECT_COLORS[traitId]?.[layer]
+        || TRAIT_EFFECT_COLORS[traitId]?.default
+        || '#fbbf24';
+};
+
+const getTraitEffectLabel = (traitEffect) => {
+    const traitLabel = traitEffect?.label || 'Rasgo';
+    const layerLabel = BLOCK_LABELS[traitEffect?.layer] || traitEffect?.layer;
+    return layerLabel ? `${traitLabel} · ${layerLabel}` : traitLabel;
+};
+
+const getSpeedEffectColor = (speedEffect) => (
+    speedEffect?.hex
+    || SPEED_EFFECT_COLORS[speedEffect?.id]
+    || SPEED_EFFECT_COLORS.default
+);
+
+const getPushEffectColor = (pushEffect) => (
+    pushEffect?.hex
+    || PUSH_EFFECT_COLORS[pushEffect?.id]
+    || PUSH_EFFECT_COLORS.default
 );
 
 export function getCombatEffectLifetimeMs(effect) {
@@ -109,21 +218,46 @@ export function getCombatEffectLifetimeMs(effect) {
         finalDamage = 0,
         counterDamage = 0,
         blocksLost,
+        traitEffectsApplied,
         statusEffectsApplied,
+        speedEffectsApplied,
+        pushEffectsApplied,
         postReactionSpeedLoss
     } = effect;
 
+    const targetAppliedTraitEffects = normalizeTraitEffects(
+        Array.isArray(traitEffectsApplied?.target) ? traitEffectsApplied.target : []
+    );
+    const attackerAppliedTraitEffects = normalizeTraitEffects(
+        Array.isArray(traitEffectsApplied?.attacker) ? traitEffectsApplied.attacker : []
+    );
     const targetBlocks = getLostBlocks(
-        reactionType === 'parar' && counterDamage > 0 ? null : blocksLost
+        reactionType === 'parar' && counterDamage > 0
+            ? null
+            : getBlocksLostWithoutTraitEffects(blocksLost, targetAppliedTraitEffects)
     );
     const attackerBlocks = getLostBlocks(
-        reactionType === 'parar' && counterDamage > 0 ? blocksLost : null
+        reactionType === 'parar' && counterDamage > 0
+            ? getBlocksLostWithoutTraitEffects(blocksLost, attackerAppliedTraitEffects)
+            : null
     );
     const targetAppliedStatusEffects = sortStatusEffects(
         Array.isArray(statusEffectsApplied?.target) ? statusEffectsApplied.target : []
     );
     const attackerAppliedStatusEffects = sortStatusEffects(
         Array.isArray(statusEffectsApplied?.attacker) ? statusEffectsApplied.attacker : []
+    );
+    const targetAppliedSpeedEffects = normalizeSpeedEffects(
+        Array.isArray(speedEffectsApplied?.target) ? speedEffectsApplied.target : []
+    );
+    const attackerAppliedSpeedEffects = normalizeSpeedEffects(
+        Array.isArray(speedEffectsApplied?.attacker) ? speedEffectsApplied.attacker : []
+    );
+    const targetAppliedPushEffects = normalizePushEffects(
+        Array.isArray(pushEffectsApplied?.target) ? pushEffectsApplied.target : []
+    );
+    const attackerAppliedPushEffects = normalizePushEffects(
+        Array.isArray(pushEffectsApplied?.attacker) ? pushEffectsApplied.attacker : []
     );
     const hasTargetBlocksLost = targetBlocks.length > 0;
     const resistedTargetHit = finalDamage > 0 && !hasTargetBlocksLost;
@@ -145,17 +279,43 @@ export function getCombatEffectLifetimeMs(effect) {
         getDamageFlyoffCount({ finalDamage: counterDamage, blocks: attackerBlocks, resistedTargetHit: false }),
         attackerDamageDelay
     );
+    const targetTraitDelay = targetAppliedTraitEffects.length > 0
+        ? getStatusSequenceDelay(
+            Math.max(targetDamageLastStart, hasTargetIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0),
+            targetIntroCount > 0 ||
+            getDamageFlyoffCount({ finalDamage, blocks: targetBlocks, resistedTargetHit }) > 0
+        )
+        : 0;
+    const attackerTraitDelay = attackerAppliedTraitEffects.length > 0
+        ? getStatusSequenceDelay(
+            Math.max(attackerDamageLastStart, hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0),
+            hasCounterIntro ||
+            getDamageFlyoffCount({ finalDamage: counterDamage, blocks: attackerBlocks, resistedTargetHit: false }) > 0
+        )
+        : 0;
+    const targetTraitLastStart = getStaggeredSequenceLastStart(
+        targetAppliedTraitEffects.length,
+        targetTraitDelay
+    );
+    const attackerTraitLastStart = getStaggeredSequenceLastStart(
+        attackerAppliedTraitEffects.length,
+        attackerTraitDelay
+    );
     const postReactionTargetBlocks = getLostBlocks(postReactionSpeedLoss?.target?.blocksLost);
     const postReactionTargetDelay = postReactionTargetBlocks.length > 0
         ? getStatusSequenceDelay(
             Math.max(
                 targetDamageLastStart,
                 attackerDamageLastStart,
+                targetTraitLastStart,
+                attackerTraitLastStart,
                 hasTargetIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0,
                 hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0
             ),
             targetIntroCount > 0 ||
             getDamageFlyoffCount({ finalDamage, blocks: targetBlocks, resistedTargetHit }) > 0 ||
+            targetAppliedTraitEffects.length > 0 ||
+            attackerAppliedTraitEffects.length > 0 ||
             hasCounterIntro ||
             getDamageFlyoffCount({ finalDamage: counterDamage, blocks: attackerBlocks, resistedTargetHit: false }) > 0
         )
@@ -164,23 +324,96 @@ export function getCombatEffectLifetimeMs(effect) {
         postReactionTargetBlocks.length,
         postReactionTargetDelay
     );
-
-    const targetStateDelay = targetAppliedStatusEffects.length > 0
+    const targetPushDelay = targetAppliedPushEffects.length > 0
         ? getStatusSequenceDelay(
             Math.max(
                 targetDamageLastStart,
+                targetTraitLastStart,
                 postReactionTargetLastStart,
                 hasTargetIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0
             ),
             targetIntroCount > 0 ||
             getDamageFlyoffCount({ finalDamage, blocks: targetBlocks, resistedTargetHit }) > 0 ||
+            targetAppliedTraitEffects.length > 0 ||
             postReactionTargetBlocks.length > 0
+        )
+        : 0;
+    const attackerPushDelay = attackerAppliedPushEffects.length > 0
+        ? getStatusSequenceDelay(
+            Math.max(attackerDamageLastStart, attackerTraitLastStart, hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0),
+            hasCounterIntro ||
+            attackerAppliedTraitEffects.length > 0 ||
+            getDamageFlyoffCount({ finalDamage: counterDamage, blocks: attackerBlocks, resistedTargetHit: false }) > 0
+        )
+        : 0;
+    const targetPushLastStart = getStaggeredSequenceLastStart(
+        targetAppliedPushEffects.length,
+        targetPushDelay
+    );
+    const attackerPushLastStart = getStaggeredSequenceLastStart(
+        attackerAppliedPushEffects.length,
+        attackerPushDelay
+    );
+    const targetSpeedDelay = targetAppliedSpeedEffects.length > 0
+        ? getStatusSequenceDelay(
+            Math.max(
+                targetDamageLastStart,
+                targetTraitLastStart,
+                postReactionTargetLastStart,
+                targetPushLastStart,
+                hasTargetIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0
+            ),
+            targetIntroCount > 0 ||
+            getDamageFlyoffCount({ finalDamage, blocks: targetBlocks, resistedTargetHit }) > 0 ||
+            targetAppliedTraitEffects.length > 0 ||
+            postReactionTargetBlocks.length > 0 ||
+            targetAppliedPushEffects.length > 0
+        )
+        : 0;
+    const attackerSpeedDelay = attackerAppliedSpeedEffects.length > 0
+        ? getStatusSequenceDelay(
+            Math.max(attackerDamageLastStart, attackerTraitLastStart, attackerPushLastStart, hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0),
+            hasCounterIntro ||
+            attackerAppliedTraitEffects.length > 0 ||
+            getDamageFlyoffCount({ finalDamage: counterDamage, blocks: attackerBlocks, resistedTargetHit: false }) > 0 ||
+            attackerAppliedPushEffects.length > 0
+        )
+        : 0;
+    const targetSpeedLastStart = getStaggeredSequenceLastStart(
+        targetAppliedSpeedEffects.length,
+        targetSpeedDelay
+    );
+    const attackerSpeedLastStart = getStaggeredSequenceLastStart(
+        attackerAppliedSpeedEffects.length,
+        attackerSpeedDelay
+    );
+
+    const targetStateDelay = targetAppliedStatusEffects.length > 0
+        ? getStatusSequenceDelay(
+            Math.max(
+                targetDamageLastStart,
+                targetTraitLastStart,
+                postReactionTargetLastStart,
+                targetPushLastStart,
+                targetSpeedLastStart,
+                hasTargetIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0
+            ),
+            targetIntroCount > 0 ||
+            getDamageFlyoffCount({ finalDamage, blocks: targetBlocks, resistedTargetHit }) > 0 ||
+            targetAppliedTraitEffects.length > 0 ||
+            postReactionTargetBlocks.length > 0 ||
+            targetAppliedPushEffects.length > 0 ||
+            targetAppliedSpeedEffects.length > 0
         )
         : 0;
     const attackerStateDelay = attackerAppliedStatusEffects.length > 0
         ? getStatusSequenceDelay(
-            Math.max(attackerDamageLastStart, hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0),
-            hasCounterIntro || getDamageFlyoffCount({ finalDamage: counterDamage, blocks: attackerBlocks, resistedTargetHit: false }) > 0
+            Math.max(attackerDamageLastStart, attackerTraitLastStart, attackerPushLastStart, attackerSpeedLastStart, hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0),
+            hasCounterIntro ||
+            attackerAppliedTraitEffects.length > 0 ||
+            getDamageFlyoffCount({ finalDamage: counterDamage, blocks: attackerBlocks, resistedTargetHit: false }) > 0 ||
+            attackerAppliedPushEffects.length > 0 ||
+            attackerAppliedSpeedEffects.length > 0
         )
         : 0;
     const targetStateLastStart = getStaggeredSequenceLastStart(
@@ -195,7 +428,13 @@ export function getCombatEffectLifetimeMs(effect) {
         targetIntroEnd,
         targetDamageLastStart ? targetDamageLastStart + FLYOFF_DURATION_SECONDS : 0,
         attackerDamageLastStart ? attackerDamageLastStart + FLYOFF_DURATION_SECONDS : 0,
+        targetTraitLastStart ? targetTraitLastStart + FLYOFF_DURATION_SECONDS : 0,
+        attackerTraitLastStart ? attackerTraitLastStart + FLYOFF_DURATION_SECONDS : 0,
         postReactionTargetLastStart ? postReactionTargetLastStart + FLYOFF_DURATION_SECONDS : 0,
+        targetPushLastStart ? targetPushLastStart + FLYOFF_DURATION_SECONDS : 0,
+        attackerPushLastStart ? attackerPushLastStart + FLYOFF_DURATION_SECONDS : 0,
+        targetSpeedLastStart ? targetSpeedLastStart + FLYOFF_DURATION_SECONDS : 0,
+        attackerSpeedLastStart ? attackerSpeedLastStart + FLYOFF_DURATION_SECONDS : 0,
         targetStateLastStart ? targetStateLastStart + FLYOFF_DURATION_SECONDS : 0,
         attackerStateLastStart ? attackerStateLastStart + FLYOFF_DURATION_SECONDS : 0,
         hasTargetBlocksLost ? targetDamageDelay + HIGHLIGHT_DURATION_SECONDS : 0,
@@ -216,7 +455,10 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
         counterDamage,
         counterPreventedByRange,
         blocksLost,
+        traitEffectsApplied,
         statusEffectsApplied,
+        speedEffectsApplied,
+        pushEffectsApplied,
         postReactionSpeedLoss,
         attackerId,
         targetId,
@@ -227,11 +469,21 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
     const effectKey = sourceEventId || `${timestamp || 'no-ts'}-${attackerId || 'no-att'}-${targetId || 'no-target'}-${reactionType || 'none'}`;
     const flyoffs = [];
     const highlights = [];
+    const targetAppliedTraitEffects = normalizeTraitEffects(
+        Array.isArray(traitEffectsApplied?.target) ? traitEffectsApplied.target : []
+    );
+    const attackerAppliedTraitEffects = normalizeTraitEffects(
+        Array.isArray(traitEffectsApplied?.attacker) ? traitEffectsApplied.attacker : []
+    );
     const targetBlocks = getLostBlocks(
-        reactionType === 'parar' && counterDamage > 0 ? null : blocksLost
+        reactionType === 'parar' && counterDamage > 0
+            ? null
+            : getBlocksLostWithoutTraitEffects(blocksLost, targetAppliedTraitEffects)
     );
     const attackerBlocks = getLostBlocks(
-        reactionType === 'parar' && counterDamage > 0 ? blocksLost : null
+        reactionType === 'parar' && counterDamage > 0
+            ? getBlocksLostWithoutTraitEffects(blocksLost, attackerAppliedTraitEffects)
+            : null
     );
     const hasTargetBlocksLost = targetBlocks.length > 0;
     const targetAppliedStatusEffects = sortStatusEffects(
@@ -239,6 +491,18 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
     );
     const attackerAppliedStatusEffects = sortStatusEffects(
         Array.isArray(statusEffectsApplied?.attacker) ? statusEffectsApplied.attacker : []
+    );
+    const targetAppliedSpeedEffects = normalizeSpeedEffects(
+        Array.isArray(speedEffectsApplied?.target) ? speedEffectsApplied.target : []
+    );
+    const attackerAppliedSpeedEffects = normalizeSpeedEffects(
+        Array.isArray(speedEffectsApplied?.attacker) ? speedEffectsApplied.attacker : []
+    );
+    const targetAppliedPushEffects = normalizePushEffects(
+        Array.isArray(pushEffectsApplied?.target) ? pushEffectsApplied.target : []
+    );
+    const attackerAppliedPushEffects = normalizePushEffects(
+        Array.isArray(pushEffectsApplied?.attacker) ? pushEffectsApplied.attacker : []
     );
 
     const addHighlight = (id, position, delay = 0) => {
@@ -260,7 +524,9 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
             ...data,
             id: `${effectKey}-${id}`,
             driftX: stableOffset(`${effectKey}-${id}-x`, 20),
-            rotate: flyoffType === 'damage' ? stableOffset(`${effectKey}-${id}-r`, 10) : 0
+            rotate: ['damage', 'trait'].includes(flyoffType)
+                ? stableOffset(`${effectKey}-${id}-r`, 10)
+                : 0
         });
     };
 
@@ -310,6 +576,69 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
         });
     };
 
+    const addTraitEffectFlyoffs = (id, position, traitEffects, baseDelay = 0) => {
+        if (!position || traitEffects.length === 0) return;
+
+        const centerX = position.x + position.width / 2;
+        const baseY = position.y - 28;
+
+        traitEffects.forEach((traitEffect, idx) => {
+            addFlyoff(`${id}-${traitEffect.id || 'trait'}-${traitEffect.layer || idx}`, {
+                x: centerX + stableOffset(`${effectKey}-${id}-${idx}-trait-x`, 16),
+                y: baseY - (idx * 8),
+                text: `-${traitEffect.blocks}`,
+                color: getTraitEffectColor(traitEffect),
+                label: getTraitEffectLabel(traitEffect),
+                type: 'trait',
+                delay: baseDelay + (idx * STATE_EFFECT_STAGGER_SECONDS)
+            });
+        });
+    };
+
+    const addSpeedEffectFlyoffs = (id, position, speedEffects, baseDelay = 0) => {
+        if (!position || speedEffects.length === 0) return;
+
+        const centerX = position.x + position.width / 2;
+        const baseY = position.y - 54;
+
+        speedEffects.forEach((speedEffect, idx) => {
+            addFlyoff(`${id}-${speedEffect.id || 'speed'}-${idx}`, {
+                x: centerX + stableOffset(`${effectKey}-${id}-${idx}-speed-x`, 14),
+                y: baseY - (idx * 8),
+                text: `+${speedEffect.delta} Velocidad`,
+                color: getSpeedEffectColor(speedEffect),
+                label: speedEffect.label || 'Ralentizado',
+                type: 'speed',
+                delay: baseDelay + (idx * STATE_EFFECT_STAGGER_SECONDS)
+            });
+        });
+    };
+
+    const getPushEffectLabel = (pushEffect) => {
+        if (pushEffect?.sharedMode === 'duelo') return 'Duelo';
+        if (pushEffect?.sharedMode === 'formacion') return 'Formación';
+        return '1 casilla';
+    };
+
+    const addPushEffectFlyoffs = (id, position, pushEffects, baseDelay = 0) => {
+        if (!position || pushEffects.length === 0) return;
+
+        const centerX = position.x + position.width / 2;
+        const baseY = position.y - 66;
+
+        pushEffects.forEach((pushEffect, idx) => {
+            addFlyoff(`${id}-${pushEffect.id || 'push'}-${idx}`, {
+                x: centerX + stableOffset(`${effectKey}-${id}-${idx}-push-x`, 14),
+                y: baseY - (idx * 8),
+                text: `¡${pushEffect.label || 'Empuje'}!`,
+                color: getPushEffectColor(pushEffect),
+                label: getPushEffectLabel(pushEffect),
+                type: 'push',
+                delay: baseDelay + (idx * STATE_EFFECT_STAGGER_SECONDS)
+            });
+        });
+    };
+
     const resistedTargetHit = finalDamage > 0 && !hasTargetBlocksLost;
     const hasCounterIntro = reactionType === 'parar' && counterDamage > 0 && !!targetPos;
     const hasTargetIntro = (
@@ -325,18 +654,124 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
         attackerDamageFlyoffCount,
         hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0
     );
+    const targetTraitDelay = targetAppliedTraitEffects.length > 0
+        ? getStatusSequenceDelay(
+            Math.max(targetDamageLastStart, targetIntroDelay),
+            hasTargetIntro || targetDamageFlyoffCount > 0
+        )
+        : 0;
+    const attackerTraitDelay = attackerAppliedTraitEffects.length > 0
+        ? getStatusSequenceDelay(
+            Math.max(
+                attackerDamageLastStart,
+                hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0
+            ),
+            hasCounterIntro || attackerDamageFlyoffCount > 0
+        )
+        : 0;
+    const targetTraitLastStart = getStaggeredSequenceLastStart(
+        targetAppliedTraitEffects.length,
+        targetTraitDelay
+    );
+    const attackerTraitLastStart = getStaggeredSequenceLastStart(
+        attackerAppliedTraitEffects.length,
+        attackerTraitDelay
+    );
     const postReactionTargetBlocks = getLostBlocks(postReactionSpeedLoss?.target?.blocksLost);
     const postReactionTargetDelay = postReactionTargetBlocks.length > 0
         ? getStatusSequenceDelay(
             Math.max(
                 targetDamageLastStart,
                 attackerDamageLastStart,
+                targetTraitLastStart,
+                attackerTraitLastStart,
                 targetIntroDelay,
                 hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0
             ),
-            hasTargetIntro || targetDamageFlyoffCount > 0 || hasCounterIntro || attackerDamageFlyoffCount > 0
+            hasTargetIntro ||
+            targetDamageFlyoffCount > 0 ||
+            targetAppliedTraitEffects.length > 0 ||
+            hasCounterIntro ||
+            attackerDamageFlyoffCount > 0 ||
+            attackerAppliedTraitEffects.length > 0
         )
         : 0;
+    const postReactionTargetLastStart = getDelayedSequenceLastStart(
+        postReactionTargetBlocks.length,
+        postReactionTargetDelay
+    );
+    const targetPushDelay = targetAppliedPushEffects.length > 0
+        ? getStatusSequenceDelay(
+            Math.max(
+                targetDamageLastStart,
+                targetTraitLastStart,
+                postReactionTargetLastStart,
+                targetIntroDelay
+            ),
+            hasTargetIntro ||
+            targetDamageFlyoffCount > 0 ||
+            targetAppliedTraitEffects.length > 0 ||
+            postReactionTargetBlocks.length > 0
+        )
+        : 0;
+    const attackerPushDelay = attackerAppliedPushEffects.length > 0
+        ? getStatusSequenceDelay(
+            Math.max(
+                attackerDamageLastStart,
+                attackerTraitLastStart,
+                hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0
+            ),
+            hasCounterIntro ||
+            attackerDamageFlyoffCount > 0 ||
+            attackerAppliedTraitEffects.length > 0
+        )
+        : 0;
+    const targetPushLastStart = getStaggeredSequenceLastStart(
+        targetAppliedPushEffects.length,
+        targetPushDelay
+    );
+    const attackerPushLastStart = getStaggeredSequenceLastStart(
+        attackerAppliedPushEffects.length,
+        attackerPushDelay
+    );
+    const targetSpeedDelay = targetAppliedSpeedEffects.length > 0
+        ? getStatusSequenceDelay(
+            Math.max(
+                targetDamageLastStart,
+                targetTraitLastStart,
+                postReactionTargetLastStart,
+                targetPushLastStart,
+                targetIntroDelay
+            ),
+            hasTargetIntro ||
+            targetDamageFlyoffCount > 0 ||
+            targetAppliedTraitEffects.length > 0 ||
+            postReactionTargetBlocks.length > 0 ||
+            targetAppliedPushEffects.length > 0
+        )
+        : 0;
+    const attackerSpeedDelay = attackerAppliedSpeedEffects.length > 0
+        ? getStatusSequenceDelay(
+            Math.max(
+                attackerDamageLastStart,
+                attackerTraitLastStart,
+                attackerPushLastStart,
+                hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0
+            ),
+            hasCounterIntro ||
+            attackerDamageFlyoffCount > 0 ||
+            attackerAppliedTraitEffects.length > 0 ||
+            attackerAppliedPushEffects.length > 0
+        )
+        : 0;
+    const targetSpeedLastStart = getStaggeredSequenceLastStart(
+        targetAppliedSpeedEffects.length,
+        targetSpeedDelay
+    );
+    const attackerSpeedLastStart = getStaggeredSequenceLastStart(
+        attackerAppliedSpeedEffects.length,
+        attackerSpeedDelay
+    );
 
     if ((finalDamage > 0 || hasTargetBlocksLost) && targetPos) {
         const targetDamageDelay = targetIntroDelay;
@@ -421,6 +856,9 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
         addDamageFlyoff('att-dmg', attackerPos, counterDamage, counterDamageDelay, attackerBlocks);
     }
 
+    addTraitEffectFlyoffs('target-trait', targetPos, targetAppliedTraitEffects, targetTraitDelay);
+    addTraitEffectFlyoffs('attacker-trait', attackerPos, attackerAppliedTraitEffects, attackerTraitDelay);
+
     if (targetPos && postReactionTargetBlocks.length > 0) {
         const postReactionSource = postReactionSpeedLoss?.target?.source;
         const postReactionValue = postReactionSpeedLoss?.target?.vida || postReactionTargetBlocks.reduce((sum, block) => sum + (block.cantidad || 0), 0);
@@ -446,6 +884,12 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
         }
     }
 
+    addPushEffectFlyoffs('target-push', targetPos, targetAppliedPushEffects, targetPushDelay);
+    addPushEffectFlyoffs('attacker-push', attackerPos, attackerAppliedPushEffects, attackerPushDelay);
+
+    addSpeedEffectFlyoffs('target-speed', targetPos, targetAppliedSpeedEffects, targetSpeedDelay);
+    addSpeedEffectFlyoffs('attacker-speed', attackerPos, attackerAppliedSpeedEffects, attackerSpeedDelay);
+
     targetAppliedStatusEffects.forEach((statusEffect, idx) => {
         if (!targetPos) return;
 
@@ -458,10 +902,18 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
             delay: getStatusSequenceDelay(
                 Math.max(
                     targetDamageLastStart,
-                    getDelayedSequenceLastStart(postReactionTargetBlocks.length, postReactionTargetDelay),
+                    targetTraitLastStart,
+                    postReactionTargetLastStart,
+                    targetPushLastStart,
+                    targetSpeedLastStart,
                     targetIntroDelay
                 ),
-                hasTargetIntro || targetDamageFlyoffCount > 0 || postReactionTargetBlocks.length > 0
+                hasTargetIntro ||
+                targetDamageFlyoffCount > 0 ||
+                targetAppliedTraitEffects.length > 0 ||
+                postReactionTargetBlocks.length > 0 ||
+                targetAppliedPushEffects.length > 0 ||
+                targetAppliedSpeedEffects.length > 0
             ) + (idx * STATE_EFFECT_STAGGER_SECONDS)
         });
     });
@@ -470,14 +922,18 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
         if (!attackerPos) return;
 
         addFlyoff(`attacker-status-${statusEffect.id || idx}`, {
-            x: attackerPos.x + attackerPos.width / 2,
-            y: attackerPos.y - 40,
-            text: `¡${statusEffect.label || 'Estado'}!`,
-            color: statusEffect.hex || '#818cf8',
-            type: 'state',
-            delay: getStatusSequenceDelay(
-                Math.max(attackerDamageLastStart, hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0),
-                hasCounterIntro || attackerDamageFlyoffCount > 0
+                x: attackerPos.x + attackerPos.width / 2,
+                y: attackerPos.y - 40,
+                text: `¡${statusEffect.label || 'Estado'}!`,
+                color: statusEffect.hex || '#818cf8',
+                type: 'state',
+                delay: getStatusSequenceDelay(
+                Math.max(attackerDamageLastStart, attackerTraitLastStart, attackerPushLastStart, attackerSpeedLastStart, hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0),
+                hasCounterIntro ||
+                attackerDamageFlyoffCount > 0 ||
+                attackerAppliedTraitEffects.length > 0 ||
+                attackerAppliedPushEffects.length > 0 ||
+                attackerAppliedSpeedEffects.length > 0
             ) + (idx * STATE_EFFECT_STAGGER_SECONDS)
         });
     });
@@ -547,7 +1003,7 @@ function FloatingCombatEffectsComponent({ effect, targetPos, attackerPos }) {
                             className="font-fantasy font-black italic tracking-tighter"
                             style={{
                                 color: flyoff.color,
-                                fontSize: flyoff.type === 'damage' ? '48px' : (flyoff.type === 'state' ? '34px' : '32px'),
+                                fontSize: ['damage', 'trait'].includes(flyoff.type) ? '48px' : (['state', 'speed', 'push'].includes(flyoff.type) ? '34px' : '32px'),
                                 textShadow: `
                                     0 0 10px ${flyoff.color}80,
                                     0 0 20px #000,

@@ -10,7 +10,7 @@ import CombatHUD from './CombatHUD';
 import CombatReactionModal from './CombatReactionModal';
 import FloatingCombatEffects, { getCombatEffectLifetimeMs } from './FloatingCombatEffects';
 import { DEFAULT_STATUS_EFFECTS, ICON_MAP, PRONE_STATUS_IDS } from '../utils/statusEffects';
-import { rollAttack, getSpeedConsumption, hasCombatTrait, hasManualCombatTrait, hasNativeCombatTrait } from '../utils/combatSystem';
+import { rollAttack, getSpeedConsumption, hasCombatTrait, hasManualCombatTrait, hasNativeCombatTrait, normalizeCombatTraitId } from '../utils/combatSystem';
 import {
     syncArmorState,
     getArmorProtection,
@@ -288,6 +288,9 @@ const formatCombatTraitLabel = (trait = '') => {
     if (normalized === 'conmocionante') return 'Conmocionante';
     if (normalized === 'fluida') return 'Fluida';
     if (normalized === 'sangrado') return 'Sangrado';
+    if (normalized === 'ralentizado' || normalized === 'ralentizar') return 'Ralentizado';
+    if (normalized === 'penetrante' || normalized === 'perforante') return 'Penetrante';
+    if (normalized === 'empuje' || normalized === 'empujar') return 'Empuje';
     if (normalized === 'sin guardia' || normalized === 'singuardia' || normalized === 'sin_guardia') return 'Sin guardia';
     return trait;
 };
@@ -650,6 +653,15 @@ const extractCombatRollDice = (rollResult, idPrefix = 'roll') => {
     });
 };
 
+const isCombatDieEvaded = (die, evadedIds = []) => {
+    const ids = Array.isArray(evadedIds) ? evadedIds : [];
+    const rawDieId = typeof die?.id === 'string' ? die.id : '';
+    const unprefixedDieId = rawDieId.startsWith('att-') || rawDieId.startsWith('atk-') || rawDieId.startsWith('roll-')
+        ? rawDieId.replace(/^[^-]+-/, '')
+        : rawDieId;
+    return ids.includes(rawDieId) || ids.includes(unprefixedDieId);
+};
+
 const buildParryWeaponSummaryLabel = (steps = []) => {
     const counts = new globalThis.Map();
     steps.forEach((step) => {
@@ -670,8 +682,23 @@ const GLOBAL_PARRY_TRAIT_IDS = new Set([
     'derribo',
     'hendir',
     'conmocionante',
-    'sangrado'
+    'sangrado',
+    'ralentizado',
+    'penetrante',
+    'empuje'
 ]);
+
+const NON_STATUS_COMBAT_EFFECT_IDS = new Set(['ralentizado', 'empuje']);
+const RALENTIZADO_EFFECT_LABEL = 'Ralentizado';
+const RALENTIZADO_EFFECT_HEX = '#fcd34d';
+const EMPUJE_EFFECT_LABEL = 'Empuje';
+const EMPUJE_EFFECT_HEX = '#38bdf8';
+
+const normalizeTokenStatusIds = (statuses = []) => (
+    Array.isArray(statuses)
+        ? statuses.filter((statusId) => !NON_STATUS_COMBAT_EFFECT_IDS.has(normalizeCombatTraitId(statusId)))
+        : []
+);
 
 const buildAggregateCombatWeapon = (steps = []) => {
     const firstWeapon = steps.find((step) => step?.weapon)?.weapon;
@@ -680,7 +707,7 @@ const buildAggregateCombatWeapon = (steps = []) => {
     const mergedTraits = Array.from(new Set(
         steps
             .flatMap((step) => getItemTraits(step?.weapon))
-            .filter((traitId) => GLOBAL_PARRY_TRAIT_IDS.has(traitId))
+            .filter((traitId) => GLOBAL_PARRY_TRAIT_IDS.has(normalizeCombatTraitId(traitId)))
     ));
     const summaryName = buildParryWeaponSummaryLabel(steps) || firstWeapon?.nombre || firstWeapon?.name || 'Parada';
 
@@ -971,6 +998,119 @@ const getCombatCellOccupancyIssue = ({ movingToken, nextX, nextY, items = [], co
 };
 
 const canOccupyCombatCell = (params) => !getCombatCellOccupancyIssue(params);
+
+const getCombatGridCenter = (token, config = {}) => {
+    const bounds = getTokenGridBounds(token, config);
+    return {
+        x: bounds.x + ((bounds.w - 1) / 2),
+        y: bounds.y + ((bounds.h - 1) / 2),
+    };
+};
+
+const getWorldCenter = (token) => ({
+    x: (Number(token?.x) || 0) + ((Number(token?.width) || 0) / 2),
+    y: (Number(token?.y) || 0) + ((Number(token?.height) || 0) / 2),
+});
+
+const getPlacementCenter = (token, placement = {}) => ({
+    x: (Number(placement?.x) || 0) + ((Number(token?.width) || 0) / 2),
+    y: (Number(placement?.y) || 0) + ((Number(token?.height) || 0) / 2),
+});
+
+const getEmpujeDirection = (sourceToken, pushedToken, config = {}, items = []) => {
+    if (!sourceToken || !pushedToken) return null;
+
+    const sourceCenter = getCombatGridCenter(sourceToken, config);
+    const pushedCenter = getCombatGridCenter(pushedToken, config);
+    let dx = Math.sign(pushedCenter.x - sourceCenter.x);
+    let dy = Math.sign(pushedCenter.y - sourceCenter.y);
+
+    if (dx === 0 && dy === 0) {
+        const sourceWorld = getWorldCenter(sourceToken);
+        const pushedWorld = getWorldCenter(pushedToken);
+        dx = Math.sign(pushedWorld.x - sourceWorld.x);
+        dy = Math.sign(pushedWorld.y - sourceWorld.y);
+    }
+
+    if (dx === 0 && dy === 0 && Array.isArray(items) && items.length > 0) {
+        const sourcePlacement = getPlacementCenter(sourceToken, getCombatRenderPlacement(sourceToken, items, config));
+        const pushedPlacement = getPlacementCenter(pushedToken, getCombatRenderPlacement(pushedToken, items, config));
+        dx = Math.sign(pushedPlacement.x - sourcePlacement.x);
+        dy = Math.sign(pushedPlacement.y - sourcePlacement.y);
+    }
+
+    if (dx === 0 && dy === 0) return null;
+    return { dx, dy };
+};
+
+const resolveEmpujeMovement = ({ sourceToken, pushedToken, items = [], config = {} }) => {
+    if (!sourceToken || !pushedToken || !isCombatTokenItem(pushedToken)) {
+        return { applied: false, reason: 'Objetivo inválido' };
+    }
+
+    const direction = getEmpujeDirection(sourceToken, pushedToken, config, items);
+    if (!direction) {
+        return { applied: false, reason: 'Sin dirección clara' };
+    }
+
+    const cellW = Number(config.cellWidth) || DEFAULT_GRID_CONFIG.cellWidth;
+    const cellH = Number(config.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight;
+    const nextX = roundGridValue((Number(pushedToken.x) || 0) + (direction.dx * cellW));
+    const nextY = roundGridValue((Number(pushedToken.y) || 0) + (direction.dy * cellH));
+    const movedToken = { ...pushedToken, x: nextX, y: nextY };
+    const movedCells = getTokenOccupiedGridCells(movedToken, config);
+
+    if (movedCells.some((cell) => !isGridCellInsideBounds(cell, config))) {
+        return { applied: false, reason: 'Borde del mapa', direction };
+    }
+
+    const occupancyIssue = getCombatCellOccupancyIssue({
+        movingToken: pushedToken,
+        nextX,
+        nextY,
+        items,
+        config,
+    });
+
+    if (occupancyIssue) {
+        return { applied: false, reason: occupancyIssue.reason || 'Casilla bloqueada', direction };
+    }
+
+    const walls = (items || []).filter((item) => item.type === 'wall' && !(item.wallType === 'door' && item.isOpen));
+    const startCenter = getWorldCenter(pushedToken);
+    const endCenter = getWorldCenter(movedToken);
+    const pathBlocked = walls.some((wall) =>
+        linesIntersect(startCenter.x, startCenter.y, endCenter.x, endCenter.y, wall.x1, wall.y1, wall.x2, wall.y2)
+    );
+    const overlapBlocked = walls.some((wall) =>
+        lineRectIntersect(wall.x1, wall.y1, wall.x2, wall.y2, nextX + 2, nextY + 2, (pushedToken.width || cellW) - 4, (pushedToken.height || cellH) - 4)
+    );
+
+    if (pathBlocked || overlapBlocked) {
+        return { applied: false, reason: 'Muro bloquea', direction };
+    }
+
+    const fromCell = getTokenPrimaryGridCell(pushedToken, config);
+    const toCell = getTokenPrimaryGridCell(movedToken, config);
+    const destinationOccupants = getCellOccupants(items, toCell, config, [pushedToken.id]);
+    const sharedMode = destinationOccupants.length === 1
+        ? (areTokensAllied(pushedToken, destinationOccupants[0]) ? 'formacion' : 'duelo')
+        : null;
+
+    return {
+        applied: true,
+        x: nextX,
+        y: nextY,
+        fromCell,
+        toCell,
+        direction,
+        sharedMode,
+        sharedWith: destinationOccupants.map((occupant) => ({
+            id: occupant.id,
+            name: occupant.name || 'Token',
+        })),
+    };
+};
 
 const areCombatOccupancyFeedbacksEqual = (a, b) => (
     (a?.tokenId || null) === (b?.tokenId || null) &&
@@ -5387,46 +5527,47 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                             {/* Estados (Sidebar Izquierda - Distribuidos verticalmente) */}
                             {/* Estados (Sidebar Izquierda - Distribuidos verticalmente) */}
-                            {item.status && item.status.length > 0 && (
-                                (() => {
-                                    const isLargeToken = item.width > gridConfig.cellWidth || item.height > gridConfig.cellHeight;
-                                    const maxStatuses = isLargeToken ? 6 : 3;
-                                    const hasSharedIcon = item.controlledBy?.length > 0;
+                            {(() => {
+                                const visibleStatusIds = normalizeTokenStatusIds(item.status || [])
+                                    .filter((statusId) => DEFAULT_STATUS_EFFECTS[statusId]);
+                                if (visibleStatusIds.length === 0) return null;
 
-                                    // Apilados siempre de arriba a abajo (justify-start)
-                                    // Tokens grandes (2x2+): Muestran hasta 6 gap-1
-                                    // Tokens pequeños (1x1): Muestran hasta 3 gap-1 (para que quepan bien sin justify-between forzado)
+                                const isLargeToken = item.width > gridConfig.cellWidth || item.height > gridConfig.cellHeight;
+                                const maxStatuses = isLargeToken ? 6 : 3;
+                                const hasSharedIcon = item.controlledBy?.length > 0;
 
-                                    const statusCount = Math.min(item.status.length, maxStatuses);
-                                    const isFull = statusCount === maxStatuses;
+                                // Apilados siempre de arriba a abajo (justify-start)
+                                // Tokens grandes (2x2+): Muestran hasta 6 gap-1
+                                // Tokens pequeños (1x1): Muestran hasta 3 gap-1 (para que quepan bien sin justify-between forzado)
+                                const statusCount = Math.min(visibleStatusIds.length, maxStatuses);
+                                const isFull = statusCount === maxStatuses;
 
-                                    let layoutClasses = '';
-                                    if (isLargeToken) {
-                                        layoutClasses = isFull
-                                            ? (hasSharedIcon ? '-top-[1px] h-[calc(100%+6px)] pt-2.5 justify-between' : '-top-2 h-[calc(100%+8px)] justify-between')
-                                            : (hasSharedIcon ? '-top-[1px] pt-2.5 justify-start gap-1' : '-top-2 justify-start gap-1');
-                                    } else {
-                                        layoutClasses = isFull
-                                            ? (hasSharedIcon ? '-top-[1px] h-[calc(100%+6px)] pt-2.5 justify-between' : '-top-3.5 h-[calc(100%+12px)] justify-between')
-                                            : (hasSharedIcon ? '-top-[1px] pt-2.5 justify-start gap-[5px]' : '-top-3.5 justify-start gap-[5px]');
-                                    }
+                                let layoutClasses = '';
+                                if (isLargeToken) {
+                                    layoutClasses = isFull
+                                        ? (hasSharedIcon ? '-top-[1px] h-[calc(100%+6px)] pt-2.5 justify-between' : '-top-2 h-[calc(100%+8px)] justify-between')
+                                        : (hasSharedIcon ? '-top-[1px] pt-2.5 justify-start gap-1' : '-top-2 justify-start gap-1');
+                                } else {
+                                    layoutClasses = isFull
+                                        ? (hasSharedIcon ? '-top-[1px] h-[calc(100%+6px)] pt-2.5 justify-between' : '-top-3.5 h-[calc(100%+12px)] justify-between')
+                                        : (hasSharedIcon ? '-top-[1px] pt-2.5 justify-start gap-[5px]' : '-top-3.5 justify-start gap-[5px]');
+                                }
 
-                                    return (
-                                        <div className={`absolute -left-[1px] -translate-x-1/2 flex flex-col items-center z-30 pointer-events-none ${layoutClasses}`}>
-                                            {item.status.slice(0, maxStatuses).map(statusId => {
-                                                const effect = DEFAULT_STATUS_EFFECTS[statusId];
-                                                if (!effect) return null;
-                                                const Icon = ICON_MAP[effect.iconName] || ICON_MAP.AlertCircle;
-                                                return (
-                                                    <div key={statusId} className="relative w-3 h-3 shrink-0 aspect-square bg-[#0b1120] rounded-full border border-white/20 shadow-sm" style={{ borderColor: effect.hex || '#c8aa6e', color: effect.hex || '#c8aa6e' }}>
-                                                        <Icon className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[7px] h-[7px]" strokeWidth={2.5} />
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    );
-                                })()
-                            )}
+                                return (
+                                    <div className={`absolute -left-[1px] -translate-x-1/2 flex flex-col items-center z-30 pointer-events-none ${layoutClasses}`}>
+                                        {visibleStatusIds.slice(0, maxStatuses).map(statusId => {
+                                            const effect = DEFAULT_STATUS_EFFECTS[statusId];
+                                            if (!effect) return null;
+                                            const Icon = ICON_MAP[effect.iconName] || ICON_MAP.AlertCircle;
+                                            return (
+                                                <div key={statusId} className="relative w-3 h-3 shrink-0 aspect-square bg-[#0b1120] rounded-full border border-white/20 shadow-sm" style={{ borderColor: effect.hex || '#c8aa6e', color: effect.hex || '#c8aa6e' }}>
+                                                    <Icon className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[7px] h-[7px]" strokeWidth={2.5} />
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
                         </div>
 
                         {/* Aura (Underneath the token) */}
@@ -6211,7 +6352,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         counterDamage: 0,
         blocksLost: { postura: 0, armadura: 0, vida: lostVida },
         baseBlocksLost: { postura: 0, armadura: 0, vida: lostVida },
-        traitBonuses: { postura: null, armadura: null },
+        traitBonuses: { postura: null, armadura: null, vida: null },
+        traitEffectsApplied: { target: [], attacker: [] },
         statusEffectsApplied: { target: [], attacker: [] },
         damage: 0,
         statusTickSource: 'sangrado',
@@ -6279,6 +6421,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const hasHendir = normalizedTraits.some((t) => t.includes('hendir'));
         const hasConmocionante = normalizedTraits.some((t) => t.includes('conmocionante'));
         const hasSangrado = normalizedTraits.some((t) => t.includes('sangrado'));
+        const hasRalentizado = normalizedTraits.some((t) => t.includes('ralentizado') || t.includes('ralentizar'));
+        const hasPenetrante = normalizedTraits.some((t) => t.includes('penetrante') || t.includes('perforante'));
+        const hasEmpuje = normalizedTraits.some((t) => t.includes('empuje') || t.includes('empujar'));
 
         const reduceDieStep = (dieStr) => {
             if (!dieStr || typeof dieStr !== 'string') return dieStr;
@@ -6312,14 +6457,23 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         let lostVida = 0;
         let extraPosturaFromTrait = 0;
         let extraArmaduraFromTrait = 0;
+        let extraArmaduraFromPenetrante = 0;
+        let extraVidaFromPenetrante = 0;
         let baseLostPostura = 0;
         let baseLostArmadura = 0;
+        let baseLostVida = 0;
         const appliedStatusEffects = [];
+        const appliedTraitEffects = [];
 
         let currentPostura = token.stats?.postura?.current || 0;
         let currentArmadura = token.stats?.armadura?.current || 0;
         let currentVida = token.stats?.vida?.current || 0;
         const posturaInicial = currentPostura;
+        const currentLayerBeforeDamage =
+            currentPostura > 0 ? 'postura' :
+                currentArmadura > 0 ? 'armadura' :
+                    currentVida > 0 ? 'vida' :
+                        null;
         let remainingDamage = Math.max(0, Number(damage) || 0);
 
         const consumeDamageBlocks = (availableBlocks, threshold) => {
@@ -6350,16 +6504,72 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         baseLostArmadura = lostArmadura;
         currentArmadura -= lostArmadura;
 
-        if (hasHendir && lostArmadura > 0 && currentArmadura > 0) {
+        if (hasHendir && (lostPostura > 0 || lostArmadura > 0) && currentArmadura > 0) {
             lostArmadura += 1;
             currentArmadura -= 1;
             extraArmaduraFromTrait = 1;
+            appliedTraitEffects.push({
+                id: 'hendir',
+                label: 'Hendir',
+                layer: 'armadura',
+                blocks: 1,
+                hex: '#cbd5e1'
+            });
         }
 
         lostVida = consumeDamageBlocks(currentVida, vidaUmbral);
+        baseLostVida = lostVida;
         currentVida -= lostVida;
 
-        const newStatus = [...(token.status || [])];
+        const addPenetranteBlock = (preferredLayer) => {
+            if (preferredLayer === 'armadura' && currentArmadura > 0) {
+                currentArmadura -= 1;
+                lostArmadura += 1;
+                extraArmaduraFromPenetrante += 1;
+                appliedTraitEffects.push({
+                    id: 'penetrante',
+                    label: 'Penetrante',
+                    layer: 'armadura',
+                    blocks: 1,
+                    hex: '#f59e0b'
+                });
+                return true;
+            }
+
+            if (currentVida > 0) {
+                currentVida -= 1;
+                lostVida += 1;
+                extraVidaFromPenetrante += 1;
+                appliedTraitEffects.push({
+                    id: 'penetrante',
+                    label: 'Penetrante',
+                    layer: 'vida',
+                    blocks: 1,
+                    hex: '#fb7185'
+                });
+                return true;
+            }
+
+            return false;
+        };
+
+        if (hasPenetrante) {
+            const penetratedCurrentLayer =
+                (currentLayerBeforeDamage === 'postura' && lostPostura > 0) ||
+                (currentLayerBeforeDamage === 'armadura' && lostArmadura > 0) ||
+                (currentLayerBeforeDamage === 'vida' && lostVida > 0);
+
+            if (penetratedCurrentLayer) {
+                if (currentLayerBeforeDamage === 'postura') {
+                    addPenetranteBlock('armadura');
+                } else {
+                    addPenetranteBlock('vida');
+                }
+            }
+        }
+
+        const newStatus = normalizeTokenStatusIds(token.status || []);
+        const totalBlocksLost = lostPostura + lostArmadura + lostVida;
         if (hasSangrado && lostVida > 0 && !newStatus.includes('sangrado')) {
             newStatus.push('sangrado');
             appliedStatusEffects.push({
@@ -6368,8 +6578,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 hex: DEFAULT_STATUS_EFFECTS.sangrado?.hex || '#b91c1c'
             });
         }
+        const speedDeltaFromCombatEffects = totalBlocksLost > 0 && hasRalentizado
+            ? 1
+            : 0;
+        const pushTriggered = totalBlocksLost > 0 && hasEmpuje;
 
-        const wasAlreadyProne = PRONE_STATUS_IDS.some((statusId) => Array.isArray(token.status) && token.status.includes(statusId));
+        const wasAlreadyProne = PRONE_STATUS_IDS.some((statusId) => newStatus.includes(statusId));
         const fellProneByPostureBreak = posturaInicial > 0 && currentPostura === 0;
         const fellProneByBodyDamageWithoutPosture = posturaInicial === 0 && (lostArmadura > 0 || lostVida > 0);
 
@@ -6393,12 +6607,24 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             },
             status: newStatus,
             lost: { postura: lostPostura, armadura: lostArmadura, vida: lostVida },
-            baseLost: { postura: baseLostPostura, armadura: baseLostArmadura, vida: lostVida },
+            baseLost: { postura: baseLostPostura, armadura: baseLostArmadura, vida: baseLostVida },
             traitBonuses: {
                 postura: extraPosturaFromTrait ? { name: 'Derribo', blocks: extraPosturaFromTrait } : null,
-                armadura: extraArmaduraFromTrait ? { name: 'Hendir', blocks: extraArmaduraFromTrait } : null,
+                armadura: (extraArmaduraFromTrait + extraArmaduraFromPenetrante) > 0
+                    ? {
+                        name: [
+                            extraArmaduraFromTrait ? 'Hendir' : null,
+                            extraArmaduraFromPenetrante ? 'Penetrante' : null
+                        ].filter(Boolean).join(' + '),
+                        blocks: extraArmaduraFromTrait + extraArmaduraFromPenetrante
+                    }
+                    : null,
+                vida: extraVidaFromPenetrante ? { name: 'Penetrante', blocks: extraVidaFromPenetrante } : null,
             },
-            appliedStatusEffects
+            appliedStatusEffects,
+            appliedTraitEffects,
+            speedDeltaFromCombatEffects,
+            pushTriggered
         };
     };
 
@@ -6441,7 +6667,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const attackerDice = extractCombatRollDice(event.attackerRollResult, 'atk');
 
             let logText = "";
-            let finalItems = [...scenario.items];
+            let finalItems = scenario.items.map((item) => (
+                Array.isArray(item.status)
+                    ? { ...item, status: normalizeTokenStatusIds(item.status) }
+                    : item
+            ));
             const updateTokenInList = (id, updates) => {
                 finalItems = finalItems.map(item => item.id === id ? { ...item, ...updates } : item);
             };
@@ -6451,7 +6681,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         let counterDamage = 0;
         let blocksLost = { postura: 0, armadura: 0, vida: 0 };
         let baseBlocksLost = { postura: 0, armadura: 0, vida: 0 };
-        let traitBonuses = { postura: null, armadura: null };
+        let traitBonuses = { postura: null, armadura: null, vida: null };
         let evadedDiceIds = [];
         let defenderDice = [];
         let defenderSteps = [];
@@ -6473,8 +6703,77 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         let defenderTraits = [];
         let defenderWeaponSummary = null;
         let statusEffectsApplied = { target: [], attacker: [] };
+        let traitEffectsApplied = { target: [], attacker: [] };
+        let speedEffectsApplied = { target: [], attacker: [] };
+        let pushEffectsApplied = { target: [], attacker: [] };
         let nextAttackerFluidaState = getTokenFluidaState(attackerTokenBase);
         let nextTargetFluidaState = getTokenFluidaState(targetTokenBase);
+
+        const getRalentizadoSpeedDelta = (result) => Math.max(0, Number(result?.speedDeltaFromCombatEffects) || 0);
+        const buildRalentizadoSpeedEffect = (result, tokenLike) => {
+            const delta = getRalentizadoSpeedDelta(result);
+            if (delta <= 0) return null;
+            return {
+                id: 'ralentizado',
+                label: RALENTIZADO_EFFECT_LABEL,
+                hex: RALENTIZADO_EFFECT_HEX,
+                delta,
+                tokenId: tokenLike?.id || null,
+                tokenName: tokenLike?.name || 'Token'
+            };
+        };
+        const appendRalentizadoLog = (text, result, tokenLike) => {
+            const delta = getRalentizadoSpeedDelta(result);
+            if (delta <= 0) return text;
+            return `${text} ${RALENTIZADO_EFFECT_LABEL} aumenta la velocidad de ${tokenLike?.name || 'el objetivo'} en ${delta}.`;
+        };
+        const applyEmpujeEffect = (result, sourceTokenLike, pushedTokenLike) => {
+            if (!result?.pushTriggered || !sourceTokenLike?.id || !pushedTokenLike?.id) return null;
+
+            const currentSource = finalItems.find((item) => item.id === sourceTokenLike.id) || sourceTokenLike;
+            const currentPushed = finalItems.find((item) => item.id === pushedTokenLike.id) || pushedTokenLike;
+            const outcome = resolveEmpujeMovement({
+                sourceToken: currentSource,
+                pushedToken: currentPushed,
+                items: finalItems,
+                config: gridConfig,
+            });
+
+            if (outcome.applied) {
+                updateTokenInList(pushedTokenLike.id, {
+                    x: outcome.x,
+                    y: outcome.y,
+                });
+            }
+
+            return {
+                id: 'empuje',
+                label: EMPUJE_EFFECT_LABEL,
+                hex: EMPUJE_EFFECT_HEX,
+                applied: !!outcome.applied,
+                reason: outcome.reason || null,
+                tokenId: pushedTokenLike.id,
+                tokenName: pushedTokenLike.name || 'Token',
+                fromCell: outcome.fromCell || null,
+                toCell: outcome.toCell || null,
+                direction: outcome.direction || null,
+                sharedMode: outcome.sharedMode || null,
+                sharedWith: outcome.sharedWith || [],
+            };
+        };
+        const appendEmpujeLog = (text, pushEffect) => {
+            if (!pushEffect) return text;
+            if (pushEffect.applied) {
+                const sharedText = pushEffect.sharedMode === 'duelo'
+                    ? ' y entra en duelo'
+                    : pushEffect.sharedMode === 'formacion'
+                        ? ' y entra en formación'
+                        : '';
+                return `${text} ${EMPUJE_EFFECT_LABEL} desplaza a ${pushEffect.tokenName || 'el objetivo'} 1 casilla${sharedText}.`;
+            }
+
+            return `${text} ${EMPUJE_EFFECT_LABEL} no desplaza a ${pushEffect.tokenName || 'el objetivo'}: ${pushEffect.reason || 'bloqueado'}.`;
+        };
 
         const setAttackerFluidaState = (state) => {
             nextAttackerFluidaState = laterActionBreaksAttackerFluida ? null : normalizeFluidaState(state);
@@ -6484,38 +6783,63 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             nextTargetFluidaState = normalizeFluidaState(state);
         };
 
-        if (event.reactionType === 'evadir') {
-            evadedDiceIds = event.reactionData.evadedDiceIds || [];
+        const getAttackTotalAfterEvasion = (evadedIds = []) => {
+            const safeEvadedIds = Array.isArray(evadedIds) ? evadedIds : [];
+            if (safeEvadedIds.length === 0) {
+                return Number(event.attackerRollResult?.total) || 0;
+            }
+
             let newTotal = 0;
-            const details = JSON.parse(JSON.stringify(event.attackerRollResult.details));
+            const details = JSON.parse(JSON.stringify(event.attackerRollResult?.details || []));
             details.forEach((detail, dIdx) => {
                 if (detail.type === 'dice') {
-                    const filteredRolls = detail.rolls.filter((_, rIdx) => !evadedDiceIds.includes(`${dIdx}-${rIdx}`));
-                    detail.rolls = filteredRolls;
-                    detail.subtotal = filteredRolls.reduce((sum, r) => sum + (typeof r === 'object' ? r.value : r), 0);
-                    newTotal += detail.subtotal;
-                } else if (detail.type === 'modifier') {
-                    newTotal += detail.value;
+                    const filteredRolls = (detail.rolls || []).filter((_, rIdx) => !safeEvadedIds.includes(`${dIdx}-${rIdx}`));
+                    newTotal += filteredRolls.reduce((sum, r) => sum + (typeof r === 'object' ? Number(r.value) || 0 : Number(r) || 0), 0);
+                } else if (detail.type === 'modifier' || detail.type === 'calc') {
+                    if (!safeEvadedIds.includes(`${dIdx}-0`)) {
+                        newTotal += Number(detail.value ?? detail.total ?? detail.subtotal) || 0;
+                    }
                 }
             });
+            return newTotal;
+        };
+
+        let effectiveAttackTotal = Number(event.attackerRollResult?.total) || 0;
+
+        if (event.reactionType === 'evadir') {
+            evadedDiceIds = event.reactionData.evadedDiceIds || [];
+            const newTotal = getAttackTotalAfterEvasion(evadedDiceIds);
 
             finalDamage = newTotal;
+            effectiveAttackTotal = newTotal;
             const evadedAll = newTotal <= 0; // Todos los dados evadidos
             const res = applyCombatCalculations(targetToken, newTotal, event.weapon);
             blocksLost = res.lost;
             baseBlocksLost = res.baseLost || baseBlocksLost;
             traitBonuses = res.traitBonuses || traitBonuses;
             statusEffectsApplied.target = res.appliedStatusEffects || [];
-            updateTokenInList(targetTokenBase.id, { stats: res.stats, status: res.status, velocidad: getTargetVelocityAfterReaction(event.reactionData.yellowCost || 0) });
+            traitEffectsApplied.target = res.appliedTraitEffects || [];
+            speedEffectsApplied.target = [buildRalentizadoSpeedEffect(res, targetToken)].filter(Boolean);
+            updateTokenInList(targetTokenBase.id, {
+                stats: res.stats,
+                status: res.status,
+                velocidad: getTargetVelocityAfterReaction(event.reactionData.yellowCost || 0) + getRalentizadoSpeedDelta(res)
+            });
+            const pushEffect = applyEmpujeEffect(res, attackerTokenBase, targetTokenBase);
+            pushEffectsApplied.target = [pushEffect].filter(Boolean);
             if (evadedAll) {
                 logText = `¡${targetToken.name} evadió completamente ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : `el ataque de ${attackerToken.name}`}!`;
             } else {
                 logText = `${targetToken.name} evadió parcialmente ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'} de ${attackerToken.name}` : `a ${attackerToken.name}`} y recibió ${newTotal} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
             }
+            logText = appendEmpujeLog(logText, pushEffect);
+            logText = appendRalentizadoLog(logText, res, targetToken);
             setAttackerFluidaState(attackHasFluida ? createFluidaState(targetToken.id, event.fluidaMeta?.sourceWeapon || event.weapon, 'attack') : null);
             setTargetFluidaState(null);
         } else if (event.reactionType === 'parar') {
             const defenderAttrs = targetToken.attributes || targetToken.atributos || {};
+            evadedDiceIds = event.reactionData?.evadedDiceIds || [];
+            effectiveAttackTotal = getAttackTotalAfterEvasion(evadedDiceIds);
             const parryStepsData = buildLegacyParrySteps(event.reactionData);
             const attackerRange = getCombatRangeData(event.weapon);
             const storedDistance = Number(event.distanceBetweenTokens);
@@ -6567,15 +6891,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const reachableCounterSteps = defenderSteps.filter((step) => step.reachesAttacker);
             const counterWeapon = buildAggregateCombatWeapon(reachableCounterSteps);
             const lastNativeFluidaStep = [...defenderSteps].reverse().find((step) => hasNativeCombatTrait(step.weapon, 'fluida'));
-            const diff = event.attackerRollResult.total - defenderTotal;
+            const diff = effectiveAttackTotal - defenderTotal;
             const yellowCost = event.reactionData.yellowCost
                 || defenderSteps.reduce((sum, step) => sum + Math.max(0, Number(step.yellowCost) || 0), 0);
+            const evasionLogPrefix = evadedDiceIds.length > 0
+                ? `evadió ${evadedDiceIds.length} dado${evadedDiceIds.length === 1 ? '' : 's'} y `
+                : '';
 
             if (diff === 0) {
                 finalDamage = 0;
                 updateTokenInList(targetTokenBase.id, { velocidad: getTargetVelocityAfterReaction(yellowCost) });
                 const defWeaponName = defenderWeaponSummary || 'su arma';
-                logText = `${targetToken.name} realizó una parada perfecta ${isSweepAttack ? `contra ${attackModeLabel?.toLowerCase() || 'el barrido'}` : ''} con ${defWeaponName}.`;
+                logText = `${targetToken.name} ${evasionLogPrefix}realizó una parada perfecta ${isSweepAttack ? `contra ${attackModeLabel?.toLowerCase() || 'el barrido'}` : ''} con ${defWeaponName}.`;
                 setAttackerFluidaState(null);
                 setTargetFluidaState(lastNativeFluidaStep ? createFluidaState(attackerToken.id, lastNativeFluidaStep.weapon, 'parry') : null);
             } else if (diff > 0) {
@@ -6585,9 +6912,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 baseBlocksLost = res.baseLost || baseBlocksLost;
                 traitBonuses = res.traitBonuses || traitBonuses;
                 statusEffectsApplied.target = res.appliedStatusEffects || [];
-                updateTokenInList(targetTokenBase.id, { stats: res.stats, status: res.status, velocidad: getTargetVelocityAfterReaction(yellowCost) });
+                traitEffectsApplied.target = res.appliedTraitEffects || [];
+                speedEffectsApplied.target = [buildRalentizadoSpeedEffect(res, targetToken)].filter(Boolean);
+                updateTokenInList(targetTokenBase.id, {
+                    stats: res.stats,
+                    status: res.status,
+                    velocidad: getTargetVelocityAfterReaction(yellowCost) + getRalentizadoSpeedDelta(res)
+                });
+                const pushEffect = applyEmpujeEffect(res, attackerTokenBase, targetTokenBase);
+                pushEffectsApplied.target = [pushEffect].filter(Boolean);
                 const defWeaponName = defenderWeaponSummary || 'su arma';
-                logText = `${targetToken.name} paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName} pero recibió ${diff} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
+                logText = `${targetToken.name} ${evasionLogPrefix}paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName} pero recibió ${diff} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
+                logText = appendEmpujeLog(logText, pushEffect);
+                logText = appendRalentizadoLog(logText, res, targetToken);
                 setAttackerFluidaState(attackHasFluida ? createFluidaState(targetToken.id, event.fluidaMeta?.sourceWeapon || event.weapon, 'attack') : null);
                 setTargetFluidaState(lastNativeFluidaStep ? createFluidaState(attackerToken.id, lastNativeFluidaStep.weapon, 'parry') : null);
             } else {
@@ -6596,7 +6933,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     counterPreventedByRange = true;
                     finalDamage = 0;
                     updateTokenInList(targetTokenBase.id, { velocidad: getTargetVelocityAfterReaction(yellowCost) });
-                    logText = `${targetToken.name} paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName}, pero no pudo contraatacar porque su alcance (${defenderRangeLabel || 'desconocido'}) no alcanza la distancia real entre ambos (${distanceBetweenTokens}).`;
+                    logText = `${targetToken.name} ${evasionLogPrefix}paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName}, pero no pudo contraatacar porque su alcance (${defenderRangeLabel || 'desconocido'}) no alcanza la distancia real entre ambos (${distanceBetweenTokens}).`;
                 } else {
                     counterDamage = Math.abs(diff);
                     const res = applyCombatCalculations(attackerToken, counterDamage, counterWeapon);
@@ -6604,9 +6941,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     baseBlocksLost = res.baseLost || baseBlocksLost;
                     traitBonuses = res.traitBonuses || traitBonuses;
                     statusEffectsApplied.attacker = res.appliedStatusEffects || [];
-                    updateTokenInList(attackerTokenBase.id, { stats: res.stats, status: res.status });
+                    traitEffectsApplied.attacker = res.appliedTraitEffects || [];
+                    speedEffectsApplied.attacker = [buildRalentizadoSpeedEffect(res, attackerToken)].filter(Boolean);
+                    updateTokenInList(attackerTokenBase.id, {
+                        stats: res.stats,
+                        status: res.status,
+                        velocidad: (attackerTokenBase.velocidad || 0) + getRalentizadoSpeedDelta(res)
+                    });
+                    const pushEffect = applyEmpujeEffect(res, targetTokenBase, attackerTokenBase);
+                    pushEffectsApplied.attacker = [pushEffect].filter(Boolean);
                     updateTokenInList(targetTokenBase.id, { velocidad: getTargetVelocityAfterReaction(yellowCost) });
-                    logText = `¡${targetToken.name} paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName} y contraatacó a ${attackerToken.name} por ${counterDamage} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques)!`;
+                    logText = `¡${targetToken.name} ${evasionLogPrefix}paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName} y contraatacó a ${attackerToken.name} por ${counterDamage} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques)!`;
+                    logText = appendEmpujeLog(logText, pushEffect);
+                    logText = appendRalentizadoLog(logText, res, attackerToken);
                 }
                 setAttackerFluidaState(null);
                 setTargetFluidaState(lastNativeFluidaStep ? createFluidaState(attackerToken.id, lastNativeFluidaStep.weapon, 'parry') : null);
@@ -6618,8 +6965,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             baseBlocksLost = res.baseLost || baseBlocksLost;
             traitBonuses = res.traitBonuses || traitBonuses;
             statusEffectsApplied.target = res.appliedStatusEffects || [];
-            updateTokenInList(targetTokenBase.id, { stats: res.stats, status: res.status });
+            traitEffectsApplied.target = res.appliedTraitEffects || [];
+            speedEffectsApplied.target = [buildRalentizadoSpeedEffect(res, targetToken)].filter(Boolean);
+            updateTokenInList(targetTokenBase.id, {
+                stats: res.stats,
+                status: res.status,
+                velocidad: (targetTokenBase.velocidad || 0) + getRalentizadoSpeedDelta(res)
+            });
+            const pushEffect = applyEmpujeEffect(res, attackerTokenBase, targetTokenBase);
+            pushEffectsApplied.target = [pushEffect].filter(Boolean);
             logText = `${targetToken.name} recibió ${isSweepAttack ? `${attackModeLabel?.toLowerCase() || 'el barrido'} de ${attackerToken.name}` : `el golpe directo de ${attackerToken.name}`} por ${event.attackerRollResult.total} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
+            logText = appendEmpujeLog(logText, pushEffect);
+            logText = appendRalentizadoLog(logText, res, targetToken);
             setAttackerFluidaState(attackHasFluida ? createFluidaState(targetToken.id, event.fluidaMeta?.sourceWeapon || event.weapon, 'attack') : null);
             setTargetFluidaState(null);
         }
@@ -6640,6 +6997,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             attackSourceLabel,
             attackSequence: Array.isArray(event.attackSequence) ? event.attackSequence : [],
             attackTotal: event.attackerRollResult.total,
+            effectiveAttackTotal,
             attackTraits,
             attackerDice,
             defenderDice,
@@ -6670,7 +7028,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             blocksLost,
             baseBlocksLost,
             traitBonuses,
+            traitEffectsApplied,
             statusEffectsApplied,
+            speedEffectsApplied,
+            pushEffectsApplied,
             damage: finalDamage,
             negatedTraits: event.negatedTraits || [],
             armorProtectionSource: event.armorProtectionSource || null,
@@ -6685,8 +7046,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 status: 'resuelto',
                 result: combatLogEntry,
                 tokenUpdates: {
-                    target: updatedTarget ? { id: targetToken.id, stats: updatedTarget.stats, status: updatedTarget.status, velocidad: updatedTarget.velocidad, fluidaState: updatedTarget.fluidaState ?? null } : null,
-                    attacker: updatedAttacker ? { id: attackerToken.id, stats: updatedAttacker.stats, status: updatedAttacker.status, velocidad: updatedAttacker.velocidad, fluidaState: updatedAttacker.fluidaState ?? null } : null
+                    target: updatedTarget ? { id: targetToken.id, stats: updatedTarget.stats, status: updatedTarget.status, velocidad: updatedTarget.velocidad, x: updatedTarget.x, y: updatedTarget.y, fluidaState: updatedTarget.fluidaState ?? null } : null,
+                    attacker: updatedAttacker ? { id: attackerToken.id, stats: updatedAttacker.stats, status: updatedAttacker.status, velocidad: updatedAttacker.velocidad, x: updatedAttacker.x, y: updatedAttacker.y, fluidaState: updatedAttacker.fluidaState ?? null } : null
                 }
             });
         } catch (error) {
@@ -6741,6 +7102,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 stats: targetUpdate.stats,
                                 status: targetUpdate.status,
                                 velocidad: Math.max(Number(item.velocidad) || 0, Number(targetUpdate.velocidad) || 0),
+                                x: Number.isFinite(Number(targetUpdate.x)) ? Number(targetUpdate.x) : item.x,
+                                y: Number.isFinite(Number(targetUpdate.y)) ? Number(targetUpdate.y) : item.y,
                                 fluidaState: targetUpdate.fluidaState ?? null
                             } : item);
                             changed = true;
@@ -6762,7 +7125,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         }
 
                         if (ev.tokenUpdates.attacker) {
-                            currentItems = currentItems.map(item => item.id === ev.tokenUpdates.attacker.id ? { ...item, stats: ev.tokenUpdates.attacker.stats, status: ev.tokenUpdates.attacker.status, velocidad: ev.tokenUpdates.attacker.velocidad, fluidaState: ev.tokenUpdates.attacker.fluidaState ?? null } : item);
+                            currentItems = currentItems.map(item => item.id === ev.tokenUpdates.attacker.id ? {
+                                ...item,
+                                stats: ev.tokenUpdates.attacker.stats,
+                                status: ev.tokenUpdates.attacker.status,
+                                velocidad: ev.tokenUpdates.attacker.velocidad,
+                                x: Number.isFinite(Number(ev.tokenUpdates.attacker.x)) ? Number(ev.tokenUpdates.attacker.x) : item.x,
+                                y: Number.isFinite(Number(ev.tokenUpdates.attacker.y)) ? Number(ev.tokenUpdates.attacker.y) : item.y,
+                                fluidaState: ev.tokenUpdates.attacker.fluidaState ?? null
+                            } : item);
                             changed = true;
                         }
 
@@ -6822,6 +7193,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             if (reaction.type === 'parar') {
                 const parrySteps = buildLegacyParrySteps(reaction.data);
                 const totalParryCost = parrySteps.reduce((sum, step) => sum + Math.max(0, Number(step?.yellowCost) || 0), 0);
+                const evadedDiceIds = Array.isArray(reaction.data?.evadedDiceIds) ? reaction.data.evadedDiceIds : [];
+                const totalReactionCost = totalParryCost + evadedDiceIds.length;
 
                 if (reactionBudget <= 0) {
                     triggerToast("Sin reacción", "Ya igualas o superas la velocidad final del atacante.", 'warning');
@@ -6838,9 +7211,20 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     return;
                 }
 
-                if (totalParryCost > reactionBudget) {
+                if (totalReactionCost > reactionBudget) {
                     triggerToast("Reacción insuficiente", `Solo puedes gastar hasta ${reactionBudget} de velocidad en esta reacción.`, 'warning');
                     return;
+                }
+
+                if (evadedDiceIds.length > 0) {
+                    const scenarioItems = activeScenarioRef.current?.items || activeScenario?.items || [];
+                    const liveTargetToken = scenarioItems.find((item) => item.id === currentEvent.event.targetId) || currentEvent.targetToken;
+                    const liveAttackerToken = scenarioItems.find((item) => item.id === currentEvent.event.attackerId);
+                    const targetCombatContext = getTokenDuelContextAgainstAttacker(liveTargetToken, liveAttackerToken, scenarioItems, gridConfig);
+                    if (targetCombatContext.isDuelWithAttacker && !isSmallCombatToken(liveTargetToken, gridConfig)) {
+                        triggerToast("Duelo", "No puedes evadir contra el atacante con el que estás en duelo.", 'warning');
+                        return;
+                    }
                 }
             }
 
@@ -7023,16 +7407,26 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     const attackerAttrs =
                         attackerToken.attributes || attackerToken.atributos || {};
                     const sweepWeapon = buildSweepWeapon(action.weapon);
-                    const attackerRollResult = rollAttack(
-                        sweepWeapon,
-                        attackerAttrs
-                    );
                     const sweepId = nanoid();
 
                     for (const targetId of action.targetIds.slice(0, 3)) {
                         const targetToken = scenario.items.find((item) => item.id === targetId);
                         if (!targetToken) continue;
 
+                        const targetCombatToken = enrichTokenWithCharacterData(targetToken);
+                        const armorProtection = getArmorProtection(
+                            targetCombatToken,
+                            sweepWeapon,
+                            { armaduras }
+                        );
+                        const effectiveSweepWeapon = applyNegatedTraitsToItem(
+                            sweepWeapon,
+                            armorProtection.negatedTraits
+                        );
+                        const attackerRollResult = rollAttack(
+                            effectiveSweepWeapon,
+                            attackerAttrs
+                        );
                         const actualDistance = getTokenDistanceInCells(token, targetToken, gridConfig);
                         const targetCurrentVel = targetToken.velocidad || 0;
                         const reactionBudget = Math.max(0, Math.round(attackerFinalVelForAction - targetCurrentVel));
@@ -7043,9 +7437,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             targetId: targetToken.id,
                             targetName: targetToken.name,
                             attackerRollResult,
-                            weapon: sweepWeapon || null,
-                            negatedTraits: [],
-                            armorProtectionSource: null,
+                            weapon: effectiveSweepWeapon || null,
+                            negatedTraits: armorProtection.negatedTraits || [],
+                            armorProtectionSource: armorProtection.armorProtectionSource || null,
                             status: 'esperando_reaccion',
                             scenarioId: scenario.id,
                             clientTimestamp: Date.now(),
@@ -7504,10 +7898,46 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     const isCounterPreventedByRange = entry.reactionType === 'parar' && entry.counterPreventedByRange;
                                                     const isPerfect = entry.reactionType === 'parar' && entry.damage === 0 && !isCounter && !isCounterPreventedByRange;
                                                     const totalBlocks = (entry.blocksLost?.postura || 0) + (entry.blocksLost?.armadura || 0) + (entry.blocksLost?.vida || 0);
-                                                    const basePosturaLost = entry.baseBlocksLost?.postura || 0;
-                                                    const baseArmaduraLost = entry.baseBlocksLost?.armadura || 0;
                                                     const traitPosturaBonus = entry.traitBonuses?.postura?.blocks || 0;
                                                     const traitArmaduraBonus = entry.traitBonuses?.armadura?.blocks || 0;
+                                                    const traitVidaBonus = entry.traitBonuses?.vida?.blocks || 0;
+                                                    const basePosturaLost = entry.baseBlocksLost
+                                                        ? entry.baseBlocksLost.postura || 0
+                                                        : Math.max(0, (entry.blocksLost?.postura || 0) - traitPosturaBonus);
+                                                    const baseArmaduraLost = entry.baseBlocksLost
+                                                        ? entry.baseBlocksLost.armadura || 0
+                                                        : Math.max(0, (entry.blocksLost?.armadura || 0) - traitArmaduraBonus);
+                                                    const baseVidaLost = entry.baseBlocksLost
+                                                        ? entry.baseBlocksLost.vida || 0
+                                                        : Math.max(0, (entry.blocksLost?.vida || 0) - traitVidaBonus);
+                                                    const speedEffectBadges = [
+                                                        ...(Array.isArray(entry.speedEffectsApplied?.target)
+                                                            ? entry.speedEffectsApplied.target.map((effect) => ({
+                                                                ...effect,
+                                                                sideLabel: effect.tokenName || entry.targetName || 'Objetivo'
+                                                            }))
+                                                            : []),
+                                                        ...(Array.isArray(entry.speedEffectsApplied?.attacker)
+                                                            ? entry.speedEffectsApplied.attacker.map((effect) => ({
+                                                                ...effect,
+                                                                sideLabel: effect.tokenName || entry.attackerName || 'Atacante'
+                                                            }))
+                                                            : [])
+                                                    ].filter((effect) => Number(effect?.delta) > 0);
+                                                    const pushEffectBadges = [
+                                                        ...(Array.isArray(entry.pushEffectsApplied?.target)
+                                                            ? entry.pushEffectsApplied.target.map((effect) => ({
+                                                                ...effect,
+                                                                sideLabel: effect.tokenName || entry.targetName || 'Objetivo'
+                                                            }))
+                                                            : []),
+                                                        ...(Array.isArray(entry.pushEffectsApplied?.attacker)
+                                                            ? entry.pushEffectsApplied.attacker.map((effect) => ({
+                                                                ...effect,
+                                                                sideLabel: effect.tokenName || entry.attackerName || 'Atacante'
+                                                            }))
+                                                            : [])
+                                                    ];
 
                                                     const accentColor = entry.reactionType === 'evadir' ? '#eab308' :
                                                         entry.reactionType === 'parar' ? '#3b82f6' : '#ef4444';
@@ -7569,7 +7999,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                 <div className="flex items-center gap-4 px-1">
                                                                     <div className="flex gap-1.5">
                                                                         {(entry.attackerDice || []).map((die, i) => {
-                                                                            const wasEvaded = (entry.evadedDiceIds || []).includes(die.id);
+                                                                            const wasEvaded = isCombatDieEvaded(die, entry.evadedDiceIds);
                                                                             const matchedAttr = typeof die.matchedAttr === 'string' ? die.matchedAttr.trim().toLowerCase() : null;
 
                                                                             const attrColorMap = {
@@ -7619,7 +8049,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                     <div className="h-4 w-[1px] bg-slate-800" />
                                                                     <div className="flex items-center gap-1.5">
                                                                         <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Total</span>
-                                                                        <span className="text-[#f0e6d2] text-xs font-bold">{entry.attackTotal}</span>
+                                                                        <span className="text-[#f0e6d2] text-xs font-bold">{entry.effectiveAttackTotal ?? entry.attackTotal}</span>
                                                                     </div>
                                                                 </div>
 
@@ -7704,10 +8134,39 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                     {traitPosturaBonus > 0 && <span className="text-[9px] text-green-300 border-b border-green-500/40 pb-0.5">-{traitPosturaBonus} Postura</span>}
                                                                     {baseArmaduraLost > 0 && <span className="text-[9px] text-slate-400/80 border-b border-slate-800/40 pb-0.5">-{baseArmaduraLost} Armadura</span>}
                                                                     {traitArmaduraBonus > 0 && <span className="text-[9px] text-slate-300 border-b border-slate-400/50 pb-0.5">-{traitArmaduraBonus} Armadura</span>}
-                                                                    {entry.blocksLost?.vida > 0 && <span className="text-[9px] text-red-500/80 border-b border-red-900/40 pb-0.5">-{entry.blocksLost.vida} Vida</span>}
+                                                                    {baseVidaLost > 0 && <span className="text-[9px] text-red-500/80 border-b border-red-900/40 pb-0.5">-{baseVidaLost} Vida</span>}
+                                                                    {traitVidaBonus > 0 && <span className="text-[9px] text-amber-300 border-b border-amber-500/40 pb-0.5">-{traitVidaBonus} Vida</span>}
                                                                 </div>
                                                             ) : totalBlocks === 0 && entry.reactionType !== 'parar' && (
                                                                 <div className="px-1 pt-1 italic text-[9px] text-green-500/50 tracking-wider">Sin daño a bloques</div>
+                                                            )}
+                                                            {speedEffectBadges.length > 0 && (
+                                                                <div className="flex flex-wrap gap-2 px-1 pt-1">
+                                                                    {speedEffectBadges.map((effect, idx) => (
+                                                                        <span
+                                                                            key={`${entry.id}-speed-${idx}`}
+                                                                            className="text-[9px] text-amber-300 border-b border-amber-400/40 pb-0.5"
+                                                                            title={`${effect.label || RALENTIZADO_EFFECT_LABEL}: +${effect.delta} velocidad para ${effect.sideLabel}`}
+                                                                        >
+                                                                            +{effect.delta} Velocidad · {effect.label || RALENTIZADO_EFFECT_LABEL}
+                                                                            {effect.sideLabel ? ` (${effect.sideLabel})` : ''}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                            {pushEffectBadges.length > 0 && (
+                                                                <div className="flex flex-wrap gap-2 px-1 pt-1">
+                                                                    {pushEffectBadges.map((effect, idx) => (
+                                                                        <span
+                                                                            key={`${entry.id}-push-${idx}`}
+                                                                            className={`text-[9px] border-b pb-0.5 ${effect.applied ? 'text-sky-300 border-sky-400/40' : 'text-slate-500 border-slate-700/50'}`}
+                                                                            title={effect.applied ? `${EMPUJE_EFFECT_LABEL}: ${effect.sideLabel} se desplaza 1 casilla` : `${EMPUJE_EFFECT_LABEL} bloqueado: ${effect.reason || 'sin desplazamiento'}`}
+                                                                        >
+                                                                            {effect.applied ? `1 Casilla · ${effect.label || EMPUJE_EFFECT_LABEL}` : `${effect.label || EMPUJE_EFFECT_LABEL} bloqueado`}
+                                                                            {effect.sideLabel ? ` (${effect.sideLabel})` : ''}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
                                                             )}
                                                         </motion.div>
                                                     );
@@ -8961,9 +9420,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                             <Flame size={12} /> Estados Alterados
                                                         </h4>
                                                         <EstadoSelector
-                                                            selected={token.status || []}
+                                                            selected={normalizeTokenStatusIds(token.status || [])}
                                                             onToggle={(statusId) => {
-                                                                const currentStatus = token.status || [];
+                                                                const currentStatus = normalizeTokenStatusIds(token.status || []);
                                                                 const newStatus = currentStatus.includes(statusId)
                                                                     ? currentStatus.filter(s => s !== statusId)
                                                                     : [...currentStatus, statusId];

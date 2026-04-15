@@ -32,7 +32,18 @@ export const parseCombatTraits = (input) => {
     .filter(Boolean);
 };
 
-export const normalizeCombatTrait = (trait) => normalizeKey(trait);
+export const normalizeCombatTrait = (trait) => {
+  const normalized = normalizeKey(trait);
+  const compact = normalized.replace(/[\s_-]+/g, '');
+
+  if (!normalized) return '';
+  if (['derribado', 'derribar', 'derribo'].includes(normalized)) return 'derribo';
+  if (normalized === 'perforante') return 'penetrante';
+  if (normalized === 'ralentizar') return 'ralentizado';
+  if (normalized === 'empujar') return 'empuje';
+  if (compact === 'singuardia') return 'sin guardia';
+  return normalized;
+};
 
 export const getItemName = (item) =>
   (item?.nombre || item?.name || item?.label || '').toString().trim();

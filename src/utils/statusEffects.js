@@ -193,7 +193,7 @@ export const DEFAULT_STATUS_EFFECTS = {
 };
 
 export const PRONE_STATUS_IDS = ['derribado', 'conmocionado'];
-export const NON_SELECTABLE_STATUS_EFFECT_IDS = ['conmocionado'];
+export const NON_SELECTABLE_STATUS_EFFECT_IDS = ['conmocionado', 'ralentizado'];
 
 export const ESTADOS = Object.entries(DEFAULT_STATUS_EFFECTS)
     .filter(([id]) => !NON_SELECTABLE_STATUS_EFFECT_IDS.includes(id))

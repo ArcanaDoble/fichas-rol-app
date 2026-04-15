@@ -51,9 +51,67 @@ const formatCombatTraitLabel = (trait = '') => {
     if (normalized === 'conmocionante') return 'Conmocionante';
     if (normalized === 'fluida') return 'Fluida';
     if (normalized === 'sangrado') return 'Sangrado';
+    if (normalized === 'ralentizado' || normalized === 'ralentizar') return 'Ralentizado';
+    if (normalized === 'penetrante' || normalized === 'perforante') return 'Penetrante';
+    if (normalized === 'empuje' || normalized === 'empujar') return 'Empuje';
     if (normalized === 'sin guardia' || normalized === 'singuardia' || normalized === 'sin_guardia') return 'Sin guardia';
     return trait;
 };
+
+const createEmptyCombatModifiers = () => ({ extraDice: {}, activeTraits: [] });
+
+const cloneCombatModifiers = (modifiers = {}) => ({
+    extraDice: Object.fromEntries(
+        Object.entries(modifiers.extraDice || {})
+            .map(([die, count]) => [die, Math.max(0, Number(count) || 0)])
+            .filter(([, count]) => count > 0)
+    ),
+    activeTraits: Array.isArray(modifiers.activeTraits)
+        ? Array.from(new Set(modifiers.activeTraits.filter(Boolean)))
+        : [],
+});
+
+const hasCombatModifiers = (modifiers = {}) => (
+    Object.values(modifiers.extraDice || {}).some((count) => Number(count) > 0) ||
+    (Array.isArray(modifiers.activeTraits) && modifiers.activeTraits.length > 0)
+);
+
+const summarizeCombatModifiers = (modifiers = {}) => {
+    const normalizedModifiers = cloneCombatModifiers(modifiers);
+    return [
+        ...Object.entries(normalizedModifiers.extraDice).map(([die, count]) => `+${count}${die}`),
+        ...normalizedModifiers.activeTraits.map((trait) => formatCombatTraitLabel(trait)),
+    ];
+};
+
+const getParryBaseWeapon = (step) => step?.baseWeapon || step?.weapon || null;
+
+const shouldApplyModifiersToStep = (step, scope, selectedBaseWeapon) => {
+    if (!step || scope === 'single') return false;
+    if (scope === 'all') return true;
+    if (scope !== 'sameWeapon') return false;
+
+    return getCombatWeaponName(getParryBaseWeapon(step)) === getCombatWeaponName(selectedBaseWeapon);
+};
+
+const applyParryModifiersToStep = (step, modifiers) => {
+    const baseWeapon = JSON.parse(JSON.stringify(getParryBaseWeapon(step) || {}));
+    const cleanModifiers = cloneCombatModifiers(modifiers);
+    const weapon = applyModifiersToWeapon(baseWeapon, cleanModifiers);
+    return {
+        ...step,
+        baseWeapon,
+        weapon,
+        weaponName: weapon?.nombre || weapon?.name || step.weaponName || 'Arma',
+        modifiers: cleanModifiers,
+    };
+};
+
+const MODIFIER_SCOPE_OPTIONS = [
+    { id: 'single', label: 'Esta', helper: 'Se limpia al añadir la parada.' },
+    { id: 'all', label: 'Todas', helper: 'Actualiza las paradas añadidas y mantiene el borrador.' },
+    { id: 'sameWeapon', label: 'Mismo arma', helper: 'Actualiza solo las paradas añadidas con esta arma.' },
+];
 
 const getArmorProtectionMeta = (payload) => ({
     traits: payload?.negatedTraits || payload?.blockedTraits || [],
@@ -146,7 +204,8 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
     const [reactionType, setReactionType] = useState(null); // 'evadir', 'parar', 'recibir'
     const [selectedWeapon, setSelectedWeapon] = useState('');
     const [parrySteps, setParrySteps] = useState([]);
-    const [customModifiers, setCustomModifiers] = useState({ extraDice: {}, activeTraits: [] });
+    const [customModifiers, setCustomModifiers] = useState(createEmptyCombatModifiers);
+    const [modifierScope, setModifierScope] = useState('single');
     const [modifiersExpanded, setModifiersExpanded] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const proneStatusId = useMemo(() => {
@@ -276,7 +335,10 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
     const totalParryCost = useMemo(() => (
         parrySteps.reduce((sum, step) => sum + Math.max(0, Number(step.yellowCost) || 0), 0)
     ), [parrySteps]);
-    const remainingReactionBudget = Math.max(0, reactionBudget - totalParryCost);
+    const evadeCost = selectedDiceIndices.length;
+    const currentReactionCost = totalParryCost + evadeCost;
+    const remainingReactionBudget = Math.max(0, reactionBudget - currentReactionCost);
+    const maxEvadeDice = Math.max(0, reactionBudget - totalParryCost);
 
     const weaponSelectionMeta = useMemo(() => {
         return weapons.map((weapon, idx) => {
@@ -301,24 +363,21 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
     const hasAnyParryWeapon = weaponSelectionMeta.some((entry) => !entry.blockedByNoGuard);
     const canParry = canParryByBudget && hasAnyParryWeapon;
 
-    const currentReactionCost = reactionType === 'evadir'
-        ? selectedDiceIndices.length
-        : reactionType === 'parar'
-            ? totalParryCost
-            : 0;
     const canAddCurrentParryStep =
         reactionType === 'parar' &&
         !!modifiedParryWeapon &&
         !selectedWeaponBlockedByNoGuard &&
         parryCostMeta.yellowCost > 0 &&
         parryCostMeta.yellowCost <= remainingReactionBudget;
+    const hasCurrentModifiers = hasCombatModifiers(customModifiers);
+    const currentModifierSummary = useMemo(() => summarizeCombatModifiers(customModifiers), [customModifiers]);
 
     const toggleDie = (dieId) => {
         setSelectedDiceIndices(prev => {
             if (prev.includes(dieId)) {
                 return prev.filter(id => id !== dieId);
             }
-            if (prev.length >= reactionBudget) {
+            if (prev.length >= maxEvadeDice) {
                 return prev;
             }
             return [...prev, dieId];
@@ -333,7 +392,8 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
         setSelectedDiceIndices([]);
         setSelectedWeapon('');
         setParrySteps([]);
-        setCustomModifiers({ extraDice: {}, activeTraits: [] });
+        setCustomModifiers(createEmptyCombatModifiers());
+        setModifierScope('single');
         setModifiersExpanded(false);
         setReactionType(isTargetProne ? 'recibir' : null);
     }, [event?.id, event?.status, isTargetProne]);
@@ -346,7 +406,6 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
         if (reactionType === 'parar' && !canParry) {
             setReactionType(null);
             setSelectedWeapon('');
-            setSelectedDiceIndices([]);
             setParrySteps([]);
         }
     }, [reactionType, canEvade, canParry]);
@@ -364,40 +423,73 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
     }, [reactionType, selectedWeapon, defaultParryWeaponId, weaponSelectionMeta]);
 
     useEffect(() => {
-        if (selectedDiceIndices.length > reactionBudget) {
-            setSelectedDiceIndices(prev => prev.slice(0, reactionBudget));
+        if (selectedDiceIndices.length > maxEvadeDice) {
+            setSelectedDiceIndices(prev => prev.slice(0, maxEvadeDice));
         }
-    }, [selectedDiceIndices.length, reactionBudget]);
+    }, [selectedDiceIndices.length, maxEvadeDice]);
 
     const handleAddParryStep = () => {
         if (!canAddCurrentParryStep || !modifiedParryWeapon) return;
 
-        const stepWeapon = JSON.parse(JSON.stringify(modifiedParryWeapon));
-        setParrySteps(prev => [
-            ...prev,
-            {
-                id: `parry-step-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                weapon: stepWeapon,
-                weaponName: stepWeapon?.nombre || stepWeapon?.name || selectedWeaponData?.nombre || selectedWeaponData?.name || 'Arma',
-                yellowCost: parryCostMeta.yellowCost,
-                baseYellowCost: parryCostMeta.baseCost,
-                fluidaDiscountApplied: parryCostMeta.fluidaDiscountApplied
-            }
-        ]);
+        const selectedBaseWeapon = JSON.parse(JSON.stringify(selectedWeaponData || modifiedParryWeapon));
+        const stepModifiers = cloneCombatModifiers(customModifiers);
+        const stepWeapon = JSON.parse(JSON.stringify(applyModifiersToWeapon(selectedBaseWeapon, stepModifiers)));
+        const nextStep = {
+            id: `parry-step-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            weapon: stepWeapon,
+            baseWeapon: selectedBaseWeapon,
+            modifiers: stepModifiers,
+            weaponName: stepWeapon?.nombre || stepWeapon?.name || selectedWeaponData?.nombre || selectedWeaponData?.name || 'Arma',
+            yellowCost: parryCostMeta.yellowCost,
+            baseYellowCost: parryCostMeta.baseCost,
+            fluidaDiscountApplied: parryCostMeta.fluidaDiscountApplied
+        };
+
+        setParrySteps(prev => {
+            const shouldUpdateExisting = hasCombatModifiers(stepModifiers) && modifierScope !== 'single';
+            const updatedPrev = shouldUpdateExisting
+                ? prev.map((step) => {
+                    if (!shouldApplyModifiersToStep(step, modifierScope, selectedBaseWeapon)) {
+                        return step;
+                    }
+                    const updatedStep = applyParryModifiersToStep(step, stepModifiers);
+                    const updatedCostMeta = getParryWeaponCostMeta(updatedStep.weapon, updatedStep.baseWeapon || updatedStep.weapon);
+                    return {
+                        ...updatedStep,
+                        yellowCost: updatedCostMeta.yellowCost,
+                        baseYellowCost: updatedCostMeta.baseCost,
+                        fluidaDiscountApplied: updatedCostMeta.fluidaDiscountApplied
+                    };
+                })
+                : prev;
+            return [...updatedPrev, nextStep];
+        });
+
+        if (modifierScope === 'single') {
+            setCustomModifiers(createEmptyCombatModifiers());
+            setModifiersExpanded(false);
+        }
     };
 
     const removeParryStep = (stepId) => {
         setParrySteps(prev => prev.filter((step) => step.id !== stepId));
     };
 
+    const handleSelectParryWeapon = (weaponId) => {
+        setSelectedWeapon(weaponId);
+        if (modifierScope === 'single') {
+            setCustomModifiers(createEmptyCombatModifiers());
+            setModifiersExpanded(false);
+        }
+    };
+
     const handleConfirm = async () => {
         if (isSubmitting) return;
 
         let payload;
-        if (reactionType === 'evadir') {
-            if (!canEvade) return;
-            payload = { type: 'evadir', data: { evadedDiceIds: selectedDiceIndices, yellowCost: selectedDiceIndices.length } };
-        } else if (reactionType === 'parar') {
+        if (reactionType === 'recibir') {
+            payload = { type: 'recibir', data: null };
+        } else if (totalParryCost > 0) {
             if (!canParryByBudget) return;
             if (parrySteps.length === 0) return;
             payload = {
@@ -405,12 +497,18 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
                 data: {
                     weapon: parrySteps[0]?.weapon || null,
                     parrySteps,
-                    yellowCost: totalParryCost,
+                    evadedDiceIds: selectedDiceIndices,
+                    yellowCost: currentReactionCost,
+                    parryCost: totalParryCost,
+                    evadeCost,
                     reactionBudget
                 }
             };
+        } else if (selectedDiceIndices.length > 0) {
+            if (!canEvade) return;
+            payload = { type: 'evadir', data: { evadedDiceIds: selectedDiceIndices, yellowCost: evadeCost } };
         } else {
-            payload = { type: 'recibir', data: null };
+            return;
         }
 
         setIsSubmitting(true);
@@ -439,6 +537,8 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
     const showQueue = queueTotal > 1;
     const isResolving = event.status && event.status.endsWith('_pendiente');
     const isResolved = event.status === 'resuelto';
+    const hasDefenseActions = selectedDiceIndices.length > 0 || parrySteps.length > 0;
+    const canConfirmReaction = reactionType === 'recibir' || hasDefenseActions;
     const pendingProtection = getArmorProtectionMeta(event);
     const resolvedProtection = getArmorProtectionMeta(event.result);
     const attackLabel = event.attackMode === 'barrido'
@@ -453,7 +553,11 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
         return (
             <div className="flex flex-wrap gap-2 justify-center my-3 relative z-10">
                 {diceList.map((die) => {
-                    const isEvaded = evadedIds.includes(die.id);
+                    const rawDieId = typeof die.id === 'string' ? die.id : '';
+                    const unprefixedDieId = rawDieId.startsWith('att-') || rawDieId.startsWith('atk-') || rawDieId.startsWith('roll-')
+                        ? rawDieId.replace(/^[^-]+-/, '')
+                        : rawDieId;
+                    const isEvaded = evadedIds.includes(rawDieId) || evadedIds.includes(unprefixedDieId);
                     const isCrit = die.isCrit || die.critical;
                     const matchedAttr = die.matchedAttr ? die.matchedAttr.trim().toLowerCase() : null;
 
@@ -616,8 +720,15 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
                                                             </p>
                                                             
                                                             <div className="bg-black/20 p-2 rounded-lg border border-slate-700/30">
-                                                                <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Ataque ({event.result.attackTotal})</div>
-                                                                {renderResultDice(event.result.attackerDice)}
+                                                                <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">
+                                                                    Ataque ({event.result.effectiveAttackTotal ?? event.result.attackTotal})
+                                                                </div>
+                                                                {(event.result.evadedDiceIds || []).length > 0 && (
+                                                                    <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-yellow-500/80">
+                                                                        Evasión: {(event.result.evadedDiceIds || []).length} dado{(event.result.evadedDiceIds || []).length === 1 ? '' : 's'} anulado{(event.result.evadedDiceIds || []).length === 1 ? '' : 's'}
+                                                                    </div>
+                                                                )}
+                                                                {renderResultDice(event.result.attackerDice, event.result.evadedDiceIds)}
                                                                 <CombatTraitRow
                                                                     label="Rasgos"
                                                                     traits={event.result.attackTraits}
@@ -669,7 +780,7 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
                                                             )}
 
                                                             <div className="text-sm flex justify-center items-center gap-4 mt-2 mb-1">
-                                                                <div><span className="text-slate-400 uppercase tracking-widest text-[10px] mr-1">Atq:</span><span className="text-red-400 font-bold">{event.result.attackTotal}</span></div>
+                                                                <div><span className="text-slate-400 uppercase tracking-widest text-[10px] mr-1">Atq:</span><span className="text-red-400 font-bold">{event.result.effectiveAttackTotal ?? event.result.attackTotal}</span></div>
                                                                 <div><span className="text-slate-400 uppercase tracking-widest text-[10px] mr-1">Def:</span><span className="text-blue-400 font-bold">{event.result.defenderTotal}</span></div>
                                                             </div>
                                                         </div>
@@ -838,7 +949,7 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
                                 </div>
                                 {reactionType === 'evadir' && (
                                     <p className="text-center text-xs text-slate-400 mt-3">
-                                        Toca los dados que quieras eludir. Maximo: {reactionBudget} dado{reactionBudget === 1 ? '' : 's'}.
+                                        Toca los dados que quieras eludir. Disponible: {remainingReactionBudget} de {reactionBudget}.
                                     </p>
                                 )}
                             </div>
@@ -870,38 +981,39 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
                                     onClick={() => {
                                         setReactionType('evadir');
                                         setSelectedWeapon('');
-                                        setSelectedDiceIndices([]);
-                                        setParrySteps([]);
                                     }}
                                     disabled={!canEvade}
-                                    className={`flex flex-col items-center justify-center p-3 rounded border transition-all ${reactionType === 'evadir' ? 'bg-[#c8aa6e]/20 border-[#c8aa6e]' : 'bg-black/40 border-slate-700 hover:border-slate-500'
+                                    className={`flex flex-col items-center justify-center p-3 rounded border transition-all ${reactionType === 'evadir' || selectedDiceIndices.length > 0 ? 'bg-[#c8aa6e]/20 border-[#c8aa6e]' : 'bg-black/40 border-slate-700 hover:border-slate-500'
                                         } ${!canEvade ? 'opacity-50 cursor-not-allowed hidden' : ''}`}
                                 >
                                     <div className="flex items-center gap-2 text-[#c8aa6e] font-bold uppercase tracking-wider">
                                         <FastForward size={18} /> Evadir
                                     </div>
-                                    <span className="text-xs text-slate-400 mt-1">Hasta igualar la velocidad</span>
+                                    <span className="text-xs text-slate-400 mt-1">
+                                        {selectedDiceIndices.length > 0 ? `${selectedDiceIndices.length} dado${selectedDiceIndices.length === 1 ? '' : 's'} seleccionado${selectedDiceIndices.length === 1 ? '' : 's'}` : 'Elige dados del ataque'}
+                                    </span>
                                 </button>
 
                                 {/* BOTÓN PARAR */}
                                 <button
                                     onClick={() => {
                                         if (reactionType !== 'parar') {
-                                            setParrySteps([]);
+                                            setCustomModifiers(createEmptyCombatModifiers());
+                                            setModifierScope('single');
+                                            setModifiersExpanded(false);
                                         }
                                         setReactionType('parar');
                                         setSelectedWeapon(defaultParryWeaponId);
-                                        setSelectedDiceIndices([]);
                                     }}
                                     disabled={!canParry}
-                                    className={`flex flex-col items-center justify-center p-3 rounded border transition-all ${reactionType === 'parar' ? 'bg-[#c8aa6e]/20 border-[#c8aa6e]' : 'bg-black/40 border-slate-700 hover:border-slate-500'
+                                    className={`flex flex-col items-center justify-center p-3 rounded border transition-all ${reactionType === 'parar' || parrySteps.length > 0 ? 'bg-[#c8aa6e]/20 border-[#c8aa6e]' : 'bg-black/40 border-slate-700 hover:border-slate-500'
                                         } ${!canParryByBudget ? 'opacity-50 cursor-not-allowed hidden' : ''} ${!canParry ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                     <div className="flex items-center gap-2 text-[#c8aa6e] font-bold uppercase tracking-wider">
                                         <Sword size={18} /> Parar
                                     </div>
                                     <span className="text-xs text-slate-400 mt-1">
-                                        {!canParryByBudget ? 'Sin reacción disponible' : !canParry ? 'Ningún arma apta para parar' : 'Hasta igualar la velocidad'}
+                                        {!canParryByBudget ? 'Sin reacción disponible' : !canParry ? 'Ningún arma apta para parar' : parrySteps.length > 0 ? `${parrySteps.length} parada${parrySteps.length === 1 ? '' : 's'} añadida${parrySteps.length === 1 ? '' : 's'}` : 'Añade una o varias paradas'}
                                     </span>
                                 </button>
 
@@ -912,6 +1024,9 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
                                         setSelectedWeapon('');
                                         setSelectedDiceIndices([]);
                                         setParrySteps([]);
+                                        setCustomModifiers(createEmptyCombatModifiers());
+                                        setModifierScope('single');
+                                        setModifiersExpanded(false);
                                     }}
                                     className={`flex items-center justify-center gap-2 p-3 rounded border transition-all ${reactionType === 'recibir' ? 'bg-red-900/40 border-red-500 text-red-200' : 'bg-black/40 border-slate-700 hover:border-slate-500 text-slate-300'
                                         }`}
@@ -940,7 +1055,7 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
                                                         key={id}
                                                         weapon={weapon}
                                                         isSelected={selectedWeapon === id}
-                                                        onSelect={() => setSelectedWeapon(id)}
+                                                        onSelect={() => handleSelectParryWeapon(id)}
                                                         disabled={blockedByNoGuard || blockedByBudget}
                                                         helperText={helperText}
                                                         customEquipmentImages={customEquipmentImages}
@@ -957,25 +1072,33 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
                                                     Paradas añadidas
                                                 </p>
                                                 <p className="text-[9px] uppercase tracking-[0.18em] text-[#c8aa6e] font-bold">
-                                                    {totalParryCost}/{reactionBudget} velocidad
+                                                    {totalParryCost} parada · {evadeCost} evasión
                                                 </p>
                                             </div>
                                             <div className="flex flex-wrap gap-1.5">
-                                                {parrySteps.map((step, stepIndex) => (
-                                                    <div key={step.id} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-700/80 bg-black/25 px-2.5 py-1 text-[10px] text-slate-300">
-                                                        <span className="shrink-0 text-slate-500">#{stepIndex + 1}</span>
-                                                        <span className="max-w-[9rem] truncate font-semibold text-slate-200">{step.weaponName || 'Arma'}</span>
-                                                        <span className="shrink-0 font-bold text-yellow-400">-{step.yellowCost} 🟡</span>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => removeParryStep(step.id)}
-                                                            className="ml-0.5 rounded-full text-slate-500 hover:text-red-200 transition-all"
-                                                            title="Quitar parada"
-                                                        >
-                                                            <X size={11} />
-                                                        </button>
-                                                    </div>
-                                                ))}
+                                                {parrySteps.map((step, stepIndex) => {
+                                                    const stepModifierSummary = summarizeCombatModifiers(step.modifiers);
+                                                    return (
+                                                        <div key={step.id} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-700/80 bg-black/25 px-2.5 py-1 text-[10px] text-slate-300">
+                                                            <span className="shrink-0 text-slate-500">#{stepIndex + 1}</span>
+                                                            <span className="max-w-[7rem] truncate font-semibold text-slate-200 sm:max-w-[9rem]">{step.weaponName || 'Arma'}</span>
+                                                            {stepModifierSummary.length > 0 && (
+                                                                <span className="shrink-0 rounded-full border border-[#c8aa6e]/25 bg-[#c8aa6e]/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.12em] text-[#c8aa6e]">
+                                                                    {stepModifierSummary.slice(0, 2).join(' · ')}{stepModifierSummary.length > 2 ? ` +${stepModifierSummary.length - 2}` : ''}
+                                                                </span>
+                                                            )}
+                                                            <span className="shrink-0 font-bold text-yellow-400">-{step.yellowCost} 🟡</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeParryStep(step.id)}
+                                                                className="ml-0.5 rounded-full text-slate-500 hover:text-red-200 transition-all"
+                                                                title="Quitar parada"
+                                                            >
+                                                                <X size={11} />
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     )}
@@ -1001,6 +1124,48 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
                                                 onToggleExpand={() => setModifiersExpanded(!modifiersExpanded)}
                                                 currentWeapon={selectedWeaponData}
                                             />
+                                            <div className="rounded-lg border border-slate-800/80 bg-black/25 p-2.5 space-y-2">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <p className="text-[9px] uppercase tracking-[0.2em] text-slate-500 font-bold">
+                                                        Aplicar modificadores a
+                                                    </p>
+                                                    {hasCurrentModifiers && (
+                                                        <div className="flex min-w-0 flex-wrap justify-end gap-1">
+                                                            {currentModifierSummary.slice(0, 4).map((label, index) => (
+                                                                <span key={`${label}-${index}`} className="rounded-full border border-[#c8aa6e]/25 bg-[#c8aa6e]/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[#c8aa6e]">
+                                                                    {label}
+                                                                </span>
+                                                            ))}
+                                                            {currentModifierSummary.length > 4 && (
+                                                                <span className="rounded-full border border-slate-700 bg-slate-900/60 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                                                                    +{currentModifierSummary.length - 4}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="grid grid-cols-3 gap-1.5">
+                                                    {MODIFIER_SCOPE_OPTIONS.map((option) => {
+                                                        const isActive = modifierScope === option.id;
+                                                        return (
+                                                            <button
+                                                                key={option.id}
+                                                                type="button"
+                                                                onClick={() => setModifierScope(option.id)}
+                                                                className={`min-h-9 rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] transition-all ${isActive
+                                                                    ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2] shadow-[0_0_10px_rgba(200,170,110,0.12)]'
+                                                                    : 'border-slate-700 bg-slate-900/50 text-slate-500 hover:border-slate-500 hover:text-slate-300'
+                                                                    }`}
+                                                            >
+                                                                {option.label}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                                <p className="text-center text-[10px] leading-relaxed text-slate-500">
+                                                    {MODIFIER_SCOPE_OPTIONS.find((option) => option.id === modifierScope)?.helper}
+                                                </p>
+                                            </div>
                                             <div className="space-y-2">
                                                 <button
                                                     type="button"
@@ -1012,7 +1177,7 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
                                                 </button>
                                                 {reactionType === 'parar' && remainingReactionBudget <= 0 && (
                                                     <p className="text-center text-[11px] text-slate-500">
-                                                        Ya has agotado toda tu reacción disponible para esta parada.
+                                                        Ya has agotado toda tu reacción disponible.
                                                     </p>
                                                 )}
                                             </div>
@@ -1036,7 +1201,7 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
                             </div>
                             <button
                                 onClick={handleConfirm}
-                                disabled={isSubmitting || !reactionType || (reactionType === 'parar' && parrySteps.length === 0)}
+                                disabled={isSubmitting || !canConfirmReaction}
                                 className="px-8 py-2.5 bg-gradient-to-r from-red-600 to-red-800 text-white font-fantasy text-sm uppercase tracking-[0.2em] rounded shadow-lg hover:shadow-red-600/20 active:scale-95 disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed transition-all"
                             >
                                 {isSubmitting ? 'Procesando...' : 'Confirmar'}
