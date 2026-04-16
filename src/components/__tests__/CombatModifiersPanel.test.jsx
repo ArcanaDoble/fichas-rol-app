@@ -34,3 +34,27 @@ test('serializes Empuje as a manual combat trait', () => {
   expect(modifiedWeapon.rasgos).toContain('Empuje');
   expect(modifiedWeapon.manualCombatTraits).toEqual(['empuje']);
 });
+
+test('serializes Perforante as a manual combat trait', () => {
+  const weapon = { type: 'weapon', nombre: 'Lanza', dano: '1d8', rasgos: [] };
+
+  const modifiedWeapon = applyModifiersToWeapon(weapon, {
+    extraDice: {},
+    activeTraits: ['perforante'],
+  });
+
+  expect(modifiedWeapon.rasgos).toContain('Perforante');
+  expect(modifiedWeapon.manualCombatTraits).toEqual(['perforante']);
+});
+
+test('serializes Elusión as a manual combat trait', () => {
+  const weapon = { type: 'weapon', nombre: 'Estoque', dano: '1d8', rasgos: [] };
+
+  const modifiedWeapon = applyModifiersToWeapon(weapon, {
+    extraDice: {},
+    activeTraits: ['elusion'],
+  });
+
+  expect(modifiedWeapon.rasgos).toContain('Elusión');
+  expect(modifiedWeapon.manualCombatTraits).toEqual(['elusion']);
+});
