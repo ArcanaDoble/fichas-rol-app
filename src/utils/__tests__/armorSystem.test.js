@@ -7,7 +7,8 @@ import {
 describe('armor trait protection', () => {
   it('normalizes common combat trait aliases for armor protection', () => {
     expect(normalizeCombatTrait('Derribado')).toBe('derribo');
-    expect(normalizeCombatTrait('Perforante')).toBe('penetrante');
+    expect(normalizeCombatTrait('Perforante')).toBe('perforante');
+    expect(normalizeCombatTrait('Penetrante')).toBe('perforante');
     expect(normalizeCombatTrait('Ralentizar')).toBe('ralentizado');
     expect(normalizeCombatTrait('Empujar')).toBe('empuje');
     expect(normalizeCombatTrait('Sin_guardia')).toBe('sin guardia');

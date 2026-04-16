@@ -289,8 +289,9 @@ const formatCombatTraitLabel = (trait = '') => {
     if (normalized === 'fluida') return 'Fluida';
     if (normalized === 'sangrado') return 'Sangrado';
     if (normalized === 'ralentizado' || normalized === 'ralentizar') return 'Ralentizado';
-    if (normalized === 'penetrante' || normalized === 'perforante') return 'Penetrante';
+    if (normalized === 'penetrante' || normalized === 'perforante') return 'Perforante';
     if (normalized === 'empuje' || normalized === 'empujar') return 'Empuje';
+    if (normalized === 'elusion' || normalized === 'elusión') return 'Elusión';
     if (normalized === 'sin guardia' || normalized === 'singuardia' || normalized === 'sin_guardia') return 'Sin guardia';
     return trait;
 };
@@ -653,6 +654,14 @@ const extractCombatRollDice = (rollResult, idPrefix = 'roll') => {
     });
 };
 
+const isValidSelectionBoxPoint = (point) => (
+    Number.isFinite(point?.x) && Number.isFinite(point?.y)
+);
+
+const isValidSelectionBox = (box) => (
+    isValidSelectionBoxPoint(box?.start) && isValidSelectionBoxPoint(box?.current)
+);
+
 const isCombatDieEvaded = (die, evadedIds = []) => {
     const ids = Array.isArray(evadedIds) ? evadedIds : [];
     const rawDieId = typeof die?.id === 'string' ? die.id : '';
@@ -684,7 +693,7 @@ const GLOBAL_PARRY_TRAIT_IDS = new Set([
     'conmocionante',
     'sangrado',
     'ralentizado',
-    'penetrante',
+    'perforante',
     'empuje'
 ]);
 
@@ -1417,7 +1426,19 @@ const CanvasThumbnail = ({ scenario }) => {
     return (
         <div className="w-32 h-32 bg-[#050810] rounded-lg border border-slate-800 overflow-hidden relative flex items-center justify-center shrink-0 shadow-inner">
             {config.backgroundImage ? (
-                <img src={config.backgroundImage} className="w-full h-full object-cover opacity-60" alt="Preview" />
+                <CanvasAssetImage
+                    src={config.backgroundImage}
+                    label={`${scenario.name || 'Encuentro'} preview`}
+                    imageClassName="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80"
+                    fallback={
+                        <div className="w-full h-full flex flex-col items-center justify-center opacity-20 bg-[#050810]">
+                            <LayoutGrid size={40} className="text-[#c8aa6e]" />
+                            <span className="text-[8px] font-bold uppercase mt-1 text-[#c8aa6e]">
+                                Mapa
+                            </span>
+                        </div>
+                    }
+                />
             ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center opacity-20">
                     <LayoutGrid size={40} className="text-[#c8aa6e]" />
@@ -1551,21 +1572,19 @@ const SpeedTimeline = ({ tokens, selectedId, onSelect, isPlayerView, onReset }) 
                                     className="relative group cursor-pointer"
                                 >
                                     {/* Portrait ring */}
-                                    <div className={`
-                                        w-7 h-7 md:w-8 md:h-8 rounded-full overflow-hidden transition-all duration-200
+                                    <TokenImageWithLoader
+                                        src={token.portrait || token.img}
+                                        label={token.name || 'Token'}
+                                        className={`
+                                        w-7 h-7 md:w-8 md:h-8 rounded-full transition-all duration-200
                                         ${isNext
                                             ? 'ring-[1.5px] ring-[#c8aa6e] shadow-[0_0_8px_rgba(200,170,110,0.25)]'
                                             : 'ring-1 ring-slate-700/60 opacity-60 grayscale-[30%]'
                                         }
                                         ${isSelectedToken ? 'ring-white/80 opacity-100 grayscale-0 scale-105' : ''}
-                                    `}>
-                                        <img
-                                            src={token.portrait || token.img}
-                                            className="w-full h-full object-cover"
-                                            draggable={false}
-                                            alt=""
-                                        />
-                                    </div>
+                                    `}
+                                        imageClassName="w-full h-full object-cover"
+                                    />
 
                                     {/* Speed counter — small badge bottom-right */}
                                     <div className={`
@@ -1709,14 +1728,46 @@ const CanvasAssetImage = ({
     src,
     label = '',
     imageClassName = '',
+    imageStyle = undefined,
     overlayClassName = '',
+    loadingClassName = 'absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#0b1120]/95 via-black/70 to-[#161f32]/90',
+    loadingRingClassName = 'absolute inset-[-7px] rounded-full border border-[#c8aa6e]/15 animate-pulse',
+    loadingIconClassName = 'w-4 h-4 text-[#c8aa6e]/80 animate-spin drop-shadow-[0_0_8px_rgba(200,170,110,0.35)]',
+    loadingTimeoutMs = 15000,
     fallback = null,
 }) => {
     const [status, setStatus] = useState(src ? 'loading' : 'idle');
+    const imgRef = useRef(null);
 
     useEffect(() => {
-        setStatus(src ? 'loading' : 'idle');
-    }, [src]);
+        if (!src) {
+            setStatus('idle');
+            return undefined;
+        }
+
+        let isCurrent = true;
+        setStatus('loading');
+
+        const syncSettledImage = () => {
+            const image = imgRef.current;
+            if (!isCurrent || !image || !image.complete) return false;
+
+            setStatus(image.naturalWidth > 0 ? 'loaded' : 'error');
+            return true;
+        };
+
+        const settleTimer = window.setTimeout(syncSettledImage, 0);
+        const timeoutTimer = window.setTimeout(() => {
+            if (syncSettledImage()) return;
+            if (isCurrent) setStatus('error');
+        }, Math.max(1000, Number(loadingTimeoutMs) || 15000));
+
+        return () => {
+            isCurrent = false;
+            window.clearTimeout(settleTimer);
+            window.clearTimeout(timeoutTimer);
+        };
+    }, [loadingTimeoutMs, src]);
 
     if (!src) return fallback;
 
@@ -1725,22 +1776,26 @@ const CanvasAssetImage = ({
     return (
         <>
             <img
+                ref={imgRef}
                 src={src}
                 alt=""
                 aria-label={label || undefined}
                 draggable={false}
-                onLoad={() => setStatus('loaded')}
+                onLoad={(event) => {
+                    setStatus(event.currentTarget.naturalWidth > 0 ? 'loaded' : 'error');
+                }}
                 onError={() => setStatus('error')}
                 className={`${imageClassName} transition-opacity duration-500 ${status === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
+                style={imageStyle}
             />
             {overlayClassName && !showFallback && (
                 <div className={`${overlayClassName} transition-opacity duration-500 ${status === 'loaded' ? 'opacity-100' : 'opacity-0'}`} />
             )}
             {status === 'loading' && (
-                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#0b1120]/95 via-black/70 to-[#161f32]/90">
+                <div className={loadingClassName}>
                     <div className="relative flex items-center justify-center">
-                        <div className="absolute inset-[-7px] rounded-full border border-[#c8aa6e]/15 animate-pulse" />
-                        <RotateCw className="w-4 h-4 text-[#c8aa6e]/80 animate-spin drop-shadow-[0_0_8px_rgba(200,170,110,0.35)]" />
+                        {loadingRingClassName && <div className={loadingRingClassName} />}
+                        <RotateCw className={loadingIconClassName} />
                     </div>
                 </div>
             )}
@@ -1752,6 +1807,32 @@ const CanvasAssetImage = ({
         </>
     );
 };
+
+const TokenImageWithLoader = ({
+    src,
+    label = '',
+    className = '',
+    imageClassName = 'w-full h-full object-contain',
+    imageStyle = undefined,
+    fallbackIcon: FallbackIcon = Sparkles,
+}) => (
+    <div className={`relative overflow-hidden ${className}`}>
+        <CanvasAssetImage
+            src={src}
+            label={label}
+            imageClassName={imageClassName}
+            imageStyle={imageStyle}
+            loadingClassName="absolute inset-0 flex items-center justify-center bg-transparent pointer-events-none"
+            loadingRingClassName=""
+            loadingIconClassName="w-3.5 h-3.5 text-[#c8aa6e]/70 animate-spin drop-shadow-[0_0_6px_rgba(200,170,110,0.28)]"
+            fallback={
+                <div className="absolute inset-0 flex items-center justify-center bg-transparent">
+                    <FallbackIcon className="w-1/2 h-1/2 max-w-10 max-h-10 text-[#c8aa6e]/70 drop-shadow-[0_0_12px_rgba(200,170,110,0.3)]" />
+                </div>
+            }
+        />
+    </div>
+);
 
 // --- Helper: Get rarity visual info ---
 const getRarityInfo = (rareza) => {
@@ -2296,6 +2377,8 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
                                 filteredItems.map((item, idx) => {
                                     const rarityColor = rarityColorMap[item.rareza] || '#94a3b8';
                                     const subInfo = item.dano || item.defensa || item.poder || item.alcance || '';
+                                    const itemImage = getObjectImage(item, customEquipmentImages);
+                                    const TypeIcon = typeIcons[item.type || currentCat?.type] || Package;
                                     return (
                                         <div
                                             key={item.id || idx}
@@ -2305,6 +2388,25 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
                                                 className="w-1.5 h-1.5 rounded-full shrink-0"
                                                 style={{ backgroundColor: rarityColor, boxShadow: `0 0 6px ${rarityColor}60` }}
                                             />
+                                            <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded border border-slate-800 bg-black/45">
+                                                {itemImage ? (
+                                                    <CanvasAssetImage
+                                                        src={itemImage}
+                                                        label={item.nombre || item.name || item.type || 'equipamiento'}
+                                                        imageClassName="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100"
+                                                        overlayClassName="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"
+                                                        fallback={
+                                                            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#0b1120]/95 via-black/75 to-[#161f32]/90">
+                                                                <TypeIcon className="h-4 w-4 text-[#c8aa6e]/60" />
+                                                            </div>
+                                                        }
+                                                    />
+                                                ) : (
+                                                    <div className="absolute inset-0 flex items-center justify-center">
+                                                        <TypeIcon className="h-4 w-4 text-slate-600" />
+                                                    </div>
+                                                )}
+                                            </div>
                                             <div className="flex flex-col min-w-0 flex-1">
                                                 <span className="text-[11px] font-semibold truncate" style={{ color: rarityColor }}>
                                                     {item.nombre || item.name}
@@ -3225,7 +3327,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         // --- SELECTION BOX ---
         if (selectionBox) {
-            setSelectionBox(prev => ({ ...prev, current: { x: curX, y: curY } }));
+            setSelectionBox(prev => (
+                isValidSelectionBox(prev)
+                    ? { ...prev, current: { x: curX, y: curY } }
+                    : null
+            ));
             return;
         }
 
@@ -3530,6 +3636,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         // --- FINALIZAR SELECCIÓN BOX ---
         if (selectionBox && activeScenario) {
+            if (!isValidSelectionBox(selectionBox)) {
+                setSelectionBox(null);
+                return;
+            }
+
             const containerRect = containerRef.current?.getBoundingClientRect();
             if (containerRect) {
                 // Calcular rectangulo de selección en coordenadas relativas al div contenedor (para simplificar)
@@ -5615,11 +5726,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             </div>
                         ) : (
                             item.isCircular ? (
-                                <div className="w-full h-full rounded-full overflow-hidden border-2 border-[#c8aa6e] shadow-[0_0_12px_rgba(200,170,110,0.4)]">
-                                    <img src={item.img} className="w-full h-full object-cover" draggable={false} alt="" />
-                                </div>
+                                <TokenImageWithLoader
+                                    src={item.img}
+                                    label={item.name || 'Token'}
+                                    className="w-full h-full rounded-full border-2 border-[#c8aa6e] shadow-[0_0_12px_rgba(200,170,110,0.4)]"
+                                    imageClassName="w-full h-full object-cover"
+                                />
                             ) : (
-                                <img src={item.img} className="w-full h-full object-contain drop-shadow-lg" draggable={false} alt="" />
+                                <TokenImageWithLoader
+                                    src={item.img}
+                                    label={item.name || 'Token'}
+                                    className="w-full h-full"
+                                    imageClassName="w-full h-full object-contain drop-shadow-lg"
+                                />
                             )
                         )}
 
@@ -6360,6 +6479,38 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         clientTimestamp: Date.now()
     });
 
+    const buildPosturaRecoveryEffect = (tokenLike, recoveredPostura) => ({
+        scenarioId: activeScenarioRef.current?.id || activeScenario?.id || null,
+        attackerId: null,
+        attackerName: null,
+        targetId: tokenLike.id,
+        targetName: tokenLike.name || 'Token',
+        weaponName: null,
+        reactionType: 'turn_recovery',
+        finalDamage: 0,
+        counterDamage: 0,
+        blocksLost: { postura: 0, armadura: 0, vida: 0 },
+        baseBlocksLost: { postura: 0, armadura: 0, vida: 0 },
+        traitBonuses: { postura: null, armadura: null, vida: null },
+        traitEffectsApplied: { target: [], attacker: [] },
+        statusEffectsApplied: { target: [], attacker: [] },
+        speedEffectsApplied: { target: [], attacker: [] },
+        pushEffectsApplied: { target: [], attacker: [] },
+        recoveryEffectsApplied: {
+            target: [{
+                id: 'postura_recovery',
+                label: 'Reposo · Postura',
+                resource: 'postura',
+                amount: recoveredPostura,
+                hex: '#34d399'
+            }],
+            attacker: []
+        },
+        damage: 0,
+        recoverySource: 'end_turn_idle',
+        clientTimestamp: Date.now()
+    });
+
     const publishSyncedCombatEffect = async (effect) => {
         if (!effect?.scenarioId) {
             queueLocalCombatAnimation(effect);
@@ -6402,6 +6553,27 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         enqueue();
     };
 
+    const queuePosturaRecoveryAnimation = (tokenLike, recoveredPostura, options = {}) => {
+        if (!tokenLike?.id || recoveredPostura <= 0) return;
+
+        const effect = buildPosturaRecoveryEffect(tokenLike, recoveredPostura);
+        const normalizedDelay = Math.max(0, Number(options.delayMs) || 0);
+        const enqueue = () => {
+            if (options.shared) {
+                publishSyncedCombatEffect(effect);
+                return;
+            }
+            queueLocalCombatAnimation(effect);
+        };
+
+        if (normalizedDelay > 0) {
+            setTimeout(enqueue, normalizedDelay);
+            return;
+        }
+
+        enqueue();
+    };
+
     const applyCombatCalculations = (token, damage, weapon) => {
         const attributeDice = {
             destreza: token.attributes?.destreza || 'd6',
@@ -6422,7 +6594,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const hasConmocionante = normalizedTraits.some((t) => t.includes('conmocionante'));
         const hasSangrado = normalizedTraits.some((t) => t.includes('sangrado'));
         const hasRalentizado = normalizedTraits.some((t) => t.includes('ralentizado') || t.includes('ralentizar'));
-        const hasPenetrante = normalizedTraits.some((t) => t.includes('penetrante') || t.includes('perforante'));
+        const hasPerforante = normalizedTraits.some((t) => t.includes('penetrante') || t.includes('perforante'));
         const hasEmpuje = normalizedTraits.some((t) => t.includes('empuje') || t.includes('empujar'));
 
         const reduceDieStep = (dieStr) => {
@@ -6457,8 +6629,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         let lostVida = 0;
         let extraPosturaFromTrait = 0;
         let extraArmaduraFromTrait = 0;
-        let extraArmaduraFromPenetrante = 0;
-        let extraVidaFromPenetrante = 0;
+        let extraArmaduraFromPerforante = 0;
+        let extraVidaFromPerforante = 0;
         let baseLostPostura = 0;
         let baseLostArmadura = 0;
         let baseLostVida = 0;
@@ -6521,14 +6693,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         baseLostVida = lostVida;
         currentVida -= lostVida;
 
-        const addPenetranteBlock = (preferredLayer) => {
+        const addPerforanteBlock = (preferredLayer) => {
             if (preferredLayer === 'armadura' && currentArmadura > 0) {
                 currentArmadura -= 1;
                 lostArmadura += 1;
-                extraArmaduraFromPenetrante += 1;
+                extraArmaduraFromPerforante += 1;
                 appliedTraitEffects.push({
-                    id: 'penetrante',
-                    label: 'Penetrante',
+                    id: 'perforante',
+                    label: 'Perforante',
                     layer: 'armadura',
                     blocks: 1,
                     hex: '#f59e0b'
@@ -6539,10 +6711,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             if (currentVida > 0) {
                 currentVida -= 1;
                 lostVida += 1;
-                extraVidaFromPenetrante += 1;
+                extraVidaFromPerforante += 1;
                 appliedTraitEffects.push({
-                    id: 'penetrante',
-                    label: 'Penetrante',
+                    id: 'perforante',
+                    label: 'Perforante',
                     layer: 'vida',
                     blocks: 1,
                     hex: '#fb7185'
@@ -6553,7 +6725,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             return false;
         };
 
-        if (hasPenetrante) {
+        if (hasPerforante) {
             const penetratedCurrentLayer =
                 (currentLayerBeforeDamage === 'postura' && lostPostura > 0) ||
                 (currentLayerBeforeDamage === 'armadura' && lostArmadura > 0) ||
@@ -6561,9 +6733,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
             if (penetratedCurrentLayer) {
                 if (currentLayerBeforeDamage === 'postura') {
-                    addPenetranteBlock('armadura');
+                    addPerforanteBlock('armadura');
                 } else {
-                    addPenetranteBlock('vida');
+                    addPerforanteBlock('vida');
                 }
             }
         }
@@ -6610,16 +6782,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             baseLost: { postura: baseLostPostura, armadura: baseLostArmadura, vida: baseLostVida },
             traitBonuses: {
                 postura: extraPosturaFromTrait ? { name: 'Derribo', blocks: extraPosturaFromTrait } : null,
-                armadura: (extraArmaduraFromTrait + extraArmaduraFromPenetrante) > 0
+                armadura: (extraArmaduraFromTrait + extraArmaduraFromPerforante) > 0
                     ? {
                         name: [
                             extraArmaduraFromTrait ? 'Hendir' : null,
-                            extraArmaduraFromPenetrante ? 'Penetrante' : null
+                            extraArmaduraFromPerforante ? 'Perforante' : null
                         ].filter(Boolean).join(' + '),
-                        blocks: extraArmaduraFromTrait + extraArmaduraFromPenetrante
+                        blocks: extraArmaduraFromTrait + extraArmaduraFromPerforante
                     }
                     : null,
-                vida: extraVidaFromPenetrante ? { name: 'Penetrante', blocks: extraVidaFromPenetrante } : null,
+                vida: extraVidaFromPerforante ? { name: 'Perforante', blocks: extraVidaFromPerforante } : null,
             },
             appliedStatusEffects,
             appliedTraitEffects,
@@ -6706,6 +6878,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         let traitEffectsApplied = { target: [], attacker: [] };
         let speedEffectsApplied = { target: [], attacker: [] };
         let pushEffectsApplied = { target: [], attacker: [] };
+        let elusionEffect = null;
         let nextAttackerFluidaState = getTokenFluidaState(attackerTokenBase);
         let nextTargetFluidaState = getTokenFluidaState(targetTokenBase);
 
@@ -6854,7 +7027,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     step.weapon,
                     counterArmorProtection.negatedTraits
                 );
-                const stepTraits = getItemTraits(defenderWeapon);
+                const stepTraits = getItemTraits(defenderWeapon)
+                    .filter((traitId) => normalizeCombatTraitId(traitId) !== 'elusion');
                 const defenderRoll = rollAttack(defenderWeapon, defenderAttrs);
                 const stepDice = extractCombatRollDice(defenderRoll, `def-${stepIndex}`);
                 const defenderRange = getCombatRangeData(defenderWeapon);
@@ -6888,6 +7062,64 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 || 'su arma';
             defenderRangeLabel = Array.from(new Set(defenderSteps.map((step) => step.rangeLabel).filter(Boolean))).join(' · ') || null;
 
+            const attackHasElusion = attackTraits.some((traitId) => normalizeCombatTraitId(traitId) === 'elusion')
+                || hasCombatTrait(event.weapon, 'elusion');
+            if (attackHasElusion && defenderDice.length > 0) {
+                let highestParryDie = null;
+                defenderSteps.forEach((step, stepIndex) => {
+                    (step.dice || []).forEach((die, dieIndex) => {
+                        const dieValue = Number(die?.value) || 0;
+                        if (!highestParryDie || dieValue > highestParryDie.value) {
+                            highestParryDie = {
+                                die,
+                                dieIndex,
+                                stepIndex,
+                                stepId: step.id || `parry-step-${stepIndex + 1}`,
+                                value: dieValue,
+                            };
+                        }
+                    });
+                });
+
+                if (highestParryDie && highestParryDie.value > 0) {
+                    const originalDefenderTotal = defenderTotal;
+                    const removedDieId = highestParryDie.die?.id || null;
+                    defenderTotal = Math.max(0, defenderTotal - highestParryDie.value);
+                    defenderSteps = defenderSteps.map((step, stepIndex) => {
+                        if (stepIndex !== highestParryDie.stepIndex) return step;
+
+                        return {
+                            ...step,
+                            total: Math.max(0, (Number(step.total) || 0) - highestParryDie.value),
+                            dice: (step.dice || []).map((die, dieIndex) => {
+                                if (dieIndex !== highestParryDie.dieIndex) return die;
+                                return {
+                                    ...die,
+                                    eludedByElusion: true,
+                                    elusionRemoved: true,
+                                };
+                            }),
+                        };
+                    });
+                    defenderDice = defenderDice.map((die) => (
+                        die?.id === removedDieId
+                            ? { ...die, eludedByElusion: true, elusionRemoved: true }
+                            : die
+                    ));
+                    elusionEffect = {
+                        id: 'elusion',
+                        label: 'Elusión',
+                        dieId: removedDieId,
+                        value: highestParryDie.value,
+                        stepId: highestParryDie.stepId,
+                        stepIndex: highestParryDie.stepIndex,
+                        weaponName: event.weapon?.nombre || event.weapon?.name || null,
+                        originalDefenderTotal,
+                        defenderTotal,
+                    };
+                }
+            }
+
             const reachableCounterSteps = defenderSteps.filter((step) => step.reachesAttacker);
             const counterWeapon = buildAggregateCombatWeapon(reachableCounterSteps);
             const lastNativeFluidaStep = [...defenderSteps].reverse().find((step) => hasNativeCombatTrait(step.weapon, 'fluida'));
@@ -6897,12 +7129,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const evasionLogPrefix = evadedDiceIds.length > 0
                 ? `evadió ${evadedDiceIds.length} dado${evadedDiceIds.length === 1 ? '' : 's'} y `
                 : '';
+            const elusionLogPrefix = elusionEffect
+                ? `Elusión retiró un dado de parada (${elusionEffect.value}). `
+                : '';
 
             if (diff === 0) {
                 finalDamage = 0;
                 updateTokenInList(targetTokenBase.id, { velocidad: getTargetVelocityAfterReaction(yellowCost) });
                 const defWeaponName = defenderWeaponSummary || 'su arma';
-                logText = `${targetToken.name} ${evasionLogPrefix}realizó una parada perfecta ${isSweepAttack ? `contra ${attackModeLabel?.toLowerCase() || 'el barrido'}` : ''} con ${defWeaponName}.`;
+                logText = `${elusionLogPrefix}${targetToken.name} ${evasionLogPrefix}realizó una parada perfecta ${isSweepAttack ? `contra ${attackModeLabel?.toLowerCase() || 'el barrido'}` : ''} con ${defWeaponName}.`;
                 setAttackerFluidaState(null);
                 setTargetFluidaState(lastNativeFluidaStep ? createFluidaState(attackerToken.id, lastNativeFluidaStep.weapon, 'parry') : null);
             } else if (diff > 0) {
@@ -6922,7 +7157,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 const pushEffect = applyEmpujeEffect(res, attackerTokenBase, targetTokenBase);
                 pushEffectsApplied.target = [pushEffect].filter(Boolean);
                 const defWeaponName = defenderWeaponSummary || 'su arma';
-                logText = `${targetToken.name} ${evasionLogPrefix}paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName} pero recibió ${diff} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
+                logText = `${elusionLogPrefix}${targetToken.name} ${evasionLogPrefix}paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName} pero recibió ${diff} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
                 logText = appendEmpujeLog(logText, pushEffect);
                 logText = appendRalentizadoLog(logText, res, targetToken);
                 setAttackerFluidaState(attackHasFluida ? createFluidaState(targetToken.id, event.fluidaMeta?.sourceWeapon || event.weapon, 'attack') : null);
@@ -6933,7 +7168,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     counterPreventedByRange = true;
                     finalDamage = 0;
                     updateTokenInList(targetTokenBase.id, { velocidad: getTargetVelocityAfterReaction(yellowCost) });
-                    logText = `${targetToken.name} ${evasionLogPrefix}paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName}, pero no pudo contraatacar porque su alcance (${defenderRangeLabel || 'desconocido'}) no alcanza la distancia real entre ambos (${distanceBetweenTokens}).`;
+                    logText = `${elusionLogPrefix}${targetToken.name} ${evasionLogPrefix}paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName}, pero no pudo contraatacar porque su alcance (${defenderRangeLabel || 'desconocido'}) no alcanza la distancia real entre ambos (${distanceBetweenTokens}).`;
                 } else {
                     counterDamage = Math.abs(diff);
                     const res = applyCombatCalculations(attackerToken, counterDamage, counterWeapon);
@@ -6951,7 +7186,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     const pushEffect = applyEmpujeEffect(res, targetTokenBase, attackerTokenBase);
                     pushEffectsApplied.attacker = [pushEffect].filter(Boolean);
                     updateTokenInList(targetTokenBase.id, { velocidad: getTargetVelocityAfterReaction(yellowCost) });
-                    logText = `¡${targetToken.name} ${evasionLogPrefix}paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName} y contraatacó a ${attackerToken.name} por ${counterDamage} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques)!`;
+                    logText = `${elusionLogPrefix}¡${targetToken.name} ${evasionLogPrefix}paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName} y contraatacó a ${attackerToken.name} por ${counterDamage} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques)!`;
                     logText = appendEmpujeLog(logText, pushEffect);
                     logText = appendRalentizadoLog(logText, res, attackerToken);
                 }
@@ -7022,6 +7257,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             attackerRangeLabel,
             defenderRangeLabel,
             distanceBetweenTokens,
+            elusionEffect,
             finalDamage,
             counterDamage,
             defenderWeapon: defenderWeaponSummary || event.reactionData?.weapon?.nombre || event.reactionData?.weapon?.name || null,
@@ -7292,6 +7528,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const pending = pendingTurnState && pendingTurnState.tokenId === tokenId ? pendingTurnState : null;
         const moveCost = pending ? pending.moveCost : 0;
         const actionCost = pending ? pending.actionCost : 0;
+        const pendingActions = Array.isArray(pending?.actions) ? pending.actions : [];
+        const didNothingThisTurn = !pending || (
+            Math.max(0, Number(moveCost) || 0) <= 0 &&
+            Math.max(0, Number(actionCost) || 0) <= 0 &&
+            pendingActions.length === 0
+        );
         const isStandingUp = !!pending?.actions?.some(action => action.actionId === 'stand_up');
         const pendingSangradoControl = getPendingSangradoControlCount(pending);
         const pendingSangradoControlSpeedCost = getPendingSangradoControlSpeedCost(pending);
@@ -7507,6 +7749,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }
 
         let endTurnSangradoAnimation = null;
+        let endTurnPosturaRecoveryAnimation = null;
         const newItems = scenario.items.map(i => {
             if (i.id !== tokenId) return i;
 
@@ -7532,6 +7775,31 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         }
                     }
                 };
+            }
+
+            if (didNothingThisTurn && !isStandingUp) {
+                const posturaCurrent = Math.max(0, Number(nextItem?.stats?.postura?.current ?? 0));
+                const posturaMax = Math.max(posturaCurrent, Number(nextItem?.stats?.postura?.max ?? posturaCurrent));
+                const recoveredPostura = posturaMax > posturaCurrent ? 1 : 0;
+                if (recoveredPostura > 0) {
+                    nextItem = {
+                        ...nextItem,
+                        stats: {
+                            ...nextItem.stats,
+                            postura: {
+                                ...(nextItem.stats?.postura || {}),
+                                current: Math.min(posturaMax, posturaCurrent + recoveredPostura)
+                            }
+                        }
+                    };
+                    endTurnPosturaRecoveryAnimation = {
+                        token: {
+                            ...nextItem,
+                            name: i.name
+                        },
+                        recoveredPostura
+                    };
+                }
             }
 
             const effectiveSangradoSpentSpeed = Math.max(0, finalCost - pendingSangradoControlSpeedCost);
@@ -7561,11 +7829,31 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             if (endTurnSangradoAnimation) {
                 queueSangradoSpeedAnimation(endTurnSangradoAnimation.token, endTurnSangradoAnimation.lostVida, { shared: true });
             }
-            triggerToast("Turno Finalizado", `Total: +${finalCost} 🟡`, 'success');
+            if (endTurnPosturaRecoveryAnimation) {
+                queuePosturaRecoveryAnimation(
+                    endTurnPosturaRecoveryAnimation.token,
+                    endTurnPosturaRecoveryAnimation.recoveredPostura,
+                    { shared: true }
+                );
+            }
+            const recoveryText = endTurnPosturaRecoveryAnimation ? ' · +1 Postura' : '';
+            triggerToast("Turno Finalizado", `Total: +${finalCost} 🟡${recoveryText}`, 'success');
         } catch (error) {
             console.error("Error ending turn:", error);
         }
     };
+
+    const selectionBoxContainerRect = isValidSelectionBox(selectionBox)
+        ? containerRef.current?.getBoundingClientRect()
+        : null;
+    const selectionBoxOverlayRect = selectionBoxContainerRect
+        ? {
+            left: Math.min(selectionBox.start.x, selectionBox.current.x) - selectionBoxContainerRect.left,
+            top: Math.min(selectionBox.start.y, selectionBox.current.y) - selectionBoxContainerRect.top,
+            width: Math.abs(selectionBox.current.x - selectionBox.start.x),
+            height: Math.abs(selectionBox.current.y - selectionBox.start.y)
+        }
+        : null;
 
     return (
         <div className={`h-screen w-screen overflow-hidden bg-[#09090b] relative font-['Lato'] select-none ${targetingState ? 'cursor-crosshair' : ''}`}>
@@ -8058,6 +8346,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                          <div className="flex gap-1.5">
                                                                              {entry.defenderDice.map((die, i) => {
                                                                                 const matchedAttr = typeof die.matchedAttr === 'string' ? die.matchedAttr.trim().toLowerCase() : null;
+                                                                                const wasEludedByElusion = !!die.eludedByElusion || !!die.elusionRemoved || entry.elusionEffect?.dieId === die.id;
                                                                                 const attrColorMap = {
                                                                                     destreza: { color: '#4ade80' },
                                                                                     intelecto: { color: '#60a5fa' },
@@ -8067,7 +8356,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                                 const attrStyle = matchedAttr && attrColorMap[matchedAttr] ? attrColorMap[matchedAttr] : null;
 
                                                                                 return (
-                                                                                    <div key={i} className="flex-shrink-0" title={die.critical ? "Dado Crítico" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)}` : "Dado de Arma"}>
+                                                                                    <div
+                                                                                        key={i}
+                                                                                        className={`relative flex-shrink-0 ${wasEludedByElusion ? 'opacity-45 grayscale' : ''}`}
+                                                                                        title={wasEludedByElusion ? `Dado retirado por Elusión (${die.value})` : die.critical ? "Dado Crítico" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)}` : "Dado de Arma"}
+                                                                                    >
                                                                                         <DiceSvg faces={die.faces} value={die.value}
                                                                                             className={`w-5 h-5 ${die.critical ? 'drop-shadow-[0_0_6px_rgba(234,88,12,0.3)]' : 'drop-shadow-sm'}`}
                                                                                             style={die.critical ? {
@@ -8084,6 +8377,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                                                 backgroundColor: 'transparent',
                                                                                             }}
                                                                                         />
+                                                                                        {wasEludedByElusion && (
+                                                                                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                                                                <div className="w-[125%] h-0.5 bg-cyan-300 rotate-45 absolute shadow-[0_0_5px_rgba(103,232,249,0.8)]"></div>
+                                                                                                <div className="w-[125%] h-0.5 bg-cyan-300 -rotate-45 absolute shadow-[0_0_5px_rgba(103,232,249,0.8)]"></div>
+                                                                                            </div>
+                                                                                        )}
                                                                                     </div>
                                                                                 );
                                                                             })}
@@ -8113,6 +8412,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                 {entry.reactionType === 'parar' && (
                                                                     <p className="text-slate-300">
                                                                         <span className="text-blue-400/80 mr-1.5 italic font-bold">Parada:</span>
+                                                                        {entry.elusionEffect ? <span className="text-cyan-300 font-bold">Elusión retiró el dado {entry.elusionEffect.value}. </span> : null}
                                                                         {isPerfect ? `Desvió completamente el ataque con ${entry.defenderWeapon || 'su arma'}.` :
                                                                             isCounter ? `Devolvió ${entry.counterDamage} de daño al atacante con ${entry.defenderWeapon || 'su arma'}.` :
                                                                                 isCounterPreventedByRange ? `Desvió el ataque con ${entry.defenderWeapon || 'su arma'}, pero no alcanza la distancia real para devolver el golpe.` :
@@ -8563,7 +8863,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     onClick={() => addTokenToCanvas(token.url)} // Click to Add
                                                     title="Click para añadir al mapa"
                                                 >
-                                                    <img src={token.url} alt={token.name} className="w-full h-full object-contain p-2" />
+                                                    <TokenImageWithLoader
+                                                        src={token.url}
+                                                        label={token.name || 'Token'}
+                                                        className="w-full h-full"
+                                                        imageClassName="w-full h-full object-contain p-2"
+                                                    />
 
                                                     {/* Delete Button Overlay */}
                                                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
@@ -8773,9 +9078,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         }}
                                                         className={`group flex items-center gap-4 bg-[#111827] border p-3 rounded-lg transition-all cursor-pointer ${selectedTokenIds.includes(token.id) ? 'border-[#c8aa6e] bg-[#c8aa6e]/5' : 'border-slate-800 hover:border-slate-700'}`}
                                                     >
-                                                        <div className="w-10 h-10 bg-[#0b1120] rounded border border-slate-800 overflow-hidden flex items-center justify-center">
-                                                            <img src={token.portrait || token.img} className="w-full h-full object-contain p-1" />
-                                                        </div>
+                                                        <TokenImageWithLoader
+                                                            src={token.portrait || token.img}
+                                                            label={token.name || 'Token'}
+                                                            className="w-10 h-10 bg-[#0b1120] rounded border border-slate-800 shrink-0"
+                                                            imageClassName="w-full h-full object-contain p-1"
+                                                        />
                                                         <div className="flex-1 min-w-0">
                                                             <h5 className="text-[#f0e6d2] font-fantasy text-sm truncate uppercase tracking-wider">{token.name}</h5>
                                                             <div className="flex items-center gap-2 text-[8px] font-bold text-slate-500 uppercase">
@@ -8826,7 +9134,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     ) : token.type === 'geometry' ? (
                                                         token.shapeType === 'circle' ? <Circle className="w-10 h-10 drop-shadow-[0_0_12px_currentColor]" /> : <Square className="w-10 h-10 drop-shadow-[0_0_12px_currentColor]" />
                                                     ) : (
-                                                        <img src={token.portrait || token.img} className="w-full h-full object-contain p-1.5 transition-transform duration-500 group-hover:scale-110" />
+                                                        <TokenImageWithLoader
+                                                            src={token.portrait || token.img}
+                                                            label={token.name || 'Token'}
+                                                            className="w-full h-full"
+                                                            imageClassName="w-full h-full object-contain p-1.5 transition-transform duration-500 group-hover:scale-110"
+                                                        />
                                                     )}
                                                 </div>
                                                 <div className="space-y-1.5">
@@ -9034,12 +9347,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                 {token.linkedCharacterId ? (
                                                                     <div className="flex items-center justify-between gap-3 bg-[#0b1120] p-2.5 rounded border border-[#c8aa6e]/30 shadow-inner">
                                                                         <div className="flex items-center gap-2.5 overflow-hidden">
-                                                                            <div className="w-7 h-7 rounded bg-slate-900 border border-slate-800 overflow-hidden shrink-0">
-                                                                                <img
-                                                                                    src={availableCharacters?.find(c => c.id === token.linkedCharacterId)?.avatar || token.img}
-                                                                                    className="w-full h-full object-contain p-0.5"
-                                                                                />
-                                                                            </div>
+                                                                            <TokenImageWithLoader
+                                                                                src={availableCharacters?.find(c => c.id === token.linkedCharacterId)?.avatar || token.img}
+                                                                                label={availableCharacters?.find(c => c.id === token.linkedCharacterId)?.name || token.name || 'Token vinculado'}
+                                                                                className="w-7 h-7 rounded bg-slate-900 border border-slate-800 shrink-0"
+                                                                                imageClassName="w-full h-full object-contain p-0.5"
+                                                                            />
                                                                             <div className="flex flex-col min-w-0">
                                                                                 <span className="text-[11px] text-[#f0e6d2] truncate font-bold uppercase tracking-wider">
                                                                                     {availableCharacters?.find(c => c.id === token.linkedCharacterId)?.name || 'Archivo Vinculado'}
@@ -9841,15 +10154,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             onContextMenu={(e) => e.preventDefault()}
                         >
                             {/* --- SELECTION BOX RENDER (Screen Space Overlay) --- */}
-                            {selectionBox && (
+                            {selectionBoxOverlayRect && (
                                 <div
                                     className="absolute border border-[#c8aa6e] bg-[#c8aa6e]/10 pointer-events-none z-50"
-                                    style={{
-                                        left: Math.min(selectionBox.start.x, selectionBox.current.x) - (containerRef.current?.getBoundingClientRect().left || 0),
-                                        top: Math.min(selectionBox.start.y, selectionBox.current.y) - (containerRef.current?.getBoundingClientRect().top || 0),
-                                        width: Math.abs(selectionBox.current.x - selectionBox.start.x),
-                                        height: Math.abs(selectionBox.current.y - selectionBox.start.y)
-                                    }}
+                                    style={selectionBoxOverlayRect}
                                 />
                             )}
 

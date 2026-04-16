@@ -45,6 +45,11 @@ const TRAIT_EFFECT_COLORS = {
         armadura: '#cbd5e1',
         default: '#cbd5e1',
     },
+    perforante: {
+        armadura: '#f59e0b',
+        vida: '#fb7185',
+        default: '#fbbf24',
+    },
     penetrante: {
         armadura: '#f59e0b',
         vida: '#fb7185',
@@ -166,6 +171,20 @@ const normalizePushEffects = (pushEffects = []) => (
         : []
 );
 
+const normalizeRecoveryEffects = (recoveryEffects = []) => (
+    Array.isArray(recoveryEffects)
+        ? recoveryEffects
+            .map((recoveryEffect) => ({
+                ...recoveryEffect,
+                id: recoveryEffect?.id || 'recovery',
+                amount: Math.max(0, Number(recoveryEffect?.amount) || 0),
+                resource: typeof recoveryEffect?.resource === 'string' ? recoveryEffect.resource.toLowerCase() : recoveryEffect?.resource,
+                label: recoveryEffect?.label || 'Recuperación',
+            }))
+            .filter((recoveryEffect) => recoveryEffect.amount > 0)
+        : []
+);
+
 const getBlocksLostWithoutTraitEffects = (blocksLost, traitEffects = []) => {
     if (!blocksLost || traitEffects.length === 0) return blocksLost;
 
@@ -222,6 +241,7 @@ export function getCombatEffectLifetimeMs(effect) {
         statusEffectsApplied,
         speedEffectsApplied,
         pushEffectsApplied,
+        recoveryEffectsApplied,
         postReactionSpeedLoss
     } = effect;
 
@@ -258,6 +278,9 @@ export function getCombatEffectLifetimeMs(effect) {
     );
     const attackerAppliedPushEffects = normalizePushEffects(
         Array.isArray(pushEffectsApplied?.attacker) ? pushEffectsApplied.attacker : []
+    );
+    const targetAppliedRecoveryEffects = normalizeRecoveryEffects(
+        Array.isArray(recoveryEffectsApplied?.target) ? recoveryEffectsApplied.target : []
     );
     const hasTargetBlocksLost = targetBlocks.length > 0;
     const resistedTargetHit = finalDamage > 0 && !hasTargetBlocksLost;
@@ -435,6 +458,7 @@ export function getCombatEffectLifetimeMs(effect) {
         attackerPushLastStart ? attackerPushLastStart + FLYOFF_DURATION_SECONDS : 0,
         targetSpeedLastStart ? targetSpeedLastStart + FLYOFF_DURATION_SECONDS : 0,
         attackerSpeedLastStart ? attackerSpeedLastStart + FLYOFF_DURATION_SECONDS : 0,
+        targetAppliedRecoveryEffects.length > 0 ? FLYOFF_DURATION_SECONDS : 0,
         targetStateLastStart ? targetStateLastStart + FLYOFF_DURATION_SECONDS : 0,
         attackerStateLastStart ? attackerStateLastStart + FLYOFF_DURATION_SECONDS : 0,
         hasTargetBlocksLost ? targetDamageDelay + HIGHLIGHT_DURATION_SECONDS : 0,
@@ -459,6 +483,7 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
         statusEffectsApplied,
         speedEffectsApplied,
         pushEffectsApplied,
+        recoveryEffectsApplied,
         postReactionSpeedLoss,
         attackerId,
         targetId,
@@ -503,6 +528,9 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
     );
     const attackerAppliedPushEffects = normalizePushEffects(
         Array.isArray(pushEffectsApplied?.attacker) ? pushEffectsApplied.attacker : []
+    );
+    const targetAppliedRecoveryEffects = normalizeRecoveryEffects(
+        Array.isArray(recoveryEffectsApplied?.target) ? recoveryEffectsApplied.target : []
     );
 
     const addHighlight = (id, position, delay = 0) => {
@@ -634,6 +662,26 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
                 color: getPushEffectColor(pushEffect),
                 label: getPushEffectLabel(pushEffect),
                 type: 'push',
+                delay: baseDelay + (idx * STATE_EFFECT_STAGGER_SECONDS)
+            });
+        });
+    };
+
+    const addRecoveryEffectFlyoffs = (id, position, recoveryEffects, baseDelay = 0) => {
+        if (!position || recoveryEffects.length === 0) return;
+
+        const centerX = position.x + position.width / 2;
+        const baseY = position.y - 42;
+
+        recoveryEffects.forEach((recoveryEffect, idx) => {
+            const resourceLabel = BLOCK_LABELS[recoveryEffect.resource] || recoveryEffect.resource || 'Recurso';
+            addFlyoff(`${id}-${recoveryEffect.id || 'recovery'}-${idx}`, {
+                x: centerX + stableOffset(`${effectKey}-${id}-${idx}-recovery-x`, 12),
+                y: baseY - (idx * 8),
+                text: `+${recoveryEffect.amount}`,
+                color: recoveryEffect.hex || BLOCK_COLORS[recoveryEffect.resource] || '#34d399',
+                label: recoveryEffect.label || resourceLabel,
+                type: 'recovery',
                 delay: baseDelay + (idx * STATE_EFFECT_STAGGER_SECONDS)
             });
         });
@@ -889,6 +937,7 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
 
     addSpeedEffectFlyoffs('target-speed', targetPos, targetAppliedSpeedEffects, targetSpeedDelay);
     addSpeedEffectFlyoffs('attacker-speed', attackerPos, attackerAppliedSpeedEffects, attackerSpeedDelay);
+    addRecoveryEffectFlyoffs('target-recovery', targetPos, targetAppliedRecoveryEffects, 0);
 
     targetAppliedStatusEffects.forEach((statusEffect, idx) => {
         if (!targetPos) return;

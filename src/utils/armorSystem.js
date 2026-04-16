@@ -38,7 +38,7 @@ export const normalizeCombatTrait = (trait) => {
 
   if (!normalized) return '';
   if (['derribado', 'derribar', 'derribo'].includes(normalized)) return 'derribo';
-  if (normalized === 'perforante') return 'penetrante';
+  if (normalized === 'penetrante') return 'perforante';
   if (normalized === 'ralentizar') return 'ralentizado';
   if (normalized === 'empujar') return 'empuje';
   if (compact === 'singuardia') return 'sin guardia';

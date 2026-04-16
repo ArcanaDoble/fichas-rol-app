@@ -52,8 +52,9 @@ const formatCombatTraitLabel = (trait = '') => {
     if (normalized === 'fluida') return 'Fluida';
     if (normalized === 'sangrado') return 'Sangrado';
     if (normalized === 'ralentizado' || normalized === 'ralentizar') return 'Ralentizado';
-    if (normalized === 'penetrante' || normalized === 'perforante') return 'Penetrante';
+    if (normalized === 'penetrante' || normalized === 'perforante') return 'Perforante';
     if (normalized === 'empuje' || normalized === 'empujar') return 'Empuje';
+    if (normalized === 'elusion' || normalized === 'elusión') return 'Elusión';
     if (normalized === 'sin guardia' || normalized === 'singuardia' || normalized === 'sin_guardia') return 'Sin guardia';
     return trait;
 };
@@ -548,7 +549,7 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
     const resolvedParrySteps = Array.isArray(event?.result?.defenderSteps) && event.result.defenderSteps.length > 0
         ? event.result.defenderSteps
         : buildLegacyParrySteps(event?.result);
-    const renderResultDice = (diceList, evadedIds = []) => {
+    const renderResultDice = (diceList, evadedIds = [], eludedIds = []) => {
         if (!diceList || diceList.length === 0) return null;
         return (
             <div className="flex flex-wrap gap-2 justify-center my-3 relative z-10">
@@ -558,6 +559,11 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
                         ? rawDieId.replace(/^[^-]+-/, '')
                         : rawDieId;
                     const isEvaded = evadedIds.includes(rawDieId) || evadedIds.includes(unprefixedDieId);
+                    const isEluded = !!die.eludedByElusion
+                        || !!die.elusionRemoved
+                        || eludedIds.includes(rawDieId)
+                        || eludedIds.includes(unprefixedDieId);
+                    const isRemoved = isEvaded || isEluded;
                     const isCrit = die.isCrit || die.critical;
                     const matchedAttr = die.matchedAttr ? die.matchedAttr.trim().toLowerCase() : null;
 
@@ -586,19 +592,19 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
                     };
 
                     return (
-                        <div key={die.id} className={`relative transition-all duration-300 ${isEvaded ? 'opacity-40 grayscale scale-95' : 'hover:scale-110'}`}>
+                        <div key={die.id} className={`relative transition-all duration-300 ${isRemoved ? 'opacity-40 grayscale scale-95' : 'hover:scale-110'}`}>
                             <DiceSvg
                                 faces={die.faces}
                                 value={die.value}
                                 className="w-8 h-8 md:w-10 md:h-10"
                                 style={baseStyle}
-                                title={isCrit ? "Dado Crítico" : matchedAttr ? `Dado de ${matchedAttr}` : "Dado Arma"}
+                                title={isEluded ? `Dado retirado por Elusión (${die.value})` : isCrit ? "Dado Crítico" : matchedAttr ? `Dado de ${matchedAttr}` : "Dado Arma"}
                             />
                             {isCrit && <span className="absolute -top-2 -right-2 text-[#ea580c] text-[8px] font-sans font-bold bg-black/80 px-1 rounded border border-[#ea580c]/50 z-20">CRIT</span>}
-                            {isEvaded && (
+                            {isRemoved && (
                                 <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
-                                    <div className="w-[120%] h-0.5 bg-red-500 rotate-45 absolute shadow-[0_0_5px_rgba(239,68,68,0.8)]"></div>
-                                    <div className="w-[120%] h-0.5 bg-red-500 -rotate-45 absolute shadow-[0_0_5px_rgba(239,68,68,0.8)]"></div>
+                                    <div className={`w-[120%] h-0.5 ${isEluded ? 'bg-cyan-300 shadow-[0_0_5px_rgba(103,232,249,0.8)]' : 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.8)]'} rotate-45 absolute`}></div>
+                                    <div className={`w-[120%] h-0.5 ${isEluded ? 'bg-cyan-300 shadow-[0_0_5px_rgba(103,232,249,0.8)]' : 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.8)]'} -rotate-45 absolute`}></div>
                                 </div>
                             )}
                         </div>
@@ -726,6 +732,11 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
                                                                 {(event.result.evadedDiceIds || []).length > 0 && (
                                                                     <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-yellow-500/80">
                                                                         Evasión: {(event.result.evadedDiceIds || []).length} dado{(event.result.evadedDiceIds || []).length === 1 ? '' : 's'} anulado{(event.result.evadedDiceIds || []).length === 1 ? '' : 's'}
+                                                                    </div>
+                                                                )}
+                                                                {event.result.elusionEffect && (
+                                                                    <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-300/85">
+                                                                        Elusión: dado de parada retirado (-{event.result.elusionEffect.value})
                                                                     </div>
                                                                 )}
                                                                 {renderResultDice(event.result.attackerDice, event.result.evadedDiceIds)}
@@ -1123,6 +1134,10 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
                                                 isExpanded={modifiersExpanded}
                                                 onToggleExpand={() => setModifiersExpanded(!modifiersExpanded)}
                                                 currentWeapon={selectedWeaponData}
+                                                disabledTraitIds={['elusion']}
+                                                disabledTraitReasons={{
+                                                    elusion: 'Elusión solo se aplica en ataques, no en paradas.',
+                                                }}
                                             />
                                             <div className="rounded-lg border border-slate-800/80 bg-black/25 p-2.5 space-y-2">
                                                 <div className="flex items-center justify-between gap-2">

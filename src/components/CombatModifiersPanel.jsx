@@ -12,8 +12,9 @@ const formatTraitLabel = (trait = '') => {
     if (normalized === 'fluida') return 'Fluida';
     if (normalized === 'sangrado') return 'Sangrado';
     if (normalized === 'ralentizado' || normalized === 'ralentizar') return 'Ralentizado';
-    if (normalized === 'penetrante' || normalized === 'perforante') return 'Penetrante';
+    if (normalized === 'penetrante' || normalized === 'perforante') return 'Perforante';
     if (normalized === 'empuje' || normalized === 'empujar') return 'Empuje';
+    if (normalized === 'elusion' || normalized === 'elusión') return 'Elusión';
     if (normalized === 'sin guardia' || normalized === 'singuardia' || normalized === 'sin_guardia') return 'Sin guardia';
     return trait.charAt(0).toUpperCase() + trait.slice(1);
 };
@@ -26,8 +27,9 @@ const AVAILABLE_TRAITS = [
     { id: 'conmocionante', label: 'Conmocionante', icon: ArrowDown, color: 'text-indigo-300', border: 'border-indigo-400/50', bg: 'bg-indigo-900/30' },
     { id: 'sangrado', label: 'Sangrado', icon: Droplet, color: 'text-red-500', border: 'border-red-700/50', bg: 'bg-red-950/30' },
     { id: 'ralentizado', label: 'Ralentizado', icon: ZapOff, color: 'text-amber-300', border: 'border-amber-300/50', bg: 'bg-amber-900/25' },
-    { id: 'penetrante', label: 'Penetrante', icon: Target, color: 'text-amber-300', border: 'border-amber-400/50', bg: 'bg-amber-900/25' },
+    { id: 'perforante', label: 'Perforante', icon: Target, color: 'text-amber-300', border: 'border-amber-400/50', bg: 'bg-amber-900/25' },
     { id: 'empuje', label: 'Empuje', icon: MoveRight, color: 'text-sky-300', border: 'border-sky-400/50', bg: 'bg-sky-900/25' },
+    { id: 'elusion', label: 'Elusión', icon: Wind, color: 'text-cyan-300', border: 'border-cyan-400/50', bg: 'bg-cyan-900/25' },
     { id: 'fluida', label: 'Fluida', icon: Wind, color: 'text-sky-300', border: 'border-sky-400/50', bg: 'bg-sky-900/30' },
     { id: 'sin guardia', label: 'Sin guardia', icon: Shield, color: 'text-rose-300', border: 'border-rose-500/50', bg: 'bg-rose-900/30' },
     // Más rasgos se pueden añadir aquí fácilmente
@@ -42,7 +44,10 @@ const DEFAULT_TRAIT_STYLE = {
 };
 
 const getTraitConfig = (traitId) => {
-    const foundTrait = AVAILABLE_TRAITS.find((trait) => trait.id === traitId);
+    const normalizedTraitId = normalizeCombatTraitId(traitId);
+    const foundTrait = AVAILABLE_TRAITS.find((trait) => (
+        trait.id === traitId || normalizeCombatTraitId(trait.id) === normalizedTraitId
+    ));
     if (foundTrait) return foundTrait;
 
     return {
@@ -57,7 +62,9 @@ const CombatModifiersPanel = ({
     onChange,
     isExpanded,
     onToggleExpand,
-    currentWeapon = null
+    currentWeapon = null,
+    disabledTraitIds = [],
+    disabledTraitReasons = {}
 }) => {
     const [isTraitPickerOpen, setIsTraitPickerOpen] = useState(false);
 
@@ -89,11 +96,19 @@ const CombatModifiersPanel = ({
 
     const disabledTraitMeta = useMemo(() => {
         const disabled = {};
+        (disabledTraitIds || []).forEach((traitId) => {
+            const normalizedTraitId = normalizeCombatTraitId(traitId);
+            const availableTrait = AVAILABLE_TRAITS.find((trait) => normalizeCombatTraitId(trait.id) === normalizedTraitId);
+            const key = availableTrait?.id || traitId;
+            disabled[key] = disabledTraitReasons[traitId]
+                || disabledTraitReasons[normalizedTraitId]
+                || `${formatTraitLabel(key)} no puede aplicarse en esta tirada.`;
+        });
         if (fluidaDisabled) {
             disabled.fluida = 'Fluida no puede reducir un arma por debajo de 1 de velocidad.';
         }
         return disabled;
-    }, [fluidaDisabled]);
+    }, [disabledTraitIds, disabledTraitReasons, fluidaDisabled]);
 
     useEffect(() => {
         if (!isExpanded) {
@@ -102,13 +117,14 @@ const CombatModifiersPanel = ({
     }, [isExpanded]);
 
     useEffect(() => {
-        if (!modifiers.activeTraits.includes('fluida') || !fluidaDisabled) return;
+        const allowedActiveTraits = modifiers.activeTraits.filter((traitId) => !disabledTraitMeta[traitId]);
+        if (allowedActiveTraits.length === modifiers.activeTraits.length) return;
 
         onChange({
             ...modifiers,
-            activeTraits: modifiers.activeTraits.filter((traitId) => traitId !== 'fluida')
+            activeTraits: allowedActiveTraits
         });
-    }, [fluidaDisabled, modifiers, onChange]);
+    }, [disabledTraitMeta, modifiers, onChange]);
 
     useEffect(() => {
         if (!isTraitPickerOpen) return undefined;

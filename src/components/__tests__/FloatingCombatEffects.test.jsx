@@ -47,10 +47,10 @@ describe('buildCombatEffectVisuals', () => {
     });
   });
 
-  it('muestra Penetrante como flyoff propio sobre la capa de armadura afectada', () => {
+  it('muestra Perforante como flyoff propio sobre la capa de armadura afectada', () => {
     const visuals = buildCombatEffectVisuals({
       effect: {
-        sourceEventId: 'combat-event-penetrante-armadura',
+        sourceEventId: 'combat-event-perforante-armadura',
         attackerId: 'attacker-1',
         targetId: 'target-1',
         reactionType: 'recibir',
@@ -64,8 +64,8 @@ describe('buildCombatEffectVisuals', () => {
         traitEffectsApplied: {
           target: [
             {
-              id: 'penetrante',
-              label: 'Penetrante',
+              id: 'perforante',
+              label: 'Perforante',
               layer: 'armadura',
               blocks: 1,
             },
@@ -83,7 +83,7 @@ describe('buildCombatEffectVisuals', () => {
     });
 
     const damageFlyoffs = visuals.flyoffs.filter((flyoff) => flyoff.type === 'damage');
-    const penetranteFlyoff = visuals.flyoffs.find((flyoff) => flyoff.type === 'trait');
+    const perforanteFlyoff = visuals.flyoffs.find((flyoff) => flyoff.type === 'trait');
 
     expect(damageFlyoffs).toHaveLength(1);
     expect(damageFlyoffs[0]).toMatchObject({
@@ -91,9 +91,9 @@ describe('buildCombatEffectVisuals', () => {
       label: 'Postura',
       color: '#34d399',
     });
-    expect(penetranteFlyoff).toMatchObject({
+    expect(perforanteFlyoff).toMatchObject({
       text: '-1',
-      label: 'Penetrante · Armadura',
+      label: 'Perforante · Armadura',
       color: '#f59e0b',
       x: expect.any(Number),
       y: 192,
@@ -154,10 +154,10 @@ describe('buildCombatEffectVisuals', () => {
     });
   });
 
-  it('muestra Penetrante de contraataque sobre el atacante y distingue vida', () => {
+  it('muestra Perforante de contraataque sobre el atacante y distingue vida', () => {
     const visuals = buildCombatEffectVisuals({
       effect: {
-        sourceEventId: 'combat-event-penetrante-vida-counter',
+        sourceEventId: 'combat-event-perforante-vida-counter',
         attackerId: 'attacker-1',
         targetId: 'target-1',
         reactionType: 'parar',
@@ -172,8 +172,8 @@ describe('buildCombatEffectVisuals', () => {
           target: [],
           attacker: [
             {
-              id: 'penetrante',
-              label: 'Penetrante',
+              id: 'perforante',
+              label: 'Perforante',
               layer: 'vida',
               blocks: 1,
             },
@@ -195,7 +195,7 @@ describe('buildCombatEffectVisuals', () => {
     });
 
     const damageFlyoffs = visuals.flyoffs.filter((flyoff) => flyoff.type === 'damage');
-    const penetranteFlyoff = visuals.flyoffs.find((flyoff) => flyoff.type === 'trait');
+    const perforanteFlyoff = visuals.flyoffs.find((flyoff) => flyoff.type === 'trait');
 
     expect(damageFlyoffs).toHaveLength(1);
     expect(damageFlyoffs[0]).toMatchObject({
@@ -206,15 +206,15 @@ describe('buildCombatEffectVisuals', () => {
       y: 170,
       delay: 1.5,
     });
-    expect(penetranteFlyoff).toMatchObject({
+    expect(perforanteFlyoff).toMatchObject({
       text: '-1',
-      label: 'Penetrante · Vida',
+      label: 'Perforante · Vida',
       color: '#fb7185',
       y: 152,
       delay: 3.1,
     });
-    expect(penetranteFlyoff.x).toBeGreaterThanOrEqual(334);
-    expect(penetranteFlyoff.x).toBeLessThanOrEqual(366);
+    expect(perforanteFlyoff.x).toBeGreaterThanOrEqual(334);
+    expect(perforanteFlyoff.x).toBeLessThanOrEqual(366);
   });
 
   it('muestra Ralentizado solo como aumento de velocidad, sin estado final', () => {
@@ -272,6 +272,53 @@ describe('buildCombatEffectVisuals', () => {
       delay: 1.6,
     });
     expect(stateFlyoff).toBeUndefined();
+  });
+
+  it('muestra la recuperacion de postura por pasar turno sin actuar', () => {
+    const visuals = buildCombatEffectVisuals({
+      effect: {
+        sourceEventId: 'turn-recovery-postura',
+        targetId: 'target-1',
+        reactionType: 'turn_recovery',
+        finalDamage: 0,
+        counterDamage: 0,
+        blocksLost: {
+          postura: 0,
+          armadura: 0,
+          vida: 0,
+        },
+        recoveryEffectsApplied: {
+          target: [
+            {
+              id: 'postura_recovery',
+              label: 'Reposo · Postura',
+              resource: 'postura',
+              amount: 1,
+              hex: '#34d399',
+            },
+          ],
+          attacker: [],
+        },
+      },
+      targetPos: {
+        x: 120,
+        y: 220,
+        width: 80,
+        height: 80,
+      },
+      attackerPos: null,
+    });
+
+    expect(visuals.highlights).toHaveLength(0);
+    expect(visuals.flyoffs).toHaveLength(1);
+    expect(visuals.flyoffs[0]).toMatchObject({
+      type: 'recovery',
+      text: '+1',
+      label: 'Reposo · Postura',
+      color: '#34d399',
+      y: 178,
+      delay: 0,
+    });
   });
 
   it('muestra Empuje como flyoff propio sin estado final', () => {
