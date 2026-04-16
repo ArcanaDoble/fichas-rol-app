@@ -653,6 +653,14 @@ const extractCombatRollDice = (rollResult, idPrefix = 'roll') => {
     });
 };
 
+const isValidSelectionBoxPoint = (point) => (
+    Number.isFinite(point?.x) && Number.isFinite(point?.y)
+);
+
+const isValidSelectionBox = (box) => (
+    isValidSelectionBoxPoint(box?.start) && isValidSelectionBoxPoint(box?.current)
+);
+
 const isCombatDieEvaded = (die, evadedIds = []) => {
     const ids = Array.isArray(evadedIds) ? evadedIds : [];
     const rawDieId = typeof die?.id === 'string' ? die.id : '';
@@ -3225,7 +3233,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         // --- SELECTION BOX ---
         if (selectionBox) {
-            setSelectionBox(prev => ({ ...prev, current: { x: curX, y: curY } }));
+            setSelectionBox(prev => (
+                isValidSelectionBox(prev)
+                    ? { ...prev, current: { x: curX, y: curY } }
+                    : null
+            ));
             return;
         }
 
@@ -3530,6 +3542,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         // --- FINALIZAR SELECCIÓN BOX ---
         if (selectionBox && activeScenario) {
+            if (!isValidSelectionBox(selectionBox)) {
+                setSelectionBox(null);
+                return;
+            }
+
             const containerRect = containerRef.current?.getBoundingClientRect();
             if (containerRect) {
                 // Calcular rectangulo de selección en coordenadas relativas al div contenedor (para simplificar)
@@ -7567,6 +7584,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }
     };
 
+    const selectionBoxContainerRect = isValidSelectionBox(selectionBox)
+        ? containerRef.current?.getBoundingClientRect()
+        : null;
+    const selectionBoxOverlayRect = selectionBoxContainerRect
+        ? {
+            left: Math.min(selectionBox.start.x, selectionBox.current.x) - selectionBoxContainerRect.left,
+            top: Math.min(selectionBox.start.y, selectionBox.current.y) - selectionBoxContainerRect.top,
+            width: Math.abs(selectionBox.current.x - selectionBox.start.x),
+            height: Math.abs(selectionBox.current.y - selectionBox.start.y)
+        }
+        : null;
+
     return (
         <div className={`h-screen w-screen overflow-hidden bg-[#09090b] relative font-['Lato'] select-none ${targetingState ? 'cursor-crosshair' : ''}`}>
             {/* --- BIBLIOTECA DE ENCUENTROS --- */}
@@ -9841,15 +9870,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             onContextMenu={(e) => e.preventDefault()}
                         >
                             {/* --- SELECTION BOX RENDER (Screen Space Overlay) --- */}
-                            {selectionBox && (
+                            {selectionBoxOverlayRect && (
                                 <div
                                     className="absolute border border-[#c8aa6e] bg-[#c8aa6e]/10 pointer-events-none z-50"
-                                    style={{
-                                        left: Math.min(selectionBox.start.x, selectionBox.current.x) - (containerRef.current?.getBoundingClientRect().left || 0),
-                                        top: Math.min(selectionBox.start.y, selectionBox.current.y) - (containerRef.current?.getBoundingClientRect().top || 0),
-                                        width: Math.abs(selectionBox.current.x - selectionBox.start.x),
-                                        height: Math.abs(selectionBox.current.y - selectionBox.start.y)
-                                    }}
+                                    style={selectionBoxOverlayRect}
                                 />
                             )}
 
