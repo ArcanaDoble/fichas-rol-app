@@ -5,7 +5,6 @@ import { ConfirmProvider } from './components/Confirm';
 jest.mock('react-dnd', () => ({ useDrag: () => [{}, () => {}], useDrop: () => [{}, () => {}] }));
 jest.mock('./components/inventory/Inventory', () => () => <div>Inventory</div>);
 jest.mock('./components/MasterMenu', () => () => <div>MasterMenu</div>);
-jest.mock('./components/MapCanvas', () => () => <div>MapCanvas</div>);
 jest.mock('react-konva', () => ({
   Image: () => null,
   Circle: () => null,

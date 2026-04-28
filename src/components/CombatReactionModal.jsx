@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Shield, FastForward, Sword, Swords, Zap, X, Check } from 'lucide-react';
-import { getSpeedConsumption, hasCombatTrait, hasManualCombatTrait, hasNativeCombatTrait, rollAttack } from '../utils/combatSystem';
+import { getCombatTraitIds, getSpeedConsumption, hasCombatTrait, hasManualCombatTrait, hasNativeCombatTrait, rollAttack } from '../utils/combatSystem';
 import CombatModifiersPanel, { applyModifiersToWeapon } from './CombatModifiersPanel';
 import DiceSvg from './DiceSvg';
 import { useCustomEquipmentImages, getCustomImage } from '../hooks/useCustomEquipmentImages';
@@ -55,6 +55,10 @@ const formatCombatTraitLabel = (trait = '') => {
     if (normalized === 'penetrante' || normalized === 'perforante') return 'Perforante';
     if (normalized === 'empuje' || normalized === 'empujar') return 'Empuje';
     if (normalized === 'elusion' || normalized === 'elusión') return 'Elusión';
+    if (normalized === 'balistico' || normalized === 'balístico' || normalized === 'balistica' || normalized === 'balística') return 'Balístico';
+    if (normalized === 'distancia') return 'Distancia';
+    if (normalized === 'bloqueo' || normalized === 'bloquear') return 'Bloqueo';
+    if (normalized === 'guardia') return 'Guardia';
     if (normalized === 'sin guardia' || normalized === 'singuardia' || normalized === 'sin_guardia') return 'Sin guardia';
     return trait;
 };
@@ -221,6 +225,9 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
     const standUpCost = proneStatusId === 'conmocionado' ? 2 : 1;
     const isTargetInDuel = targetCombatMode === 'duel';
     const isDuelEvadeBlocked = isTargetInDuel && !targetCanEvadeInDuel;
+    const attackHasDistancia = useMemo(() => (
+        getCombatTraitIds(event?.weapon).includes('distancia')
+    ), [event?.weapon]);
 
     // Extraer dados del atacante (manteniendo individualidad de los críticos)
     const attackerDice = useMemo(() => {
@@ -319,6 +326,10 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
         if (!modifiedParryWeapon) return false;
         return hasCombatTrait(modifiedParryWeapon, 'sin guardia');
     }, [modifiedParryWeapon]);
+    const selectedWeaponBlockedByDistance = useMemo(() => {
+        if (!attackHasDistancia || !modifiedParryWeapon) return false;
+        return !hasCombatTrait(modifiedParryWeapon, 'bloqueo');
+    }, [attackHasDistancia, modifiedParryWeapon]);
 
     const parryCostMeta = useMemo(() => {
         if (!modifiedParryWeapon) {
@@ -346,16 +357,18 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
             const costMeta = getParryWeaponCostMeta(weapon, weapon);
             const blockedByNoGuard = hasCombatTrait(weapon, 'sin guardia');
             const blockedByBudget = costMeta.yellowCost > remainingReactionBudget;
+            const needsBloqueoForDistance = attackHasDistancia && !hasCombatTrait(weapon, 'bloqueo');
 
             return {
                 id: getWeaponId(weapon, idx),
                 weapon,
                 blockedByNoGuard,
                 blockedByBudget,
+                needsBloqueoForDistance,
                 costMeta,
             };
         });
-    }, [weapons, targetToken, event, remainingReactionBudget]);
+    }, [weapons, targetToken, event, remainingReactionBudget, attackHasDistancia]);
 
     const defaultParryWeaponId = useMemo(() => {
         return weaponSelectionMeta.find((entry) => !entry.blockedByNoGuard && !entry.blockedByBudget)?.id || '';
@@ -368,6 +381,7 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
         reactionType === 'parar' &&
         !!modifiedParryWeapon &&
         !selectedWeaponBlockedByNoGuard &&
+        !selectedWeaponBlockedByDistance &&
         parryCostMeta.yellowCost > 0 &&
         parryCostMeta.yellowCost <= remainingReactionBudget;
     const hasCurrentModifiers = hasCombatModifiers(customModifiers);
@@ -1054,11 +1068,13 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
                                             Selecciona el arma para parar:
                                         </label>
                                         <div className="flex flex-col gap-2">
-                                            {weaponSelectionMeta.map(({ weapon, id, blockedByNoGuard, blockedByBudget, costMeta }) => {
+                                            {weaponSelectionMeta.map(({ weapon, id, blockedByNoGuard, blockedByBudget, needsBloqueoForDistance, costMeta }) => {
                                                 const helperText = blockedByNoGuard
                                                     ? 'Sin guardia: no puedes parar con esta arma.'
                                                     : blockedByBudget
                                                         ? `Esta arma cuesta ${costMeta.yellowCost} de velocidad y supera la reacción disponible.`
+                                                        : needsBloqueoForDistance
+                                                            ? 'Distancia: necesitas Bloqueo en el arma o añadirlo como modificador para parar.'
                                                         : '';
 
                                                 return (
@@ -1121,6 +1137,17 @@ const CombatReactionModal = ({ event, targetToken, targetCombatMode = 'solo', ta
                                             </p>
                                             <p className="text-xs text-rose-100 mt-1">
                                                 Esta arma no puede usarse para parar.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {selectedWeaponBlockedByDistance && (
+                                        <div className="rounded-lg border border-violet-400/30 bg-violet-950/25 px-3 py-2 text-center">
+                                            <p className="text-[10px] uppercase tracking-[0.2em] text-violet-200 font-bold">
+                                                Ataque a distancia
+                                            </p>
+                                            <p className="text-xs text-violet-100/90 mt-1">
+                                                Esta parada necesita el rasgo Bloqueo. Puedes añadirlo desde modificadores.
                                             </p>
                                         </div>
                                     )}

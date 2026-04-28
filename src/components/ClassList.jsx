@@ -4084,7 +4084,7 @@ const ClassList = ({
                                   }
                                 }}
                                 className="px-3 py-1 bg-rose-900/40 border border-rose-500/50 text-rose-400 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2 hover:bg-rose-800/60 transition-colors group/mini relative"
-                                title="Abrir Mapa de Batalla"
+                                title="Abrir Canvas"
                               >
                                 <FiMap className="w-3 h-3" />
                                 CANVAS

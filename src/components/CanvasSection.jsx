@@ -10,7 +10,7 @@ import CombatHUD from './CombatHUD';
 import CombatReactionModal from './CombatReactionModal';
 import FloatingCombatEffects, { getCombatEffectLifetimeMs } from './FloatingCombatEffects';
 import { DEFAULT_STATUS_EFFECTS, ICON_MAP, PRONE_STATUS_IDS } from '../utils/statusEffects';
-import { rollAttack, getSpeedConsumption, hasCombatTrait, hasManualCombatTrait, hasNativeCombatTrait, normalizeCombatTraitId } from '../utils/combatSystem';
+import { rollAttack, getSpeedConsumption, hasCombatTrait, hasManualCombatTrait, hasNativeCombatTrait, normalizeCombatTraitId, parseDamage } from '../utils/combatSystem';
 import {
     syncArmorState,
     getArmorProtection,
@@ -41,6 +41,68 @@ const PRESET_COLORS = [
     '#ef4444', '#22c55e', // Red, Green
     '#3b82f6', '#a855f7'  // Blue, Purple
 ];
+
+const normalizeGeometryKind = (item = {}) => {
+    const raw = [
+        item.geometryKind,
+        item.geometryType,
+        item.markerType,
+        item.shapeType,
+        item.name,
+        item.label
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    if (raw.includes('pelig') || raw.includes('hazard') || raw.includes('danger')) return 'hazard';
+    if (raw.includes('escaler') || raw.includes('stair') || raw.includes('desnivel')) return 'stairs';
+    if (raw.includes('circle') || raw.includes('circular')) return 'circle';
+    return 'rect';
+};
+
+const renderGeometryVisual = (item = {}) => {
+    const kind = normalizeGeometryKind(item);
+    const color = item.backgroundColor || (kind === 'hazard' ? '#ef4444' : kind === 'stairs' ? '#c8aa6e' : '#22c55e');
+    const opacity = Number.isFinite(Number(item.opacity)) ? Number(item.opacity) : (kind === 'hazard' ? 0.1 : 0.28);
+    const safeId = `${item.id || 'geometry'}-${kind}`.replace(/[^a-zA-Z0-9_-]/g, '');
+
+    if (kind === 'hazard') {
+        return (
+            <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
+                <defs>
+                    <pattern id={`hazard-${safeId}`} width="42" height="42" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                        <line x1="0" y1="0" x2="0" y2="42" stroke={color} strokeWidth="4" strokeLinecap="round" opacity="0.9" />
+                    </pattern>
+                </defs>
+                <rect x="0" y="0" width="100%" height="100%" fill={color} opacity={Math.min(opacity, 0.18)} />
+                <rect x="0" y="0" width="100%" height="100%" fill={`url(#hazard-${safeId})`} opacity="0.82" />
+                <rect x="1" y="1" width="98%" height="98%" fill="none" stroke={color} strokeWidth="3" opacity="0.85" />
+            </svg>
+        );
+    }
+
+    if (kind === 'stairs') {
+        return (
+            <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
+                <defs>
+                    <pattern id={`stairs-${safeId}`} width="24" height="24" patternUnits="userSpaceOnUse">
+                        <line x1="0" y1="0" x2="0" y2="24" stroke={color} strokeWidth="3" strokeLinecap="square" opacity="0.85" />
+                    </pattern>
+                    <linearGradient id={`stairs-depth-${safeId}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={color} stopOpacity="0.28" />
+                        <stop offset="50%" stopColor={color} stopOpacity="0.08" />
+                        <stop offset="100%" stopColor={color} stopOpacity="0.22" />
+                    </linearGradient>
+                </defs>
+                <rect x="0" y="0" width="100%" height="100%" fill={`url(#stairs-depth-${safeId})`} opacity={Math.min(opacity + 0.18, 0.45)} />
+                <rect x="8" y="10" width="94%" height="84%" fill={`url(#stairs-${safeId})`} opacity="0.95" />
+                <line x1="5%" y1="5%" x2="95%" y2="5%" stroke={color} strokeWidth="4" strokeLinecap="square" opacity="0.72" />
+                <line x1="5%" y1="95%" x2="95%" y2="95%" stroke={color} strokeWidth="4" strokeLinecap="square" opacity="0.72" />
+                <line x1="8%" y1="88%" x2="92%" y2="88%" stroke={color} strokeWidth="5" strokeLinecap="square" opacity="0.55" />
+            </svg>
+        );
+    }
+
+    return null;
+};
 
 const DEFAULT_FINITE_COLUMNS = 12;
 const DEFAULT_FINITE_ROWS = 8;
@@ -292,6 +354,10 @@ const formatCombatTraitLabel = (trait = '') => {
     if (normalized === 'penetrante' || normalized === 'perforante') return 'Perforante';
     if (normalized === 'empuje' || normalized === 'empujar') return 'Empuje';
     if (normalized === 'elusion' || normalized === 'elusión') return 'Elusión';
+    if (normalized === 'balistico' || normalized === 'balístico' || normalized === 'balistica' || normalized === 'balística') return 'Balístico';
+    if (normalized === 'distancia') return 'Distancia';
+    if (normalized === 'bloqueo' || normalized === 'bloquear') return 'Bloqueo';
+    if (normalized === 'guardia') return 'Guardia';
     if (normalized === 'sin guardia' || normalized === 'singuardia' || normalized === 'sin_guardia') return 'Sin guardia';
     return trait;
 };
@@ -671,6 +737,56 @@ const isCombatDieEvaded = (die, evadedIds = []) => {
     return ids.includes(rawDieId) || ids.includes(unprefixedDieId);
 };
 
+const getCombatRollValue = (rollValue) => (
+    typeof rollValue === 'object' && rollValue !== null
+        ? Number(rollValue.value) || 0
+        : Number(rollValue) || 0
+);
+
+const getBallisticWeaponDamageFromRoll = (rollResult, evadedIds = []) => {
+    const safeEvadedIds = Array.isArray(evadedIds) ? evadedIds : [];
+    return (rollResult?.details || []).reduce((total, detail, dIdx) => {
+        if (detail?.type !== 'dice' || !detail.ballisticEligible) return total;
+
+        const rolls = Array.isArray(detail.rolls) ? detail.rolls : [];
+        return total + rolls.reduce((sum, rollValue, rIdx) => {
+            const rawId = `${dIdx}-${rIdx}`;
+            if (
+                safeEvadedIds.includes(rawId) ||
+                safeEvadedIds.includes(`att-${rawId}`) ||
+                safeEvadedIds.includes(`atk-${rawId}`) ||
+                safeEvadedIds.includes(`roll-${rawId}`)
+            ) {
+                return sum;
+            }
+
+            return sum + getCombatRollValue(rollValue);
+        }, 0);
+    }, 0);
+};
+
+const getBaseWeaponDamageFormula = (weapon) => {
+    const itemDamage = weapon?.dano ?? weapon?.poder ?? weapon?.damage ?? '';
+    const baseFormula = parseDamage(itemDamage);
+    const hasExplicitZeroBase = baseFormula === '0' || /^(\d*)d0$/i.test(baseFormula);
+    if (!baseFormula || hasExplicitZeroBase) return '';
+    return baseFormula;
+};
+
+const buildGuardiaParryRollWeapon = (weapon) => {
+    if (!weapon || !hasCombatTrait(weapon, 'guardia')) return weapon;
+
+    const guardiaDieFormula = getBaseWeaponDamageFormula(weapon);
+    if (!guardiaDieFormula) return weapon;
+
+    return {
+        ...weapon,
+        extraDamageString: weapon.extraDamageString
+            ? `${weapon.extraDamageString} + ${guardiaDieFormula}`
+            : guardiaDieFormula,
+    };
+};
+
 const buildParryWeaponSummaryLabel = (steps = []) => {
     const counts = new globalThis.Map();
     steps.forEach((step) => {
@@ -694,7 +810,8 @@ const GLOBAL_PARRY_TRAIT_IDS = new Set([
     'sangrado',
     'ralentizado',
     'perforante',
-    'empuje'
+    'empuje',
+    'balistico'
 ]);
 
 const NON_STATUS_COMBAT_EFFECT_IDS = new Set(['ralentizado', 'empuje']);
@@ -3504,8 +3621,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 if (draggedItem && original && !isBlockedCombatDestination) {
                     setPendingTurnState(prev => {
                         const isSameToken = prev && prev.tokenId === draggedTokenId;
-                        const turnStartX = isSameToken ? prev.startX : original.x;
-                        const turnStartY = isSameToken ? prev.startY : original.y;
+                        const turnStartX = isSameToken
+                            ? prev.startX
+                            : (Number.isFinite(Number(original.turnStartX)) ? Number(original.turnStartX) : original.x);
+                        const turnStartY = isSameToken
+                            ? prev.startY
+                            : (Number.isFinite(Number(original.turnStartY)) ? Number(original.turnStartY) : original.y);
 
                         const dx = Math.abs(draggedItem.x - turnStartX);
                         const dy = Math.abs(draggedItem.y - turnStartY);
@@ -3519,8 +3640,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                         const base = isSameToken ? prev : {
                             tokenId: draggedTokenId,
-                            startX: original.x,
-                            startY: original.y,
+                            startX: turnStartX,
+                            startY: turnStartY,
                             x: original.x,
                             y: original.y,
                             actionCost,
@@ -3804,8 +3925,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                 const cellW = gridConfig.cellWidth || 50;
                                 const cellH = gridConfig.cellHeight || 50;
-                                const turnStartX = Number.isFinite(Number(prev.startX)) ? Number(prev.startX) : original.x;
-                                const turnStartY = Number.isFinite(Number(prev.startY)) ? Number(prev.startY) : original.y;
+                                const turnStartX = Number.isFinite(Number(prev.startX))
+                                    ? Number(prev.startX)
+                                    : (Number.isFinite(Number(original.turnStartX)) ? Number(original.turnStartX) : original.x);
+                                const turnStartY = Number.isFinite(Number(prev.startY))
+                                    ? Number(prev.startY)
+                                    : (Number.isFinite(Number(original.turnStartY)) ? Number(original.turnStartY) : original.y);
                                 const distance = Math.max(
                                     Math.round(Math.abs(original.x - turnStartX) / cellW),
                                     Math.round(Math.abs(original.y - turnStartY) / cellH)
@@ -3835,23 +3960,30 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     const original = tokenOriginalPos[draggedTokenId];
                     if (token && original && (token.x !== original.x || token.y !== original.y)) {
                         setPendingTurnState(prev => {
-                            // Si ya hay un estado pendiente para este token, el inicio del turno es el startX guardado.
-                            // Si no, el inicio es la posición original de este arrastre.
+                            // Si ya hay un movimiento pendiente, el inicio real del turno se conserva aunque este drag empiece desde la previsualización.
                             const isSameToken = prev && prev.tokenId === draggedTokenId;
-                            const turnStartX = isSameToken ? prev.startX : original.x;
-                            const turnStartY = isSameToken ? prev.startY : original.y;
+                            const turnStartX = isSameToken
+                                ? prev.startX
+                                : (Number.isFinite(Number(original.turnStartX)) ? Number(original.turnStartX) : original.x);
+                            const turnStartY = isSameToken
+                                ? prev.startY
+                                : (Number.isFinite(Number(original.turnStartY)) ? Number(original.turnStartY) : original.y);
 
                             const dx = Math.abs(token.x - turnStartX);
                             const dy = Math.abs(token.y - turnStartY);
                             const cellW = gridConfig.cellWidth || 50;
                             const cellH = gridConfig.cellHeight || 50;
                             const distance = Math.max(Math.round(dx / cellW), Math.round(dy / cellH));
+                            const actionCost = isSameToken ? (Number(prev.actionCost) || 0) : 0;
+                            const hasActions = isSameToken && Array.isArray(prev.actions) && prev.actions.length > 0;
+
+                            if (distance <= 0 && actionCost <= 0 && !hasActions) return null;
 
                             const base = prev && prev.tokenId === draggedTokenId ? prev : {
                                 tokenId: draggedTokenId,
-                                startX: original.x,
-                                startY: original.y,
-                                actionCost: 0,
+                                startX: turnStartX,
+                                startY: turnStartY,
+                                actionCost,
                                 actions: []
                             };
                             return {
@@ -4813,7 +4945,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             };
                             originals[i.id] = {
                                 x: pendingForToken.x ?? i.x,
-                                y: pendingForToken.y ?? i.y
+                                y: pendingForToken.y ?? i.y,
+                                turnStartX: startPosition.x,
+                                turnStartY: startPosition.y
                             };
                             visualOrigins[i.id] = getCombatRenderPlacementAtPosition(
                                 i,
@@ -5065,18 +5199,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const spawnX = WORLD_SIZE / 2;
         const spawnY = WORLD_SIZE / 2;
         const side = gridConfig.cellWidth * 2 || 100;
+        const isHazard = shape === 'hazard';
+        const isStairs = shape === 'stairs';
 
         const newArea = {
             id: crypto.randomUUID(),
             type: 'geometry',
-            shapeType: shape, // 'rect' | 'circle'
-            name: shape === 'rect' ? 'Zona Rectangular' : 'Zona Circular',
+            shapeType: shape, // 'rect' | 'circle' | 'hazard' | 'stairs'
+            geometryKind: shape,
+            name: isHazard ? 'Terreno Peligroso' : isStairs ? 'Escalera' : shape === 'rect' ? 'Zona Rectangular' : 'Zona Circular',
             x: spawnX - side / 2,
             y: spawnY - side / 2,
-            width: side,
-            height: side,
-            backgroundColor: shape === 'rect' ? '#22c55e' : '#60a5fa', // Verde para rect, Azul para círculo por defecto
-            opacity: 0.3,
+            width: isStairs ? side * 2 : side,
+            height: isStairs ? side : side,
+            backgroundColor: isHazard ? '#ef4444' : isStairs ? '#c8aa6e' : shape === 'rect' ? '#22c55e' : '#60a5fa',
+            opacity: isHazard ? 0.1 : 0.3,
             rotation: 0,
             snapToGrid: true,
             controlledBy: ['master'],
@@ -5713,16 +5850,25 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             </div>
                         ) : isGeometry ? (
                             <div
-                                className={`w-full h-full flex items-center justify-center font-bold text-white shadow-inner uppercase text-[10px] tracking-widest break-words overflow-hidden p-2 text-center`}
+                                className={`relative w-full h-full flex items-center justify-center font-bold text-white uppercase text-[10px] tracking-widest break-words overflow-hidden p-2 text-center`}
                                 style={{
-                                    backgroundColor: item.backgroundColor || '#22c55e',
-                                    opacity: item.opacity || 0.4,
                                     borderRadius: item.shapeType === 'circle' ? '50%' : '4px',
-                                    border: `2px solid ${item.backgroundColor || '#22c55e'}`,
+                                    border: normalizeGeometryKind(item) === 'rect' || normalizeGeometryKind(item) === 'circle'
+                                        ? `2px solid ${item.backgroundColor || '#22c55e'}`
+                                        : 'none',
+                                    backgroundColor: normalizeGeometryKind(item) === 'rect' || normalizeGeometryKind(item) === 'circle'
+                                        ? item.backgroundColor || '#22c55e'
+                                        : 'transparent',
+                                    opacity: normalizeGeometryKind(item) === 'rect' || normalizeGeometryKind(item) === 'circle'
+                                        ? item.opacity || 0.4
+                                        : 1,
                                     pointerEvents: 'none'
                                 }}
                             >
-                                <span style={{ opacity: 1, textShadow: '0px 0px 4px black', pointerEvents: 'none' }}>{item.name}</span>
+                                {renderGeometryVisual(item)}
+                                {(normalizeGeometryKind(item) === 'rect' || normalizeGeometryKind(item) === 'circle') && (
+                                    <span style={{ opacity: 1, textShadow: '0px 0px 4px black', pointerEvents: 'none' }}>{item.name}</span>
+                                )}
                             </div>
                         ) : (
                             item.isCircular ? (
@@ -6574,7 +6720,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         enqueue();
     };
 
-    const applyCombatCalculations = (token, damage, weapon) => {
+    const applyCombatCalculations = (token, damage, weapon, options = {}) => {
         const attributeDice = {
             destreza: token.attributes?.destreza || 'd6',
             vigor: token.attributes?.vigor || 'd6',
@@ -6596,6 +6742,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const hasRalentizado = normalizedTraits.some((t) => t.includes('ralentizado') || t.includes('ralentizar'));
         const hasPerforante = normalizedTraits.some((t) => t.includes('penetrante') || t.includes('perforante'));
         const hasEmpuje = normalizedTraits.some((t) => t.includes('empuje') || t.includes('empujar'));
+        const hasBalistico = normalizedTraits.some((t) => t.includes('balistico') || t.includes('balistica'));
 
         const reduceDieStep = (dieStr) => {
             if (!dieStr || typeof dieStr !== 'string') return dieStr;
@@ -6646,7 +6793,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 currentArmadura > 0 ? 'armadura' :
                     currentVida > 0 ? 'vida' :
                         null;
-        let remainingDamage = Math.max(0, Number(damage) || 0);
+        const totalDamage = Math.max(0, Number(damage) || 0);
+        let ballisticDamage = hasBalistico
+            ? Math.min(totalDamage, Math.max(0, Math.floor(Number(options.ballisticDamage) || 0)))
+            : 0;
+        let remainingDamage = Math.max(0, totalDamage - ballisticDamage);
+
+        const consumeBallisticBlocks = (availableBlocks) => {
+            if (availableBlocks <= 0 || ballisticDamage <= 0) return 0;
+            const lostBlocks = Math.min(availableBlocks, ballisticDamage);
+            ballisticDamage -= lostBlocks;
+            return lostBlocks;
+        };
 
         const consumeDamageBlocks = (availableBlocks, threshold) => {
             if (availableBlocks <= 0 || threshold <= 0 || remainingDamage < threshold) {
@@ -6662,9 +6820,38 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             return lostBlocks;
         };
 
-        lostPostura = consumeDamageBlocks(currentPostura, posturaUmbral);
-        baseLostPostura = lostPostura;
-        currentPostura -= lostPostura;
+        const ballisticPosturaLost = consumeBallisticBlocks(currentPostura);
+        if (ballisticPosturaLost > 0) {
+            lostPostura += ballisticPosturaLost;
+            baseLostPostura += ballisticPosturaLost;
+            currentPostura -= ballisticPosturaLost;
+            appliedTraitEffects.push({
+                id: 'balistico',
+                label: 'Balístico',
+                layer: 'postura',
+                blocks: ballisticPosturaLost,
+                hex: '#facc15'
+            });
+        }
+
+        const ballisticVidaLost = consumeBallisticBlocks(currentVida);
+        if (ballisticVidaLost > 0) {
+            lostVida += ballisticVidaLost;
+            baseLostVida += ballisticVidaLost;
+            currentVida -= ballisticVidaLost;
+            appliedTraitEffects.push({
+                id: 'balistico',
+                label: 'Balístico',
+                layer: 'vida',
+                blocks: ballisticVidaLost,
+                hex: '#fb7185'
+            });
+        }
+
+        const normalPosturaLost = consumeDamageBlocks(currentPostura, posturaUmbral);
+        lostPostura += normalPosturaLost;
+        baseLostPostura += normalPosturaLost;
+        currentPostura -= normalPosturaLost;
 
         if (hasDerribado && lostPostura > 0 && currentPostura > 0) {
             lostPostura += 1;
@@ -6672,9 +6859,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             extraPosturaFromTrait = 1;
         }
 
-        lostArmadura = consumeDamageBlocks(currentArmadura, armaduraUmbral);
-        baseLostArmadura = lostArmadura;
-        currentArmadura -= lostArmadura;
+        const normalArmaduraLost = consumeDamageBlocks(currentArmadura, armaduraUmbral);
+        lostArmadura += normalArmaduraLost;
+        baseLostArmadura += normalArmaduraLost;
+        currentArmadura -= normalArmaduraLost;
 
         if (hasHendir && (lostPostura > 0 || lostArmadura > 0) && currentArmadura > 0) {
             lostArmadura += 1;
@@ -6689,9 +6877,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             });
         }
 
-        lostVida = consumeDamageBlocks(currentVida, vidaUmbral);
-        baseLostVida = lostVida;
-        currentVida -= lostVida;
+        const normalVidaLost = consumeDamageBlocks(currentVida, vidaUmbral);
+        lostVida += normalVidaLost;
+        baseLostVida += normalVidaLost;
+        currentVida -= normalVidaLost;
 
         const addPerforanteBlock = (preferredLayer) => {
             if (preferredLayer === 'armadura' && currentArmadura > 0) {
@@ -6986,7 +7175,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             finalDamage = newTotal;
             effectiveAttackTotal = newTotal;
             const evadedAll = newTotal <= 0; // Todos los dados evadidos
-            const res = applyCombatCalculations(targetToken, newTotal, event.weapon);
+            const res = applyCombatCalculations(targetToken, newTotal, event.weapon, {
+                ballisticDamage: Math.min(newTotal, getBallisticWeaponDamageFromRoll(event.attackerRollResult, evadedDiceIds)),
+            });
             blocksLost = res.lost;
             baseBlocksLost = res.baseLost || baseBlocksLost;
             traitBonuses = res.traitBonuses || traitBonuses;
@@ -7013,7 +7204,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const defenderAttrs = targetToken.attributes || targetToken.atributos || {};
             evadedDiceIds = event.reactionData?.evadedDiceIds || [];
             effectiveAttackTotal = getAttackTotalAfterEvasion(evadedDiceIds);
-            const parryStepsData = buildLegacyParrySteps(event.reactionData);
+            const rawParryStepsData = buildLegacyParrySteps(event.reactionData);
+            const attackHasDistancia = attackTraits.some((traitId) => normalizeCombatTraitId(traitId) === 'distancia')
+                || hasCombatTrait(event.weapon, 'distancia');
+            const parryStepsData = attackHasDistancia
+                ? rawParryStepsData.filter((step) => hasCombatTrait(step.weapon, 'bloqueo'))
+                : rawParryStepsData;
+            const blockedByDistanciaCount = Math.max(0, rawParryStepsData.length - parryStepsData.length);
             const attackerRange = getCombatRangeData(event.weapon);
             const storedDistance = Number(event.distanceBetweenTokens);
             distanceBetweenTokens = Number.isFinite(storedDistance)
@@ -7029,7 +7226,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 );
                 const stepTraits = getItemTraits(defenderWeapon)
                     .filter((traitId) => normalizeCombatTraitId(traitId) !== 'elusion');
-                const defenderRoll = rollAttack(defenderWeapon, defenderAttrs);
+                const parryRollWeapon = buildGuardiaParryRollWeapon(defenderWeapon);
+                const defenderRoll = rollAttack(parryRollWeapon, defenderAttrs);
                 const stepDice = extractCombatRollDice(defenderRoll, `def-${stepIndex}`);
                 const defenderRange = getCombatRangeData(defenderWeapon);
                 const reachesAttacker = isWeaponWithinCombatRange(
@@ -7048,6 +7246,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     weapon: defenderWeapon,
                     weaponName: defenderWeapon?.nombre || defenderWeapon?.name || step.weaponName || 'Arma',
                     total: defenderRoll.total,
+                    rollResult: defenderRoll,
                     dice: stepDice,
                     traits: stepTraits,
                     rangeLabel: defenderRange.label,
@@ -7122,27 +7321,41 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
             const reachableCounterSteps = defenderSteps.filter((step) => step.reachesAttacker);
             const counterWeapon = buildAggregateCombatWeapon(reachableCounterSteps);
+            const reachableDefenderTotal = reachableCounterSteps.reduce(
+                (sum, step) => sum + Math.max(0, Number(step.total) || 0),
+                0
+            );
             const lastNativeFluidaStep = [...defenderSteps].reverse().find((step) => hasNativeCombatTrait(step.weapon, 'fluida'));
             const diff = effectiveAttackTotal - defenderTotal;
-            const yellowCost = event.reactionData.yellowCost
-                || defenderSteps.reduce((sum, step) => sum + Math.max(0, Number(step.yellowCost) || 0), 0);
+            const evasionCost = Number(event.reactionData?.evadeCost);
+            const yellowCost = Math.max(
+                0,
+                (Number.isFinite(evasionCost) ? evasionCost : evadedDiceIds.length) +
+                defenderSteps.reduce((sum, step) => sum + Math.max(0, Number(step.yellowCost) || 0), 0)
+            );
             const evasionLogPrefix = evadedDiceIds.length > 0
                 ? `evadió ${evadedDiceIds.length} dado${evadedDiceIds.length === 1 ? '' : 's'} y `
+                : '';
+            const distanciaLogPrefix = blockedByDistanciaCount > 0
+                ? `Distancia anuló ${blockedByDistanciaCount} parada${blockedByDistanciaCount === 1 ? '' : 's'} sin Bloqueo. `
                 : '';
             const elusionLogPrefix = elusionEffect
                 ? `Elusión retiró un dado de parada (${elusionEffect.value}). `
                 : '';
+            const traitLogPrefix = `${distanciaLogPrefix}${elusionLogPrefix}`;
 
             if (diff === 0) {
                 finalDamage = 0;
                 updateTokenInList(targetTokenBase.id, { velocidad: getTargetVelocityAfterReaction(yellowCost) });
                 const defWeaponName = defenderWeaponSummary || 'su arma';
-                logText = `${elusionLogPrefix}${targetToken.name} ${evasionLogPrefix}realizó una parada perfecta ${isSweepAttack ? `contra ${attackModeLabel?.toLowerCase() || 'el barrido'}` : ''} con ${defWeaponName}.`;
+                logText = `${traitLogPrefix}${targetToken.name} ${evasionLogPrefix}realizó una parada perfecta ${isSweepAttack ? `contra ${attackModeLabel?.toLowerCase() || 'el barrido'}` : ''} con ${defWeaponName}.`;
                 setAttackerFluidaState(null);
                 setTargetFluidaState(lastNativeFluidaStep ? createFluidaState(attackerToken.id, lastNativeFluidaStep.weapon, 'parry') : null);
             } else if (diff > 0) {
                 finalDamage = diff;
-                const res = applyCombatCalculations(targetToken, diff, event.weapon);
+                const res = applyCombatCalculations(targetToken, diff, event.weapon, {
+                    ballisticDamage: Math.min(diff, getBallisticWeaponDamageFromRoll(event.attackerRollResult, evadedDiceIds)),
+                });
                 blocksLost = res.lost;
                 baseBlocksLost = res.baseLost || baseBlocksLost;
                 traitBonuses = res.traitBonuses || traitBonuses;
@@ -7157,21 +7370,30 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 const pushEffect = applyEmpujeEffect(res, attackerTokenBase, targetTokenBase);
                 pushEffectsApplied.target = [pushEffect].filter(Boolean);
                 const defWeaponName = defenderWeaponSummary || 'su arma';
-                logText = `${elusionLogPrefix}${targetToken.name} ${evasionLogPrefix}paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName} pero recibió ${diff} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
+                logText = defenderSteps.length > 0
+                    ? `${traitLogPrefix}${targetToken.name} ${evasionLogPrefix}paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName} pero recibió ${diff} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`
+                    : `${traitLogPrefix}${targetToken.name} ${evasionLogPrefix}no pudo parar ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : `el ataque de ${attackerToken.name}`} y recibió ${diff} de daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques).`;
                 logText = appendEmpujeLog(logText, pushEffect);
                 logText = appendRalentizadoLog(logText, res, targetToken);
                 setAttackerFluidaState(attackHasFluida ? createFluidaState(targetToken.id, event.fluidaMeta?.sourceWeapon || event.weapon, 'attack') : null);
                 setTargetFluidaState(lastNativeFluidaStep ? createFluidaState(attackerToken.id, lastNativeFluidaStep.weapon, 'parry') : null);
             } else {
                 const defWeaponName = defenderWeaponSummary || 'su arma';
-                if (!counterWeapon || reachableCounterSteps.length === 0) {
+                const reachableCounterDamage = Math.max(0, reachableDefenderTotal - effectiveAttackTotal);
+                if (!counterWeapon || reachableCounterSteps.length === 0 || reachableCounterDamage <= 0) {
                     counterPreventedByRange = true;
                     finalDamage = 0;
                     updateTokenInList(targetTokenBase.id, { velocidad: getTargetVelocityAfterReaction(yellowCost) });
-                    logText = `${elusionLogPrefix}${targetToken.name} ${evasionLogPrefix}paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName}, pero no pudo contraatacar porque su alcance (${defenderRangeLabel || 'desconocido'}) no alcanza la distancia real entre ambos (${distanceBetweenTokens}).`;
+                    logText = `${traitLogPrefix}${targetToken.name} ${evasionLogPrefix}paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName}, pero no pudo contraatacar porque solo las paradas con alcance suficiente pueden devolver daño (distancia real: ${distanceBetweenTokens}).`;
                 } else {
-                    counterDamage = Math.abs(diff);
-                    const res = applyCombatCalculations(attackerToken, counterDamage, counterWeapon);
+                    counterDamage = reachableCounterDamage;
+                    const counterBallisticDamage = reachableCounterSteps.reduce(
+                        (sum, step) => sum + getBallisticWeaponDamageFromRoll(step.rollResult),
+                        0
+                    );
+                    const res = applyCombatCalculations(attackerToken, counterDamage, counterWeapon, {
+                        ballisticDamage: Math.min(counterDamage, counterBallisticDamage),
+                    });
                     blocksLost = res.lost;
                     baseBlocksLost = res.baseLost || baseBlocksLost;
                     traitBonuses = res.traitBonuses || traitBonuses;
@@ -7186,7 +7408,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     const pushEffect = applyEmpujeEffect(res, targetTokenBase, attackerTokenBase);
                     pushEffectsApplied.attacker = [pushEffect].filter(Boolean);
                     updateTokenInList(targetTokenBase.id, { velocidad: getTargetVelocityAfterReaction(yellowCost) });
-                    logText = `${elusionLogPrefix}¡${targetToken.name} ${evasionLogPrefix}paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName} y contraatacó a ${attackerToken.name} por ${counterDamage} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques)!`;
+                    logText = `${traitLogPrefix}¡${targetToken.name} ${evasionLogPrefix}paró ${isSweepAttack ? `el ${attackModeLabel?.toLowerCase() || 'barrido'}` : ''} con ${defWeaponName} y contraatacó a ${attackerToken.name} por ${counterDamage} daño (${res.lost.postura + res.lost.armadura + res.lost.vida} bloques)!`;
                     logText = appendEmpujeLog(logText, pushEffect);
                     logText = appendRalentizadoLog(logText, res, attackerToken);
                 }
@@ -7195,7 +7417,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             }
         } else {
             finalDamage = event.attackerRollResult.total;
-            const res = applyCombatCalculations(targetToken, event.attackerRollResult.total, event.weapon);
+            const res = applyCombatCalculations(targetToken, event.attackerRollResult.total, event.weapon, {
+                ballisticDamage: Math.min(
+                    Number(event.attackerRollResult?.total) || 0,
+                    getBallisticWeaponDamageFromRoll(event.attackerRollResult)
+                ),
+            });
             blocksLost = res.lost;
             baseBlocksLost = res.baseLost || baseBlocksLost;
             traitBonuses = res.traitBonuses || traitBonuses;
@@ -9677,6 +9904,36 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                             <Map size={12} /> Propiedades del Tapete
                                                         </h4>
 
+                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 space-y-3">
+                                                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Tipo visual</div>
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                {[
+                                                                    { id: 'rect', label: 'Zona', color: '#22c55e' },
+                                                                    { id: 'circle', label: 'Círculo', color: '#60a5fa' },
+                                                                    { id: 'hazard', label: 'Peligro', color: '#ef4444' },
+                                                                    { id: 'stairs', label: 'Escalera', color: '#c8aa6e' }
+                                                                ].map(option => {
+                                                                    const active = normalizeGeometryKind(token) === option.id;
+                                                                    return (
+                                                                        <button
+                                                                            key={option.id}
+                                                                            onClick={() => updateItem(token.id, {
+                                                                                geometryKind: option.id,
+                                                                                shapeType: option.id === 'circle' ? 'circle' : option.id,
+                                                                                isCircular: option.id === 'circle',
+                                                                                name: option.id === 'hazard' ? 'Terreno Peligroso' : option.id === 'stairs' ? 'Escalera' : option.id === 'circle' ? 'Zona Circular' : 'Zona Rectangular',
+                                                                                backgroundColor: option.color,
+                                                                                opacity: option.id === 'hazard' ? 0.1 : (token.opacity || 0.3)
+                                                                            })}
+                                                                            className={`px-2 py-2 rounded border text-[10px] font-bold uppercase tracking-wider transition-all ${active ? 'border-[#c8aa6e] text-[#f8e7b9] bg-[#c8aa6e]/15' : 'border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-600'}`}
+                                                                        >
+                                                                            {option.label}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+
                                                         {/* Opacidad del bloque */}
                                                         <div className="bg-[#0b1120] p-3 rounded border border-slate-800 space-y-4">
                                                             <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
@@ -9685,7 +9942,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                             </div>
                                                             <input
                                                                 type="range"
-                                                                min="0.1" max="1" step="0.1"
+                                                                min="0.05" max="1" step="0.05"
                                                                 value={token.opacity || 0.4}
                                                                 onChange={(e) => updateItem(token.id, { opacity: Number(e.target.value) })}
                                                                 className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
@@ -9973,6 +10230,22 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         title="Añadir Zona Circular"
                                     >
                                         <Circle className="w-5 h-5 md:w-6 md:h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
+                                    </button>
+
+                                    <button
+                                        onClick={() => addAreaToCanvas('hazard')}
+                                        className="w-10 h-10 md:w-12 md:h-12 bg-[#1a1b26] border border-[#c8aa6e]/30 text-[#c8aa6e] rounded-lg shadow-2xl flex items-center justify-center hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e] transition-all group active:scale-95"
+                                        title="Añadir Terreno Peligroso"
+                                    >
+                                        <AlertTriangle className="w-5 h-5 md:w-6 md:h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
+                                    </button>
+
+                                    <button
+                                        onClick={() => addAreaToCanvas('stairs')}
+                                        className="w-10 h-10 md:w-12 md:h-12 bg-[#1a1b26] border border-[#c8aa6e]/30 text-[#c8aa6e] rounded-lg shadow-2xl flex items-center justify-center hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e] transition-all group active:scale-95"
+                                        title="Añadir Escalera o Desnivel"
+                                    >
+                                        <Footprints className="w-5 h-5 md:w-6 md:h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
                                     </button>
                                 </div>
                             )}
