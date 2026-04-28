@@ -6,10 +6,6 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ## ✨ Características principales
 
-### 📚 Documentación adicional
-
-- [Mejoras de rendimiento pendientes en el Mapa de Batalla](docs/MapaBatallaRendimiento.md)
-
 ### ⚖️ Karma exclusivo de Yuuzu
 
 - Estadística especial "Karma" disponible únicamente en la ficha de Yuuzu, con control fino entre -10 y +10 y visualización como balanza (blanco para karma positivo, negro para karma negativo y neutro sin color).
@@ -62,7 +58,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Modo Master y Jugador** - Controles especializados según el rol del usuario
 - **Modo "hot seat"** - Alterna entre fichas controladas con Tab o el selector
 - **Selector de ficha centrado** - Muestra el nombre personalizado de cada token
-- **Mapa de Batalla integrado** - VTT sencillo con grid y tokens arrastrables
+- **Canvas táctico integrado** - VTT principal con escenarios, grid, tokens y combate automatizado
 - **Fichas de token personalizadas** - Cada token puede tener su propia hoja de personaje
 - **Copiar tokens conserva su hoja personalizada** - Al duplicar un token se clona su ficha con todos los valores (base, total y modificados), colores y visibilidad de estadísticas manteniendo IDs independientes en los mapas del máster y del jugador
 - **Tokens almacenados individualmente** - Cada ficha se guarda como documento en `pages/{pageId}/tokens/{tokenId}`
@@ -77,7 +73,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Iconos de control de tamaño fijo** - Engranaje, círculo de rotación y barras mantienen un tamaño constante al hacer zoom
 - **Estados en tokens** - Nuevo botón para aplicar condiciones como Envenenado o Cansado y mostrar sus iconos, ahora aún más grandes, sobre la ficha
 - **Botones de estados y ajustes con sombra** - El engranaje y el acceso a estados lucen ahora una sombra negra más notoria para sobresalir
-- **Mapas personalizados** - Sube una imagen como fondo en el Mapa de Batalla
+- **Mapas personalizados** - Sube una imagen como fondo en el Canvas táctico
 - **Grid ajustable** - Tamaño y desplazamiento de la cuadrícula configurables
 - **Luces ambientales configurables** - Añade focos persistentes con radios brillante y tenue, color, opacidad y activación sincronizados para todos los clientes
 - **Cuadrícula personalizable** - Alterna visibilidad y define color y opacidad con controles sincronizados entre sesiones
@@ -135,6 +131,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Tinte de Daño Pulsante**: Los tokens que pierden bloques de vida o postura muestran un pulso rojo majestuoso y un efecto de impacto escalable en el canvas.
 - **Sincronización Transversal**: Las animaciones se disparan para todos los jugadores conectados en el momento en que el defensor pulsa «Continuar» en su modal de reacción.
 - **Transiciones Majestic**: Animaciones lentas y fluidas (4.0s de duración) diseñadas para garantizar la visibilidad total de lo sucedido durante el intercambio.
+- **Fix: Previsión de movimiento en combate (Canvas Jugador)**: Corregido un bug donde al arrastrar el token de vuelta a su posición original tras una previsión, el fantasma gris (ghost) saltaba a la posición de previsión anterior en lugar de permanecer en el inicio real del turno.
 
 **Resumen de cambios v2.4.70:**
 
@@ -1962,8 +1959,12 @@ Guía rápida: ver `docs/Minimapa.md`.
 - La ocupacion tactica del canvas SVG deja de mirar solo la celda principal: cualquier token bloquea ahora todas las casillas que cubre por tamano, de modo que no se puede compartir ninguna de las celdas ocupadas por un `2x2`, `3x3` u otro token grande.
 - El `CombatReactionModal` del canvas SVG introduce presupuesto de reaccion igual al coste real del ataque recibido: `Evadir` solo puede anular hasta ese numero de dados y `Parar` permite acumular varias paradas con una o varias armas mientras no superen ese mismo coste total.
 - El `CombatReactionModal` del canvas SVG permite defensas mixtas dentro del mismo presupuesto: puedes gastar parte de la reaccion en `Evadir` dados y el resto en `Parar`, resolviendo la parada contra el ataque ya reducido.
-- Las paradas acumuladas del canvas SVG ya se resuelven y muestran por pasos: cada arma tira por separado con sus propios rasgos de tirada, la defensa total se suma de forma global y el contraataque solo hereda los rasgos globales compatibles (`Agudeza`, `Derribo`, `Hendir`, `Conmocionante`, `Sangrado`) de las armas que realmente alcanzan al atacante.
+- Las paradas acumuladas del canvas SVG ya se resuelven y muestran por pasos: cada arma tira por separado con sus propios rasgos de tirada, la defensa total se suma de forma global y el contraataque solo hereda los rasgos globales compatibles (`Agudeza`, `Derribo`, `Hendir`, `Conmocionante`, `Sangrado`, `Ralentizado`, `Perforante`, `Empuje`, `Balístico`) de las armas que realmente alcanzan al atacante.
 - Se añade `Elusión` como rasgo exclusivo de ataque en el canvas SVG: si el objetivo intenta `Parar`, el ataque retira automáticamente el dado de parada más alto antes de comparar totales, y el resultado lo marca visualmente en el `CombatReactionModal` y en el registro del inspector.
+- Se añade `Balístico` al combate del canvas SVG y al panel de modificadores: sus dados base del arma quitan bloques directamente ignorando `Armadura` y CD, sin convertir en balístico los dados de atributo ni los dados extra manuales; una armadura activa con resistencia `Balístico` anula ese bypass y restaura la resolución normal por capas y CD.
+- Se añaden los rasgos `Distancia` y `Bloqueo`: un ataque con `Distancia` no puede pararse y solo permite evadir, salvo que la víctima use un arma con `Bloqueo` o añada `Bloqueo` desde modificadores defensivos antes de confirmar la parada.
+- Se añade `Guardia` como rasgo defensivo: al realizar una parada con un arma que lo tenga, la tirada de parada añade un dado extra igual al dado base del arma; en ataques normales queda desactivado desde el panel de modificadores.
+- El contraataque de una parada respeta siempre el alcance real del arma defensiva: las paradas fuera de alcance pueden ayudar a desviar el golpe, pero no aportan daño devuelto al atacante.
 - El selector de armas del `CombatReactionModal` trata ahora las armas fuera de presupuesto igual que `Sin guardia`: quedan bloqueadas directamente en su card con aviso rojo propio, evitando mensajes sueltos debajo del boton de `Añadir parada`.
 - La reaccion defensiva del canvas SVG deja de usar la regla fija de `V.Diff <= 1`: el presupuesto defensivo se calcula ahora como `velocidad final del atacante - velocidad actual del defensor`, de modo que solo puedes `Evadir` o `Parar` mientras no superes la velocidad final del ataque.
 - Los ataques normales repetidos por un mismo atacante contra el mismo objetivo dentro del mismo cierre de turno se agrupan ya en una sola ventana de reaccion: se suma su tirada total, el presupuesto defensivo se calcula contra la velocidad final acumulada del atacante y el modal indica que son ataques acumulados; los ataques simultaneos de atacantes distintos siguen generando ventanas separadas.
@@ -1982,3 +1983,7 @@ Guía rápida: ver `docs/Minimapa.md`.
 - El aviso textual del destino bloqueado queda ahora por encima de las fichas también en la vista del máster, evitando que tokens grandes tapen mensajes como `Ficha grande bloquea` o `Casilla ocupada`.
 - La `X` y el contorno rojo de la casilla bloqueada suben a la misma capa superior del feedback, para que no desaparezcan bajo tokens grandes en la vista del máster.
 - El coste pendiente del HUD de combate deja de recrearse en cada micro movimiento del drag: el estado provisional incluye ya `x/y`, no se crea para coste `0` y no se recalcula sobre destinos bloqueados, evitando el parpadeo `Nombre` / `Nombre +X`.
+- Se retira el tablero táctico antiguo del menú y del render principal: la entrada `Canvas` abre directamente `CanvasSection`, se elimina `MapCanvas.jsx` y se ocultan los accesos heredados que enviaban enemigos a esa estructura.
+- La capa `Mapa` del canvas SVG incorpora marcadores de escenario táctiles: zona, círculo, escalera, cobertura, peligro y etiqueta, con render visual propio y edición desde el inspector para preparar encuentros sin usar tokens ni dibujo libre.
+- Los marcadores `Peligro` y `Escalera` del canvas SVG usan ahora patrones vectoriales adaptativos: las líneas se recalculan al redimensionar la zona para mantener legibilidad sin deformarse.
+- El marcador `Escalera` usa un diseño de planta con peldaños, marco y sombreado de desnivel, ocupando todo su recuadro; las zonas de mapa se renderizan siempre por debajo de muros y tokens.

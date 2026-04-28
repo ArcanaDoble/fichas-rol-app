@@ -13,6 +13,8 @@ export const normalizeCombatTraitId = (trait = '') => {
     if (!normalized) return '';
     if (normalized === 'derribado' || normalized === 'derribar' || normalized === 'derribo') return 'derribo';
     if (normalized === 'penetrante') return 'perforante';
+    if (normalized === 'balistica') return 'balistico';
+    if (normalized === 'bloquear') return 'bloqueo';
     if (normalized === 'ralentizar') return 'ralentizado';
     if (normalized === 'empujar') return 'empuje';
     if (compact === 'singuardia') return 'sin guardia';
@@ -134,13 +136,6 @@ export const rollAttack = (weapon, attributes) => {
         baseFormula = '1d20';
     }
 
-    let rolledBaseFormula = baseFormula;
-    if (weapon?.extraDamageString) {
-        rolledBaseFormula = rolledBaseFormula
-            ? `${rolledBaseFormula} + ${weapon.extraDamageString}`
-            : weapon.extraDamageString;
-    }
-
     const allTraits = weapon?.rasgos || weapon?.traits || weapon?.trait || weapon?.properties || [];
 
     const parsedBonuses = parseAttrBonuses(allTraits);
@@ -204,14 +199,36 @@ export const rollAttack = (weapon, attributes) => {
         return normalized.includes('critico');
     });
 
-    // 1. Roll Base Damage
-    let baseRes = { formula: rolledBaseFormula || '', total: 0, details: [] };
-    if (rolledBaseFormula) {
-        if (hasCritical) {
-            baseRes = rollExpressionCritical(rolledBaseFormula);
-        } else {
-            baseRes = rollExpression(rolledBaseFormula);
-        }
+    const rollDamageFormula = (formula, source) => {
+        if (!formula) return { formula: '', total: 0, details: [] };
+        const result = hasCritical
+            ? rollExpressionCritical(formula)
+            : rollExpression(formula);
+
+        return {
+            ...result,
+            details: (result.details || []).map((detail) => ({
+                ...detail,
+                damageSource: source,
+                ballisticEligible: source === 'weapon',
+            })),
+        };
+    };
+
+    // 1. Roll base weapon damage separately from manual extra dice.
+    const baseRes = rollDamageFormula(baseFormula, 'weapon');
+    const extraDamageRes = rollDamageFormula(weapon?.extraDamageString || '', 'modifier');
+    const baseDetails = [
+        ...(baseRes.details || []),
+        ...(extraDamageRes.details || []),
+    ];
+    const baseTotal = (Number(baseRes.total) || 0) + (Number(extraDamageRes.total) || 0);
+    const baseFormulaParts = [];
+    if (baseFormula) {
+        baseFormulaParts.push(baseFormula);
+    }
+    if (weapon?.extraDamageString) {
+        baseFormulaParts.push(weapon.extraDamageString);
     }
 
     // 2. Roll Attribute Dice individually to tag them
@@ -237,8 +254,8 @@ export const rollAttack = (weapon, attributes) => {
     });
 
     const formulaParts = [];
-    if (rolledBaseFormula) {
-        formulaParts.push(rolledBaseFormula);
+    if (baseFormulaParts.length > 0) {
+        formulaParts.push(baseFormulaParts.join(' + '));
     }
     if (attrDiceArray.length > 0) {
         formulaParts.push(attrDiceArray.map(d => d.dieStr).join(' + '));
@@ -247,8 +264,8 @@ export const rollAttack = (weapon, attributes) => {
 
     return {
         formula,
-        total: baseRes.total + extraTotal,
-        details: [...baseRes.details, ...extraDetails],
+        total: baseTotal + extraTotal,
+        details: [...baseDetails, ...extraDetails],
     };
 };
 

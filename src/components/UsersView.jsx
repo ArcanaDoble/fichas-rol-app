@@ -181,7 +181,6 @@ const UsersView = ({ onBack }) => {
     ];
 
     const MASTER_PERMISSIONS = [
-        { key: 'canViewBattleMap', label: 'Mapa de Batalla', icon: '🗺️', default: false },
         { key: 'canViewBestiary', label: 'Bestiario', icon: '👹', default: false },
         { key: 'canViewClasses', label: 'Lista de Clases', icon: '📜', default: false },
     ];

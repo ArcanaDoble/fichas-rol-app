@@ -55,6 +55,11 @@ const TRAIT_EFFECT_COLORS = {
         vida: '#fb7185',
         default: '#fbbf24',
     },
+    balistico: {
+        postura: '#facc15',
+        vida: '#fb7185',
+        default: '#fde047',
+    },
 };
 
 const SPEED_EFFECT_COLORS = {

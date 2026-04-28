@@ -566,6 +566,10 @@ const CombatHUD = ({
                                                                                 isExpanded={attackModifiersExpanded}
                                                                                 onToggleExpand={() => setAttackModifiersExpanded(!attackModifiersExpanded)}
                                                                                 currentWeapon={item}
+                                                                                disabledTraitIds={['guardia']}
+                                                                                disabledTraitReasons={{
+                                                                                    guardia: 'Guardia solo se aplica al realizar paradas.',
+                                                                                }}
                                                                             />
 
                                                                             <button

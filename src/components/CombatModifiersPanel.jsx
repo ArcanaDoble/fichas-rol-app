@@ -15,6 +15,10 @@ const formatTraitLabel = (trait = '') => {
     if (normalized === 'penetrante' || normalized === 'perforante') return 'Perforante';
     if (normalized === 'empuje' || normalized === 'empujar') return 'Empuje';
     if (normalized === 'elusion' || normalized === 'elusión') return 'Elusión';
+    if (normalized === 'balistico' || normalized === 'balístico' || normalized === 'balistica' || normalized === 'balística') return 'Balístico';
+    if (normalized === 'distancia') return 'Distancia';
+    if (normalized === 'bloqueo' || normalized === 'bloquear') return 'Bloqueo';
+    if (normalized === 'guardia') return 'Guardia';
     if (normalized === 'sin guardia' || normalized === 'singuardia' || normalized === 'sin_guardia') return 'Sin guardia';
     return trait.charAt(0).toUpperCase() + trait.slice(1);
 };
@@ -28,6 +32,10 @@ const AVAILABLE_TRAITS = [
     { id: 'sangrado', label: 'Sangrado', icon: Droplet, color: 'text-red-500', border: 'border-red-700/50', bg: 'bg-red-950/30' },
     { id: 'ralentizado', label: 'Ralentizado', icon: ZapOff, color: 'text-amber-300', border: 'border-amber-300/50', bg: 'bg-amber-900/25' },
     { id: 'perforante', label: 'Perforante', icon: Target, color: 'text-amber-300', border: 'border-amber-400/50', bg: 'bg-amber-900/25' },
+    { id: 'balistico', label: 'Balístico', icon: Target, color: 'text-yellow-300', border: 'border-yellow-400/50', bg: 'bg-yellow-900/25' },
+    { id: 'distancia', label: 'Distancia', icon: Target, color: 'text-violet-300', border: 'border-violet-400/50', bg: 'bg-violet-900/25' },
+    { id: 'bloqueo', label: 'Bloqueo', icon: Shield, color: 'text-blue-300', border: 'border-blue-400/50', bg: 'bg-blue-900/25' },
+    { id: 'guardia', label: 'Guardia', icon: Shield, color: 'text-emerald-300', border: 'border-emerald-400/50', bg: 'bg-emerald-900/25' },
     { id: 'empuje', label: 'Empuje', icon: MoveRight, color: 'text-sky-300', border: 'border-sky-400/50', bg: 'bg-sky-900/25' },
     { id: 'elusion', label: 'Elusión', icon: Wind, color: 'text-cyan-300', border: 'border-cyan-400/50', bg: 'bg-cyan-900/25' },
     { id: 'fluida', label: 'Fluida', icon: Wind, color: 'text-sky-300', border: 'border-sky-400/50', bg: 'bg-sky-900/30' },

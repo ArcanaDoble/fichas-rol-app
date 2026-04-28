@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import {
     FiZap,
     FiUsers,
-    FiTarget,
     FiCompass,
     FiMap,
     FiTool,
@@ -66,20 +65,11 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
         },
         {
             id: 'canvas',
-            title: 'Mapa de Batalla',
-            description: 'Tablero virtual táctico con grid, tokens y herramientas de dibujo.',
-            color: 'indigo',
-            icon: FiTarget,
-            features: ['Grid', 'Tokens', 'Táctico'],
-            isNew: false,
-        },
-        {
-            id: 'canvas_beta',
-            title: 'Canvas (BETA)',
-            description: 'Nueva arquitectura del Canvas. Entorno de pruebas aislado.',
+            title: 'Canvas',
+            description: 'Tablero táctico principal con escenarios, tokens y combate automatizado.',
             color: 'rose',
             icon: FiLayout,
-            features: ['Beta', 'Dev', 'Test'],
+            features: ['Escenarios', 'Tokens', 'Combate'],
             isNew: true,
         },
         {

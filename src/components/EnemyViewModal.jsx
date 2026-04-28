@@ -14,7 +14,7 @@ import {
   isYuuzuName,
   KARMA_KEY,
 } from '../utils/karma';
-import { FiSearch, FiMap, FiCopy, FiEdit2, FiX } from 'react-icons/fi';
+import { FiSearch, FiCopy, FiEdit2, FiX } from 'react-icons/fi';
 
 const atributos = ['destreza', 'vigor', 'intelecto', 'voluntad'];
 const defaultRecursos = ['postura', 'vida', 'ingenio', 'cordura', 'armadura'];
@@ -44,7 +44,6 @@ const EnemyViewModal = ({
   onClose,
   onEdit,
   onDuplicate,
-  onSendToMap,
   highlightText = (t) => t,
   floating = false,
   rarityColorMap = {},
@@ -374,11 +373,6 @@ const EnemyViewModal = ({
       <div className="flex items-center justify-between mb-4 cursor-move" onMouseDown={handleMouseDown}>
         <h2 className="text-xl font-bold">Ficha de {enemy.name}</h2>
         <div className="hidden md:flex gap-2">
-          {onSendToMap && (
-            <Boton color="indigo" onClick={() => onSendToMap(enemy)}>
-              Enviar al mapa
-            </Boton>
-          )}
           {onDuplicate && (
             <Boton color="yellow" onClick={() => onDuplicate(enemy)}>
               Duplicar
@@ -590,17 +584,6 @@ const EnemyViewModal = ({
         {/* Barra de acciones sticky para móvil */}
         <div className="md:hidden sticky bottom-0 left-0 right-0 bg-gray-900/95 border-t border-gray-700 mt-3 -mx-6 px-4 py-2">
           <div className="flex items-center justify-around gap-3">
-            {onSendToMap && (
-              <button
-                type="button"
-                title="Enviar al mapa"
-                aria-label="Enviar al mapa"
-                onClick={() => onSendToMap(enemy)}
-                className="h-10 w-10 rounded-full bg-indigo-600 text-white shadow flex items-center justify-center active:scale-95"
-              >
-                <FiMap />
-              </button>
-            )}
             {onDuplicate && (
               <button
                 type="button"
@@ -654,7 +637,6 @@ EnemyViewModal.propTypes = {
   onClose: PropTypes.func.isRequired,
   onEdit: PropTypes.func,
   onDuplicate: PropTypes.func,
-  onSendToMap: PropTypes.func,
   highlightText: PropTypes.func,
   floating: PropTypes.bool,
   rarityColorMap: PropTypes.object,

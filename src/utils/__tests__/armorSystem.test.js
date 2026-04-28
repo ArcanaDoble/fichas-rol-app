@@ -9,6 +9,7 @@ describe('armor trait protection', () => {
     expect(normalizeCombatTrait('Derribado')).toBe('derribo');
     expect(normalizeCombatTrait('Perforante')).toBe('perforante');
     expect(normalizeCombatTrait('Penetrante')).toBe('perforante');
+    expect(normalizeCombatTrait('Balística')).toBe('balistico');
     expect(normalizeCombatTrait('Ralentizar')).toBe('ralentizado');
     expect(normalizeCombatTrait('Empujar')).toBe('empuje');
     expect(normalizeCombatTrait('Sin_guardia')).toBe('sin guardia');
@@ -23,19 +24,19 @@ describe('armor trait protection', () => {
         {
           nombre: 'Cota ritual',
           type: 'armor',
-          rasgos: ['Derribado', 'Ralentizado', 'Empuje', 'Crítico'],
+          rasgos: ['Derribado', 'Ralentizado', 'Empuje', 'Crítico', 'Balístico'],
         },
       ],
     };
     const weapon = {
       nombre: 'Martillo',
-      rasgos: ['Derribo', 'Ralentizar', 'Empujar', 'Crítico', 'Sangrado'],
+      rasgos: ['Derribo', 'Ralentizar', 'Empujar', 'Crítico', 'Sangrado', 'Balístico'],
     };
 
     const protection = getArmorProtection(defender, weapon);
     const effectiveWeapon = applyNegatedTraitsToItem(weapon, protection.negatedTraits);
 
-    expect(protection.negatedTraits).toEqual(['Derribo', 'Ralentizar', 'Empujar', 'Crítico']);
+    expect(protection.negatedTraits).toEqual(['Derribo', 'Ralentizar', 'Empujar', 'Crítico', 'Balístico']);
     expect(effectiveWeapon.rasgos).toEqual(['Sangrado']);
   });
 
