@@ -73,6 +73,15 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
             isNew: true,
         },
         {
+            id: 'board',
+            title: 'Tablero',
+            description: 'Mesa táctica alternativa con grid, tokens y soporte inicial para cartas.',
+            color: 'amber',
+            icon: FiImage,
+            features: ['Cartas', 'Grid', 'Tokens'],
+            isNew: true,
+        },
+        {
             id: 'minimap',
             title: 'Minimapa',
             description: 'Constructor rápido de entornos y referencias visuales.',

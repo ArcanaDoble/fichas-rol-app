@@ -7303,6 +7303,23 @@ function App() {
     );
   }
 
+  if (userType === 'master' && authenticated && chosenView === 'board') {
+    return (
+      <CanvasSection
+        mode="board"
+        onBack={() => setChosenView(null)}
+        existingPlayers={existingPlayers}
+        armas={armas}
+        armaduras={armaduras}
+        habilidades={habilidades}
+        accesorios={accesorios}
+        glossary={glossary}
+        rarityColorMap={rarityColorMap}
+        highlightText={highlightText}
+      />
+    );
+  }
+
   if (userType === 'master' && authenticated) {
     return withTooltips(
       <div className="min-h-screen bg-[#0b1120] text-gray-100">
