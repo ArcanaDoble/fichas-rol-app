@@ -402,7 +402,102 @@ const getCombatRangeData = (item) => {
     return { value: COMBAT_RANGE_MAP.toque, label };
 };
 
-const isCombatTokenItem = (item) => !!item && item.type !== 'light' && item.type !== 'wall' && item.type !== 'geometry';
+const isCardItem = (item) => item?.type === 'card';
+const isHandCardItem = (item) => isCardItem(item) && item.zone === 'hand';
+const isStackedCardItem = (item) => isCardItem(item) && !!item.stackParentId;
+const isCombatTokenItem = (item) => !!item && item.type !== 'light' && item.type !== 'wall' && item.type !== 'geometry' && !isCardItem(item);
+
+const uniqueCardIds = (ids = []) => [...new globalThis.Set(ids.filter(Boolean))];
+const normalizeCardGroupName = (card = {}) => (card.name || card.nombre || 'Carta')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const getCardStackIds = (item) => (
+    Array.isArray(item?.stackIds)
+        ? uniqueCardIds(item.stackIds)
+        : []
+);
+
+const sanitizeCardStacks = (items = []) => {
+    const cardIds = new globalThis.Set(items.filter(isCardItem).map(item => item.id));
+    const parentByChild = new globalThis.Map();
+    const parentZoneByChild = new globalThis.Map();
+
+    const cleanedParents = items.map(item => {
+        if (!isCardItem(item)) return item;
+
+        const cleanStackIds = getCardStackIds(item).filter(childId => {
+            if (!cardIds.has(childId) || childId === item.id || parentByChild.has(childId)) return false;
+            parentByChild.set(childId, item.id);
+            parentZoneByChild.set(childId, item.zone || 'board');
+            return true;
+        });
+
+        return cleanStackIds.length > 0 || Array.isArray(item.stackIds)
+            ? { ...item, stackIds: cleanStackIds }
+            : item;
+    });
+
+    return cleanedParents.map(item => {
+        if (!isCardItem(item)) return item;
+
+        const parentId = parentByChild.get(item.id);
+        if (parentId) {
+            return {
+                ...item,
+                zone: parentZoneByChild.get(item.id) || item.zone || 'board',
+                stackParentId: parentId,
+                stackIds: [],
+            };
+        }
+
+        return item.stackParentId
+            ? { ...item, stackParentId: null }
+            : item;
+    });
+};
+
+const getVisibleHandCards = (items = [], predicate = () => true) => items
+    .filter(item => isHandCardItem(item) && predicate(item))
+    .sort((a, b) => (Number(a.handOrder) || 0) - (Number(b.handOrder) || 0));
+
+const getCardCenter = (item) => ({
+    x: (Number(item?.x) || 0) + ((Number(item?.width) || 0) / 2),
+    y: (Number(item?.y) || 0) + ((Number(item?.height) || 0) / 2),
+});
+
+const isPointInsideExpandedItem = (point, item, expandRatio = 0.18) => {
+    if (!point || !item) return false;
+    const width = Number(item.width) || 0;
+    const height = Number(item.height) || 0;
+    const expandX = width * expandRatio;
+    const expandY = height * expandRatio;
+    return (
+        point.x >= item.x - expandX &&
+        point.x <= item.x + width + expandX &&
+        point.y >= item.y - expandY &&
+        point.y <= item.y + height + expandY
+    );
+};
+
+const snapCardRotationAngle = (angle, threshold = 5) => {
+    if (!Number.isFinite(angle)) return angle;
+    const normalized = ((angle % 360) + 360) % 360;
+    const nearestRightAngle = Math.round(normalized / 90) * 90;
+    const wrappedNearest = nearestRightAngle === 360 ? 0 : nearestRightAngle;
+    const distance = Math.min(
+        Math.abs(normalized - wrappedNearest),
+        Math.abs(normalized - wrappedNearest + 360),
+        Math.abs(normalized - wrappedNearest - 360)
+    );
+
+    if (distance > threshold) return angle;
+    const turns = Math.floor(angle / 360);
+    return turns * 360 + nearestRightAngle;
+};
 
 const normalizeCombatSideKey = (value = '') => value
     .toString()
@@ -1951,6 +2046,29 @@ const TokenImageWithLoader = ({
     </div>
 );
 
+const CardImageWithLoader = ({
+    src,
+    label = 'Carta',
+    className = 'absolute inset-0 w-full h-full',
+    imageClassName = 'w-full h-full object-cover',
+}) => (
+    <div className={`relative overflow-hidden bg-[#111827] ${className}`}>
+        <CanvasAssetImage
+            src={src}
+            label={label}
+            imageClassName={imageClassName}
+            loadingClassName="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_50%_20%,rgba(200,170,110,0.18),transparent_45%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(35,43,58,0.96),rgba(8,13,22,0.98))] pointer-events-none"
+            loadingRingClassName="absolute inset-2 rounded border border-[#c8aa6e]/20 animate-pulse"
+            loadingIconClassName="w-4 h-4 text-[#c8aa6e]/80 animate-spin drop-shadow-[0_0_8px_rgba(200,170,110,0.35)]"
+            fallback={
+                <div className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_50%_20%,rgba(200,170,110,0.18),transparent_45%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(35,43,58,0.96),rgba(8,13,22,0.98))]">
+                    <div className="h-2/3 w-2/3 rounded border border-[#c8aa6e]/25 bg-black/20 shadow-inner" />
+                </div>
+            }
+        />
+    </div>
+);
+
 // --- Helper: Get rarity visual info ---
 const getRarityInfo = (rareza) => {
     const r = (rareza || '').toLowerCase();
@@ -2569,7 +2687,11 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
     );
 };
 
-const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, playerName = '', isPlayerView = false, existingPlayers = [], characterData = null, onOpenCharacterSheet = null, armas = [], armaduras = [], habilidades = [], accesorios = [], glossary = [], rarityColorMap = {}, highlightText = (t) => t }) => {
+const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, playerName = '', isPlayerView = false, existingPlayers = [], characterData = null, onOpenCharacterSheet = null, armas = [], armaduras = [], habilidades = [], accesorios = [], glossary = [], rarityColorMap = {}, highlightText = (t) => t, mode = 'canvas' }) => {
+    const isBoardMode = mode === 'board';
+    const scenarioCollectionName = isBoardMode ? 'board_scenarios' : 'canvas_scenarios';
+    const visibilityDocName = isBoardMode ? 'boardVisibility' : 'canvasVisibility';
+    const sectionTitle = isBoardMode ? 'Tablero' : 'Canvas Beta';
     // Estado de la cámara (separado en zoom y offset como en MinimapV2)
     const [zoom, setZoom] = useState(1);
     const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -2645,6 +2767,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [activeLayer, setActiveLayer] = useState('TABLETOP'); // 'TABLETOP' | 'LIGHTING'
     const [tokens, setTokens] = useState([]);
     const [uploadingToken, setUploadingToken] = useState(false);
+    const [cards, setCards] = useState([]);
+    const [uploadingCard, setUploadingCard] = useState(false);
 
     // Estado para Drag & Drop de Tokens en el Canvas
     const [draggedTokenId, setDraggedTokenId] = useState(null); // ID del token principal being dragged (para referencia visual inmediata)
@@ -2655,6 +2779,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [selectedTokenIds, setSelectedTokenIds] = useState([]); // Array de IDs seleccionados
     const [rotatingTokenId, setRotatingTokenId] = useState(null);
     const [resizingTokenId, setResizingTokenId] = useState(null); // Nuevo estado para resize
+    const [draggingHandCard, setDraggingHandCard] = useState(null);
     const resizeStartRef = useRef(null); // { x, y, width, height }
 
     // Detección de móvil para deshabilitar ciertas funcionalidades problemáticas
@@ -2851,7 +2976,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         console.log("🕵️ Monitoring global canvas visibility...");
         let activeScenarioUnsub = null;
 
-        const globalUnsub = onSnapshot(doc(db, 'gameSettings', 'canvasVisibility'), (docSnap) => {
+        const globalUnsub = onSnapshot(doc(db, 'gameSettings', visibilityDocName), (docSnap) => {
             const data = docSnap.exists() ? docSnap.data() : {};
             const activeId = data.activeScenarioId || null;
             console.log("📡 canvasVisibility updated — activeScenarioId:", activeId);
@@ -2870,7 +2995,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 if (activeScenarioUnsub) activeScenarioUnsub();
 
                 console.log("📍 Active scenario detected:", activeId);
-                const scenarioRef = doc(db, 'canvas_scenarios', activeId);
+                const scenarioRef = doc(db, scenarioCollectionName, activeId);
                 activeScenarioUnsub = onSnapshot(scenarioRef, (scenarioDoc) => {
                     if (scenarioDoc.exists()) {
                         const sData = { id: scenarioDoc.id, ...scenarioDoc.data() };
@@ -2901,7 +3026,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const setGlobalActiveScenario = async (scenarioId) => {
         console.log("🎬 setGlobalActiveScenario called with:", scenarioId);
         try {
-            await setDoc(doc(db, 'gameSettings', 'canvasVisibility'), {
+            await setDoc(doc(db, 'gameSettings', visibilityDocName), {
                 activeScenarioId: scenarioId,
                 updatedAt: serverTimestamp()
             }, { merge: true });
@@ -2922,7 +3047,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         if (!activeScenario?.id) return;
 
         // Suscribirse a cambios en el documento del escenario activo
-        const unsub = onSnapshot(doc(db, 'canvas_scenarios', activeScenario.id), (docSnap) => {
+        const unsub = onSnapshot(doc(db, scenarioCollectionName, activeScenario.id), (docSnap) => {
             if (docSnap.exists()) {
                 const remoteData = docSnap.data();
 
@@ -3409,6 +3534,82 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         return { x: worldX, y: worldY };
     }
 
+    const isPointInsideBoardHand = (point) => {
+        if (!point || !isBoardMode) return false;
+        const handDropZone = document.querySelector('[data-board-hand-drop-zone="true"]');
+        const rect = handDropZone?.getBoundingClientRect();
+        if (!rect) return false;
+        return point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom;
+    };
+
+    const findCardStackDropTarget = (sourceCard, items = []) => {
+        if (!isBoardMode || !isCardItem(sourceCard) || sourceCard.zone !== 'board') return null;
+
+        const sourceStackIds = new globalThis.Set([sourceCard.id, ...getCardStackIds(sourceCard)]);
+        const center = getCardCenter(sourceCard);
+
+        return [...items].reverse().find(candidate => (
+            isCardItem(candidate) &&
+            candidate.zone === 'board' &&
+            !candidate.stackParentId &&
+            !sourceStackIds.has(candidate.id) &&
+            isPointInsideExpandedItem(center, candidate)
+        )) || null;
+    };
+
+    const stackCardOnTarget = (items = [], sourceId, targetId) => {
+        const source = items.find(item => item.id === sourceId);
+        const target = items.find(item => item.id === targetId);
+        if (!isCardItem(source) || !isCardItem(target) || source.id === target.id) return items;
+
+        const sourceStackIds = getCardStackIds(source);
+        const targetStackIds = getCardStackIds(target);
+        const sourcePileIds = [source.id, ...sourceStackIds].filter(Boolean);
+        const targetPileIds = [target.id, ...targetStackIds].filter(Boolean);
+        if (sourcePileIds.includes(target.id) || targetPileIds.includes(source.id)) return items;
+
+        const nextSourceStackIds = [
+            ...targetStackIds,
+            target.id,
+            ...sourceStackIds
+        ].filter(Boolean);
+        const stackedIds = new globalThis.Set(nextSourceStackIds);
+
+        const nextItems = items.map(item => {
+            if (item.id === source.id) {
+                return {
+                    ...item,
+                    zone: 'board',
+                    stackParentId: null,
+                    stackIds: nextSourceStackIds,
+                };
+            }
+
+            if (stackedIds.has(item.id)) {
+                return {
+                    ...item,
+                    zone: 'board',
+                    stackParentId: source.id,
+                    stackIds: [],
+                    x: source.x,
+                    y: source.y,
+                    rotation: source.rotation || 0,
+                };
+            }
+
+            if (Array.isArray(item.stackIds)) {
+                return {
+                    ...item,
+                    stackIds: item.stackIds.filter(id => !sourcePileIds.includes(id) && !targetPileIds.includes(id)),
+                };
+            }
+
+            return item;
+        });
+
+        return sanitizeCardStacks(nextItems);
+    };
+
     const snapToWallEndpoints = (worldPos, customSnapActive = null) => {
         let snappedPos = { ...worldPos };
 
@@ -3523,6 +3724,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const deltaY = curY - tokenScreenY;
 
             let angleDeg = (Math.atan2(deltaY, deltaX) * 180 / Math.PI) + 90;
+            if (isCardItem(token)) {
+                angleDeg = snapCardRotationAngle(angleDeg);
+            }
 
             setLoadingRotation(angleDeg); // Update Rotation
 
@@ -3744,7 +3948,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             if (Math.hypot(newWall.x2 - newWall.x1, newWall.y2 - newWall.y1) > 5) {
                 const updatedItems = [...(activeScenario.items || []), newWall];
                 setActiveScenario(prev => ({ ...prev, items: updatedItems }));
-                updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
+                updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
                     items: updatedItems,
                     lastModified: Date.now()
                 });
@@ -3782,6 +3986,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                 // Seleccionar items que intersecten y pertenezcan a la capa activa
                 const newSelected = activeScenario.items.filter(item => {
+                    if (isStackedCardItem(item)) return false;
+
                     const isLight = item.type === 'light';
                     const isWall = item.type === 'wall';
                     const isGeometry = item.type === 'geometry';
@@ -3818,7 +4024,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }
 
         if (draggingWallHandle && activeScenario) {
-            updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
+            updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
                 items: activeScenario.items,
                 lastModified: Date.now()
             });
@@ -3835,6 +4041,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 const { x: releaseX, y: releaseY } = getEventCoords(e, tokenDragStart.identifier);
                 const deltaX = (releaseX - tokenDragStart.x) / zoom;
                 const deltaY = (releaseY - tokenDragStart.y) / zoom;
+                const draggedItem = currentScenario.items.find(item => item.id === draggedTokenId);
+
+                if (isBoardMode && isCardItem(draggedItem) && isPointInsideBoardHand({ x: releaseX, y: releaseY })) {
+                    moveBoardCardToHand(draggedTokenId);
+                    setDraggedTokenId(null);
+                    setRotatingTokenId(null);
+                    setResizingTokenId(null);
+                    setTokenOriginalPos({});
+                    setDragVisualOrigin({});
+                    setCombatOccupancyFeedback(null);
+                    document.body.style.cursor = 'default';
+                    return;
+                }
 
                 finalItems = currentScenario.items.map(item => {
                     if (!selectedTokenIds.includes(item.id)) return item;
@@ -3863,6 +4082,36 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                     return { ...item, x: newX, y: newY };
                 });
+
+                if (isBoardMode && isCardItem(draggedItem) && activeLayer === 'TABLETOP') {
+                    const movedCard = finalItems.find(item => item.id === draggedTokenId);
+                    const stackTarget = findCardStackDropTarget(movedCard, finalItems);
+
+                    if (stackTarget) {
+                        finalItems = stackCardOnTarget(finalItems, draggedTokenId, stackTarget.id);
+                        setActiveScenario(prev => prev ? { ...prev, items: finalItems } : prev);
+                        setSelectedTokenIds([draggedTokenId]);
+                        lastSelectedIdRef.current = draggedTokenId;
+
+                        try {
+                            updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
+                                items: finalItems,
+                                lastModified: Date.now()
+                            });
+                        } catch (error) {
+                            console.error("Error saving card stack:", error);
+                        }
+
+                        setDraggedTokenId(null);
+                        setRotatingTokenId(null);
+                        setResizingTokenId(null);
+                        setTokenOriginalPos({});
+                        setDragVisualOrigin({});
+                        setCombatOccupancyFeedback(null);
+                        document.body.style.cursor = 'default';
+                        return;
+                    }
+                }
             }
 
             // Si estábamos arrastrando tokens en la capa de mesa, comprobar colisiones
@@ -4006,7 +4255,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 // --- ACUMULACIÓN DE VELOCIDAD POR MOVIMIENTO (MODO NORMAL O MASTER) ---
                 const sangradoMovementAnimations = [];
                 finalItems = finalItems.map(item => {
-                    if (selectedTokenIds.includes(item.id) && item.type !== 'wall' && item.type !== 'light') {
+                    if (selectedTokenIds.includes(item.id) && isCombatTokenItem(item)) {
                         const original = tokenOriginalPos[item.id];
                         if (original) {
                             if (item.x !== original.x || item.y !== original.y) {
@@ -4056,7 +4305,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             // Guardar el estado final en Firebase (Solo si no es movimiento pendiente de combate y si de verdad se movió algo)
             if (shouldSaveToFirebase) {
                 try {
-                    updateDoc(doc(db, 'canvas_scenarios', currentScenario.id), {
+                    updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
                         items: finalItems,
                         lastModified: Date.now()
                     });
@@ -4233,8 +4482,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     useEffect(() => {
         if (viewMode !== 'LIBRARY') return;
 
-        console.log("📚 Conectando a Biblioteca de Escenarios...");
-        const unsub = onSnapshot(collection(db, 'canvas_scenarios'), (snap) => {
+        console.log(`📚 Conectando a Biblioteca de Escenarios (${sectionTitle})...`);
+        const unsub = onSnapshot(collection(db, scenarioCollectionName), (snap) => {
             // Se omiten los arrays pesados de los items para la vista del listado de menús (Ahorro VRAM/RAM masivo)
             const loaded = snap.docs.map(d => {
                 const data = d.data();
@@ -4251,10 +4500,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             setScenarios(loaded.sort((a, b) => b.lastModified - a.lastModified));
         });
         return () => {
-            console.log("📚 Desconectando de Biblioteca de Escenarios...");
+            console.log(`📚 Desconectando de Biblioteca de Escenarios (${sectionTitle})...`);
             unsub();
         };
-    }, [viewMode]);
+    }, [viewMode, scenarioCollectionName, sectionTitle]);
 
     // --- SUSCRIPCIÓN A TOKENS (Firebase) ---
     // Optimización: Solo descargar el índice completo de tokens si la pestaña de la barra lateral está en 'TOKENS'.
@@ -4271,6 +4520,20 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             unsub();
         };
     }, [activeTab]);
+
+    useEffect(() => {
+        if (activeTab !== 'TOKENS' || !isBoardMode || isPlayerView) return;
+
+        console.log("🃏 Conectando a Biblioteca de Cartas...");
+        const unsub = onSnapshot(collection(db, 'canvas_cards'), (snap) => {
+            const loaded = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            setCards(loaded.sort((a, b) => b.createdAt - a.createdAt));
+        });
+        return () => {
+            console.log("🃏 Desconectando de Biblioteca de Cartas...");
+            unsub();
+        };
+    }, [activeTab, isBoardMode, isPlayerView]);
 
     // --- KEYBOARD SHORTCUTS (Copy/Paste) ---
     useEffect(() => {
@@ -4320,7 +4583,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                     // Guardar en Firebase
                     try {
-                        await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
+                        await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
                             items: updatedItems,
                             lastModified: Date.now()
                         });
@@ -4349,7 +4612,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     setSelectedTokenIds([]);
 
                     try {
-                        await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
+                        await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
                             items: updatedItems,
                             lastModified: Date.now()
                         });
@@ -4378,7 +4641,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         };
 
         try {
-            const docRef = await addDoc(collection(db, 'canvas_scenarios'), newScenario);
+            const docRef = await addDoc(collection(db, scenarioCollectionName), newScenario);
             loadScenario({ id: docRef.id, ...newScenario });
         } catch (error) {
             console.error("Error creating scenario:", error);
@@ -4433,7 +4696,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const safeSync = async () => {
             try {
                 // 1. SIEMPRE leer datos FRESCOS del servidor (nunca confiar en el estado local)
-                const freshSnap = await getDoc(doc(db, 'canvas_scenarios', scenarioId));
+                const freshSnap = await getDoc(doc(db, scenarioCollectionName, scenarioId));
                 if (!freshSnap.exists()) return;
                 const freshData = freshSnap.data();
                 const freshItems = freshData.items || [];
@@ -4457,7 +4720,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         // Modificar SOLO el token del jugador en la lista fresca del servidor
                         const updatedItems = freshItems.map(i => i.id === existingToken.id ? syncedToken : i);
                         setActiveScenario(prev => prev?.id === scenarioId ? { ...prev, items: updatedItems } : prev);
-                        await updateDoc(doc(db, 'canvas_scenarios', scenarioId), {
+                        await updateDoc(doc(db, scenarioCollectionName, scenarioId), {
                             items: updatedItems,
                             lastModified: Date.now()
                         });
@@ -4508,7 +4771,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         y: -(spawnPosition.y + defaultTokenDimensions.height / 2 - WORLD_SIZE / 2) * playerZoom,
                     });
 
-                    await updateDoc(doc(db, 'canvas_scenarios', scenarioId), {
+                    await updateDoc(doc(db, scenarioCollectionName, scenarioId), {
                         items: updatedItems,
                         lastModified: Date.now()
                     });
@@ -4544,7 +4807,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
             try {
                 // Leer datos frescos del servidor
-                const freshSnap = await getDoc(doc(db, 'canvas_scenarios', currentScenario.id));
+                const freshSnap = await getDoc(doc(db, scenarioCollectionName, currentScenario.id));
                 if (!freshSnap.exists()) return;
                 const freshData = freshSnap.data();
                 const freshItems = freshData.items || [];
@@ -4572,7 +4835,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 if (hasChanges) {
                     console.log('🔄 [SafeSync] Sincronización en tiempo real para:', name);
                     setActiveScenario(prev => prev?.id === currentScenario.id ? { ...prev, items: updatedItems } : prev);
-                    await updateDoc(doc(db, 'canvas_scenarios', currentScenario.id), {
+                    await updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
                         items: updatedItems,
                         lastModified: Date.now()
                     });
@@ -4646,7 +4909,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 savePayload.allowedPlayers = activeScenario.allowedPlayers || [];
             }
 
-            await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), savePayload);
+            await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), savePayload);
 
             // 🔗 SINCRONIZACIÓN BIDIRECCIONAL: Actualizar fichas de personajes vinculados
             if (activeScenario.items && activeScenario.items.length > 0) {
@@ -4724,7 +4987,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 await releaseFile(itemToDelete.config.backgroundImageHash);
             }
 
-            await deleteDoc(doc(db, 'canvas_scenarios', idToDelete));
+            await deleteDoc(doc(db, scenarioCollectionName, idToDelete));
 
             console.log("🗑️ Encuentro y archivos asociados eliminados correctamente");
 
@@ -4772,6 +5035,409 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         } catch (error) {
             console.error("Error deleting token:", error);
         }
+    };
+
+    const handleCardUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploadingCard(true);
+        try {
+            const { url, hash } = await getOrUploadFile(file, 'CanvasCards');
+            await addDoc(collection(db, 'canvas_cards'), {
+                frontUrl: url,
+                hash,
+                name: file.name.replace(/\.[^.]+$/, ''),
+                createdAt: Date.now(),
+                uploadedBy: currentUserId
+            });
+            e.target.value = '';
+        } catch (error) {
+            console.error("Error uploading card:", error);
+        } finally {
+            setUploadingCard(false);
+        }
+    };
+
+    const deleteCard = async (card) => {
+        if (!confirm("¿Eliminar esta carta?")) return;
+        try {
+            if (card.hash) await releaseFile(card.hash);
+            await deleteDoc(doc(db, 'canvas_cards', card.id));
+        } catch (error) {
+            console.error("Error deleting card:", error);
+        }
+    };
+
+    const handleBoardCardBackUpload = async (cardId, file) => {
+        if (!cardId || !file) return;
+
+        try {
+            const { url, hash } = await getOrUploadFile(file, 'CanvasCards');
+            updateItem(cardId, { backImage: url, backImageHash: hash }, true);
+        } catch (error) {
+            console.error("Error uploading card back:", error);
+        }
+    };
+
+    const addCardToBoard = (card) => {
+        if (!activeScenario || !card?.frontUrl) return;
+
+        const centerX = (WORLD_SIZE / 2) - (offset.x / zoom);
+        const centerY = (WORLD_SIZE / 2) - (offset.y / zoom);
+        const cardWidth = Math.max(90, (gridConfig.cellWidth || 120) * 0.72);
+        const cardHeight = Math.round(cardWidth * 1.4);
+
+        const newCard = {
+            id: `card-${Date.now()}`,
+            type: 'card',
+            x: centerX - (cardWidth / 2),
+            y: centerY - (cardHeight / 2),
+            width: cardWidth,
+            height: cardHeight,
+            frontImage: card.frontUrl,
+            backImage: card.backUrl || null,
+            faceDown: false,
+            rotation: 0,
+            layer: 'CARD',
+            name: card.name || 'Carta',
+            ownerId: currentUserId,
+            zone: 'board',
+            snapToGrid: false,
+        };
+
+        const nextItems = [...(activeScenario.items || []), newCard];
+        setActiveScenario(prev => ({
+            ...prev,
+            items: nextItems
+        }));
+        if (activeScenario.id) {
+            updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
+                items: nextItems,
+                lastModified: Date.now()
+            }).catch(err => console.error("Error saving board card:", err));
+        }
+    };
+
+    const getBoardHandOwner = () => {
+        const items = activeScenarioRef.current?.items || activeScenario?.items || [];
+        const selectedCombatToken = items.find(item => selectedTokenIds.includes(item.id) && isCombatTokenItem(item));
+        const rememberedCombatToken = items.find(item => item.id === lastMasterHudTokenIdRef.current && isCombatTokenItem(item));
+        const fallbackCombatToken = items.find(item => isCombatTokenItem(item));
+        return selectedCombatToken || rememberedCombatToken || fallbackCombatToken || null;
+    };
+
+    const addCardToHand = (card) => {
+        if (!activeScenario || !card?.frontUrl) return;
+
+        const handOwner = getBoardHandOwner();
+        const handOwnerId = handOwner?.id || currentUserId;
+        const handOwnerName = handOwner?.name || playerName || 'Master';
+        const cardWidth = Math.max(90, (gridConfig.cellWidth || 120) * 0.72);
+        const cardHeight = Math.round(cardWidth * 1.4);
+        const handOrder = Date.now();
+
+        const newCard = {
+            id: `card-${handOrder}`,
+            type: 'card',
+            x: 0,
+            y: 0,
+            width: cardWidth,
+            height: cardHeight,
+            frontImage: card.frontUrl,
+            backImage: card.backUrl || null,
+            faceDown: false,
+            rotation: 0,
+            layer: 'CARD',
+            name: card.name || 'Carta',
+            ownerId: handOwnerId,
+            ownerName: handOwnerName,
+            zone: 'hand',
+            handOrder,
+            snapToGrid: false,
+        };
+
+        const nextItems = [...(activeScenario.items || []), newCard];
+        setActiveScenario(prev => ({
+            ...prev,
+            items: nextItems
+        }));
+        if (activeScenario.id) {
+            updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
+                items: nextItems,
+                lastModified: Date.now()
+            }).catch(err => console.error("Error saving hand card:", err));
+        }
+    };
+
+    const moveBoardCardToHand = (cardId) => {
+        const currentScenario = activeScenarioRef.current || activeScenario;
+        if (!currentScenario || !cardId) return;
+
+        const handOwner = getBoardHandOwner();
+        const handOwnerId = handOwner?.id || currentUserId;
+        const handOwnerName = handOwner?.name || playerName || 'Master';
+        const handOrder = Date.now();
+        const card = (currentScenario.items || []).find(item => item.id === cardId);
+        const movingIds = new globalThis.Set(
+            isCardItem(card)
+                ? [card.id, ...getCardStackIds(card)].filter(Boolean)
+                : [cardId]
+        );
+
+        const nextItems = sanitizeCardStacks((currentScenario.items || []).map(item => (
+            movingIds.has(item.id) && isCardItem(item)
+                ? {
+                    ...item,
+                    x: 0,
+                    y: 0,
+                    zone: 'hand',
+                    stackParentId: null,
+                    stackIds: [],
+                    ownerId: handOwnerId,
+                    ownerName: handOwnerName,
+                    handOrder: handOrder + Array.from(movingIds).indexOf(item.id),
+                }
+                : Array.isArray(item.stackIds)
+                    ? { ...item, stackIds: item.stackIds.filter(id => !movingIds.has(id)) }
+                    : item
+        )));
+
+        setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
+        setSelectedTokenIds(prev => prev.filter(id => !movingIds.has(id)));
+        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
+            items: nextItems,
+            lastModified: Date.now()
+        }).catch(err => console.error("Error moving card to hand:", err));
+    };
+
+    const playHandCardToBoard = (card, clientPoint = null) => {
+        const currentScenario = activeScenarioRef.current || activeScenario;
+        if (!currentScenario || !card?.id) return;
+
+        const cardWidth = card.width || Math.max(90, (gridConfig.cellWidth || 120) * 0.72);
+        const cardHeight = card.height || Math.round(cardWidth * 1.4);
+        const worldPoint = clientPoint
+            ? divToWorld(clientPoint.x, clientPoint.y)
+            : {
+                x: (WORLD_SIZE / 2) - (offset.x / zoom),
+                y: (WORLD_SIZE / 2) - (offset.y / zoom)
+            };
+
+        const stackIds = getCardStackIds(card);
+        const promotedId = stackIds[0] || null;
+        const remainingStackIds = stackIds.slice(1);
+
+        const nextItems = sanitizeCardStacks((currentScenario.items || []).map(item => {
+            if (item.id === card.id) {
+                return {
+                    ...item,
+                    zone: 'board',
+                    stackParentId: null,
+                    stackIds: [],
+                    x: worldPoint.x - (cardWidth / 2),
+                    y: worldPoint.y - (cardHeight / 2),
+                    width: cardWidth,
+                    height: cardHeight,
+                };
+            }
+
+            if (promotedId && item.id === promotedId) {
+                return {
+                    ...item,
+                    zone: 'hand',
+                    stackParentId: null,
+                    stackIds: remainingStackIds,
+                    handOrder: card.handOrder || item.handOrder || Date.now(),
+                };
+            }
+
+            if (remainingStackIds.includes(item.id)) {
+                return {
+                    ...item,
+                    zone: 'hand',
+                    stackParentId: promotedId,
+                    stackIds: [],
+                };
+            }
+
+            return item;
+        }));
+
+        setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
+        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
+            items: nextItems,
+            lastModified: Date.now()
+        }).catch(err => console.error("Error playing hand card:", err));
+    };
+
+    const handleHandCardDragStart = (card, event) => {
+        if (!isBoardMode || !card?.id) return;
+        const point = getEventCoords(event);
+        event.stopPropagation();
+        if (event.cancelable) event.preventDefault();
+        const previewSrc = card.faceDown ? (card.backImage || card.frontImage) : card.frontImage;
+        if (previewSrc) {
+            const preload = new globalThis.Image();
+            preload.src = previewSrc;
+        }
+        setDraggingHandCard({
+            card,
+            x: point.x,
+            y: point.y,
+        });
+    };
+
+    useEffect(() => {
+        if (!draggingHandCard) return;
+
+        const handleMove = (event) => {
+            const point = getEventCoords(event);
+            setDraggingHandCard(prev => prev ? { ...prev, x: point.x, y: point.y } : prev);
+        };
+
+        const handleUp = (event) => {
+            const point = getEventCoords(event);
+            if (!isPointInsideBoardHand(point)) {
+                playHandCardToBoard(draggingHandCard.card, point);
+            }
+            setDraggingHandCard(null);
+        };
+
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', handleUp);
+        window.addEventListener('touchmove', handleMove, { passive: false });
+        window.addEventListener('touchend', handleUp);
+
+        return () => {
+            window.removeEventListener('mousemove', handleMove);
+            window.removeEventListener('mouseup', handleUp);
+            window.removeEventListener('touchmove', handleMove);
+            window.removeEventListener('touchend', handleUp);
+        };
+    }, [draggingHandCard, isBoardMode, activeScenario, offset, zoom]);
+
+    const toggleHandCardFace = (card) => {
+        if (!card?.id) return;
+        updateItem(card.id, { faceDown: !card.faceDown }, true);
+    };
+
+    const unstackTopCard = (stackParentId) => {
+        const currentScenario = activeScenarioRef.current || activeScenario;
+        if (!currentScenario || !stackParentId) return;
+
+        const parent = (currentScenario.items || []).find(item => item.id === stackParentId);
+        const stackIds = getCardStackIds(parent);
+        const topCardId = stackIds[stackIds.length - 1];
+        if (!parent || !topCardId) return;
+
+        const offsetX = Math.min(52, Math.max(24, (Number(parent.width) || 120) * 0.22));
+        const offsetY = Math.min(38, Math.max(18, (Number(parent.height) || 168) * 0.12));
+        const nextStackIds = stackIds.slice(0, -1);
+        const nextItems = sanitizeCardStacks((currentScenario.items || []).map(item => {
+            if (item.id === parent.id) {
+                return { ...item, stackIds: nextStackIds };
+            }
+            if (item.id === topCardId) {
+                return {
+                    ...item,
+                    zone: 'board',
+                    stackParentId: null,
+                    stackIds: [],
+                    x: parent.x + offsetX,
+                    y: parent.y + offsetY,
+                    rotation: parent.rotation || 0,
+                };
+            }
+            return item;
+        }));
+
+        setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
+        setSelectedTokenIds([topCardId]);
+        lastSelectedIdRef.current = topCardId;
+        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
+            items: nextItems,
+            lastModified: Date.now()
+        }).catch(err => console.error("Error unstacking card:", err));
+    };
+
+    const unstackAllCards = (stackParentId) => {
+        const currentScenario = activeScenarioRef.current || activeScenario;
+        if (!currentScenario || !stackParentId) return;
+
+        const parent = (currentScenario.items || []).find(item => item.id === stackParentId);
+        const stackIds = getCardStackIds(parent);
+        if (!parent || stackIds.length === 0) return;
+
+        const gapX = Math.min(44, Math.max(26, (Number(parent.width) || 120) * 0.2));
+        const gapY = Math.min(28, Math.max(14, (Number(parent.height) || 168) * 0.09));
+        const nextItems = sanitizeCardStacks((currentScenario.items || []).map(item => {
+            if (item.id === parent.id) {
+                return { ...item, stackIds: [] };
+            }
+
+            const stackIndex = stackIds.indexOf(item.id);
+            if (stackIndex !== -1) {
+                const spreadIndex = stackIndex + 1;
+                return {
+                    ...item,
+                    zone: 'board',
+                    stackParentId: null,
+                    stackIds: [],
+                    x: parent.x + (gapX * spreadIndex),
+                    y: parent.y + (gapY * spreadIndex),
+                    rotation: parent.rotation || 0,
+                };
+            }
+
+            return item;
+        }));
+
+        setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
+        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
+            items: nextItems,
+            lastModified: Date.now()
+        }).catch(err => console.error("Error unstacking cards:", err));
+    };
+
+    const unstackSpecificCard = (stackParentId, cardId) => {
+        const currentScenario = activeScenarioRef.current || activeScenario;
+        if (!currentScenario || !stackParentId || !cardId) return;
+
+        const parent = (currentScenario.items || []).find(item => item.id === stackParentId);
+        const stackIds = getCardStackIds(parent);
+        const stackIndex = stackIds.indexOf(cardId);
+        if (!parent || stackIndex === -1) return;
+
+        const offsetX = Math.min(68, Math.max(30, (Number(parent.width) || 120) * 0.28));
+        const offsetY = Math.min(48, Math.max(18, (Number(parent.height) || 168) * 0.12));
+        const nextStackIds = stackIds.filter(id => id !== cardId);
+        const nextItems = sanitizeCardStacks((currentScenario.items || []).map(item => {
+            if (item.id === parent.id) {
+                return { ...item, stackIds: nextStackIds };
+            }
+            if (item.id === cardId) {
+                const direction = stackIndex % 2 === 0 ? -1 : 1;
+                return {
+                    ...item,
+                    zone: 'board',
+                    stackParentId: null,
+                    stackIds: [],
+                    x: parent.x + (offsetX * direction),
+                    y: parent.y + offsetY,
+                    rotation: parent.rotation || 0,
+                };
+            }
+            return item;
+        }));
+
+        setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
+        setSelectedTokenIds([cardId]);
+        lastSelectedIdRef.current = cardId;
+        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
+            items: nextItems,
+            lastModified: Date.now()
+        }).catch(err => console.error("Error unstacking selected card:", err));
     };
 
     const addTokenToCanvas = (tokenUrl) => {
@@ -4851,7 +5517,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         // Si click izquierdo o touch, seleccionamos y preparamos arrastre
         if (isTouch || e.button === 0) {
             // Restricción de Jugador: No permitir interactuar con tokens ajenos
-            const isOwner = !isPlayerView || (token.controlledBy && Array.isArray(token.controlledBy) && token.controlledBy.includes(playerName));
+            const isOwner = !isPlayerView ||
+                (isCardItem(token) && isBoardMode && (!token.ownerName || token.ownerName === playerName || token.ownerId === currentUserId)) ||
+                (token.controlledBy && Array.isArray(token.controlledBy) && token.controlledBy.includes(playerName));
             if (!isOwner) return;
 
             // Restricción de Turno: Si tienes un turno pendiente con otro token, debes terminarlo primero
@@ -5010,7 +5678,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         const updatedItems = activeScenario.items.map(i => i.id === tokenId ? finalToken : i);
         setActiveScenario(prev => ({ ...prev, items: updatedItems }));
-        updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), { items: updatedItems })
+        updateDoc(doc(db, scenarioCollectionName, activeScenario.id), { items: updatedItems })
             .then(() => {
                 triggerToast(
                     "Vínculo establecido",
@@ -5032,7 +5700,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         const updatedItems = activeScenario.items.map(i => i.id === tokenId ? finalToken : i);
         setActiveScenario(prev => ({ ...prev, items: updatedItems }));
-        updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), { items: updatedItems })
+        updateDoc(doc(db, scenarioCollectionName, activeScenario.id), { items: updatedItems })
             .then(() => {
                 triggerToast(
                     "Vínculo eliminado",
@@ -5050,16 +5718,27 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         if (!activeScenario) return;
 
-        const updatedItems = (activeScenario.items || []).filter(i => i.id !== itemId);
+        const itemToDelete = (activeScenario.items || []).find(i => i.id === itemId);
+        const idsToDelete = new globalThis.Set([
+            itemId,
+            ...(isCardItem(itemToDelete) ? getCardStackIds(itemToDelete) : [])
+        ]);
+        const updatedItems = (activeScenario.items || [])
+            .filter(i => !idsToDelete.has(i.id))
+            .map(i => (
+                Array.isArray(i.stackIds)
+                    ? { ...i, stackIds: i.stackIds.filter(id => !idsToDelete.has(id)) }
+                    : i
+            ));
 
         setActiveScenario(prev => ({
             ...prev,
             items: updatedItems
         }));
-        setSelectedTokenIds(prev => prev.filter(id => id !== itemId));
+        setSelectedTokenIds(prev => prev.filter(id => !idsToDelete.has(id)));
 
         try {
-            await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
+            await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
                 items: updatedItems,
                 lastModified: Date.now()
             });
@@ -5131,7 +5810,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 return item;
             });
 
-            updateDoc(doc(db, 'canvas_scenarios', prev.id), {
+            updateDoc(doc(db, scenarioCollectionName, prev.id), {
                 items: firebaseItems,
                 lastModified: Date.now()
             });
@@ -5184,7 +5863,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setActiveScenario(prev => ({ ...prev, items: updatedItems }));
 
         try {
-            await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
+            await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
                 items: updatedItems,
                 lastModified: Date.now()
             });
@@ -5225,7 +5904,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setSelectedTokenIds([newArea.id]);
 
         try {
-            await updateDoc(doc(db, 'canvas_scenarios', activeScenario.id), {
+            await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
                 items: updatedItems,
                 lastModified: Date.now()
             });
@@ -5238,6 +5917,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     // Usamos una función que devuelve JSX en lugar de un "Componente" de React definido dentro de otro,
     // para evitar que los nodos DOM se destruyan y reconstruyan en cada renderizado (lo cual rompe el double-click).
     const renderItemJSX = (item) => {
+        if (isHandCardItem(item)) return null;
+        if (isStackedCardItem(item)) return null;
+
         const original = tokenOriginalPos[item.id];
         const dragOrigin = dragVisualOrigin[item.id];
         const occupancyFeedbackForItem = combatOccupancyFeedback?.tokenId === item.id ? combatOccupancyFeedback : null;
@@ -5248,7 +5930,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const isLight = item.type === 'light';
         const isWall = item.type === 'wall';
         const isGeometry = item.type === 'geometry';
-        const isToken = !isLight && !isWall && !isGeometry;
+        const isCard = isCardItem(item);
+        const cardStackCount = isCard ? getCardStackIds(item).length : 0;
+        const cardStackItems = isCard && cardStackCount > 0
+            ? getCardStackIds(item)
+                .map(cardId => (activeScenario?.items || []).find(stackItem => stackItem.id === cardId))
+                .filter(Boolean)
+            : [];
+        const isToken = !isLight && !isWall && !isGeometry && !isCard;
         const isLocallyInteracting =
             !!(draggedTokenId || rotatingTokenId || resizingTokenId) &&
             selectedTokenIds.includes(item.id);
@@ -5276,20 +5965,22 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         let canInteract = false;
         if (isLightingLayer) canInteract = (isLight || isWall);
         else if (isMapLayer) canInteract = isGeometry;
-        else canInteract = (!isLight && !isWall && !isGeometry);
+        else canInteract = (isToken || isCard);
 
         // Si estamos en targeting (apuntando o eligiendo arma), TODOS los tokens son interactuables como objetivos.
         // Importante: Esto previene que el click en un enemigo "atraviese" la ficha hacia el fondo y cancele la acción en móvil.
         const isTargetingActive = targetingState && (targetingState.phase === 'targeting' || targetingState.phase === 'weapon_selection');
-        if (isTargetingActive && !isLight && !isWall && !isGeometry) {
+        if (isTargetingActive && isToken) {
             canInteract = true;
-        } else if (isPlayerView && !isLight && !isWall && !isGeometry) {
+        } else if (isPlayerView && isToken) {
             const hasPermission = item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName);
             if (!hasPermission) {
                 canInteract = false;
             }
+        } else if (isPlayerView && isCard) {
+            canInteract = isBoardMode && (!item.ownerName || item.ownerName === playerName || item.ownerId === currentUserId);
         } else if (isPlayerView && (isLight || isWall || isGeometry)) {
-            // Jugadores no pueden tocar luces ni muros ni áreas
+            // Jugadores no pueden tocar luces, muros ni áreas
             canInteract = false;
         }
 
@@ -5669,7 +6360,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             height: `${item.height}px`,
                                         }}
                                     >
-                                        {!isLight && !isGeometry && (
+                                        {isToken && (
                                             <div
                                                 className="w-full h-full"
                                                 style={{
@@ -5710,7 +6401,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         if (!canInteract) return;
 
                         // RESTRICCIÓN: Solo abrir inspector si el jugador es dueño del token (o es Master)
-                        const hasPermission = !isPlayerView || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName));
+                        const hasPermission = !isPlayerView || isCard || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName));
                         if (!hasPermission) return;
 
                         e.stopPropagation();
@@ -5734,8 +6425,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         left: 0,
                         top: 0,
                         pointerEvents: canInteract ? 'auto' : 'none',
-                        cursor: (targetingState && !isLight && !isWall) ? 'crosshair' : (canInteract ? 'grab' : 'default'),
-                        zIndex: isLight ? 10 : 20, // Luces siempre debajo de tokens
+                        cursor: (targetingState && isToken) ? 'crosshair' : (canInteract ? 'grab' : 'default'),
+                        zIndex: isLight ? 10 : isGeometry ? 15 : isCard ? 18 : 20,
                         transformOrigin: 'center center',
                         willChange: 'transform, opacity'
                     }}
@@ -5748,14 +6439,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             )}
 
                             {/* Indicador de Compartido (Izquierda) */}
-                            {item.type !== 'geometry' && item.type !== 'light' && item.type !== 'wall' && item.controlledBy?.length > 0 && (
+                            {isToken && item.controlledBy?.length > 0 && (
                                 <div className="absolute -top-[1px] -left-[1px] -translate-x-1/2 -translate-y-1/2 bg-[#c8aa6e] shadow-[0_0_10px_rgba(200,170,110,0.4)] text-[#0b1120] rounded-full p-0.5 border border-white/20 flex items-center justify-center z-40 pointer-events-none">
                                     <Users size={8} />
                                 </div>
                             )}
 
                             {/* Indicador de Velocidad (Derecha) */}
-                            {item.type !== 'geometry' && item.type !== 'light' && item.type !== 'wall' && (() => {
+                            {isToken && (() => {
                                 const currentVel = item.velocidad || 0;
                                 const pendingVel = (isPlayerView && pendingStateForItem)
                                     ? (pendingStateForItem.moveCost + pendingStateForItem.actionCost)
@@ -5818,6 +6509,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             })()}
                         </div>
 
+                        {isCard && cardStackCount > 0 && (
+                            <div className="absolute -right-3 -top-3 z-[70] rounded-full border border-[#c8aa6e]/70 bg-black/90 px-2.5 py-1 text-[10px] font-black text-[#f8e7b9] shadow-[0_0_16px_rgba(200,170,110,0.28)] pointer-events-none">
+                                x{cardStackCount + 1}
+                            </div>
+                        )}
+
                         {/* Aura (Underneath the token) */}
                         {!isLight && item.auraEnabled && (
                             <div
@@ -5870,6 +6567,61 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     <span style={{ opacity: 1, textShadow: '0px 0px 4px black', pointerEvents: 'none' }}>{item.name}</span>
                                 )}
                             </div>
+                        ) : isCard ? (
+                            <div className="w-full h-full relative" style={{ perspective: 900 }}>
+                                <div
+                                    className="absolute inset-0 rounded-md transition-transform duration-500 ease-out"
+                                    style={{
+                                        transformStyle: 'preserve-3d',
+                                        transform: item.faceDown ? 'rotateY(180deg)' : 'rotateY(0deg)'
+                                    }}
+                                >
+                                    <div
+                                        className="absolute inset-0 rounded-md overflow-hidden border border-[#c8aa6e]/70 bg-[#050810] shadow-[0_10px_30px_rgba(0,0,0,0.55)] ring-1 ring-black/60"
+                                        style={{ backfaceVisibility: 'hidden' }}
+                                    >
+                                        {(item.frontImage || item.img) ? (
+                                            <CardImageWithLoader
+                                                src={item.frontImage || item.img}
+                                                label={item.name || 'Carta'}
+                                                className="absolute inset-0 w-full h-full"
+                                                imageClassName="w-full h-full object-cover"
+                                            />
+                                        ) : (
+                                            <div className="absolute inset-0 bg-slate-500" />
+                                        )}
+                                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-1.5 pb-1 pt-5 pointer-events-none">
+                                            <div className="text-[7px] font-black uppercase tracking-[0.18em] text-[#f8e7b9] truncate text-center drop-shadow">
+                                                {item.name}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div
+                                        className="absolute inset-0 rounded-md overflow-hidden border border-[#c8aa6e]/70 bg-[#050810] shadow-[0_10px_30px_rgba(0,0,0,0.55)] ring-1 ring-black/60"
+                                        style={{
+                                            backfaceVisibility: 'hidden',
+                                            transform: 'rotateY(180deg)'
+                                        }}
+                                    >
+                                        {item.backImage ? (
+                                            <CardImageWithLoader
+                                                src={item.backImage}
+                                                label={`${item.name || 'Carta'} reverso`}
+                                                className="absolute inset-0 w-full h-full"
+                                                imageClassName="w-full h-full object-cover"
+                                            />
+                                        ) : (
+                                            <div className="absolute inset-0 bg-slate-500" />
+                                        )}
+                                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-1.5 pb-1 pt-5 pointer-events-none">
+                                            <div className="text-[7px] font-black uppercase tracking-[0.18em] text-[#f8e7b9] truncate text-center drop-shadow">
+                                                Carta oculta
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         ) : (
                             item.isCircular ? (
                                 <TokenImageWithLoader
@@ -5889,7 +6641,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         )}
 
                         {/* Recursos (HUD) - Solo para tokens, no luces ni geometria */}
-                        {!isLight && !isGeometry && canInteract && (
+                        {isToken && canInteract && (
                             <TokenHUD
                                 stats={item.stats}
                                 width={item.width}
@@ -5900,7 +6652,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
 
                         {/* MOVEMENT DISTANCE INDICATOR (Solo para tokens al arrastrar) */}
-                        {!isLight && !isGeometry && canInteract && tokenOriginalPos[item.id] && (
+                        {isToken && canInteract && tokenOriginalPos[item.id] && (
                             (() => {
                                 const original = tokenOriginalPos[item.id];
                                 const dx = Math.abs(item.x - original.x);
@@ -5936,17 +6688,94 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             })()
                         )}
 
-                        {/* Nombre */}
-                        <div className={`absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap z-50 transition-opacity ${isSelected || 'group-hover:opacity-100 opacity-0'}`}>
-                            <span className="bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full border border-slate-600 block shadow-sm backdrop-blur-sm">
-                                {item.name}
-                            </span>
-                        </div>
+                        {/* Nombre / Pila */}
+                        {!isCard ? (
+                            <div className={`absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap z-50 transition-opacity ${isSelected || 'group-hover:opacity-100 opacity-0'}`}>
+                                <span className="bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full border border-slate-600 block shadow-sm backdrop-blur-sm">
+                                    {item.name}
+                                </span>
+                            </div>
+                        ) : cardStackItems.length > 0 ? (
+                            <div className={`absolute top-[calc(100%+0.75rem)] left-1/2 -translate-x-1/2 z-[70] w-[calc((22px*6)+(0.375rem*5))] max-w-[calc(100vw-2rem)] transition-opacity ${isSelected || 'group-hover:opacity-100 opacity-0'}`}>
+                                <div className="flex flex-wrap items-center justify-center gap-1.5">
+                                    {cardStackItems.map((stackCard) => {
+                                        const stackImage = stackCard.faceDown ? (stackCard.backImage || stackCard.frontImage) : stackCard.frontImage;
+                                        return (
+                                            <button
+                                                key={stackCard.id}
+                                                onMouseDown={(event) => {
+                                                    event.stopPropagation();
+                                                    event.preventDefault();
+                                                    unstackSpecificCard(item.id, stackCard.id);
+                                                }}
+                                                onTouchStart={(event) => {
+                                                    event.stopPropagation();
+                                                    event.preventDefault();
+                                                    unstackSpecificCard(item.id, stackCard.id);
+                                                }}
+                                                className="relative h-8 w-[22px] overflow-hidden rounded-sm border border-[#c8aa6e]/55 bg-slate-600 shadow-[0_5px_14px_rgba(0,0,0,0.55)] transition-transform hover:-translate-y-1 hover:border-[#f8e7b9] active:scale-95"
+                                                title={`Sacar ${stackCard.name || 'carta'}`}
+                                            >
+                                                {stackImage ? (
+                                                    <CardImageWithLoader
+                                                        src={stackImage}
+                                                        label={stackCard.name || 'Carta en pila'}
+                                                        className="absolute inset-0 h-full w-full"
+                                                        imageClassName="h-full w-full object-cover"
+                                                    />
+                                                ) : (
+                                                    <div className="h-full w-full bg-slate-500" />
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ) : null}
 
                         {/* Controles de Acción */}
-                        {(!isPlayerView || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName))) && (
+                        {(!isPlayerView || (isCard && canInteract) || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName))) && (
                             <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${isSelected || 'group-hover:opacity-100 opacity-0'}`}>
-                                <button onMouseDown={(e) => { e.stopPropagation(); rotateItem(item.id, 45); }} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); rotateItem(item.id, 45); }} className="text-[#c8aa6e] hover:text-[#f0e6d2] p-1 hover:bg-[#c8aa6e]/10 rounded-full transition-colors"><RotateCw size={12} /></button>
+                                <button
+                                    onMouseDown={(e) => {
+                                        e.stopPropagation();
+                                        if (isCard) {
+                                            updateItem(item.id, { faceDown: !item.faceDown });
+                                        } else {
+                                            rotateItem(item.id, 45);
+                                        }
+                                    }}
+                                    onTouchStart={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        if (isCard) {
+                                            updateItem(item.id, { faceDown: !item.faceDown });
+                                        } else {
+                                            rotateItem(item.id, 45);
+                                        }
+                                    }}
+                                    className="text-[#c8aa6e] hover:text-[#f0e6d2] p-1 hover:bg-[#c8aa6e]/10 rounded-full transition-colors"
+                                    title={isCard ? 'Voltear carta' : 'Rotar 45°'}
+                                >
+                                    <RotateCw size={12} />
+                                </button>
+                                {isCard && cardStackCount > 0 && (
+                                    <button
+                                        onMouseDown={(e) => {
+                                            e.stopPropagation();
+                                            unstackTopCard(item.id);
+                                        }}
+                                        onTouchStart={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            unstackTopCard(item.id);
+                                        }}
+                                        className="text-[#c8aa6e] hover:text-[#f0e6d2] p-1 hover:bg-[#c8aa6e]/10 rounded-full transition-colors"
+                                        title="Sacar carta superior"
+                                    >
+                                        <Package size={12} />
+                                    </button>
+                                )}
                                 <div className="w-3 h-3 bg-[#c8aa6e] rounded-full mx-1 cursor-grab active:cursor-grabbing hover:scale-125 transition-transform border border-[#0b1120]" onMouseDown={(e) => handleRotationMouseDown(e, item)} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); handleRotationMouseDown(e, item); }} />
                                 <button onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); deleteItem(item.id); }} className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"><Trash2 size={12} /></button>
                             </div>
@@ -5971,7 +6800,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const newItems = prev.items.map(i => i.id === itemId ? { ...i, ...updates } : i);
 
             if (persist && prev.id) {
-                updateDoc(doc(db, 'canvas_scenarios', prev.id), {
+                updateDoc(doc(db, scenarioCollectionName, prev.id), {
                     items: newItems,
                     lastModified: Date.now()
                 }).catch(err => console.error("Error persisting item update:", err));
@@ -6237,7 +7066,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         // Persistir a Firebase
         try {
-            updateDoc(doc(db, 'canvas_scenarios', currentScenario.id), {
+            updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
                 items: newItems,
                 lastModified: Date.now()
             });
@@ -7547,7 +8376,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 // 1. APLICAR CAMBIOS DIFERIDOS DE TOKENS (Stats, Velocidad, etc)
                 let postReactionSpeedLoss = null;
                 if (ev.tokenUpdates) {
-                    const snap = await getDoc(doc(db, 'canvas_scenarios', activeScenarioRef.current?.id || ev.scenarioId));
+                    const snap = await getDoc(doc(db, scenarioCollectionName, activeScenarioRef.current?.id || ev.scenarioId));
                     if (snap.exists()) {
                         let currentItems = snap.data().items || [];
                         let changed = false;
@@ -7601,7 +8430,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         }
 
                         if (changed) {
-                            await updateDoc(doc(db, 'canvas_scenarios', snap.id), { items: currentItems, lastModified: Date.now() });
+                            await updateDoc(doc(db, scenarioCollectionName, snap.id), { items: currentItems, lastModified: Date.now() });
                         }
                     }
                 }
@@ -8049,7 +8878,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setPendingTurnState(null);
 
         try {
-            await updateDoc(doc(db, 'canvas_scenarios', scenario.id), {
+            await updateDoc(doc(db, scenarioCollectionName, scenario.id), {
                 items: newItems,
                 lastModified: Date.now()
             });
@@ -8121,7 +8950,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             <FiArrowLeft className="w-4 h-4" /> <b>VOLVER</b>
                                         </button>
                                         <h1 className="text-4xl md:text-5xl font-fantasy text-[#f0e6d2] tracking-tighter">BIBLIOTECA DE ENCUENTROS</h1>
-                                        <p className="text-slate-500 uppercase text-xs tracking-[0.3em] font-bold mt-2"><b>Gestión de escenarios para el Canvas Beta</b></p>
+                                        <p className="text-slate-500 uppercase text-xs tracking-[0.3em] font-bold mt-2"><b>Gestión de escenarios para {sectionTitle}</b></p>
                                     </div>
                                     <button onClick={createNewScenario} className="flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-[#c8aa6e] to-[#785a28] text-[#0b1120] font-fantasy font-bold uppercase tracking-widest rounded shadow-[0_0_20px_rgba(200,170,110,0.3)] hover:scale-105 transition-all">
                                         <Plus className="w-6 h-6" /> Nuevo Encuentro
@@ -8261,7 +9090,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 pointer-events-none flex flex-col items-center opacity-30 width-full">
                             <div className="flex items-center gap-2 text-[8px] font-bold uppercase tracking-[0.15em] md:tracking-[0.3em] text-[#c8aa6e] whitespace-nowrap">
                                 <span className="h-px w-4 md:w-8 bg-gradient-to-r from-transparent to-[#c8aa6e]"></span>
-                                <span>Canvas Beta</span>
+                                <span>{sectionTitle}</span>
                                 <span className="h-px w-4 md:w-8 bg-gradient-to-l from-transparent to-[#c8aa6e]"></span>
                             </div>
                         </div>
@@ -9115,6 +9944,89 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 </div>
                                             )}
                                         </div>
+
+                                        {isBoardMode && (
+                                            <div className="pt-6 mt-6 border-t border-[#c8aa6e]/20 space-y-4">
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <div>
+                                                        <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                                                            <Image className="w-3 h-3" />
+                                                            Biblioteca de Cartas
+                                                        </h4>
+                                                        <p className="text-[9px] text-slate-600 mt-1">Separadas de tokens. Añade cartas a mesa o mano.</p>
+                                                    </div>
+                                                </div>
+
+                                                <label className={`
+                                                    flex flex-col items-center justify-center w-full h-32
+                                                    border-2 border-dashed border-slate-700/50 rounded-xl
+                                                    cursor-pointer hover:border-[#c8aa6e]/50 hover:bg-[#c8aa6e]/5
+                                                    transition-all group relative overflow-hidden
+                                                    ${uploadingCard ? 'pointer-events-none opacity-50' : ''}
+                                                `}>
+                                                    <input type="file" className="hidden" accept="image/*" onChange={handleCardUpload} disabled={uploadingCard} />
+                                                    {uploadingCard ? (
+                                                        <div className="flex flex-col items-center gap-2">
+                                                            <RotateCw className="w-6 h-6 text-[#c8aa6e] animate-spin" />
+                                                            <span className="text-[10px] uppercase font-bold text-[#c8aa6e]">Subiendo carta...</span>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            <Upload className="w-8 h-8 text-slate-600 group-hover:text-[#c8aa6e] mb-2 transition-colors" />
+                                                            <span className="text-[10px] uppercase font-bold text-slate-500 group-hover:text-slate-300 tracking-widest">Subir Carta</span>
+                                                        </>
+                                                    )}
+                                                </label>
+
+                                                <div className="grid grid-cols-3 gap-3">
+                                                    {cards.map(card => (
+                                                        <div
+                                                            key={card.id}
+                                                            className="aspect-[5/7] bg-[#0b1120] rounded-md border border-slate-800 relative group overflow-hidden hover:border-[#c8aa6e]/50 transition-colors"
+                                                            title="Carta"
+                                                        >
+                                                            <TokenImageWithLoader
+                                                                src={card.frontUrl}
+                                                                label={card.name || 'Carta'}
+                                                                className="w-full h-full"
+                                                                imageClassName="w-full h-full object-cover"
+                                                            />
+                                                            <div className="absolute inset-x-0 bottom-0 bg-black/70 px-1 py-1">
+                                                                <div className="text-[7px] text-[#f8e7b9] font-bold uppercase tracking-wider truncate text-center">{card.name || 'Carta'}</div>
+                                                            </div>
+                                                            <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 p-2">
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); addCardToBoard(card); }}
+                                                                    className="w-full px-2 py-1.5 bg-[#c8aa6e] text-[#0b1120] rounded text-[8px] font-black uppercase tracking-widest hover:bg-[#f0e6d2] transition-colors"
+                                                                    title="Colocar en mesa"
+                                                                >
+                                                                    Mesa
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); addCardToHand(card); }}
+                                                                    className="w-full px-2 py-1.5 bg-[#111827]/90 border border-[#c8aa6e]/50 text-[#f8e7b9] rounded text-[8px] font-black uppercase tracking-widest hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 transition-colors"
+                                                                    title="Añadir a la mano"
+                                                                >
+                                                                    Mano
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); deleteCard(card); }}
+                                                                    className="mt-1 p-1.5 bg-red-900/50 text-red-400 rounded hover:bg-red-900 hover:text-red-200 transition-colors"
+                                                                    title="Eliminar Carta de Biblioteca"
+                                                                >
+                                                                    <Trash2 size={14} />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    {cards.length === 0 && !uploadingCard && (
+                                                        <div className="col-span-3 py-8 text-center text-slate-600 text-[10px] uppercase font-bold tracking-widest border border-dashed border-slate-800 rounded-lg">
+                                                            Sin cartas
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
@@ -9282,7 +10194,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 {/* --- TAB: TOKENS (PLAYER ONLY: List of controlled tokens) --- */}
                                 {activeTab === 'TOKENS' && isPlayerView && (() => {
                                     const controlledTokens = activeScenario?.items?.filter(i =>
-                                        i.controlledBy?.includes(playerName) && i.type !== 'light' && i.type !== 'wall'
+                                        isCombatTokenItem(i) && i.controlledBy?.includes(playerName)
                                     ) || [];
 
                                     return (
@@ -9347,19 +10259,31 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 {activeTab === 'INSPECTOR' && selectedTokenIds.length === 1 && (() => {
                                     const token = activeScenario.items.find(i => i.id === selectedTokenIds[0]);
                                     if (!token) return null;
+                                    const tokenStackItems = isCardItem(token)
+                                        ? getCardStackIds(token)
+                                            .map(cardId => (activeScenario.items || []).find(stackItem => stackItem.id === cardId))
+                                            .filter(Boolean)
+                                        : [];
 
                                     return (
                                         <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
                                             {/* Header Inspector */}
                                             {/* Header Inspector — Centered between lines (using tab border as top) */}
                                             <div className="flex flex-col items-center text-center gap-4 border-b border-slate-800/50 py-10 -mt-6 -mx-6 bg-gradient-to-b from-slate-900/20 to-transparent">
-                                                <div className="w-20 h-20 bg-[#0b1120] rounded-xl border border-slate-800 overflow-hidden shrink-0 flex items-center justify-center text-[#c8aa6e] shadow-2xl relative group ring-1 ring-slate-800/40">
+                                                <div className={`${token.type === 'card' ? 'w-20 h-28 rounded-lg' : 'w-20 h-20 rounded-xl'} bg-[#0b1120] border border-slate-800 overflow-hidden shrink-0 flex items-center justify-center text-[#c8aa6e] shadow-2xl relative group ring-1 ring-slate-800/40`}>
                                                     {token.type === 'light' ? (
                                                         <Sparkles className="w-10 h-10 drop-shadow-[0_0_12px_currentColor]" />
                                                     ) : token.type === 'wall' ? (
                                                         <PenTool className="w-10 h-10 drop-shadow-[0_0_12px_currentColor]" />
                                                     ) : token.type === 'geometry' ? (
                                                         token.shapeType === 'circle' ? <Circle className="w-10 h-10 drop-shadow-[0_0_12px_currentColor]" /> : <Square className="w-10 h-10 drop-shadow-[0_0_12px_currentColor]" />
+                                                    ) : token.type === 'card' ? (
+                                                        <CardImageWithLoader
+                                                            src={token.faceDown ? (token.backImage || token.frontImage) : token.frontImage}
+                                                            label={token.name || 'Carta'}
+                                                            className="w-full h-full"
+                                                            imageClassName="w-full h-full object-contain p-1"
+                                                        />
                                                     ) : (
                                                         <TokenImageWithLoader
                                                             src={token.portrait || token.img}
@@ -9399,6 +10323,89 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         className="w-full bg-[#111827] border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-[#c8aa6e] outline-none transition-colors"
                                                     />
                                                 </div>
+
+                                                {token.type === 'card' && (
+                                                    <div className="bg-[#0b1120] border border-[#c8aa6e]/20 rounded-lg p-3 space-y-3">
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                onClick={() => updateItem(token.id, { faceDown: !token.faceDown })}
+                                                                className="shrink-0 px-3 py-2 rounded border border-[#c8aa6e]/40 bg-[#c8aa6e]/10 text-[#f8e7b9] hover:bg-[#c8aa6e]/20 text-[10px] font-bold uppercase tracking-widest transition-colors"
+                                                            >
+                                                                Voltear
+                                                            </button>
+                                                            <label className="min-w-0 flex-1 h-9 px-3 rounded border border-slate-800 bg-[#111827] hover:border-[#c8aa6e]/40 text-slate-400 hover:text-[#f8e7b9] transition-colors cursor-pointer flex items-center justify-between gap-2">
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    className="hidden"
+                                                                    onChange={(e) => {
+                                                                        const file = e.target.files?.[0];
+                                                                        if (file) handleBoardCardBackUpload(token.id, file);
+                                                                        e.target.value = '';
+                                                                    }}
+                                                                />
+                                                                <span className="truncate text-[10px] font-bold uppercase tracking-widest">
+                                                                    {token.backImage ? 'Cambiar reverso' : 'Añadir reverso'}
+                                                                </span>
+                                                                <Upload size={12} className="shrink-0 text-[#c8aa6e]" />
+                                                            </label>
+                                                            {token.backImage && (
+                                                                <div className="w-7 h-9 rounded border border-[#c8aa6e]/30 overflow-hidden bg-black/40 shrink-0">
+                                                                    <CardImageWithLoader
+                                                                        src={token.backImage}
+                                                                        label={`${token.name || 'Carta'} reverso`}
+                                                                        className="w-full h-full"
+                                                                        imageClassName="w-full h-full object-cover"
+                                                                    />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        {tokenStackItems.length > 0 && (
+                                                            <div className="border-t border-[#c8aa6e]/10 pt-3 space-y-2">
+                                                                <div className="flex items-center justify-between gap-3">
+                                                                    <div className="flex items-center gap-2 text-[#f8e7b9]">
+                                                                        <Package size={12} className="text-[#c8aa6e]" />
+                                                                        <span className="text-[10px] font-black uppercase tracking-widest">
+                                                                            Pila x{tokenStackItems.length + 1}
+                                                                        </span>
+                                                                    </div>
+                                                                    <span className="text-[8px] uppercase tracking-[0.18em] text-slate-500">
+                                                                        Pulsa una carta para sacarla
+                                                                    </span>
+                                                                </div>
+                                                                <div className="grid grid-cols-3 gap-2">
+                                                                    {tokenStackItems.map((stackCard) => {
+                                                                        const stackImage = stackCard.faceDown ? (stackCard.backImage || stackCard.frontImage) : stackCard.frontImage;
+                                                                        return (
+                                                                            <button
+                                                                                key={stackCard.id}
+                                                                                onClick={() => unstackSpecificCard(token.id, stackCard.id)}
+                                                                                className="group min-w-0 rounded border border-slate-800 bg-[#111827] p-1.5 hover:border-[#c8aa6e]/60 hover:bg-[#c8aa6e]/10 transition-colors"
+                                                                                title={`Sacar ${stackCard.name || 'carta'}`}
+                                                                            >
+                                                                                <div className="mx-auto h-16 w-11 overflow-hidden rounded-sm border border-[#c8aa6e]/35 bg-slate-600 shadow-sm transition-transform group-hover:-translate-y-0.5">
+                                                                                    {stackImage ? (
+                                                                                        <CardImageWithLoader
+                                                                                            src={stackImage}
+                                                                                            label={stackCard.name || 'Carta en pila'}
+                                                                                            className="h-full w-full"
+                                                                                            imageClassName="h-full w-full object-cover"
+                                                                                        />
+                                                                                    ) : (
+                                                                                        <div className="h-full w-full bg-slate-500" />
+                                                                                    )}
+                                                                                </div>
+                                                                                <span className="mt-1 block truncate text-[8px] font-bold uppercase tracking-widest text-slate-400 group-hover:text-[#f8e7b9]">
+                                                                                    {stackCard.name || 'Carta'}
+                                                                                </span>
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
 
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div className="space-y-2 flex flex-col justify-end">
@@ -9491,7 +10498,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                                 {/* Future Links (Solo para personas/tokens reales) */}
                                                 {/* FORMA CIRCULAR */}
-                                                {token.type !== 'light' && token.type !== 'wall' && token.type !== 'geometry' && (
+                                                {isCombatTokenItem(token) && (
                                                     <div className="pt-4 border-t border-slate-800/50 space-y-4">
                                                         <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between">
                                                             <div className="flex flex-col gap-0.5">
@@ -9509,7 +10516,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 )}
 
                                                 {/* CONTROL DE JUGADOR (Solo para tokens reales) */}
-                                                {token.type !== 'light' && token.type !== 'wall' && token.type !== 'geometry' && (
+                                                {isCombatTokenItem(token) && (
                                                     <div className="pt-4 border-t border-slate-800/50 space-y-4">
                                                         <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
                                                             <Users size={12} /> Control de Jugador
@@ -9629,7 +10636,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 )}
 
                                                 {/* VISIÓN Y SENTIDOS (Solo para tokens reales) */}
-                                                {token.type !== 'light' && token.type !== 'wall' && token.type !== 'geometry' && (
+                                                {isCombatTokenItem(token) && (
                                                     <div className="pt-4 border-t border-slate-800/50 space-y-4">
                                                         <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
                                                             <Eye size={12} /> Visión y Niebla
@@ -9775,7 +10782,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
 
                                                 {/* RECURSOS Y ATRIBUTOS (Solo si NO es una luz ni un muro ni geometria) */}
-                                                {token.type !== 'light' && token.type !== 'wall' && token.type !== 'geometry' && (
+                                                {isCombatTokenItem(token) && (
                                                     <div className="pt-4 border-t border-slate-800/50">
                                                         <TokenResources
                                                             token={token}
@@ -9984,7 +10991,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 )}
 
                                                 {/* Estados Alterados (Solo para tokens reales) */}
-                                                {token.type !== 'light' && token.type !== 'wall' && token.type !== 'geometry' && (
+                                                {isCombatTokenItem(token) && (
                                                     <div className="pt-4 border-t border-slate-800/50 space-y-3">
                                                         <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
                                                             <Flame size={12} /> Estados Alterados
@@ -10072,7 +11079,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 )}
 
                                                 {/* SECCIÓN DE EQUIPAMIENTO */}
-                                                {(token.type !== 'light' && token.type !== 'wall' && token.type !== 'geometry') && (() => {
+                                                {(isCombatTokenItem(token)) && (() => {
                                                     const equippedItems = token.equippedItems || [];
 
                                                     // Category tabs for adding items — mirrors LoadoutView
@@ -11708,10 +12715,34 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
 
 
+            {draggingHandCard && (
+                <div
+                    className="fixed z-[90] pointer-events-none rounded-md overflow-hidden bg-[#111827] border border-[#c8aa6e]/60 shadow-[0_0_26px_rgba(0,0,0,0.7)]"
+                    style={{
+                        left: draggingHandCard.x,
+                        top: draggingHandCard.y,
+                        width: 72,
+                        height: 104,
+                        transform: 'translate(-50%, -50%) rotate(-2deg)',
+                    }}
+                >
+                    {(draggingHandCard.card.faceDown ? draggingHandCard.card.backImage : draggingHandCard.card.frontImage) ? (
+                        <CardImageWithLoader
+                            src={draggingHandCard.card.faceDown ? draggingHandCard.card.backImage : draggingHandCard.card.frontImage}
+                            label={draggingHandCard.card.name || 'Carta'}
+                            className="w-full h-full"
+                            imageClassName="w-full h-full object-cover"
+                        />
+                    ) : (
+                        <div className="w-full h-full bg-slate-500" />
+                    )}
+                </div>
+            )}
+
             {/* --- COMBAT HUD (PLAYER VIEW) --- */}
             {isPlayerView && activeScenario && (() => {
                 const myTokens = activeScenario.items?.filter(i =>
-                    i.controlledBy?.includes(playerName) && i.type !== 'light' && i.type !== 'wall'
+                    i.controlledBy?.includes(playerName) && isCombatTokenItem(i)
                 ) || [];
 
                 // Prioridad: 1. Seleccionado que controlo, 2. El primero de mi lista
@@ -11768,9 +12799,17 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             forceWeaponMenu={targetingState?.phase === 'weapon_selection' && targetingState.attackerId === hudToken.id}
                             targetDistance={targetDistance}
                             allowAdjacentTouchTargeting={allowAdjacentTouchTargeting}
+                            mode={mode}
+                            handCards={getVisibleHandCards(
+                                activeScenario.items || [],
+                                item => item.ownerId === rawHudToken.id || item.ownerId === hudToken.id || item.ownerName === hudToken.name
+                            )}
+                            onPlayCard={playHandCardToBoard}
+                            onFlipHandCard={toggleHandCardFace}
+                            onHandCardDragStart={handleHandCardDragStart}
                             isActive={(() => {
                                 if (!gridConfig.isCombatActive) return true;
-                                const combatTokens = activeScenario.items.filter(i => i.type !== 'wall' && i.type !== 'light' && (i.isCircular || i.stats));
+                                const combatTokens = activeScenario.items.filter(i => isCombatTokenItem(i) && (i.isCircular || i.stats));
                                 const minVel = Math.min(...combatTokens.map(t => t.velocidad || 0));
                                 return (hudToken.velocidad || 0) === minVel;
                             })()}
@@ -11784,7 +12823,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             {!isPlayerView && activeScenario && (() => {
                 // Determinar el token a mostrar: seleccionado actual O último seleccionado (como jugadores)
                 const allCombatTokens = (activeScenario.items || []).filter(i =>
-                    i.type !== 'light' && i.type !== 'wall' && (i.isCircular || i.stats || i.name)
+                    isCombatTokenItem(i) && (i.isCircular || i.stats || i.name)
                 );
                 const selectedControlled = allCombatTokens.find(t => selectedTokenIds.includes(t.id));
 
@@ -11795,6 +12834,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                 // Prioridad: 1. Token seleccionado actual, 2. Último token seleccionado
                 const rawHudToken = selectedControlled || allCombatTokens.find(t => t.id === lastMasterHudTokenIdRef.current) || null;
+
+                if (isBoardMode) {
+                    const hudToken = rawHudToken ? enrichTokenWithCharacterData(rawHudToken) : null;
+                    return (
+                        <CombatHUD
+                            token={hudToken}
+                            mode={mode}
+                            handCards={getVisibleHandCards(activeScenario.items || [])}
+                            onPlayCard={playHandCardToBoard}
+                            onFlipHandCard={toggleHandCardFace}
+                            onHandCardDragStart={handleHandCardDragStart}
+                            isActive={true}
+                        />
+                    );
+                }
 
                 return (
                     <>
@@ -11917,9 +12971,17 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             forceWeaponMenu={targetingState?.phase === 'weapon_selection' && targetingState.attackerId === hudToken.id}
                                             targetDistance={targetDistance}
                                             allowAdjacentTouchTargeting={allowAdjacentTouchTargeting}
+                                            mode={mode}
+                                            handCards={getVisibleHandCards(
+                                                activeScenario.items || [],
+                                                item => item.ownerId === rawHudToken?.id || item.ownerId === hudToken.id || item.ownerName === hudToken.name
+                                            )}
+                                            onPlayCard={playHandCardToBoard}
+                                            onFlipHandCard={toggleHandCardFace}
+                                            onHandCardDragStart={handleHandCardDragStart}
                                             isActive={(() => {
                                                 if (!gridConfig.isCombatActive) return true;
-                                                const combatTokens = activeScenario.items.filter(i => i.type !== 'wall' && i.type !== 'light' && (i.isCircular || i.stats));
+                                                const combatTokens = activeScenario.items.filter(i => isCombatTokenItem(i) && (i.isCircular || i.stats));
                                                 const minVel = Math.min(...combatTokens.map(t => t.velocidad || 0));
                                                 return (hudToken.velocidad || 0) === minVel;
                                             })()}
@@ -11979,6 +13041,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
 CanvasSection.propTypes = {
     onBack: PropTypes.func.isRequired,
+    mode: PropTypes.oneOf(['canvas', 'board']),
 };
 
 export default CanvasSection;
+
+

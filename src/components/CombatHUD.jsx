@@ -130,6 +130,49 @@ const ItemImage = ({ src, type, name }) => {
     );
 };
 
+const HudCardImage = ({ card }) => {
+    const image = card?.faceDown ? (card?.backImage || card?.frontImage) : card?.frontImage;
+    const [status, setStatus] = React.useState(image ? 'loading' : 'idle');
+
+    React.useEffect(() => {
+        setStatus(image ? 'loading' : 'idle');
+        if (image) {
+            const preload = new globalThis.Image();
+            preload.src = image;
+        }
+    }, [image]);
+
+    const loadingFace = (
+        <div className="absolute inset-0 overflow-hidden bg-[#111827]">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(200,170,110,0.18),transparent_45%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(35,43,58,0.96),rgba(8,13,22,0.98))]" />
+            <div className="absolute inset-[7%] rounded border border-[#c8aa6e]/25 shadow-[inset_0_0_20px_rgba(0,0,0,0.45)]" />
+            <div className="absolute inset-x-[12%] top-[12%] h-px bg-[#c8aa6e]/30" />
+            <div className="absolute inset-x-[12%] bottom-[12%] h-px bg-[#c8aa6e]/30" />
+            <div className="absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#c8aa6e]/25 flex items-center justify-center">
+                <RotateCw className="h-3.5 w-3.5 animate-spin text-[#c8aa6e]/80 drop-shadow-[0_0_8px_rgba(200,170,110,0.35)]" />
+            </div>
+        </div>
+    );
+
+    if (!image || status === 'error') {
+        return loadingFace;
+    }
+
+    return (
+        <>
+            {status !== 'loaded' && loadingFace}
+            <img
+                src={image}
+                alt={card?.name || 'Carta'}
+                draggable={false}
+                onLoad={() => setStatus('loaded')}
+                onError={() => setStatus('error')}
+                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${status === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
+            />
+        </>
+    );
+};
+
 const CombatHUD = ({
     token,
     onAction,
@@ -142,9 +185,15 @@ const CombatHUD = ({
     onCancelAction, // Función para cancelar una acción pendiente
     forceWeaponMenu = false, // Nueva prop para forzar la apertura del menú de armas
     targetDistance = null, // Distancia al objetivo actual (en casillas)
-    allowAdjacentTouchTargeting = false
+    allowAdjacentTouchTargeting = false,
+    mode = 'canvas',
+    handCards = [],
+    onPlayCard = null,
+    onFlipHandCard = null,
+    onHandCardDragStart = null
 }) => {
     const customEquipmentImages = useCustomEquipmentImages();
+    const isBoardMode = mode === 'board';
     const [activeCategory, setActiveCategory] = useState('ACCIONES'); // ACCIONES | CLASE | OBJETOS
     const [selectedActionId, setSelectedActionId] = useState(null); // Para submenús (ej: elegir arma)
     const [isEndingTurn, setIsEndingTurn] = useState(false);
@@ -155,6 +204,9 @@ const CombatHUD = ({
     const [customAttackModifiers, setCustomAttackModifiers] = useState({ extraDice: {}, activeTraits: [] });
     const [attackModifiersExpanded, setAttackModifiersExpanded] = useState(false);
     const [selectedSweepWeaponIdx, setSelectedSweepWeaponIdx] = useState(null);
+    const [handViewportWidth, setHandViewportWidth] = useState(
+        typeof window !== 'undefined' ? window.innerWidth : 1200
+    );
 
     // Efecto para forzar la apertura del menú de armas si se solicita externamente (ej: tras seleccionar objetivo)
     React.useEffect(() => {
@@ -195,6 +247,7 @@ const CombatHUD = ({
     const tokenStatus = Array.isArray(token?.status) ? token.status : [];
     const hasControllableStatus = tokenStatus.includes('sangrado');
     const isProne = PRONE_STATUS_IDS.some((statusId) => tokenStatus.includes(statusId));
+    const cardsInHand = Array.isArray(handCards) ? handCards : [];
 
     React.useEffect(() => {
         if (!isProne) return;
@@ -204,7 +257,15 @@ const CombatHUD = ({
         setAttackModifiersExpanded(false);
     }, [isProne]);
 
-    if (!token) return null;
+    React.useEffect(() => {
+        if (!isBoardMode) return;
+        const updateWidth = () => setHandViewportWidth(window.innerWidth);
+        updateWidth();
+        window.addEventListener('resize', updateWidth);
+        return () => window.removeEventListener('resize', updateWidth);
+    }, [isBoardMode]);
+
+    if (!token && !isBoardMode) return null;
 
     // Obtener opciones de ataque (Armas + Habilidades Ofensivas)
     const items = Array.isArray(token?.equippedItems) ? token.equippedItems : [];
@@ -346,6 +407,118 @@ const CombatHUD = ({
         }
     };
 
+    const renderBoardHand = () => (
+        <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pointer-events-none px-3 pb-3 md:pb-5">
+            <style>{`
+                .scrollbar-hide::-webkit-scrollbar { display: none; }
+                .board-hand-card {
+                    transform: rotate(var(--card-tilt));
+                    transform-origin: 50% 130%;
+                    transition: transform 180ms ease, filter 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+                    touch-action: none;
+                }
+                .board-hand-card:hover {
+                    transform: translateY(-22px) scale(1.12) rotate(0deg);
+                    filter: brightness(1.08);
+                    z-index: 40;
+                }
+                .board-hand-card:active {
+                    transform: translateY(-12px) scale(1.04) rotate(0deg);
+                }
+                @media (min-width: 768px) {
+                    .board-hand-card:hover {
+                        transform: translateY(-44px) scale(1.16) rotate(0deg);
+                    }
+                }
+            `}</style>
+
+            <div
+                data-board-hand-drop-zone="true"
+                className="pointer-events-auto w-full max-w-full md:max-w-6xl bg-transparent border-0 shadow-none relative min-h-[172px] overflow-visible md:min-h-[300px]"
+            >
+                <div className="absolute left-1/2 bottom-2 z-0 -translate-x-1/2 px-3 py-1 rounded-full bg-[#0b1120]/70 border border-[#c8aa6e]/15 text-[8px] md:text-[9px] font-black uppercase tracking-[0.22em] text-[#c8aa6e]/70 pointer-events-none md:bottom-3">
+                    Mano · {cardsInHand.length}
+                </div>
+
+                {cardsInHand.length === 0 ? (
+                    <div className="relative z-10 mx-auto mt-12 h-16 max-w-[240px] rounded-full border border-dashed border-[#c8aa6e]/18 bg-[#0b1120]/35 backdrop-blur-sm flex items-center justify-center text-[10px] font-bold uppercase tracking-widest text-slate-600 text-center px-4 md:mt-14 md:max-w-sm md:bg-transparent md:backdrop-blur-0 md:border-[#c8aa6e]/10 md:text-slate-700">
+                        Arrastra cartas aquí
+                    </div>
+                ) : (
+                    <div
+                        className="relative z-10 h-[162px] md:h-[300px] overflow-visible"
+                        style={{ msOverflowStyle: 'none', scrollbarWidth: 'none' }}
+                    >
+                        {cardsInHand.map((card, index) => {
+                            const count = Math.max(cardsInHand.length, 1);
+                            const isCompactHand = handViewportWidth < 768;
+                            const availableWidth = Math.max(
+                                isCompactHand ? 280 : 720,
+                                Math.min(handViewportWidth * (isCompactHand ? 0.92 : 0.82), isCompactHand ? handViewportWidth - 18 : 1160)
+                            );
+                            const baseCardWidth = isCompactHand ? 82 : 150;
+                            const maxCardWidth = isCompactHand ? 86 : 156;
+                            const minCardWidth = isCompactHand ? 54 : 104;
+                            const naturalStep = isCompactHand ? 48 : 96;
+                            const idealWidth = count <= 1 ? maxCardWidth : (availableWidth - (naturalStep * (count - 1))) / 1.05;
+                            const cardWidth = Math.max(minCardWidth, Math.min(maxCardWidth, idealWidth > 0 ? idealWidth : minCardWidth));
+                            const cardHeight = Math.round(cardWidth * 1.44);
+                            const maxSpread = Math.max(0, availableWidth - cardWidth);
+                            const step = count <= 1
+                                ? 0
+                                : Math.min(naturalStep, maxSpread / (count - 1));
+                            const middle = (cardsInHand.length - 1) / 2;
+                            const relativeIndex = index - middle;
+                            const xOffset = relativeIndex * step;
+                            const normalizedDistance = middle > 0 ? Math.abs(relativeIndex) / middle : 0;
+                            const tiltStep = isCompactHand
+                                ? Math.min(8, Math.max(2.4, 26 / count))
+                                : Math.min(7, Math.max(2.2, 34 / count));
+                            const tilt = Math.max(-24, Math.min(24, relativeIndex * tiltStep));
+                            const distanceFromCenter = Math.abs(index - middle);
+                            const arc = Math.min(isCompactHand ? 22 : 34, normalizedDistance * normalizedDistance * (isCompactHand ? 22 : 34));
+                            const baseBottom = isCompactHand ? 40 : 48;
+                            const bottomOffset = baseBottom - arc;
+                            const zIndex = 100 - Math.round(distanceFromCenter * 10);
+
+                            return (
+                                <div
+                                    key={card.id}
+                                    className="absolute left-1/2 bottom-8 md:bottom-12 group"
+                                    style={{
+                                        width: cardWidth,
+                                        height: cardHeight,
+                                        left: `calc(50% + ${xOffset}px)`,
+                                        bottom: bottomOffset,
+                                        marginLeft: -(cardWidth / 2),
+                                        '--card-tilt': `${tilt}deg`,
+                                        zIndex
+                                    }}
+                                >
+                                    <button
+                                        type="button"
+                                        onMouseDown={(event) => onHandCardDragStart && onHandCardDragStart(card, event)}
+                                        onTouchStart={(event) => onHandCardDragStart && onHandCardDragStart(card, event)}
+                                        onClick={(event) => event.preventDefault()}
+                                        className="board-hand-card relative w-full h-full rounded-md overflow-hidden bg-[#111827] border border-[#c8aa6e]/35 hover:border-[#f0e6d2] shadow-xl hover:shadow-[0_0_28px_rgba(200,170,110,0.36)]"
+                                        title="Arrastrar al tablero"
+                                    >
+                                        <HudCardImage card={card} />
+                                        <div className="absolute inset-0 ring-inset ring-1 ring-black/45 pointer-events-none" />
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+
+    if (isBoardMode) {
+        return renderBoardHand();
+    }
+
     return (
         <div className="fixed bottom-0 left-0 right-0 z-50 flex flex-col items-center pointer-events-none">
             <style>{`
@@ -378,6 +551,7 @@ const CombatHUD = ({
                 .animate-menu-reveal {
                     animation: menuReveal 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
                 }
+                .scrollbar-hide::-webkit-scrollbar { display: none; }
             `}</style>
 
 
@@ -423,6 +597,55 @@ const CombatHUD = ({
 
                 {/* 2. BARRA DE ACCIONES (Centro) */}
                 <div className={`flex-1 mx-2 md:mx-4 flex flex-col justify-end w-full transition-all duration-500 ${isActive ? 'opacity-100' : 'opacity-40 grayscale-[0.5] pointer-events-none md:pointer-events-auto'}`}>
+                    {isBoardMode ? (
+                        <div className="w-full bg-[#0b1120]/95 backdrop-blur-xl border border-[#c8aa6e]/50 rounded-xl md:rounded-2xl p-2 md:p-4 shadow-[0_0_30px_rgba(0,0,0,0.5)] relative min-h-[92px] md:min-h-[142px] flex flex-col justify-center overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#c8aa6e]/5 to-transparent pointer-events-none rounded-xl md:rounded-2xl" />
+                            <div className="relative z-10 flex items-center justify-between px-1 md:px-2 mb-2">
+                                <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.22em] text-[#c8aa6e]">Mano</span>
+                                <span className="text-[8px] md:text-[9px] font-bold uppercase tracking-widest text-slate-500">{cardsInHand.length} cartas</span>
+                            </div>
+
+                            {cardsInHand.length === 0 ? (
+                                <div className="relative z-10 h-16 md:h-24 rounded-lg border border-dashed border-slate-800/80 flex items-center justify-center text-[10px] md:text-xs font-bold uppercase tracking-widest text-slate-600">
+                                    Sin cartas en mano
+                                </div>
+                            ) : (
+                                <div
+                                    className="relative z-10 flex items-center gap-2 md:gap-3 overflow-x-auto overflow-y-visible scrollbar-hide h-[78px] md:h-[112px] px-1 pb-1"
+                                    style={{ msOverflowStyle: 'none', scrollbarWidth: 'none' }}
+                                >
+                                    {cardsInHand.map((card) => (
+                                        <div key={card.id} className="relative shrink-0 group">
+                                            <button
+                                                type="button"
+                                                onClick={() => onPlayCard && onPlayCard(card)}
+                                                className="relative w-12 h-[68px] md:w-16 md:h-[92px] rounded-md overflow-hidden bg-slate-500 border border-[#c8aa6e]/35 hover:border-[#f0e6d2] shadow-lg hover:shadow-[0_0_16px_rgba(200,170,110,0.28)] active:scale-95 transition-all"
+                                                title="Jugar carta en mesa"
+                                            >
+                                                <HudCardImage card={card} />
+                                                <div className="absolute inset-0 ring-inset ring-1 ring-black/40 pointer-events-none" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    onFlipHandCard && onFlipHandCard(card);
+                                                }}
+                                                className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-[#0b1120] border border-[#c8aa6e]/60 text-[#c8aa6e] flex items-center justify-center shadow-lg hover:bg-[#c8aa6e] hover:text-[#0b1120] transition-colors"
+                                                title="Voltear carta"
+                                            >
+                                                <RotateCw size={12} />
+                                            </button>
+                                            <div className="absolute left-1/2 -bottom-1 -translate-x-1/2 max-w-[76px] px-1.5 py-0.5 rounded bg-black/80 border border-[#c8aa6e]/20 text-[7px] md:text-[8px] font-bold uppercase tracking-wider text-[#f8e7b9] truncate pointer-events-none">
+                                                {card.name || 'Carta'}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                    <>
 
                     {/* Pestañas (Desktop) / Toggle (Mobile) */}
                     <div className="flex justify-center mb-0 relative z-10 w-full">
@@ -893,6 +1116,8 @@ const CombatHUD = ({
                             })()}
                         </div>
                     </div>
+                    </>
+                    )}
                 </div>
 
                 {/* 3. BOTÓN FIN TURNO (Derecha - Desktop) */}

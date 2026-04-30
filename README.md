@@ -1987,3 +1987,6 @@ Guía rápida: ver `docs/Minimapa.md`.
 - La capa `Mapa` del canvas SVG incorpora marcadores de escenario táctiles: zona, círculo, escalera, cobertura, peligro y etiqueta, con render visual propio y edición desde el inspector para preparar encuentros sin usar tokens ni dibujo libre.
 - Los marcadores `Peligro` y `Escalera` del canvas SVG usan ahora patrones vectoriales adaptativos: las líneas se recalculan al redimensionar la zona para mantener legibilidad sin deformarse.
 - El marcador `Escalera` usa un diseño de planta con peldaños, marco y sombreado de desnivel, ocupando todo su recuadro; las zonas de mapa se renderizan siempre por debajo de muros y tokens.
+- La sección `Tablero` permite añadir cartas a la mesa o a la mano del token activo; en este modo el HUD de combate sustituye acciones, ataques y objetos por una mano horizontal de cartas entre retrato y fin de turno, con volteo y salida rápida a mesa.
+- Las cartas del `Tablero` pueden apilarse arrastrando una sobre otra; la carta arrastrada queda arriba, la pila sustituye el nombre inferior por miniaturas de las cartas ocultas y el inspector permite sacar una carta concreta.
+- Las cartas nuevas de la mano se ordenan al extremo derecho del abanico, desplazando las anteriores hacia la izquierda.
