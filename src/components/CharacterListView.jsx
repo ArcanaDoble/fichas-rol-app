@@ -14,6 +14,7 @@ export const CharacterListView = ({
     onLaunchSpeedSystem,
     onLaunchMinimap,
     onLaunchCanvas,
+    onLaunchBoard,
     onLaunchMinigame,
     initialCharacterName = null,
 }) => {
@@ -39,6 +40,7 @@ export const CharacterListView = ({
             onLaunchSpeedSystem={onLaunchSpeedSystem}
             onLaunchMinimap={onLaunchMinimap}
             onLaunchCanvas={onLaunchCanvas}
+            onLaunchBoard={onLaunchBoard}
 
             disableSidebar={false}
             backButtonLabel="Cerrar Sesión"

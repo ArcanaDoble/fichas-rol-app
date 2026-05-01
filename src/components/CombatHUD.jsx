@@ -14,6 +14,18 @@ const RANGE_MAP = {
     extremo: 999
 };
 
+const getLoadedImageUrlCache = () => {
+    if (!globalThis.__fichasRolLoadedImageUrls) {
+        globalThis.__fichasRolLoadedImageUrls = new globalThis.Set();
+    }
+    return globalThis.__fichasRolLoadedImageUrls;
+};
+
+const isImageUrlLoaded = (src) => Boolean(src && getLoadedImageUrlCache().has(src));
+const markImageUrlLoaded = (src) => {
+    if (src) getLoadedImageUrlCache().add(src);
+};
+
 const getRangeValue = (item) => {
     const alcRaw = item?.alc || item?.alcance || item?.range || item?.Alcance || item?.Range || item?.payload?.range || item?.payload?.alcance || item?.payload?.alc;
     if (alcRaw === undefined || alcRaw === null || alcRaw === '') return RANGE_MAP.toque;
@@ -95,10 +107,10 @@ const resolveCombatItemImage = (item, customEquipmentImages) => {
 };
 
 const ItemImage = ({ src, type, name }) => {
-    const [status, setStatus] = React.useState(src ? 'loading' : 'idle');
+    const [status, setStatus] = React.useState(src ? (isImageUrlLoaded(src) ? 'loaded' : 'loading') : 'idle');
 
     React.useEffect(() => {
-        setStatus(src ? 'loading' : 'idle');
+        setStatus(src ? (isImageUrlLoaded(src) ? 'loaded' : 'loading') : 'idle');
     }, [src]);
 
     if (!src || status === 'error') {
@@ -114,7 +126,10 @@ const ItemImage = ({ src, type, name }) => {
                 alt=""
                 aria-label={name || undefined}
                 draggable={false}
-                onLoad={() => setStatus('loaded')}
+                onLoad={() => {
+                    markImageUrlLoaded(src);
+                    setStatus('loaded');
+                }}
                 onError={() => setStatus('error')}
                 className={`w-full h-full object-cover group-hover/item:scale-110 transition-transform transition-opacity duration-500 ${status === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
             />
@@ -132,30 +147,63 @@ const ItemImage = ({ src, type, name }) => {
 
 const HudCardImage = ({ card }) => {
     const image = card?.faceDown ? (card?.backImage || card?.frontImage) : card?.frontImage;
-    const [status, setStatus] = React.useState(image ? 'loading' : 'idle');
+    const [status, setStatus] = React.useState(image ? (isImageUrlLoaded(image) ? 'loaded' : 'loading') : 'idle');
 
     React.useEffect(() => {
-        setStatus(image ? 'loading' : 'idle');
+        let isCurrent = true;
+
+        if (!image) {
+            setStatus('idle');
+            return () => {
+                isCurrent = false;
+            };
+        }
+
+        if (isImageUrlLoaded(image)) {
+            setStatus('loaded');
+            return () => {
+                isCurrent = false;
+            };
+        }
+
+        setStatus('loading');
         if (image) {
             const preload = new globalThis.Image();
+            preload.onload = () => {
+                markImageUrlLoaded(image);
+                if (isCurrent) setStatus('loaded');
+            };
+            preload.onerror = () => {
+                if (isCurrent) setStatus('error');
+            };
             preload.src = image;
         }
+
+        return () => {
+            isCurrent = false;
+        };
     }, [image]);
 
-    const loadingFace = (
+    const cardBackFace = (
         <div className="absolute inset-0 overflow-hidden bg-[#111827]">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(200,170,110,0.18),transparent_45%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(35,43,58,0.96),rgba(8,13,22,0.98))]" />
             <div className="absolute inset-[7%] rounded border border-[#c8aa6e]/25 shadow-[inset_0_0_20px_rgba(0,0,0,0.45)]" />
             <div className="absolute inset-x-[12%] top-[12%] h-px bg-[#c8aa6e]/30" />
             <div className="absolute inset-x-[12%] bottom-[12%] h-px bg-[#c8aa6e]/30" />
-            <div className="absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#c8aa6e]/25 flex items-center justify-center">
-                <RotateCw className="h-3.5 w-3.5 animate-spin text-[#c8aa6e]/80 drop-shadow-[0_0_8px_rgba(200,170,110,0.35)]" />
-            </div>
         </div>
     );
 
+    const loadingFace = (
+        <>
+            {cardBackFace}
+            <div className="absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#c8aa6e]/25 flex items-center justify-center">
+                <RotateCw className="h-3.5 w-3.5 animate-spin text-[#c8aa6e]/80 drop-shadow-[0_0_8px_rgba(200,170,110,0.35)]" />
+            </div>
+        </>
+    );
+
     if (!image || status === 'error') {
-        return loadingFace;
+        return cardBackFace;
     }
 
     return (
@@ -165,7 +213,10 @@ const HudCardImage = ({ card }) => {
                 src={image}
                 alt={card?.name || 'Carta'}
                 draggable={false}
-                onLoad={() => setStatus('loaded')}
+                onLoad={() => {
+                    markImageUrlLoaded(image);
+                    setStatus('loaded');
+                }}
                 onError={() => setStatus('error')}
                 className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${status === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
             />
