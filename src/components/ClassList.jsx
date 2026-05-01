@@ -1486,6 +1486,7 @@ const ClassList = ({
   onLaunchSpeedSystem,
   onLaunchMinimap,
   onLaunchCanvas,
+  onLaunchBoard,
   title = "Lista de Clases",
   subtitle = "Gestiona el archivo de héroes. Personaliza los retratos y estados para tu próxima sesión.",
   collectionPath = "classes",
@@ -4088,6 +4089,39 @@ const ClassList = ({
                               >
                                 <FiMap className="w-3 h-3" />
                                 CANVAS
+                                <div
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateEditingClass(d => {
+                                      d.tags.splice(index, 1);
+                                    });
+                                  }}
+                                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover/mini:opacity-100 transition-opacity hover:bg-red-600 shadow-lg"
+                                  title="Eliminar Etiqueta"
+                                >
+                                  <FiX />
+                                </div>
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        const isBoard = ['tablero', 'board'].includes(tag.toLowerCase().trim());
+
+                        if (isBoard) {
+                          return (
+                            <div key={index} className="relative">
+                              <button
+                                onClick={() => {
+                                  if (onLaunchBoard) {
+                                    onLaunchBoard(editingClass.name);
+                                  }
+                                }}
+                                className="px-3 py-1 bg-amber-900/40 border border-amber-500/50 text-amber-300 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2 hover:bg-amber-800/60 transition-colors group/mini relative"
+                                title="Abrir Tablero"
+                              >
+                                <LayoutTemplate className="w-3 h-3" />
+                                TABLERO
                                 <div
                                   onClick={(e) => {
                                     e.stopPropagation();

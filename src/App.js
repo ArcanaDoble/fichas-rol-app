@@ -2050,6 +2050,7 @@ function App() {
   const [showPlayerMinimap, setShowPlayerMinimap] = useState(false);
   // Canvas para jugadores
   const [showPlayerCanvas, setShowPlayerCanvas] = useState(false);
+  const [showPlayerBoard, setShowPlayerBoard] = useState(false);
   const [showPlayerBestiary, setShowPlayerBestiary] = useState(false);
   const [showPlayerClassList, setShowPlayerClassList] = useState(false);
   const [showClassMinimap, setShowClassMinimap] = useState(false);
@@ -2099,6 +2100,20 @@ function App() {
       setShowPlayerCanvas(true);
     }
   }, [userType, setChosenView, setShowPlayerCanvas]);
+
+  const handleLaunchBoard = useCallback((name, characterData = null) => {
+    if (characterData) {
+      setPlayerCharacterData(characterData);
+    }
+    if (name) {
+      setMinigamePlayerName(name);
+      setShowPlayerBoard(true);
+    } else if (userType === 'master') {
+      setChosenView('board');
+    } else {
+      setShowPlayerBoard(true);
+    }
+  }, [userType, setChosenView, setShowPlayerBoard]);
 
   // Sugerencias dinámicas para inputs de equipo
   const armaSugerencias = playerInputArma
@@ -2208,6 +2223,7 @@ function App() {
     setShowBarraReflejos(false);
     setShowInitiativeTracker(false);
     setShowPlayerCanvas(false);
+    setShowPlayerBoard(false);
   };
   const eliminarFichaJugador = async () => {
     if (!(await confirm(`¿Eliminar ficha de ${playerName}?`))) return;
@@ -4533,6 +4549,30 @@ function App() {
             <CanvasSection
               onBack={() => { setShowPlayerCanvas(false); setPlayerCharacterData(null); }}
               playerName={playerName}
+              currentUserId={playerName}
+              isPlayerView={true}
+              isMaster={false}
+              existingPlayers={existingPlayers}
+              characterData={playerCharacterData}
+              onOpenCharacterSheet={handleOpenCharacterSheet}
+              armas={armas}
+              armaduras={armaduras}
+              habilidades={habilidades}
+              accesorios={accesorios}
+              glossary={glossary}
+              rarityColorMap={rarityColorMap}
+              highlightText={highlightText}
+            />
+          </div>
+        )}
+
+        {showPlayerBoard && (
+          <div className="fixed inset-0 z-[100]">
+            <CanvasSection
+              mode="board"
+              onBack={() => { setShowPlayerBoard(false); setPlayerCharacterData(null); }}
+              playerName={playerName}
+              currentUserId={playerName}
               isPlayerView={true}
               isMaster={false}
               existingPlayers={existingPlayers}
@@ -4585,6 +4625,7 @@ function App() {
                 onLaunchSpeedSystem={handleLaunchSpeedSystem}
                 onLaunchMinimap={handleLaunchMinimap}
                 onLaunchCanvas={handleLaunchCanvas}
+                onLaunchBoard={handleLaunchBoard}
                 onBack={handleCloseCharacterSheet}
                 initialCharacterName={characterSheetOverlayName}
               />
@@ -4604,7 +4645,7 @@ function App() {
           </div>
         )}
 
-        <div style={{ display: showPlayerCanvas ? 'none' : 'block' }}>
+        <div style={{ display: showPlayerCanvas || showPlayerBoard ? 'none' : 'block' }}>
 
           <CharacterListView
             playerName={playerName}
@@ -4618,6 +4659,7 @@ function App() {
             onLaunchSpeedSystem={handleLaunchSpeedSystem}
             onLaunchMinimap={handleLaunchMinimap}
             onLaunchCanvas={handleLaunchCanvas}
+            onLaunchBoard={handleLaunchBoard}
             onBack={() => {
               setNameEntered(false);
               setPlayerName('');
