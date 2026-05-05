@@ -60,7 +60,8 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Selector de ficha centrado** - Muestra el nombre personalizado de cada token
 - **Canvas táctico integrado** - VTT principal con escenarios, grid, tokens y combate automatizado
 - **Tablero de cartas** - El modo Tablero permite crear tableros transparentes y redimensionables para ordenar cartas en mesa, apilar cartas y mantener manos separadas por jugador para que la iniciativa y el HUD muestren la mano real de cada token.
-- **Fichas de recurso en Tablero** - Añade marcadores circulares compactos en 3D real con valor, color e icono editable para representar costes, recuperación de velocidad u otros recursos sandbox directamente sobre la mesa.
+- **Fichas de recurso en Tablero** - Añade marcadores circulares compactos en 3D real con valor y color editable para representar costes, recuperación de velocidad u otros recursos sandbox directamente sobre la mesa; los tableros suman su valor y las arrastran consigo al moverlos.
+- **Dados 3D en Tablero** - Permite generar dados D4, D6, D8, D10, D12 y D20 como objetos independientes, con color editable, caras numeradas, tamaño inicial de 0.75 casillas y modo alternable para moverlos libremente o lanzarlos por gesto de tensión.
 - **Fichas de token personalizadas** - Cada token puede tener su propia hoja de personaje
 - **Copiar tokens conserva su hoja personalizada** - Al duplicar un token se clona su ficha con todos los valores (base, total y modificados), colores y visibilidad de estadísticas manteniendo IDs independientes en los mapas del máster y del jugador
 - **Tokens almacenados individualmente** - Cada ficha se guarda como documento en `pages/{pageId}/tokens/{tokenId}`

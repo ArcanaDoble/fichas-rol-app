@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { flushSync } from 'react-dom';
+import * as ThreeModule from 'three';
 import PropTypes from 'prop-types';
 import { FiArrowLeft, FiMinus, FiPlus, FiMove, FiX, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import { BsDice6 } from 'react-icons/bs';
-import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock, Eye, Users, ShieldCheck, ShieldOff, Shield, AlertTriangle, Sword, Swords, Zap, Gem, Search, Package, Link, Flame, Footprints, Map, Circle } from 'lucide-react';
+import { LayoutGrid, Maximize, Ruler, Palette, Settings, Image, Upload, Trash2, Home, Plus, Save, FolderOpen, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Check, X, Sparkles, Activity, RotateCw, Edit2, Lightbulb, PenTool, Square, DoorOpen, DoorClosed, EyeOff, Lock, Eye, Users, ShieldCheck, ShieldOff, Shield, AlertTriangle, Sword, Swords, Zap, Gem, Search, Package, Link, Flame, Footprints, Map as MapIcon, Circle, Hand, HandGrab } from 'lucide-react';
 import EstadoSelector from './EstadoSelector';
 import TokenResources from './TokenResources';
 import TokenHUD from './TokenHUD';
@@ -39,21 +41,18 @@ const PRESET_COLORS = [
     '#334155', '#94a3b8', // Slates
     '#c8aa6e', '#785a28', // Golds
     '#ef4444', '#22c55e', // Red, Green
-    '#3b82f6', '#a855f7'  // Blue, Purple
+    '#3b82f6', '#a855f7', // Blue, Purple
+    '#0f172a', '#14b8a6'  // Ink, Teal
 ];
 
-const BOARD_MARKER_ICON_OPTIONS = [
-    { id: 'none', label: 'Sin icono', Icon: null },
-    { id: 'zap', label: 'Velocidad', Icon: Zap },
-    { id: 'circle', label: 'Punto', Icon: Circle },
-    { id: 'gem', label: 'Recurso', Icon: Gem },
-    { id: 'shield', label: 'Defensa', Icon: Shield },
-    { id: 'swords', label: 'Ataque', Icon: Swords },
-    { id: 'sparkles', label: 'Especial', Icon: Sparkles },
+const BOARD_DIE_SIDES = [4, 6, 8, 10, 12, 20];
+const D10_FACE_VALUES = [9, 1, 7, 3, 5, 8, 0, 2, 6, 4];
+const D4_VERTEX_VALUES = [
+    { value: 1, vertex: { x: -1, y: -1, z: 1 } },
+    { value: 2, vertex: { x: 1, y: 1, z: 1 } },
+    { value: 3, vertex: { x: -1, y: 1, z: -1 } },
+    { value: 4, vertex: { x: 1, y: -1, z: -1 } },
 ];
-const getBoardMarkerIcon = (iconId) => (
-    BOARD_MARKER_ICON_OPTIONS.find(option => option.id === iconId)?.Icon || null
-);
 
 const getReadableMarkerTextColor = (color = '#c8aa6e') => {
     const hex = color.replace('#', '');
@@ -79,13 +78,14 @@ const BoardMarker3dCoin = ({ fillColor }) => {
         let materials = [];
 
         import('three').then((THREE) => {
+            
             if (disposed || !canvasRef.current) return;
 
             const canvas = canvasRef.current;
             const width = Math.max(24, Math.round(canvas.clientWidth || 80));
             const height = Math.max(24, Math.round(canvas.clientHeight || 80));
 
-            renderer = new THREE.WebGLRenderer({
+            renderer = new ThreeModule.WebGLRenderer({
                 canvas,
                 alpha: true,
                 antialias: true,
@@ -94,43 +94,43 @@ const BoardMarker3dCoin = ({ fillColor }) => {
             renderer.setSize(width, height, false);
             renderer.setClearColor(0x000000, 0);
 
-            const scene = new THREE.Scene();
-            const camera = new THREE.OrthographicCamera(-1.22, 1.22, 1.22, -1.22, 0.1, 10);
+            const scene = new ThreeModule.Scene();
+            const camera = new ThreeModule.OrthographicCamera(-1.22, 1.22, 1.22, -1.22, 0.1, 10);
             camera.position.set(0, 4, 0);
             camera.up.set(0, 0, -1);
             camera.lookAt(0, 0, 0);
 
-            const baseColor = new THREE.Color(fillColor);
+            const baseColor = new ThreeModule.Color(fillColor);
             const sideColor = baseColor.clone().multiplyScalar(0.72);
             const bottomColor = baseColor.clone().multiplyScalar(0.56);
 
-            geometry = new THREE.CylinderGeometry(1, 1, 0.22, 128, 1, false);
+            geometry = new ThreeModule.CylinderGeometry(1, 1, 0.22, 128, 1, false);
             materials = [
-                new THREE.MeshStandardMaterial({ color: sideColor, roughness: 0.5, metalness: 0.08 }),
-                new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.42, metalness: 0.08 }),
-                new THREE.MeshStandardMaterial({ color: bottomColor, roughness: 0.55, metalness: 0.04 }),
+                new ThreeModule.MeshStandardMaterial({ color: sideColor, roughness: 0.5, metalness: 0.08 }),
+                new ThreeModule.MeshStandardMaterial({ color: baseColor, roughness: 0.42, metalness: 0.08 }),
+                new ThreeModule.MeshStandardMaterial({ color: bottomColor, roughness: 0.55, metalness: 0.04 }),
             ];
 
-            const coin = new THREE.Mesh(geometry, materials);
+            const coin = new ThreeModule.Mesh(geometry, materials);
             scene.add(coin);
 
-            rimGeometry = new THREE.TorusGeometry(0.96, 0.035, 12, 128);
-            rimMaterial = new THREE.MeshStandardMaterial({
+            rimGeometry = new ThreeModule.TorusGeometry(0.96, 0.035, 12, 128);
+            rimMaterial = new ThreeModule.MeshStandardMaterial({
                 color: baseColor.clone().multiplyScalar(0.92),
                 roughness: 0.45,
                 metalness: 0.1,
             });
-            const rim = new THREE.Mesh(rimGeometry, rimMaterial);
+            const rim = new ThreeModule.Mesh(rimGeometry, rimMaterial);
             rim.rotation.x = Math.PI / 2;
             rim.position.y = 0.122;
             scene.add(rim);
 
-            const ambient = new THREE.AmbientLight(0xffffff, 1.65);
+            const ambient = new ThreeModule.AmbientLight(0xffffff, 1.65);
             scene.add(ambient);
-            const key = new THREE.DirectionalLight(0xffffff, 2.2);
+            const key = new ThreeModule.DirectionalLight(0xffffff, 2.2);
             key.position.set(-1.5, 4, -1.2);
             scene.add(key);
-            const fill = new THREE.DirectionalLight(0xd7b56c, 0.75);
+            const fill = new ThreeModule.DirectionalLight(0xd7b56c, 0.75);
             fill.position.set(1.5, 4, 1.6);
             scene.add(fill);
 
@@ -152,36 +152,977 @@ const BoardMarker3dCoin = ({ fillColor }) => {
     return <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />;
 };
 
-const BoardMarkerVisual = ({ marker, className = '' }) => {
-    const MarkerIcon = getBoardMarkerIcon(marker?.markerIcon);
+const createD10Geometry = () => {
+    const vertices = [];
+    const radius = 1;
+    const topY = radius;
+    const bottomY = -radius;
+    const pentagonCos = Math.cos(Math.PI / 5);
+    const waistY = radius * ((1 - pentagonCos) / (1 + pentagonCos));
+    const equatorRadius = radius * 1.05;
+
+    vertices.push(0, topY, 0);
+    vertices.push(0, bottomY, 0);
+
+    for (let i = 0; i < 10; i += 1) {
+        const angle = (i * Math.PI * 2) / 10;
+        const isEven = i % 2 === 0;
+        vertices.push(
+            Math.cos(angle) * equatorRadius,
+            isEven ? waistY : -waistY,
+            Math.sin(angle) * equatorRadius
+        );
+    }
+
+    const indices = [];
+    for (let i = 0; i < 5; i += 1) {
+        const even = 2 + (i * 2);
+        const prevOdd = 2 + ((i * 2 + 9) % 10);
+        const nextOdd = 2 + ((i * 2 + 1) % 10);
+
+        indices.push(0, even, prevOdd);
+        indices.push(0, nextOdd, even);
+
+        const odd = 2 + ((i * 2 + 1) % 10);
+        const prevEven = 2 + ((i * 2) % 10);
+        const nextEven = 2 + ((i * 2 + 2) % 10);
+
+        indices.push(1, prevEven, odd);
+        indices.push(1, odd, nextEven);
+    }
+
+    const geometry = new ThreeModule.BufferGeometry();
+    geometry.setAttribute('position', new ThreeModule.Float32BufferAttribute(vertices, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    geometry.userData.dieFaceValues = D10_FACE_VALUES;
+    return geometry;
+};
+
+const createDieGeometry = (_THREE, sides) => {
+    switch (Number(sides)) {
+        case 4:
+            return new ThreeModule.TetrahedronGeometry(1, 0);
+        case 6:
+            return new ThreeModule.BoxGeometry(1.55, 1.55, 1.55, 1, 1, 1);
+        case 8:
+            return new ThreeModule.OctahedronGeometry(1.18, 0);
+        case 10:
+            return createD10Geometry();
+        case 12:
+            return new ThreeModule.DodecahedronGeometry(1.12, 0);
+        case 20:
+        default:
+            return new ThreeModule.IcosahedronGeometry(1.18, 0);
+    }
+};
+
+const makeVec3 = (x = 0, y = 0, z = 0) => ({ x, y, z });
+const cloneVec3 = (v) => makeVec3(v.x, v.y, v.z);
+const addVec3 = (a, b) => makeVec3(a.x + b.x, a.y + b.y, a.z + b.z);
+const subVec3 = (a, b) => makeVec3(a.x - b.x, a.y - b.y, a.z - b.z);
+const scaleVec3 = (v, scalar) => makeVec3(v.x * scalar, v.y * scalar, v.z * scalar);
+const dotVec3 = (a, b) => (a.x * b.x) + (a.y * b.y) + (a.z * b.z);
+const crossVec3 = (a, b) => makeVec3(
+    (a.y * b.z) - (a.z * b.y),
+    (a.z * b.x) - (a.x * b.z),
+    (a.x * b.y) - (a.y * b.x)
+);
+const lengthVec3 = (v) => Math.hypot(v.x, v.y, v.z);
+const normalizeVec3 = (v) => {
+    const length = lengthVec3(v);
+    return length > 0.000001 ? scaleVec3(v, 1 / length) : makeVec3();
+};
+const negateVec3 = (v) => makeVec3(-v.x, -v.y, -v.z);
+const distanceVec3 = (a, b) => lengthVec3(subVec3(a, b));
+const averageVec3 = (vectors) => (
+    vectors.length
+        ? scaleVec3(vectors.reduce((acc, vector) => addVec3(acc, vector), makeVec3()), 1 / vectors.length)
+        : makeVec3()
+);
+const getD4VertexValue = (vertex) => (
+    D4_VERTEX_VALUES.reduce((best, candidate) => {
+        const distance = distanceVec3(normalizeVec3(vertex), normalizeVec3(candidate.vertex));
+        return distance < best.distance ? { value: candidate.value, distance } : best;
+    }, { value: 1, distance: Infinity }).value
+);
+const applyQuaternionToVec3 = (v, q) => {
+    const x = v.x;
+    const y = v.y;
+    const z = v.z;
+    const qx = q.x;
+    const qy = q.y;
+    const qz = q.z;
+    const qw = q.w;
+    const ix = (qw * x) + (qy * z) - (qz * y);
+    const iy = (qw * y) + (qz * x) - (qx * z);
+    const iz = (qw * z) + (qx * y) - (qy * x);
+    const iw = (-qx * x) - (qy * y) - (qz * z);
+    return makeVec3(
+        (ix * qw) + (iw * -qx) + (iy * -qz) - (iz * -qy),
+        (iy * qw) + (iw * -qy) + (iz * -qx) - (ix * -qz),
+        (iz * qw) + (iw * -qz) + (ix * -qy) - (iy * -qx)
+    );
+};
+
+const getElementTranslate = (element) => {
+    if (!element) return { x: 0, y: 0 };
+    const transform = window.getComputedStyle(element).transform;
+    if (!transform || transform === 'none') return { x: 0, y: 0 };
+
+    try {
+        const matrix = new DOMMatrixReadOnly(transform);
+        return {
+            x: Number(matrix.m41) || 0,
+            y: Number(matrix.m42) || 0,
+        };
+    } catch {
+        const match = transform.match(/matrix\(([^)]+)\)/);
+        if (!match) return { x: 0, y: 0 };
+        const values = match[1].split(',').map(value => Number(value.trim()));
+        return {
+            x: Number(values[4]) || 0,
+            y: Number(values[5]) || 0,
+        };
+    }
+};
+
+const getRandomUnitQuaternion = (CANNON) => {
+    const u1 = Math.random();
+    const u2 = Math.random();
+    const u3 = Math.random();
+    return new CANNON.Quaternion(
+        Math.sqrt(1 - u1) * Math.sin(2 * Math.PI * u2),
+        Math.sqrt(1 - u1) * Math.cos(2 * Math.PI * u2),
+        Math.sqrt(u1) * Math.sin(2 * Math.PI * u3),
+        Math.sqrt(u1) * Math.cos(2 * Math.PI * u3)
+    );
+};
+
+const createDieConvexDefinition = (sides, scale = 1) => {
+    const dieSides = Number(sides) || 20;
+    const geometry = createDieGeometry(null, dieSides);
+    const pos = geometry.attributes.position;
+    const index = geometry.index;
+    const vertices = [];
+    const unscaledVertices = [];
+    const vertexMap = new globalThis.Map();
+    const triangles = [];
+
+    const getVertexIndex = (rawIndex) => {
+        const rawX = pos.getX(rawIndex);
+        const rawY = pos.getY(rawIndex);
+        const rawZ = pos.getZ(rawIndex);
+        const key = `${rawX.toFixed(5)}:${rawY.toFixed(5)}:${rawZ.toFixed(5)}`;
+        if (!vertexMap.has(key)) {
+            vertexMap.set(key, vertices.length);
+            vertices.push({ x: rawX * scale, y: rawY * scale, z: rawZ * scale });
+            unscaledVertices.push(makeVec3(rawX, rawY, rawZ));
+        }
+        return vertexMap.get(key);
+    };
+
+    const totalIndices = index ? index.count : pos.count;
+    for (let i = 0; i < totalIndices; i += 3) {
+        const a = getVertexIndex(index ? index.getX(i) : i);
+        const b = getVertexIndex(index ? index.getX(i + 1) : i + 1);
+        const c = getVertexIndex(index ? index.getX(i + 2) : i + 2);
+        if (a !== b && b !== c && a !== c) {
+            const va = unscaledVertices[a];
+            const vb = unscaledVertices[b];
+            const vc = unscaledVertices[c];
+            const center = averageVec3([va, vb, vc]);
+            let normal = normalizeVec3(crossVec3(subVec3(vb, va), subVec3(vc, va)));
+            const outwardFace = dotVec3(normal, center) < 0 ? [a, c, b] : [a, b, c];
+            if (dotVec3(normal, center) < 0) normal = negateVec3(normal);
+            triangles.push({ face: outwardFace, normal, center });
+        }
+    }
+
+    const faceGroups = [];
+    triangles.forEach((triangle) => {
+        const group = faceGroups.find(candidate => dotVec3(candidate.normal, triangle.normal) > 0.985);
+        if (group) {
+            group.indices.push(...triangle.face);
+            group.normal = normalizeVec3(addVec3(group.normal, triangle.normal));
+            group.centers.push(triangle.center);
+        } else {
+            faceGroups.push({ normal: cloneVec3(triangle.normal), indices: [...triangle.face], centers: [triangle.center] });
+        }
+    });
+
+    const faces = faceGroups.map((group) => {
+        const uniqueIndices = [...new Set(group.indices)];
+        const center = averageVec3(uniqueIndices.map(vertexIndex => unscaledVertices[vertexIndex]));
+
+        if (uniqueIndices.length <= 3) {
+            const orderedTriangle = [...uniqueIndices];
+            const normal = normalizeVec3(crossVec3(
+                subVec3(unscaledVertices[orderedTriangle[1]], unscaledVertices[orderedTriangle[0]]),
+                subVec3(unscaledVertices[orderedTriangle[2]], unscaledVertices[orderedTriangle[0]])
+            ));
+            if (dotVec3(normal, group.normal) < 0) orderedTriangle.reverse();
+            return orderedTriangle;
+        }
+
+        const first = unscaledVertices[uniqueIndices[0]];
+        const axisU = normalizeVec3(subVec3(first, center));
+        const axisV = normalizeVec3(crossVec3(group.normal, axisU));
+
+        const ordered = uniqueIndices.sort((a, b) => {
+            const va = subVec3(unscaledVertices[a], center);
+            const vb = subVec3(unscaledVertices[b], center);
+            return Math.atan2(dotVec3(va, axisV), dotVec3(va, axisU)) - Math.atan2(dotVec3(vb, axisV), dotVec3(vb, axisU));
+        });
+
+        if (ordered.length >= 3) {
+            const checkNormal = normalizeVec3(crossVec3(
+                subVec3(unscaledVertices[ordered[1]], unscaledVertices[ordered[0]]),
+                subVec3(unscaledVertices[ordered[2]], unscaledVertices[ordered[0]])
+            ));
+            if (dotVec3(checkNormal, group.normal) < 0) {
+                ordered.reverse();
+            }
+        }
+        return ordered;
+    });
+
+    let orderedFaceGroups = faceGroups;
+    if (dieSides === 10) {
+        orderedFaceGroups = [...faceGroups].sort((a, b) => {
+            const centerA = averageVec3(a.centers);
+            const centerB = averageVec3(b.centers);
+            return Math.atan2(centerA.z, centerA.x) - Math.atan2(centerB.z, centerB.x);
+        }).slice(0, 10);
+    } else {
+        orderedFaceGroups = orderedFaceGroups.slice(0, dieSides);
+    }
+
+    const faceData = orderedFaceGroups.map((group, indexNumber) => ({
+        value: dieSides === 10 ? D10_FACE_VALUES[indexNumber] : indexNumber + 1,
+        normal: normalizeVec3(group.normal),
+        center: averageVec3(group.centers),
+        vertices: [...new Set(group.indices)].map(vertexIndex => cloneVec3(unscaledVertices[vertexIndex])),
+    }));
+
+    geometry.dispose();
+    return { vertices, faces, faceData };
+};
+const createCannonDieShape = (CANNON, sides) => {
+    const dieSides = Number(sides) || 20;
+    if (dieSides === 6) {
+        return new CANNON.Box(new CANNON.Vec3(0.78, 0.78, 0.78));
+    }
+
+    // Dados poliédricos reales: d4 tetraedro, d8 octaedro, d10 trapezoedro,
+    // d12 dodecaedro y d20 icosaedro. No se usa collider esférico, cilíndrico
+    // ni caja genérica para estos dados.
+    const definition = createDieConvexDefinition(dieSides, 0.78);
+    return new CANNON.ConvexPolyhedron({
+        vertices: definition.vertices.map(vertex => new CANNON.Vec3(vertex.x, vertex.y, vertex.z)),
+        faces: definition.faces,
+    });
+};
+
+const createFallbackCannonDieShape = (CANNON, sides) => {
+    const scale = 0.78;
+    const v = (x, y, z) => new CANNON.Vec3(x * scale, y * scale, z * scale);
+    const dieSides = Number(sides) || 20;
+
+    if (dieSides === 4) {
+        return new CANNON.ConvexPolyhedron({
+            vertices: [v(1, 1, 1), v(-1, -1, 1), v(-1, 1, -1), v(1, -1, -1)],
+            faces: [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]]
+        });
+    }
+
+    if (dieSides === 8) {
+        return new CANNON.ConvexPolyhedron({
+            vertices: [v(1, 0, 0), v(-1, 0, 0), v(0, 1, 0), v(0, -1, 0), v(0, 0, 1), v(0, 0, -1)],
+            faces: [[0, 2, 4], [4, 2, 1], [1, 2, 5], [5, 2, 0], [0, 4, 3], [4, 1, 3], [1, 5, 3], [5, 0, 3]]
+        });
+    }
+
+    if (dieSides === 10) {
+        const radius = 1;
+        const pentagonCos = Math.cos(Math.PI / 5);
+        const waistY = radius * ((1 - pentagonCos) / (1 + pentagonCos));
+        const equatorRadius = radius * 1.05;
+        const vertices = [v(0, radius, 0), v(0, -radius, 0)];
+        for (let i = 0; i < 10; i += 1) {
+            const angle = (i * Math.PI * 2) / 10;
+            vertices.push(v(
+                Math.cos(angle) * equatorRadius,
+                i % 2 === 0 ? waistY : -waistY,
+                Math.sin(angle) * equatorRadius
+            ));
+        }
+        const faces = [];
+        for (let i = 0; i < 5; i += 1) {
+            faces.push([0, 2 + (i * 2), 2 + ((i * 2 + 9) % 10), 2 + ((i * 2 + 1) % 10)]);
+            faces.push([1, 2 + ((i * 2) % 10), 2 + ((i * 2 + 1) % 10), 2 + ((i * 2 + 2) % 10)]);
+        }
+        return new CANNON.ConvexPolyhedron({ vertices, faces });
+    }
+
+    throw new Error(`No rounded fallback is allowed for d${dieSides}`);
+};
+
+const getDieFaceData = (geometry, sides) => {
+    const dieSides = Number(sides) || 20;
+    if (dieSides !== 6) {
+        return createDieConvexDefinition(dieSides, 1).faceData;
+    }
+
+    const pos = geometry.attributes.position;
+    const index = geometry.index;
+    const getVertex = (i) => {
+        const rawIndex = index ? index.getX(i) : i;
+        return makeVec3(pos.getX(rawIndex), pos.getY(rawIndex), pos.getZ(rawIndex));
+    };
+
+    const totalIndices = index ? index.count : pos.count;
+    const triangles = [];
+    for (let i = 0; i < totalIndices; i += 3) {
+        const vA = getVertex(i);
+        const vB = getVertex(i + 1);
+        const vC = getVertex(i + 2);
+        const centroid = averageVec3([vA, vB, vC]);
+        let normal = normalizeVec3(crossVec3(subVec3(vB, vA), subVec3(vC, vA)));
+        if (dotVec3(normal, centroid) < 0) normal = negateVec3(normal);
+        triangles.push({ vertices: [vA, vB, vC], centroid, normal });
+    }
+
+    const groups = [];
+    const normalTolerance = 0.98;
+    triangles.forEach((triangle) => {
+        let group = groups.find(candidate => dotVec3(candidate.normal, triangle.normal) > normalTolerance);
+        if (!group) {
+            group = { normal: cloneVec3(triangle.normal), centroids: [], vertices: [] };
+            groups.push(group);
+        }
+        group.centroids.push(triangle.centroid);
+        group.vertices.push(...triangle.vertices);
+        group.normal = normalizeVec3(addVec3(group.normal, triangle.normal));
+    });
+
+    return groups
+        .sort((a, b) => b.normal.y - a.normal.y)
+        .slice(0, Number(sides) || 20)
+        .map((group, indexNumber) => ({
+            value: indexNumber + 1,
+            normal: normalizeVec3(group.normal),
+            center: averageVec3(group.centroids),
+            vertices: group.vertices,
+        }));
+};
+const createNumberedFaces = (geometry, sides, textColor, renderer) => {
+    
+    const facesGroup = new ThreeModule.Group();
+    const labels = [];
+    const dieSides = Number(sides) || 20;
+    getDieFaceData(geometry, sides).forEach((face) => {
+        const center = face.center;
+        const normal = face.normal;
+        const maxRadius = face.vertices.reduce((max, vertex) => (
+            Math.max(max, distanceVec3(vertex, center))
+        ), 0.55);
+
+        if (dieSides === 4) {
+            face.vertices.forEach((vertex) => {
+                const value = getD4VertexValue(vertex);
+                const labelCenter = addVec3(scaleVec3(center, 0.42), scaleVec3(vertex, 0.58));
+                const canvas = document.createElement('canvas');
+                canvas.width = 160;
+                canvas.height = 160;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = textColor;
+                ctx.font = '900 92px Georgia, serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.lineWidth = 7;
+                ctx.strokeStyle = textColor === '#111827'
+                    ? 'rgba(255,255,255,0.26)'
+                    : 'rgba(0,0,0,0.72)';
+                ctx.strokeText(String(value), 80, 84);
+                ctx.fillText(String(value), 80, 84);
+
+                const texture = new ThreeModule.CanvasTexture(canvas);
+                texture.anisotropy = Math.min(renderer?.capabilities?.getMaxAnisotropy?.() || 1, 8);
+                const material = new ThreeModule.MeshBasicMaterial({
+                    map: texture,
+                    transparent: true,
+                    depthTest: true,
+                    depthWrite: false,
+                    side: ThreeModule.DoubleSide,
+                });
+                const plane = new ThreeModule.Mesh(new ThreeModule.PlaneGeometry(0.32, 0.32), material);
+                plane.position.set(
+                    labelCenter.x + (normal.x * 0.032),
+                    labelCenter.y + (normal.y * 0.032),
+                    labelCenter.z + (normal.z * 0.032)
+                );
+                plane.lookAt(
+                    plane.position.x + normal.x,
+                    plane.position.y + normal.y,
+                    plane.position.z + normal.z
+                );
+                facesGroup.add(plane);
+                labels.push({ mesh: plane, normal: cloneVec3(normal), geometry: plane.geometry, material, texture });
+            });
+            return;
+        }
+
+        const planeSize = Math.max(0.34, Math.min(0.72, maxRadius * 0.9));
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 192;
+        canvas.height = 192;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = textColor;
+        ctx.font = '900 108px Georgia, serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineWidth = 8;
+        ctx.strokeStyle = textColor === '#111827'
+            ? 'rgba(255,255,255,0.26)'
+            : 'rgba(0,0,0,0.72)';
+        ctx.strokeText(String(face.value), 96, 102);
+        ctx.fillText(String(face.value), 96, 102);
+
+        const texture = new ThreeModule.CanvasTexture(canvas);
+        texture.anisotropy = Math.min(renderer?.capabilities?.getMaxAnisotropy?.() || 1, 8);
+        const material = new ThreeModule.MeshBasicMaterial({
+            map: texture,
+            transparent: true,
+            depthTest: true,
+            depthWrite: false,
+            side: ThreeModule.DoubleSide,
+        });
+        const plane = new ThreeModule.Mesh(new ThreeModule.PlaneGeometry(planeSize, planeSize), material);
+        plane.position.set(
+            center.x + (normal.x * 0.025),
+            center.y + (normal.y * 0.025),
+            center.z + (normal.z * 0.025)
+        );
+        plane.lookAt(
+            plane.position.x + normal.x,
+            plane.position.y + normal.y,
+            plane.position.z + normal.z
+        );
+        facesGroup.add(plane);
+        labels.push({ mesh: plane, normal: cloneVec3(normal), geometry: plane.geometry, material, texture });
+    });
+
+    facesGroup.userData.labels = labels;
+    return facesGroup;
+};
+
+const BoardDie3d = ({ sides = 20, color = '#c8aa6e', rotationRef }) => {
+    const canvasRef = useRef(null);
+
+    useEffect(() => {
+        let disposed = false;
+        let renderer = null;
+        let geometry = null;
+        let material = null;
+        let edgeGeometry = null;
+        let edgeMaterial = null;
+        let numberedFaces = null;
+
+        import('three').then((THREE) => {
+            
+            if (disposed || !canvasRef.current) return;
+
+            const canvas = canvasRef.current;
+            const width = Math.max(32, Math.round(canvas.clientWidth || 96));
+            const height = Math.max(32, Math.round(canvas.clientHeight || 96));
+
+            renderer = new ThreeModule.WebGLRenderer({
+                canvas,
+                alpha: true,
+                antialias: true,
+                premultipliedAlpha: false,
+            });
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+            renderer.setSize(width, height, false);
+            renderer.setClearColor(0x000000, 0);
+            renderer.setClearAlpha(0);
+
+            const scene = new ThreeModule.Scene();
+            const camera = new ThreeModule.OrthographicCamera(-1.65, 1.65, 1.65, -1.65, 0.1, 10);
+            camera.position.set(0, 4.6, 0);
+            camera.up.set(0, 0, -1);
+            camera.lookAt(0, 0, 0);
+
+            const baseColor = new ThreeModule.Color(color);
+            geometry = createDieGeometry(null, sides);
+            material = new ThreeModule.MeshStandardMaterial({
+                color: baseColor,
+                roughness: 0.5,
+                metalness: 0.06,
+                flatShading: true,
+                side: ThreeModule.DoubleSide,
+            });
+
+            const die = new ThreeModule.Mesh(geometry, material);
+            die.rotation.set(0, 0.25, 0);
+            scene.add(die);
+            
+            edgeGeometry = new ThreeModule.EdgesGeometry(geometry, 18);
+            edgeMaterial = new ThreeModule.LineBasicMaterial({
+                color: baseColor.clone().multiplyScalar(0.48),
+                transparent: true,
+                opacity: 0.72,
+            });
+            const edges = new ThreeModule.LineSegments(edgeGeometry, edgeMaterial);
+            edges.rotation.copy(die.rotation);
+            scene.add(edges);
+
+            numberedFaces = createNumberedFaces(
+                geometry,
+                sides,
+                getReadableMarkerTextColor(color),
+                renderer
+            );
+            die.add(numberedFaces);
+
+            const renderLoop = () => {
+                if (disposed) return;
+                if (rotationRef && rotationRef.current) {
+                    die.rotation.set(rotationRef.current.x, rotationRef.current.y, rotationRef.current.z);
+                    edges.rotation.copy(die.rotation);
+                }
+                renderer.render(scene, camera);
+                requestAnimationFrame(renderLoop);
+            };
+            renderLoop();
+
+            const ambient = new ThreeModule.AmbientLight(0xffffff, 1.35);
+            scene.add(ambient);
+            const key = new ThreeModule.DirectionalLight(0xffffff, 2.35);
+            key.position.set(-1.6, 5.2, -1.4);
+            scene.add(key);
+            const fill = new ThreeModule.DirectionalLight(0xd7b56c, 0.72);
+            fill.position.set(1.6, 3.2, 1.4);
+            scene.add(fill);
+
+            // The render loop replaces the single static render
+            // renderer.render(scene, camera);
+        });
+
+        return () => {
+            disposed = true;
+            geometry?.dispose();
+            material?.dispose();
+            edgeGeometry?.dispose();
+            edgeMaterial?.dispose();
+            numberedFaces?.userData?.labels?.forEach(label => {
+                label.geometry?.dispose();
+                label.texture?.dispose();
+                label.material?.dispose();
+            });
+            renderer?.dispose();
+        };
+    }, [sides, color]);
+
+    return (
+        <canvas
+            ref={canvasRef}
+            className="absolute inset-[-14%] block h-[128%] w-[128%] bg-transparent"
+            style={{
+                background: 'transparent',
+                clipPath: 'circle(49% at 50% 50%)',
+            }}
+            aria-hidden="true"
+        />
+    );
+};
+
+const getDieTopFaceValue = (sides, quaternionLike) => {
+    const dieSides = Number(sides) || 20;
+    const worldUp = makeVec3(0, 1, 0);
+
+    if (dieSides === 4) {
+        const definition = createDieConvexDefinition(4, 1);
+        return definition.vertices.reduce((best, vertex) => {
+            const upAlignment = dotVec3(applyQuaternionToVec3(vertex, quaternionLike), worldUp);
+            return upAlignment > best.upAlignment
+                ? { value: getD4VertexValue(vertex), upAlignment }
+                : best;
+        }, { value: 1, upAlignment: -Infinity }).value;
+    }
+
+    const geometry = createDieGeometry(null, sides);
+    const faces = getDieFaceData(geometry, sides);
+    geometry.dispose();
+
+    return faces.reduce((best, face) => {
+        const upAlignment = dotVec3(applyQuaternionToVec3(face.normal, quaternionLike), worldUp);
+        return upAlignment > best.upAlignment
+            ? { value: face.value, upAlignment }
+            : best;
+    }, { value: 1, upAlignment: -Infinity }).value;
+};
+const BoardDieVisual = ({ die, className = '', isDragging = false, currentDieRollSpeed = 0, dragDirection = 0, enableRollPhysics = true }) => {
+    const rotationRef = useRef({ x: 0, y: 0.25, z: 0 });
+    const [localValue, setLocalValue] = useState(null);
+
+    useEffect(() => {
+        setLocalValue(null);
+    }, [die?.dieValue, die?.dieSides]);
+
+    useEffect(() => {
+        if (!die?.dieRotation3d) return;
+        const nextRotation = {
+            x: Number(die.dieRotation3d.x) || 0,
+            y: Number(die.dieRotation3d.y) || 0,
+            z: Number(die.dieRotation3d.z) || 0,
+        };
+        rotationRef.current = nextRotation;
+    }, [die?.dieRotation3d?.x, die?.dieRotation3d?.y, die?.dieRotation3d?.z]);
+
+    useEffect(() => {
+        if (!enableRollPhysics) return undefined;
+        let isRolling = false;
+        const handleRoll = async (e) => {
+            if (e.detail.id !== die.id || isRolling) return;
+            isRolling = true;
+            const { velocity = {}, settleInPlace = false, bounds = null } = e.detail;
+            const dieSides = Number(die.dieSides) || 20;
+
+            setLocalValue('');
+
+            try {
+                const [CANNON, THREE] = await Promise.all([
+                    import('cannon-es'),
+                    import('three'),
+                ]);
+                
+                const innerWrapper = document.getElementById(`token-inner-wrapper-${die.id}`);
+                if (!innerWrapper) {
+                    isRolling = false;
+                    return;
+                }
+
+                const pxPerMeter = 42;
+                const world = new CANNON.World({
+                    gravity: new CANNON.Vec3(0, -28, 0),
+                });
+                world.allowSleep = true;
+                world.defaultContactMaterial.friction = 0.86;
+                world.defaultContactMaterial.restitution = 0.14;
+
+                const dieMaterial = new CANNON.Material('die');
+                const tableMaterial = new CANNON.Material('table');
+                world.addContactMaterial(new CANNON.ContactMaterial(dieMaterial, tableMaterial, {
+                    friction: 0.92,
+                    restitution: 0.12,
+                }));
+
+                let dieShape;
+                try {
+                    dieShape = createCannonDieShape(CANNON, dieSides);
+                } catch (shapeError) {
+                    console.warn("Fallback physics shape for board die", dieSides, shapeError);
+                    dieShape = createFallbackCannonDieShape(CANNON, dieSides);
+                }
+
+                const body = new CANNON.Body({
+                    mass: 1.35,
+                    material: dieMaterial,
+                    linearDamping: 0.42,
+                    angularDamping: 0.54,
+                    position: new CANNON.Vec3(0, 1.55, 0),
+                    shape: dieShape,
+                });
+                body.allowSleep = true;
+                body.sleepSpeedLimit = 0.22;
+                body.sleepTimeLimit = 0.42;
+                if (dieSides === 4) {
+                    body.quaternion.copy(getRandomUnitQuaternion(CANNON));
+                } else {
+                    const randomRollOffset = new CANNON.Quaternion();
+                    randomRollOffset.setFromEuler(
+                        (Math.random() - 0.5) * Math.PI,
+                        Math.random() * Math.PI * 2,
+                        (Math.random() - 0.5) * Math.PI,
+                        'XYZ'
+                    );
+                    const baseRotation = new CANNON.Quaternion();
+                    baseRotation.setFromEuler(rotationRef.current.x, rotationRef.current.y, rotationRef.current.z, 'XYZ');
+                    body.quaternion.copy(baseRotation.mult(randomRollOffset));
+                }
+
+                const launchX = Number(velocity.x) || 0;
+                const launchZ = Number(velocity.y) || 0;
+                const launchPower = Math.max(0.28, Math.min(1.35, Math.hypot(launchX, launchZ)));
+                const d4Boost = dieSides === 4 ? 1.55 : 1;
+                const randomD4NudgeX = dieSides === 4 ? (Math.random() - 0.5) * 2.4 : 0;
+                const randomD4NudgeZ = dieSides === 4 ? (Math.random() - 0.5) * 2.4 : 0;
+                body.velocity.set(launchX * 11, 7.5 + (launchPower * 2.4 * d4Boost), launchZ * 11);
+                body.angularVelocity.set(
+                    ((Math.random() < 0.5 ? -1 : 1) * (6 + (Math.random() * 5) + Math.abs(launchZ * 8)) * d4Boost) + randomD4NudgeX,
+                    (Math.random() < 0.5 ? -1 : 1) * (5 + (Math.random() * 6)) * d4Boost,
+                    ((Math.random() < 0.5 ? -1 : 1) * (6 + (Math.random() * 5) + Math.abs(launchX * 8)) * d4Boost) + randomD4NudgeZ,
+                );
+                world.addBody(body);
+
+                const floor = new CANNON.Body({ mass: 0, material: tableMaterial });
+                floor.addShape(new CANNON.Plane());
+                floor.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+                world.addBody(floor);
+
+                if (!settleInPlace) {
+                    const safeBounds = bounds || { left: 240, right: 240, top: 180, bottom: 180 };
+                    const left = -Math.max(1.5, safeBounds.left / pxPerMeter);
+                    const right = Math.max(1.5, safeBounds.right / pxPerMeter);
+                    const top = -Math.max(1.5, safeBounds.top / pxPerMeter);
+                    const bottom = Math.max(1.5, safeBounds.bottom / pxPerMeter);
+                    const wallSpecs = [
+                        { x: left, z: 0, rotY: Math.PI / 2 },
+                        { x: right, z: 0, rotY: -Math.PI / 2 },
+                        { x: 0, z: top, rotY: 0 },
+                        { x: 0, z: bottom, rotY: Math.PI },
+                    ];
+                    wallSpecs.forEach((spec) => {
+                        const wall = new CANNON.Body({ mass: 0, material: tableMaterial });
+                        wall.addShape(new CANNON.Plane());
+                        wall.position.set(spec.x, 0, spec.z);
+                        wall.quaternion.setFromEuler(0, spec.rotY, 0);
+                        world.addBody(wall);
+                    });
+                }
+
+                const startTime = performance.now();
+                let lastTime = startTime;
+                let settledFrames = 0;
+                let lastX = 0;
+                let lastY = 0;
+
+                const loop = (time) => {
+                    const delta = Math.min((time - lastTime) / 1000, 1 / 30);
+                    lastTime = time;
+                    world.step(1 / 60, delta, 4);
+
+                    const speed = body.velocity.length();
+                    const spin = body.angularVelocity.length();
+                    const elapsed = time - startTime;
+                    const isSleeping = body.sleepState === CANNON.Body.SLEEPING;
+                    if (isSleeping || (elapsed > 900 && speed < 0.34 && spin < 0.42)) {
+                        settledFrames += 1;
+                    } else {
+                        settledFrames = 0;
+                    }
+
+                    const euler = new ThreeModule.Euler().setFromQuaternion(
+                        new ThreeModule.Quaternion(body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w),
+                        'XYZ'
+                    );
+                    rotationRef.current = { x: euler.x, y: euler.y, z: euler.z };
+
+                    lastX = body.position.x * pxPerMeter;
+                    lastY = body.position.z * pxPerMeter;
+                    const lift = Math.max(0, (body.position.y - 0.62) * pxPerMeter);
+                    innerWrapper.style.transform = `translate(${lastX}px, ${lastY}px) translateY(${-lift}px) scale(${1 + Math.min(0.08, lift / 900)})`;
+
+                    if (settledFrames >= 14) {
+                        const settledEuler = new ThreeModule.Euler().setFromQuaternion(
+                            new ThreeModule.Quaternion(body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w),
+                            'XYZ'
+                        );
+                        rotationRef.current = { x: settledEuler.x, y: settledEuler.y, z: settledEuler.z };
+                        const rolledValue = getDieTopFaceValue(dieSides, body.quaternion);
+                        const finalVisualTranslate = getElementTranslate(innerWrapper);
+                        const finalDx = settleInPlace ? 0 : finalVisualTranslate.x;
+                        const finalDy = settleInPlace ? 0 : finalVisualTranslate.y;
+                        setLocalValue(rolledValue);
+                        window.dispatchEvent(new CustomEvent('save-die-roll', {
+                            detail: {
+                                id: die.id,
+                                dx: finalDx,
+                                dy: finalDy,
+                                value: rolledValue,
+                                rotation3d: rotationRef.current,
+                                instant: true
+                            }
+                        }));
+                        isRolling = false;
+                        return;
+                    }
+
+                    requestAnimationFrame(loop);
+                };
+                requestAnimationFrame(loop);
+            } catch (err) {
+                console.error("Error rolling board die", err);
+                let rolledValue = Number(die.dieValue) || 1;
+                try {
+                    
+                    const quaternion = new ThreeModule.Quaternion().setFromEuler(
+                        new ThreeModule.Euler(rotationRef.current.x, rotationRef.current.y, rotationRef.current.z, 'XYZ')
+                    );
+                    rolledValue = getDieTopFaceValue(Number(die.dieSides) || 20, quaternion);
+                } catch (resultError) {
+                    console.error("Error reading board die result from orientation", resultError);
+                }
+                setLocalValue(rolledValue);
+                window.dispatchEvent(new CustomEvent('save-die-roll', {
+                    detail: { id: die.id, dx: 0, dy: 0, value: rolledValue, rotation3d: rotationRef.current }
+                }));
+                isRolling = false;
+            }
+        };
+        
+        window.addEventListener('roll-die', handleRoll);
+        return () => window.removeEventListener('roll-die', handleRoll);
+    }, [enableRollPhysics, die.id, die.dieSides, die.x, die.y, die.rotation]);
+
+    const sides = Number(die?.dieSides) || 20;
+    const color = die?.dieColor || '#c8aa6e';
+    const displayValue = localValue === '' ? null : (localValue ?? die?.dieValue);
+    const showD4FloatingResult = sides === 4 && displayValue !== null && displayValue !== undefined && !isDragging;
+
+    return (
+        <div className={`relative h-full w-full overflow-visible bg-transparent ${className}`} style={{ perspective: 420 }}>
+            {/* --- INDICADOR DE TIRACHINAS (NUEVO) --- */}
+            {isDragging && currentDieRollSpeed > 0.02 && (
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-[60]" style={{ transform: 'translateZ(100px)' }}>
+                    {/* Halo de Tensión (Círculo que se contrae/expande) */}
+                    <div 
+                        className="absolute rounded-full border-[3px] transition-all duration-75"
+                        style={{
+                            width: '120%',
+                            height: '120%',
+                            borderColor: currentDieRollSpeed > 0.8 ? '#ff4d4d' : currentDieRollSpeed > 0.4 ? '#ff944d' : '#ffd11a',
+                            opacity: 0.4 + (currentDieRollSpeed * 0.4),
+                            transform: `scale(${1 - currentDieRollSpeed * 0.2})`,
+                            boxShadow: `0 0 ${15 * currentDieRollSpeed}px ${currentDieRollSpeed > 0.8 ? '#ff4d4d' : '#ffd11a'}`
+                        }}
+                    />
+                    
+                    {/* Flecha de Trayectoria (Hacia donde saldrá disparado) */}
+                    <div 
+                        className="absolute origin-bottom transition-all duration-75"
+                        style={{
+                            bottom: '50%',
+                            height: `${Math.min(currentDieRollSpeed * 280, 240)}px`,
+                            width: '14px',
+                            background: `linear-gradient(to top, rgba(255,255,255,0.1), ${currentDieRollSpeed > 0.8 ? '#ff4d4d' : '#ffd11a'})`,
+                            borderRadius: '10px 10px 0 0',
+                            transform: `rotate(${dragDirection}deg)`,
+                            filter: 'drop-shadow(0 0 8px rgba(0,0,0,0.4))'
+                        }}
+                    >
+                        {/* Punta de la flecha reforzada */}
+                        <div 
+                            className="absolute -top-4 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[12px] border-l-transparent border-r-[12px] border-r-transparent border-b-[22px]"
+                            style={{ borderBottomColor: currentDieRollSpeed > 0.8 ? '#ff4d4d' : '#ffd11a' }}
+                        />
+                        
+                        {/* Líneas de velocidad en la flecha */}
+                        <div className="absolute inset-0 flex flex-col justify-around py-4 opacity-30">
+                            {[1, 2, 3].map(i => (
+                                <div key={i} className="w-full h-[2px] bg-white/50" />
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Badge de Potencia */}
+                    <div 
+                        className="absolute -top-20 bg-black/95 px-4 py-2 rounded-xl border-2 shadow-2xl transition-transform"
+                        style={{ 
+                            borderColor: currentDieRollSpeed > 0.8 ? '#ff4d4d' : '#ffd11a',
+                            transform: `scale(${1 + currentDieRollSpeed * 0.15}) translateY(${currentDieRollSpeed * -10}px)`,
+                            boxShadow: `0 10px 25px rgba(0,0,0,0.6), 0 0 15px ${currentDieRollSpeed > 0.8 ? 'rgba(255,77,77,0.3)' : 'rgba(255,209,26,0.2)'}`
+                        }}
+                    >
+                        <div className="flex flex-col items-center gap-1">
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">Tensión</span>
+                            <span className="text-[16px] font-black font-mono leading-none" style={{ color: currentDieRollSpeed > 0.8 ? '#ff4d4d' : '#ffd11a' }}>
+                                {Math.round(Math.min(currentDieRollSpeed, 1) * 100)}%
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div
+                className="absolute inset-0 transition-transform duration-300 ease-out"
+                style={{
+                    transform: isDragging ? 'translateY(-8px) scale(1.06) rotateX(8deg)' : 'translateY(0) scale(1)',
+                    transformStyle: 'preserve-3d',
+                }}
+            >
+                <BoardDie3d sides={sides} color={color} rotationRef={rotationRef} />
+            </div>
+            {showD4FloatingResult && (
+                <div className="absolute inset-0 z-[70] pointer-events-none flex items-center justify-center">
+                    <div
+                        className="relative -translate-y-[38%] min-w-[1.75rem] h-7 px-2 rounded-full border border-[#f8e7b9]/80 bg-[#07070a]/88 shadow-[0_8px_20px_rgba(0,0,0,0.55),0_0_16px_rgba(200,170,110,0.28)] flex items-center justify-center"
+                        aria-hidden="true"
+                    >
+                        <span className="font-serif text-[1.15rem] leading-none font-black text-[#f8e7b9] drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]">
+                            {displayValue}
+                        </span>
+                        <span className="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-r border-b border-[#f8e7b9]/70 bg-[#07070a]/88" />
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+const BoardMarkerVisual = ({ marker, className = '', renderCoin = true, showOverlay = true, stackIndex = 0, isDragging = false }) => {
     const markerColor = marker?.markerColor || '#c8aa6e';
     const markerValue = Number.isFinite(Number(marker?.markerValue)) ? Number(marker.markerValue) : 1;
     const markerSize = Math.min(Number(marker?.width) || 80, Number(marker?.height) || 80);
     const hasValue = markerValue > 0;
     const fillColor = hasValue ? markerColor : '#e7e1d5';
-    const showIcon = !hasValue && !!MarkerIcon && markerSize >= 18;
     const fontSize = Math.max(10, Math.min(30, markerSize * 0.5));
     const textColor = getReadableMarkerTextColor(fillColor);
+    const lift = Math.min(18, (stackIndex * 4) + (isDragging ? 7 : 0));
+    const shadowOpacity = Math.min(0.72, 0.46 + (stackIndex * 0.08) + (isDragging ? 0.12 : 0));
 
     return (
-        <div className={`relative h-full w-full rounded-full ${className}`}>
-            <div className="absolute inset-[8%] translate-y-[8%] rounded-full bg-black/55 blur-[6px]" aria-hidden="true" />
-            <BoardMarker3dCoin fillColor={fillColor} />
-            {showIcon && (
-                <MarkerIcon
-                    className="absolute left-1/2 top-1/2 h-[44%] w-[44%] -translate-x-1/2 -translate-y-1/2"
-                    style={{ color: '#111827', opacity: 0.56 }}
-                    strokeWidth={2.4}
-                />
-            )}
-            {hasValue && (
-                <span
-                    className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-fantasy leading-none"
-                    style={{ fontSize: `${fontSize}px`, color: textColor }}
-                >
-                    {markerValue}
-                </span>
-            )}
+        <div className={`relative h-full w-full rounded-full ${className}`} style={{ perspective: 320 }}>
+            <div
+                className="absolute inset-0 rounded-full transition-transform duration-300 ease-out"
+                style={{
+                    transform: `translateY(${-lift}px) ${isDragging ? 'scale(1.06) rotateX(10deg)' : stackIndex > 0 ? 'scale(1.015)' : 'scale(1)'}`,
+                    transformStyle: 'preserve-3d',
+                }}
+            >
+                {renderCoin && (
+                    <>
+                        <div
+                            className="absolute inset-[8%] translate-y-[18%] rounded-full blur-[7px]"
+                            style={{ backgroundColor: `rgba(0,0,0,${shadowOpacity})` }}
+                            aria-hidden="true"
+                        />
+                        <BoardMarker3dCoin fillColor={fillColor} />
+                    </>
+                )}
+                {!renderCoin && (
+                    <div
+                        className="absolute inset-0 rounded-full opacity-95 shadow-[0_8px_14px_rgba(0,0,0,0.55)]"
+                        style={{
+                            background: `radial-gradient(circle at 38% 34%, rgba(255,255,255,0.18), transparent 28%), ${fillColor}`,
+                            border: '1px solid rgba(5,7,13,0.7)',
+                        }}
+                        aria-hidden="true"
+                    />
+                )}
+                {showOverlay && hasValue && (
+                    <span
+                        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-fantasy leading-none"
+                        style={{ fontSize: `${fontSize}px`, color: textColor }}
+                    >
+                        {markerValue}
+                    </span>
+                )}
+            </div>
         </div>
     );
 };
@@ -500,8 +1441,27 @@ const getBackgroundGridPresetIndex = (config = {}, presets = []) => {
     return closestIndex >= 0 ? closestIndex : 0;
 };
 
+const fixMojibakeText = (value = '') => {
+    if (value === null || value === undefined) return '';
+    let current = String(value);
+    if (!/[\u00c3\u00c2\u00e2]/.test(current)) return current;
+
+    for (let i = 0; i < 6; i += 1) {
+        try {
+            const bytes = Uint8Array.from([...current].map((char) => char.charCodeAt(0) & 0xff));
+            const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+            if (decoded === current) break;
+            current = decoded;
+        } catch {
+            break;
+        }
+    }
+    return current;
+};
+
 const formatCombatTraitLabel = (trait = '') => {
-    const normalized = trait.toString().trim().toLowerCase();
+    const cleanTrait = fixMojibakeText(trait).trim();
+    const normalized = cleanTrait.toLowerCase();
     if (normalized === 'derribado' || normalized === 'derribar' || normalized === 'derribo') return 'Derribo';
     if (normalized === 'conmocionante') return 'Conmocionante';
     if (normalized === 'fluida') return 'Fluida';
@@ -515,7 +1475,7 @@ const formatCombatTraitLabel = (trait = '') => {
     if (normalized === 'bloqueo' || normalized === 'bloquear') return 'Bloqueo';
     if (normalized === 'guardia') return 'Guardia';
     if (normalized === 'sin guardia' || normalized === 'singuardia' || normalized === 'sin_guardia') return 'Sin guardia';
-    return trait;
+    return cleanTrait;
 };
 
 const COMBAT_RANGE_MAP = {
@@ -561,10 +1521,25 @@ const getCombatRangeData = (item) => {
 const isCardItem = (item) => item?.type === 'card';
 const isCardContainerItem = (item) => item?.type === 'cardContainer';
 const isBoardMarkerItem = (item) => item?.type === 'boardMarker';
+const isBoardDieItem = (item) => item?.type === 'boardDie';
 const isHandCardItem = (item) => isCardItem(item) && item.zone === 'hand';
 const isStackedCardItem = (item) => isCardItem(item) && !!item.stackParentId;
 const isContainedCardItem = (item) => isCardItem(item) && !!item.containerId;
-const isCombatTokenItem = (item) => !!item && item.type !== 'light' && item.type !== 'wall' && item.type !== 'geometry' && !isCardItem(item) && !isCardContainerItem(item) && !isBoardMarkerItem(item);
+const isCombatTokenItem = (item) => !!item && item.type !== 'light' && item.type !== 'wall' && item.type !== 'geometry' && !isCardItem(item) && !isCardContainerItem(item) && !isBoardMarkerItem(item) && !isBoardDieItem(item);
+const getItemOverlapRatio = (a = {}, b = {}) => {
+    const left = Math.max(Number(a.x) || 0, Number(b.x) || 0);
+    const top = Math.max(Number(a.y) || 0, Number(b.y) || 0);
+    const right = Math.min((Number(a.x) || 0) + (Number(a.width) || 0), (Number(b.x) || 0) + (Number(b.width) || 0));
+    const bottom = Math.min((Number(a.y) || 0) + (Number(a.height) || 0), (Number(b.y) || 0) + (Number(b.height) || 0));
+    const overlapWidth = Math.max(0, right - left);
+    const overlapHeight = Math.max(0, bottom - top);
+    const overlapArea = overlapWidth * overlapHeight;
+    const minArea = Math.max(1, Math.min(
+        (Number(a.width) || 0) * (Number(a.height) || 0),
+        (Number(b.width) || 0) * (Number(b.height) || 0)
+    ));
+    return overlapArea / minArea;
+};
 
 const uniqueCardIds = (ids = []) => [...new globalThis.Set(ids.filter(Boolean))];
 const normalizeCardGroupName = (card = {}) => (card.name || card.nombre || 'Carta')
@@ -1929,7 +2904,7 @@ const SaveToast = ({ show, type = 'success', message, subMessage }) => {
 };
 
 // =============================================================================
-// SpeedTimeline — Minimal horizontal initiative tracker based on SPEED
+// SpeedTimeline  Minimal horizontal initiative tracker based on SPEED
 // Aesthetic: Matches the dark-fantasy gold/slate palette of the canvas UI
 // =============================================================================
 const SpeedTimeline = ({ tokens, selectedId, onSelect, isPlayerView, onReset, mode = 'speed' }) => {
@@ -2003,7 +2978,7 @@ const SpeedTimeline = ({ tokens, selectedId, onSelect, isPlayerView, onReset, mo
                                         imageClassName="w-full h-full object-cover"
                                     />
 
-                                    {/* Speed counter — small badge bottom-right */}
+                                    {/* Speed counter  small badge bottom-right */}
                                     <div className={`
                                         absolute -bottom-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center
                                         rounded-full text-[7px] font-bold leading-none px-[3px]
@@ -2035,7 +3010,7 @@ const SpeedTimeline = ({ tokens, selectedId, onSelect, isPlayerView, onReset, mo
                     })}
                 </AnimatePresence>
 
-                {/* Reset button — inline, icon-only for master */}
+                {/* Reset button  inline, icon-only for master */}
                 {!isPlayerView && (
                     <button
                         onClick={(e) => { e.stopPropagation(); onReset(); }}
@@ -2513,7 +3488,7 @@ const syncTokenWithSheet = (token, sheetData, catalogs = {}, options = {}) => {
 const normalizeGlossaryWord = (word) => (word || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 
 // =============================================================================
-// EquipmentSection — Inventory-style equipment panel for canvas inspector
+// EquipmentSection  Inventory-style equipment panel for canvas inspector
 // Mirrors the aesthetic of LoadoutView / Mazo Inicial / Inventario
 // =============================================================================
 const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap = {}, glossary = [], highlightText = (t) => t, onAddItem, onRemoveItem, isPlayerView = false }) => {
@@ -2601,7 +3576,7 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
 
     return (
         <div className="pt-4 border-t border-slate-800/50 space-y-4">
-            {/* Section Header — standardized with other sections */}
+            {/* Section Header  standardized with other sections */}
             <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
                 <Sword size={12} /> Equipamiento
                 {equippedItems.length > 0 && (
@@ -2611,7 +3586,7 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
                 )}
             </h4>
 
-            {/* Equipped Items — Inventory card style */}
+            {/* Equipped Items  Inventory card style */}
             {equippedItems.length > 0 ? (
                 <div className="space-y-2">
                     {orderedEquippedItems.map(({ item, originalIndex }) => {
@@ -2626,7 +3601,7 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
                                 key={`${originalIndex}-${item.nombre || item.name || item.type || 'item'}`}
                                 className={`relative bg-[#161f32] border ${rarity.border} rounded-lg overflow-hidden group hover:border-[#c8aa6e]/60 transition-all duration-300`}
                             >
-                                {/* Dynamic Background Gradient (Hover Effect) — mirrors LoadoutView */}
+                                {/* Dynamic Background Gradient (Hover Effect)  mirrors LoadoutView */}
                                 <div className={`absolute inset-0 bg-gradient-to-r ${rarity.glow} via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-0`}></div>
 
                                 {/* Stardust/Noise Texture Overlay */}
@@ -2641,7 +3616,7 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
                                 <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${rarity.stripe} z-10`} />
 
                                 <div className="flex">
-                                    {/* Left Column — Image or Icon (mirrors LoadoutView style) */}
+                                    {/* Left Column  Image or Icon (mirrors LoadoutView style) */}
                                     <div className="w-16 bg-black/50 relative shrink-0 ml-[3px] flex flex-col z-10 overflow-hidden">
                                         {itemImage && (
                                             <CanvasAssetImage
@@ -2662,7 +3637,7 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
                                                     <TypeIcon className={`w-7 h-7 ${rarity.text} opacity-60 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]`} />
                                                 </div>
                                             )}
-                                            {/* Rarity Label — clean text style like LoadoutView */}
+                                            {/* Rarity Label  clean text style like LoadoutView */}
                                             {item.rareza && item.rareza.toLowerCase() !== 'común' ? (
                                                 <span className={`text-[8px] uppercase font-bold ${rarity.text} text-center leading-tight px-1 drop-shadow-md`}>
                                                     {item.rareza}
@@ -2673,7 +3648,7 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
                                         </div>
                                     </div>
 
-                                    {/* Right Column — Content */}
+                                    {/* Right Column  Content */}
                                     <div className="flex-1 min-w-0 p-2 pl-2.5 flex flex-col">
                                         {/* Name */}
                                         <span
@@ -2765,7 +3740,7 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
                 </div>
             )}
 
-            {/* Add Item Panel — mirroring LoadoutView "Agregar al inventario" */}
+            {/* Add Item Panel  mirroring LoadoutView "Agregar al inventario" */}
             <div className="rounded-lg border border-slate-700/60 overflow-hidden bg-[#0f172a]">
                 {/* Toggle header */}
                 <button
@@ -2920,9 +3895,72 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [availableCharacters, setAvailableCharacters] = useState([]);
     const activeScenarioRef = useRef(null);
     useEffect(() => { activeScenarioRef.current = activeScenario; }, [activeScenario]);
+    const instantBoardDieMoveIdsRef = useRef(new Set());
 
     const [viewMode, setViewMode] = useState('LIBRARY'); // 'LIBRARY' | 'EDIT'
     const lastActionTimeRef = useRef(0);
+
+    // Escuchar rolls de dados para actualizar firebase al terminar
+    useEffect(() => {
+        const handleSaveDieRoll = (e) => {
+            const { id, dx, dy, value, rotation3d = null, instant = false } = e.detail;
+            const currentScenario = activeScenarioRef.current;
+            if (!currentScenario) return;
+            const item = currentScenario.items?.find(i => i.id === id);
+            if (!item) return;
+
+            const safeDx = Number.isFinite(Number(dx)) ? Number(dx) : 0;
+            const safeDy = Number.isFinite(Number(dy)) ? Number(dy) : 0;
+            if (instant) {
+                instantBoardDieMoveIdsRef.current.add(id);
+            }
+            const nextItems = currentScenario.items.map(i => 
+                i.id === id ? {
+                    ...i,
+                    x: i.x + safeDx,
+                    y: i.y + safeDy,
+                    dieValue: value,
+                    dieRotation3d: rotation3d
+                        ? {
+                            x: Number(rotation3d.x) || 0,
+                            y: Number(rotation3d.y) || 0,
+                            z: Number(rotation3d.z) || 0,
+                        }
+                        : i.dieRotation3d
+                } : i
+            );
+            if (instant) {
+                flushSync(() => {
+                    setActiveScenario(prev => ({ ...prev, items: nextItems }));
+                });
+            } else {
+                setActiveScenario(prev => ({ ...prev, items: nextItems }));
+            }
+
+            if (instant) {
+                const innerWrapper = document.getElementById(`token-inner-wrapper-${id}`);
+                if (innerWrapper) {
+                    innerWrapper.style.transition = 'none';
+                    innerWrapper.style.transform = 'translate(0px, 0px) translateY(0px) scale(1)';
+                }
+                window.setTimeout(() => {
+                    instantBoardDieMoveIdsRef.current.delete(id);
+                    if (innerWrapper) {
+                        innerWrapper.style.transition = '';
+                    }
+                }, 500);
+            }
+
+            import('firebase/firestore').then(({ doc, updateDoc }) => {
+                 updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
+                     items: nextItems,
+                     lastModified: Date.now()
+                 }).catch(err => console.error("Error saving die roll", err));
+            });
+        };
+        window.addEventListener('save-die-roll', handleSaveDieRoll);
+        return () => window.removeEventListener('save-die-roll', handleSaveDieRoll);
+    }, [scenarioCollectionName]);
     const [showToast, setShowToast] = useState(false);
     const [toastType, setToastType] = useState('success');
     const [toastMessage, setToastMessage] = useState('');
@@ -2996,6 +4034,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [rotatingTokenId, setRotatingTokenId] = useState(null);
     const [resizingTokenId, setResizingTokenId] = useState(null); // Nuevo estado para resize
     const [draggingHandCard, setDraggingHandCard] = useState(null);
+    const [currentDieRollSpeed, setCurrentDieRollSpeed] = useState(0);
+    const [dragDirection, setDragDirection] = useState(0);
     const resizeStartRef = useRef(null); // { x, y, width, height }
 
     // Detección de móvil para deshabilitar ciertas funcionalidades problemáticas
@@ -3190,13 +4230,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
     // Effect to sync global state and auto-load for players
     useEffect(() => {
-        console.log("🕵️ Monitoring global canvas visibility...");
+        console.log("Monitoring global canvas visibility...");
         let activeScenarioUnsub = null;
 
         const globalUnsub = onSnapshot(doc(db, 'gameSettings', visibilityDocName), (docSnap) => {
             const data = docSnap.exists() ? docSnap.data() : {};
             const activeId = data.activeScenarioId || null;
-            console.log("📡 canvasVisibility updated — activeScenarioId:", activeId);
+            console.log("📡 canvasVisibility updated  activeScenarioId:", activeId);
             setGlobalActiveId(activeId);
 
             // If no active scenario, clear local state for players
@@ -3211,7 +4251,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             if (isPlayerView && activeId) {
                 if (activeScenarioUnsub) activeScenarioUnsub();
 
-                console.log("📍 Active scenario detected:", activeId);
+                console.log("Active scenario detected:", activeId);
                 const scenarioRef = doc(db, scenarioCollectionName, activeId);
                 activeScenarioUnsub = onSnapshot(scenarioRef, (scenarioDoc) => {
                     if (scenarioDoc.exists()) {
@@ -3254,7 +4294,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 'success'
             );
         } catch (e) {
-            console.error("❌ Error toggling active scenario:", e);
+            console.error(" Error toggling active scenario:", e);
             triggerToast("Error de Transmisión", e.message || "No se pudo actualizar", 'error');
         }
     };
@@ -3292,7 +4332,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         });
 
                         if (movedExternally) {
-                            console.warn("⚠️ Master movió fichas en drag. Cancelando.");
+                            console.warn("⚠ Master movió fichas en drag. Cancelando.");
                             draggedTokenIdRef.current = null;
                             setDraggedTokenId(null);
                             setRotatingTokenId(null);
@@ -3384,7 +4424,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     const lastModifiedChanged = remoteData.lastModified !== current.lastModified;
 
                     if (itemsChanged || lastModifiedChanged) {
-                        console.log("🔄 Sincronizando tablero con datos remotos (Merging local locks)...");
+                        console.log("Sincronizando tablero con datos remotos (Merging local locks)...");
                         return {
                             ...current,
                             items: mergedItems,
@@ -4003,7 +5043,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const tokenScreenX = worldDivCenterX + (distFromCenterWorldX * zoom);
             const tokenScreenY = worldDivCenterY + (distFromCenterWorldY * zoom);
 
-            // 4. Calcular Ángulo
+            // 4. Calcular ngulo
             const deltaX = curX - tokenScreenX;
             const deltaY = curY - tokenScreenY;
 
@@ -4034,14 +5074,31 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     .filter(item => selectedTokenIds.includes(item.id) && isCardContainerItem(item))
                     .map(item => item.id)
             );
+            const selectedContainers = currentScenario.items
+                .filter(item => selectedContainerIds.has(item.id) && isCardContainerItem(item));
+            const draggedItemForMove = currentScenario.items.find(item => item.id === draggedTokenId);
+            const isLaunchingBoardDieDrag = isBoardMode && isBoardDieItem(draggedItemForMove) && draggedItemForMove.dieLaunchMode;
 
             let nextCombatOccupancyFeedback = null;
             const newItems = currentScenario.items.map(item => {
                 const movesWithSelectedContainer = isCardItem(item) && selectedContainerIds.has(item.containerId);
-                if (selectedTokenIds.includes(item.id) || movesWithSelectedContainer) {
+                const markerMovesWithSelectedContainer = isBoardMarkerItem(item) && selectedContainers.some(container => (
+                    item.zone === 'board' &&
+                    isPointInsideExpandedItem(getCardCenter(item), container, 0)
+                ));
+                const movesInDragGroup = Object.prototype.hasOwnProperty.call(tokenOriginalPos, item.id);
+                if (selectedTokenIds.includes(item.id) || movesWithSelectedContainer || markerMovesWithSelectedContainer || movesInDragGroup) {
                     const original = tokenOriginalPos[item.id] || { x: item.x, y: item.y };
-                    let newX = original.x + deltaX;
-                    let newY = original.y + deltaY;
+                    let newX, newY;
+
+                    if (isLaunchingBoardDieDrag) {
+                        // Mecánica de tirachinas: el dado queda fijo mientras se carga tensión.
+                        newX = original.x;
+                        newY = original.y;
+                    } else {
+                        newX = original.x + deltaX;
+                        newY = original.y + deltaY;
+                    }
 
                     // Protección contra NaN/Infinity en móvil (Evita que las luces se 'apaguen' al salir del mundo)
                     if (!Number.isFinite(newX) || !Number.isFinite(newY)) return item;
@@ -4155,6 +5212,22 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 }
             }
 
+            // --- ACTUALIZAR FUERZA DE LANZAMIENTO (DADOS) ---
+            if (isBoardMode && draggedTokenId) {
+                const draggedItem = newItems.find(i => i.id === draggedTokenId);
+                if (isBoardDieItem(draggedItem) && draggedItem.dieLaunchMode) {
+                    const dragDistance = Math.hypot(curX - tokenDragStart.x, curY - tokenDragStart.y);
+                    const cancelRadius = Math.max(20, Math.min(draggedItem.width || 48, draggedItem.height || 48) * 0.42);
+                    const tension = Math.min(Math.max((dragDistance - cancelRadius) / 220, 0), 1);
+                    setCurrentDieRollSpeed(tension);
+                    setDragDirection(Math.atan2(curY - tokenDragStart.y, curX - tokenDragStart.x) * 180 / Math.PI + 90);
+                } else if (currentDieRollSpeed !== 0) {
+                    setCurrentDieRollSpeed(0);
+                }
+            } else if (currentDieRollSpeed !== 0) {
+                setCurrentDieRollSpeed(0);
+            }
+
             setActiveScenario(prev => ({ ...prev, items: newItems }));
             return;
         }
@@ -4201,7 +5274,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         if (!isDragging) return;
 
-        // Lógica de paneo de CÁMARA
+        // Lógica de paneo de CMARA
         const deltaX = curX - dragStartRef.current.x;
         const deltaY = curY - dragStartRef.current.y;
 
@@ -4338,17 +5411,74 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         if ((draggedTokenId || rotatingTokenId || resizingTokenId) && activeScenarioRef.current) {
             const currentScenario = activeScenarioRef.current;
             let finalItems = currentScenario.items;
+            let didReorderBoardMarkerStack = false;
 
             if (draggedTokenId) {
                 const { x: releaseX, y: releaseY } = getEventCoords(e, tokenDragStart.identifier);
                 const deltaX = (releaseX - tokenDragStart.x) / zoom;
                 const deltaY = (releaseY - tokenDragStart.y) / zoom;
                 const draggedItem = currentScenario.items.find(item => item.id === draggedTokenId);
+
+                // --- NUEVO: Físicas de dados ---
+                if (isBoardMode && isBoardDieItem(draggedItem) && draggedItem.dieLaunchMode) {
+                    const screenDeltaX = releaseX - tokenDragStart.x;
+                    const screenDeltaY = releaseY - tokenDragStart.y;
+                    const dragDistance = Math.hypot(screenDeltaX, screenDeltaY);
+                    const cancelRadius = Math.max(20, Math.min(draggedItem.width || 48, draggedItem.height || 48) * 0.42);
+                    if (dragDistance <= cancelRadius) {
+                        setActiveScenario(prev => ({
+                            ...prev,
+                            items: prev.items.map(item => (
+                                item.id === draggedTokenId && tokenOriginalPos[item.id]
+                                    ? { ...item, x: tokenOriginalPos[item.id].x, y: tokenOriginalPos[item.id].y }
+                                    : item
+                            ))
+                        }));
+                        setDraggedTokenId(null);
+                        setRotatingTokenId(null);
+                        setResizingTokenId(null);
+                        setTokenOriginalPos({});
+                        setDragVisualOrigin({});
+                        setCombatOccupancyFeedback(null);
+                        setCurrentDieRollSpeed(0);
+                        document.body.style.cursor = 'default';
+                        return;
+                    }
+
+                    const tension = Math.min(Math.max((dragDistance - cancelRadius) / 220, 0), 1);
+                    const angle = Math.atan2(screenDeltaY, screenDeltaX);
+                    const throwPower = 0.28 + (tension * 1.18);
+                    const velocity = {
+                        x: Math.cos(angle) * throwPower,
+                        y: Math.sin(angle) * throwPower,
+                    };
+                    window.dispatchEvent(new CustomEvent('roll-die', {
+                        detail: {
+                            id: draggedTokenId,
+                            velocity,
+                            settleInPlace: false,
+                            bounds: getBoardDieRollBounds(draggedItem),
+                        }
+                    }));
+
+                    setDraggedTokenId(null);
+                    setRotatingTokenId(null);
+                    setResizingTokenId(null);
+                    setTokenOriginalPos({});
+                    setDragVisualOrigin({});
+                    setCombatOccupancyFeedback(null);
+                    setCurrentDieRollSpeed(0);
+                    document.body.style.cursor = 'default';
+                    return;
+                }
+
                 const selectedContainerIds = new globalThis.Set(
                     currentScenario.items
                         .filter(item => selectedTokenIds.includes(item.id) && isCardContainerItem(item))
                         .map(item => item.id)
                 );
+                const selectedContainers = currentScenario.items
+                    .filter(item => selectedContainerIds.has(item.id) && isCardContainerItem(item));
 
                 if (isBoardMode && isCardItem(draggedItem) && isPointInsideBoardHand({ x: releaseX, y: releaseY })) {
                     moveBoardCardToHand(draggedTokenId);
@@ -4364,15 +5494,22 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                 finalItems = currentScenario.items.map(item => {
                     const movesWithSelectedContainer = isCardItem(item) && selectedContainerIds.has(item.containerId);
-                    if (!selectedTokenIds.includes(item.id) && !movesWithSelectedContainer) return item;
+                    const markerMovesWithSelectedContainer = isBoardMarkerItem(item) && selectedContainers.some(container => (
+                        item.zone === 'board' &&
+                        isPointInsideExpandedItem(getCardCenter(item), container, 0)
+                    ));
+                    const movesInDragGroup = Object.prototype.hasOwnProperty.call(tokenOriginalPos, item.id);
+                    if (!selectedTokenIds.includes(item.id) && !movesWithSelectedContainer && !markerMovesWithSelectedContainer && !movesInDragGroup) return item;
 
                     if (item.type === 'wall') {
                         return item;
                     }
 
                     const original = tokenOriginalPos[item.id] || { x: item.x, y: item.y };
-                    let newX = original.x + deltaX;
-                    let newY = original.y + deltaY;
+                    let newX, newY;
+
+                    newX = original.x + deltaX;
+                    newY = original.y + deltaY;
 
                     if (!Number.isFinite(newX) || !Number.isFinite(newY)) return item;
 
@@ -4452,6 +5589,41 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         if (!currentContainer || !isPointInsideExpandedItem(getCardCenter(movedCard), currentContainer, 0.02)) {
                             finalItems = detachCardFromContainer(finalItems, draggedTokenId);
                         }
+                    }
+                }
+
+                if (isBoardMode && isBoardMarkerItem(draggedItem) && activeLayer === 'TABLETOP') {
+                    const movedMarker = finalItems.find(item => item.id === draggedTokenId);
+                    const markerCenter = movedMarker
+                        ? {
+                            x: movedMarker.x + (movedMarker.width / 2),
+                            y: movedMarker.y + (movedMarker.height / 2)
+                        }
+                        : null;
+                    const markerStackTarget = movedMarker
+                        ? finalItems
+                            .filter(item => {
+                            if (item.id === draggedTokenId || !isBoardMarkerItem(item)) return false;
+                            const itemCenterX = item.x + (item.width / 2);
+                            const itemCenterY = item.y + (item.height / 2);
+                            const distance = Math.hypot(markerCenter.x - itemCenterX, markerCenter.y - itemCenterY);
+                            const threshold = Math.min(
+                                movedMarker.width,
+                                movedMarker.height,
+                                item.width,
+                                item.height
+                            ) * 0.55;
+                            return distance <= threshold || getItemOverlapRatio(movedMarker, item) >= 0.18;
+                        })
+                            .sort((a, b) => getItemOverlapRatio(movedMarker, b) - getItemOverlapRatio(movedMarker, a))[0]
+                        : null;
+
+                    if (movedMarker && markerStackTarget) {
+                        finalItems = [
+                            ...finalItems.filter(item => item.id !== draggedTokenId),
+                            movedMarker,
+                        ];
+                        didReorderBoardMarkerStack = true;
                     }
                 }
             }
@@ -4635,6 +5807,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             // Evaluar si hubo cambios reales respecto al inicio del drag para evitar writes innecesarios que rompen previsiones de movimiento
             let shouldSaveToFirebase = false;
             if (rotatingTokenId || resizingTokenId) {
+                shouldSaveToFirebase = true;
+            } else if (didReorderBoardMarkerStack) {
                 shouldSaveToFirebase = true;
             } else if (draggedTokenId) {
                 shouldSaveToFirebase = selectedTokenIds.some(id => {
@@ -4866,21 +6040,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     useEffect(() => {
         if (activeTab !== 'TOKENS' || !isBoardMode) return;
 
-        console.log("🃏 Conectando a Biblioteca de Cartas...");
+        console.log("Conectando a Biblioteca de Cartas...");
         const unsub = onSnapshot(collection(db, 'canvas_cards'), (snap) => {
             const loaded = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             setCards(loaded.sort((a, b) => b.createdAt - a.createdAt));
         });
         return () => {
-            console.log("🃏 Desconectando de Biblioteca de Cartas...");
             unsub();
         };
     }, [activeTab, isBoardMode]);
 
-    // --- KEYBOARD SHORTCUTS (Copy/Paste) ---
+    // --- KEYBOARD SHORTCUTS (Copy/Paste/Delete) ---
     useEffect(() => {
         const handleKeyDown = async (e) => {
-            // Ignorar si estamos escribiendo en un input
             if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
 
             // COPY (Ctrl+C)
@@ -4897,68 +6069,47 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             // PASTE (Ctrl+V)
             if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
                 if (clipboard.length > 0 && activeScenario) {
-                    e.preventDefault(); // Evitar pegado nativo
-
+                    e.preventDefault();
                     const newTokens = clipboard.map(originalItem => {
-                        // Generar ID única y desplazar ligeramente
                         const newId = crypto.randomUUID();
                         return {
                             ...originalItem,
                             id: newId,
                             x: (originalItem.x || 0) + 40,
                             y: (originalItem.y || 0) + 40,
-                            // COPIA PROFUNDA (Deep Copy) para singularidad en BD
-                            // Esto asegura que editar stats/status del nuevo no afecte al original
                             stats: JSON.parse(JSON.stringify(originalItem.stats || {})),
                             attributes: JSON.parse(JSON.stringify(originalItem.attributes || {})),
                             status: [...(originalItem.status || [])]
                         };
                     });
-
                     const updatedItems = [...(activeScenario.items || []), ...newTokens];
-
-                    // Actualización Optimista Local
-                    setActiveScenario(prev => ({
-                        ...prev,
-                        items: updatedItems
-                    }));
-
-                    // Guardar en Firebase
+                    setActiveScenario(prev => ({ ...prev, items: updatedItems }));
                     try {
                         await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
                             items: updatedItems,
                             lastModified: Date.now()
                         });
-
-                        // Seleccionar los nuevos tokens clonados
                         setSelectedTokenIds(newTokens.map(t => t.id));
-
-                        // Feedback visual reutilizando el Toast existente
                         setToastType('success');
                         setShowToast(true);
                         setTimeout(() => setShowToast(false), 2500);
-
                     } catch (error) {
                         console.error('Error al pegar tokens:', error);
                     }
                 }
             }
 
-            // DELETE / BACKSPACE (Eliminar seleccionados)
-            if (e.key === 'Delete' || e.key === 'Backspace') {
+            // DELETE / BACKSPACE / CTRL+DELETE
+            if (e.key === 'Delete' || e.key === 'Backspace' || (e.ctrlKey && e.key === 'Delete')) {
                 if (selectedTokenIds.length > 0 && activeScenario) {
                     const updatedItems = activeScenario.items.filter(item => !selectedTokenIds.includes(item.id));
-
-                    // Actualización Optimista
                     setActiveScenario(prev => ({ ...prev, items: updatedItems }));
                     setSelectedTokenIds([]);
-
                     try {
                         await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
                             items: updatedItems,
                             lastModified: Date.now()
                         });
-                        // Feedback de sincronización automática
                         triggerToast("Selección Eliminada", "El tablero se ha sincronizado", 'info');
                     } catch (error) {
                         console.error('Error al eliminar items con teclado:', error);
@@ -4969,7 +6120,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [activeScenario, selectedTokenIds, clipboard]);
+    }, [activeScenario, selectedTokenIds, clipboard, scenarioCollectionName]);
 
     const createNewScenario = async () => {
         const newScenario = {
@@ -5026,7 +6177,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     // Auto-create player token when entering with character data
     const hasCreatedAutoToken = useRef(false);
     // Auto-create OR sync player token on join / characterData change
-    // ⚠️ CRITICAL: Este efecto SIEMPRE lee datos frescos del servidor antes de escribir,
+    // ⚠ CRITICAL: Este efecto SIEMPRE lee datos frescos del servidor antes de escribir,
     // para evitar que un jugador con datos locales antiguos sobrescriba los tokens del Master.
     useEffect(() => {
         if (!isPlayerView || !characterData || !activeScenario?.id) return;
@@ -5058,7 +6209,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     });
 
                     if (JSON.stringify(syncedToken) !== JSON.stringify(existingToken)) {
-                        console.log('🔄 [SafeSync] Sincronizando token existente al entrar:', characterName);
+                        console.log('[SafeSync] Sincronizando token existente al entrar:', characterName);
                         // Modificar SOLO el token del jugador en la lista fresca del servidor
                         const updatedItems = freshItems.map(i => i.id === existingToken.id ? syncedToken : i);
                         setActiveScenario(prev => prev?.id === scenarioId ? { ...prev, items: updatedItems } : prev);
@@ -5121,7 +6272,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                 hasCreatedAutoToken.current = true;
             } catch (err) {
-                console.error('❌ [SafeSync] Error en sincronización segura:', err);
+                console.error(' [SafeSync] Error en sincronización segura:', err);
             }
         };
 
@@ -5139,7 +6290,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     ]);
 
     // Listener para sincronización en tiempo real desde edición de fichas
-    // ⚠️ CRITICAL: Lee datos frescos del servidor antes de escribir para evitar sobrescrituras.
+    // ⚠ CRITICAL: Lee datos frescos del servidor antes de escribir para evitar sobrescrituras.
     useEffect(() => {
         const handleSyncEvent = async (e) => {
             const { name, sheet } = e.detail || {};
@@ -5175,7 +6326,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 });
 
                 if (hasChanges) {
-                    console.log('🔄 [SafeSync] Sincronización en tiempo real para:', name);
+                    console.log(' [SafeSync] Sincronización en tiempo real para:', name);
                     setActiveScenario(prev => prev?.id === currentScenario.id ? { ...prev, items: updatedItems } : prev);
                     await updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
                         items: updatedItems,
@@ -5183,7 +6334,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     });
                 }
             } catch (err) {
-                console.error('❌ [SafeSync] Error sincronizando ficha en tiempo real:', err);
+                console.error(' [SafeSync] Error sincronizando ficha en tiempo real:', err);
             }
         };
 
@@ -5195,7 +6346,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
     const saveCurrentScenario = async () => {
         if (!activeScenario) {
-            console.warn("⚠️ Intento de guardado sin escenario activo");
+            console.warn("⚠ Intento de guardado sin escenario activo");
             return;
         }
 
@@ -5223,7 +6374,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                     // Si ya había una imagen diferente antes, liberamos la referencia anterior
                     if (gridConfig.backgroundImageHash && gridConfig.backgroundImageHash !== hash) {
-                        console.log("♻️ Liberando imagen anterior de Storage...");
+                        console.log("♻ Liberando imagen anterior de Storage...");
                         await releaseFile(gridConfig.backgroundImageHash);
                     }
 
@@ -5253,9 +6404,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
             await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), savePayload);
 
-            // 🔗 SINCRONIZACIÓN BIDIRECCIONAL: Actualizar fichas de personajes vinculados
+            //  SINCRONIZACIÓN BIDIRECCIONAL: Actualizar fichas de personajes vinculados
             if (activeScenario.items && activeScenario.items.length > 0) {
-                console.log("🔗 Iniciando sincronización inversa con fichas vinculadas...");
+                console.log(" Iniciando sincronización inversa con fichas vinculadas...");
                 const syncPromises = activeScenario.items
                     .filter(token => token.linkedCharacterId)
                     .map(async (token) => {
@@ -5298,7 +6449,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 console.log(`✅ Ficha ${char.name} sincronizada correctamente desde el Canvas`);
                             }
                         } catch (err) {
-                            console.error(`❌ Error sincronizando ficha ${char.name}:`, err);
+                            console.error(` Error sincronizando ficha ${char.name}:`, err);
                         }
                     });
 
@@ -5307,7 +6458,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
             console.log(`✅ Escenario guardado correctamente (${isPlayerView ? 'Jugador' : 'Master'})`);
         } catch (error) {
-            console.error("❌ Error al guardar escenario:", error);
+            console.error(" Error al guardar escenario:", error);
             setToastType('error');
             setShowToast(true);
         } finally {
@@ -5325,13 +6476,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         try {
             // Si el escenario tenía una imagen en Storage, liberamos la referencia
             if (itemToDelete.config?.backgroundImageHash) {
-                console.log("♻️ Eliminando imagen asociada de Storage...");
+                console.log("♻ Eliminando imagen asociada de Storage...");
                 await releaseFile(itemToDelete.config.backgroundImageHash);
             }
 
             await deleteDoc(doc(db, scenarioCollectionName, idToDelete));
 
-            console.log("🗑️ Encuentro y archivos asociados eliminados correctamente");
+            console.log("Encuentro y archivos asociados eliminados correctamente");
 
             // Si el escenario borrado era el que estábamos editando, volvemos a la biblioteca
             if (activeScenario?.id === idToDelete) {
@@ -5617,7 +6768,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             name: 'Velocidad',
             markerValue: 1,
             markerColor: '#c8aa6e',
-            markerIcon: 'none',
             isCircular: true,
             ownerId: currentUserId,
             ownerName: playerName || 'Master',
@@ -5632,6 +6782,44 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             items: nextItems,
             lastModified: Date.now()
         }).catch(err => console.error("Error saving board marker:", err));
+    };
+
+    const addBoardDieToBoard = () => {
+        if (!activeScenario || !isBoardMode) return;
+
+        const centerX = (WORLD_SIZE / 2) - (offset.x / zoom);
+        const centerY = (WORLD_SIZE / 2) - (offset.y / zoom);
+        const dieWidth = Math.max(36, Math.round((gridConfig.cellWidth || 120) * 0.75));
+        const dieHeight = Math.max(36, Math.round((gridConfig.cellHeight || gridConfig.cellWidth || 120) * 0.75));
+        const die = {
+            id: `board-die-${Date.now()}`,
+            type: 'boardDie',
+            x: centerX - (dieWidth / 2),
+            y: centerY - (dieHeight / 2),
+            width: dieWidth,
+            height: dieHeight,
+            rotation: 0,
+            layer: 'DICE',
+            zone: 'board',
+            name: 'Dado D6',
+            dieSides: 6,
+            dieValue: 1,
+            dieColor: '#c8aa6e',
+            dieRotation3d: { x: 0, y: 0.25, z: 0 },
+            dieLaunchMode: false,
+            ownerId: currentUserId,
+            ownerName: playerName || 'Master',
+            snapToGrid: false,
+        };
+
+        const nextItems = [...(activeScenario.items || []), die];
+        setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
+        setSelectedTokenIds([die.id]);
+        lastSelectedIdRef.current = die.id;
+        updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
+            items: nextItems,
+            lastModified: Date.now()
+        }).catch(err => console.error("Error saving board die:", err));
     };
 
     const removeCardFromContainer = (containerId, cardId) => {
@@ -6059,6 +7247,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     token.ownerName === playerName ||
                     token.ownerId === currentUserId
                 )) ||
+                (isBoardDieItem(token) && isBoardMode && (
+                    !token.ownerName ||
+                    token.ownerName === playerName ||
+                    token.ownerId === currentUserId
+                )) ||
                 (isCardContainerItem(token) && isBoardMode) ||
                 (token.controlledBy && Array.isArray(token.controlledBy) && token.controlledBy.includes(playerName));
             if (!isOwner) return;
@@ -6133,7 +7326,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
             setDraggedTokenId(token.id);
             const touchId = (isTouch && e.touches && e.touches[0]) ? e.touches[0].identifier : null;
-            setTokenDragStart({ x: curX, y: curY, identifier: touchId });
+            setTokenDragStart({ x: curX, y: curY, identifier: touchId, startTime: Date.now() });
 
             const pendingForToken = (
                 isPlayerView &&
@@ -6150,9 +7343,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         .filter(item => newSelection.includes(item.id) && isCardContainerItem(item))
                         .map(item => item.id)
                 );
+                const selectedContainers = currentScenario.items
+                    .filter(item => selectedContainerIds.has(item.id) && isCardContainerItem(item));
                 currentScenario.items.forEach(i => {
                     const movesWithSelectedContainer = isCardItem(i) && selectedContainerIds.has(i.containerId);
-                    if (newSelection.includes(i.id) || movesWithSelectedContainer) {
+                    const markerMovesWithSelectedContainer = isBoardMarkerItem(i) && selectedContainers.some(container => (
+                        i.zone === 'board' &&
+                        isPointInsideExpandedItem(getCardCenter(i), container, 0)
+                    ));
+                    if (newSelection.includes(i.id) || movesWithSelectedContainer || markerMovesWithSelectedContainer) {
                         if (pendingForToken && i.id === token.id) {
                             const startPosition = {
                                 x: pendingForToken.startX ?? pendingForToken.x ?? i.x,
@@ -6491,22 +7690,56 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const isCard = isCardItem(item);
         const isCardContainer = isCardContainerItem(item);
         const isBoardMarker = isBoardMarkerItem(item);
+        const isBoardDie = isBoardDieItem(item);
+        const itemOrderIndex = Math.max(0, (activeScenario?.items || []).findIndex(candidate => candidate.id === item.id));
+        const boardMarkerStackIndex = isBoardMarker
+            ? (activeScenario?.items || [])
+                .filter(isBoardMarkerItem)
+                .reduce((count, marker) => {
+                    if (marker.id === item.id) return count;
+                    const markerOrder = (activeScenario?.items || []).findIndex(candidate => candidate.id === marker.id);
+                    const itemOrder = (activeScenario?.items || []).findIndex(candidate => candidate.id === item.id);
+                    if (markerOrder < 0 || itemOrder < 0 || markerOrder >= itemOrder) return count;
+                    const itemCenterX = item.x + (item.width / 2);
+                    const itemCenterY = item.y + (item.height / 2);
+                    const markerCenterX = marker.x + (marker.width / 2);
+                    const markerCenterY = marker.y + (marker.height / 2);
+                    const distance = Math.hypot(itemCenterX - markerCenterX, itemCenterY - markerCenterY);
+                    const threshold = Math.min(item.width, item.height, marker.width, marker.height) * 0.55;
+                    return distance <= threshold || getItemOverlapRatio(item, marker) >= 0.18 ? count + 1 : count;
+                }, 0)
+            : 0;
         const containerCardItems = isCardContainer
             ? getCardContainerItems(item.id, activeScenario?.items || [])
             : [];
+        const containerMarkerItems = isCardContainer
+            ? (activeScenario?.items || []).filter(candidate => (
+                isBoardMarkerItem(candidate) &&
+                candidate.zone === 'board' &&
+                isPointInsideExpandedItem(getCardCenter(candidate), item, 0)
+            ))
+            : [];
+        const containerMarkerValueTotal = containerMarkerItems.reduce((total, marker) => {
+            const value = Number(marker?.markerValue);
+            return total + (Number.isFinite(value) ? value : 0);
+        }, 0);
+        const containerItemCount = containerCardItems.length + containerMarkerValueTotal;
         const cardStackCount = isCard ? getCardStackIds(item).length : 0;
         const cardStackItems = isCard && cardStackCount > 0
             ? getCardStackIds(item)
                 .map(cardId => (activeScenario?.items || []).find(stackItem => stackItem.id === cardId))
                 .filter(Boolean)
             : [];
-        const isToken = !isLight && !isWall && !isGeometry && !isCard && !isCardContainer && !isBoardMarker;
+        const isToken = !isLight && !isWall && !isGeometry && !isCard && !isCardContainer && !isBoardMarker && !isBoardDie;
         const isLocallyInteracting =
             !!(draggedTokenId || rotatingTokenId || resizingTokenId) &&
             selectedTokenIds.includes(item.id);
-        const itemMotionTransition = isToken && !isLocallyInteracting
-            ? { type: 'tween', duration: 0.42, ease: [0.22, 1, 0.36, 1] }
-            : { duration: 0 };
+        const isInstantBoardDieMove = isBoardDie && instantBoardDieMoveIdsRef.current.has(item.id);
+        const itemMotionTransition = isBoardMarker || isBoardDie
+            ? (isLocallyInteracting || isInstantBoardDieMove ? { duration: 0 } : { type: 'spring', stiffness: 520, damping: 28, mass: 0.55 })
+            : isToken && !isLocallyInteracting
+                ? { type: 'tween', duration: 0.42, ease: [0.22, 1, 0.36, 1] }
+                : { duration: 0 };
         const combatPlacementItems = combatOccupancyFeedback?.tokenId && tokenOriginalPos[combatOccupancyFeedback.tokenId]
             ? (activeScenario?.items || []).map((placementItem) => (
                 placementItem.id === combatOccupancyFeedback.tokenId
@@ -6528,7 +7761,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         let canInteract = false;
         if (isLightingLayer) canInteract = (isLight || isWall);
         else if (isMapLayer) canInteract = isGeometry;
-        else canInteract = (isToken || isCard || isCardContainer || isBoardMarker);
+        else canInteract = (isToken || isCard || isCardContainer || isBoardMarker || isBoardDie);
 
         // Si estamos en targeting (apuntando o eligiendo arma), TODOS los tokens son interactuables como objetivos.
         // Importante: Esto previene que el click en un enemigo "atraviese" la ficha hacia el fondo y cancele la acción en móvil.
@@ -6540,7 +7773,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             if (!hasPermission) {
                 canInteract = false;
             }
-        } else if (isPlayerView && (isCard || isCardContainer || isBoardMarker)) {
+        } else if (isPlayerView && (isCard || isCardContainer || isBoardMarker || isBoardDie)) {
             canInteract = isBoardMode && (
                 !item.ownerName ||
                 item.ownerName === playerName ||
@@ -6811,120 +8044,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             const feedbackCellRect = occupancyFeedbackForItem?.cell
                                 ? getGridCellWorldRect(occupancyFeedbackForItem.cell, gridConfig)
                                 : null;
-                            const blockedPlacement = occupancyFeedbackForItem
+                            const blockedPlacement = (occupancyFeedbackForItem && feedbackCellRect && item.width <= feedbackCellRect.width && item.height <= feedbackCellRect.height)
                                 ? (
-                                    feedbackCellRect && item.width <= feedbackCellRect.width && item.height <= feedbackCellRect.height
-                                        ? {
-                                            x: feedbackCellRect.x + ((feedbackCellRect.width - item.width) / 2),
-                                            y: feedbackCellRect.y + ((feedbackCellRect.height - item.height) / 2),
-                                        }
-                                        : getCombatRenderPlacementAtPosition(
-                                            item,
-                                            { x: occupancyFeedbackForItem.targetX, y: occupancyFeedbackForItem.targetY },
-                                            activeScenario?.items || [],
-                                            gridConfig
-                                        )
-                                )
-                                : null;
-                            const currentX = blockedPlacement ? blockedPlacement.x : renderPlacement.x;
-                            const currentY = blockedPlacement ? blockedPlacement.y : renderPlacement.y;
-                            const startPlacement = dragOrigin
-                                ? dragOrigin
-                                : getCombatRenderPlacementAtPosition(
-                                    item,
-                                    { x: logicalStartX, y: logicalStartY },
-                                    activeScenario?.items || [],
-                                    gridConfig
-                                );
-                            const startX = startPlacement.x;
-                            const startY = startPlacement.y;
-
-                            if (![startX, startY, currentX, currentY].every(value => Number.isFinite(value))) return null;
-                            if (startX === currentX && startY === currentY) return null;
-
-                            const isBlockedMove = !!blockedPlacement;
-                            const lineColor = isBlockedMove ? '#ef4444' : '#c8aa6e';
-
-                            return (
-                                <>
-                                    <svg className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible z-[80]">
-                                        {feedbackCellRect && (
-                                            <>
-                                                <rect
-                                                    x={feedbackCellRect.x}
-                                                    y={feedbackCellRect.y}
-                                                    width={feedbackCellRect.width}
-                                                    height={feedbackCellRect.height}
-                                                    fill="#ef4444"
-                                                    fillOpacity="0.16"
-                                                    stroke="#ef4444"
-                                                    strokeWidth="2"
-                                                    strokeDasharray="7 4"
-                                                    rx="6"
-                                                />
-                                                <line
-                                                    x1={feedbackCellRect.x + (feedbackCellRect.width * 0.35)}
-                                                    y1={feedbackCellRect.y + (feedbackCellRect.height * 0.35)}
-                                                    x2={feedbackCellRect.x + (feedbackCellRect.width * 0.65)}
-                                                    y2={feedbackCellRect.y + (feedbackCellRect.height * 0.65)}
-                                                    stroke="#fecaca"
-                                                    strokeWidth="2"
-                                                    strokeLinecap="round"
-                                                    opacity="0.9"
-                                                />
-                                                <line
-                                                    x1={feedbackCellRect.x + (feedbackCellRect.width * 0.65)}
-                                                    y1={feedbackCellRect.y + (feedbackCellRect.height * 0.35)}
-                                                    x2={feedbackCellRect.x + (feedbackCellRect.width * 0.35)}
-                                                    y2={feedbackCellRect.y + (feedbackCellRect.height * 0.65)}
-                                                    stroke="#fecaca"
-                                                    strokeWidth="2"
-                                                    strokeLinecap="round"
-                                                    opacity="0.9"
-                                                />
-                                            </>
-                                        )}
-                                        <line
-                                            x1={startX + item.width / 2}
-                                            y1={startY + item.height / 2}
-                                            x2={currentX + item.width / 2}
-                                            y2={currentY + item.height / 2}
-                                            stroke={lineColor}
-                                            strokeWidth="1.5"
-                                            strokeDasharray="6 4"
-                                            opacity={isBlockedMove ? "0.85" : "0.6"}
-                                        />
-                                        <circle cx={startX + item.width / 2} cy={startY + item.height / 2} r="3" fill={lineColor} opacity="0.5" />
-                                    </svg>
-                                    {isBlockedMove && (
-                                        <div
-                                            className={`absolute top-0 left-0 z-[70] pointer-events-none border-2 border-dashed border-red-400/80 bg-red-950/20 ${item.isCircular ? 'rounded-full' : 'rounded-sm'} overflow-hidden`}
-                                            style={{
-                                                transform: `translate(${currentX}px, ${currentY}px) rotate(${item.rotation}deg)`,
-                                                width: `${item.width}px`,
-                                                height: `${item.height}px`,
-                                                boxShadow: '0 0 18px rgba(239, 68, 68, 0.45)',
-                                            }}
-                                        />
-                                    )}
-                                    {isBlockedMove && (
-                                        <div
-                                            className="absolute z-[90] pointer-events-none"
-                                            style={{
-                                                left: currentX + (item.width / 2),
-                                                top: currentY,
-                                                transform: 'translate(-50%, calc(-100% - 0.5rem))',
-                                            }}
-                                        >
-                                            <div className="rounded-full border border-red-400/50 bg-black/85 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-red-100 shadow-[0_0_14px_rgba(239,68,68,0.35)] whitespace-nowrap">
-                                                {occupancyFeedbackForItem.reason}
-                                            </div>
-                                        </div>
-                                    )}
                                     <div
                                         className={`absolute top-0 left-0 z-10 pointer-events-none grayscale opacity-40 border-2 border-dashed border-[#c8aa6e]/50 ${item.isCircular ? 'rounded-full' : 'rounded-sm'} overflow-hidden`}
                                         style={{
-                                            transform: `translate(${startX}px, ${startY}px) rotate(${item.rotation}deg)`,
+                                            transform: `translate(${feedbackCellRect.x}px, ${feedbackCellRect.y}px) rotate(${item.rotation}deg)`,
                                             width: `${item.width}px`,
                                             height: `${item.height}px`,
                                         }}
@@ -6955,10 +8080,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             </div>
                                         )}
                                     </div>
+                                )
+                                : null;
 
-                                    {/* --- INDICADOR DE TARGETING: Eliminado de aquí y movido a Capa Global al final de la sección del mapa --- */}
-                                </>
-                            );
+                            return blockedPlacement;
                         })()}
                     </>
                 )}
@@ -6970,7 +8095,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         if (!canInteract) return;
 
                         // RESTRICCIÓN: Solo abrir inspector si el jugador es dueño del token (o es Master)
-                        const hasPermission = !isPlayerView || isCard || isCardContainer || isBoardMarker || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName));
+                        const hasPermission = !isPlayerView || isCard || isCardContainer || isBoardMarker || isBoardDie || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName));
                         if (!hasPermission) return;
 
                         e.stopPropagation();
@@ -6995,18 +8120,26 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         top: 0,
                         pointerEvents: canInteract ? 'auto' : 'none',
                         cursor: (targetingState && isToken) ? 'crosshair' : (canInteract ? 'grab' : 'default'),
-                        zIndex: isLight ? 10 : isGeometry ? 15 : isCardContainer ? 17 : isCard ? 18 : isBoardMarker ? 19 : 20,
+                        zIndex: isBoardDie
+                            ? 80
+                            : isBoardMarker
+                                ? (draggedTokenId === item.id ? 70 : 30 + itemOrderIndex)
+                                : isLight
+                                    ? 10
+                                    : isGeometry
+                                        ? 15
+                                        : isCardContainer
+                                            ? 17
+                                            : isCard
+                                                ? 18
+                                                : 20,
                         transformOrigin: 'center center',
                         willChange: 'transform, opacity'
                     }}
                     className="group"
                 >
-                    <div className={`w-full h-full relative ${draggedTokenId === item.id ? 'scale-105 shadow-2xl' : ''} transition-transform`}>
-                        <div className={`absolute -inset-1 z-50 border-2 border-[#c8aa6e] ${item.isCircular ? 'rounded-full' : 'rounded-sm'} transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}>
-                            {isSelected && (
-                                <div className="absolute -top-8 left-1/2 w-0.5 h-8 bg-[#c8aa6e] -z-10 origin-bottom"></div>
-                            )}
-
+                    <div id={`token-inner-wrapper-${item.id}`} className={`w-full h-full relative ${draggedTokenId === item.id ? (isBoardDie ? 'scale-105' : 'scale-105 shadow-2xl') : ''} ${isBoardDie ? '' : 'transition-transform'}`}>
+                        <div className={`absolute -inset-1 z-50 ${isBoardDie ? 'opacity-0' : 'border-2 border-[#c8aa6e]'} ${item.isCircular ? 'rounded-full' : 'rounded-sm'} transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}>
                             {/* Indicador de Compartido (Izquierda) */}
                             {isToken && item.controlledBy?.length > 0 && (
                                 <div className="absolute -top-[1px] -left-[1px] -translate-x-1/2 -translate-y-1/2 bg-[#c8aa6e] shadow-[0_0_10px_rgba(200,170,110,0.4)] text-[#0b1120] rounded-full p-0.5 border border-white/20 flex items-center justify-center z-40 pointer-events-none">
@@ -7137,7 +8270,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 )}
                             </div>
                         ) : isBoardMarker ? (
-                            <BoardMarkerVisual marker={item} />
+                            <BoardMarkerVisual
+                                marker={item}
+                                stackIndex={boardMarkerStackIndex}
+                                isDragging={draggedTokenId === item.id}
+                            />
+                        ) : isBoardDie ? (
+                            <BoardDieVisual
+                                die={item}
+                                isDragging={draggedTokenId === item.id}
+                                currentDieRollSpeed={item.dieLaunchMode ? currentDieRollSpeed : 0}
+                                dragDirection={dragDirection}
+                            />
                         ) : isCardContainer ? (
                             <div
                                 className="relative w-full h-full overflow-visible rounded-md border border-dashed border-[#c8aa6e]/55 bg-transparent shadow-[0_0_0_1px_rgba(0,0,0,0.45)]"
@@ -7151,7 +8295,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         {item.name || 'Tablero'}
                                     </span>
                                     <span className="rounded-full border border-[#c8aa6e]/45 bg-black/75 px-2 py-0.5 text-[9px] font-black text-[#f8e7b9] shadow">
-                                        {containerCardItems.length}
+                                        {containerItemCount}
                                     </span>
                                 </div>
                             </div>
@@ -7312,7 +8456,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     })}
                                 </div>
                             </div>
-                        ) : !isCard && !isCardContainer && !isBoardMarker ? (
+                        ) : !isCard && !isCardContainer && !isBoardMarker && !isBoardDie ? (
                             <div className={`absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap z-50 transition-opacity ${isSelected || 'group-hover:opacity-100 opacity-0'}`}>
                                 <span className="bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full border border-slate-600 block shadow-sm backdrop-blur-sm">
                                     {item.name}
@@ -7356,12 +8500,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         ) : null}
 
                         {/* Controles de Acción */}
-                        {(!isPlayerView || ((isCard || isCardContainer || isBoardMarker) && canInteract) || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName))) && (
+                        {(!isPlayerView || ((isCard || isCardContainer || isBoardMarker || isBoardDie) && canInteract) || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName))) && (
                             <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${isSelected || 'group-hover:opacity-100 opacity-0'}`}>
                                 <button
                                     onMouseDown={(e) => {
                                         e.stopPropagation();
-                                        if (isCard) {
+                                        if (isBoardDie) {
+                                            updateItem(item.id, { dieLaunchMode: !item.dieLaunchMode }, true);
+                                        } else if (isCard) {
                                             updateItem(item.id, { faceDown: !item.faceDown });
                                         } else {
                                             rotateItem(item.id, 45);
@@ -7370,16 +8516,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     onTouchStart={(e) => {
                                         e.stopPropagation();
                                         e.preventDefault();
-                                        if (isCard) {
+                                        if (isBoardDie) {
+                                            updateItem(item.id, { dieLaunchMode: !item.dieLaunchMode }, true);
+                                        } else if (isCard) {
                                             updateItem(item.id, { faceDown: !item.faceDown });
                                         } else {
                                             rotateItem(item.id, 45);
                                         }
                                     }}
-                                    className="text-[#c8aa6e] hover:text-[#f0e6d2] p-1 hover:bg-[#c8aa6e]/10 rounded-full transition-colors"
-                                    title={isCard ? 'Voltear carta' : 'Rotar 45°'}
+                                    className={`p-1 rounded-full transition-colors ${isBoardDie && item.dieLaunchMode ? 'text-[#facc15] hover:text-[#ffe66d]' : 'text-[#c8aa6e] hover:text-[#f0e6d2] hover:bg-[#c8aa6e]/10'}`}
+                                    title={isBoardDie ? (item.dieLaunchMode ? 'Modo lanzamiento activo' : 'Modo mover dado') : isCard ? 'Voltear carta' : 'Rotar 45°'}
                                 >
-                                    <RotateCw size={12} />
+                                    {isBoardDie ? (item.dieLaunchMode ? <HandGrab size={12} fill="currentColor" strokeWidth={2.2} /> : <Hand size={12} />) : <RotateCw size={12} />}
                                 </button>
                                 <div className="w-3 h-3 bg-[#c8aa6e] rounded-full mx-1 cursor-grab active:cursor-grabbing hover:scale-125 transition-transform border border-[#0b1120]" onMouseDown={(e) => handleRotationMouseDown(e, item)} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); handleRotationMouseDown(e, item); }} />
                                 <button onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); deleteItem(item.id); }} className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"><Trash2 size={12} /></button>
@@ -7387,7 +8535,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         )}
 
                         {/* Resize Handle (Deshabilitado en móvil por errores de ux/redimensionado) */}
-                        {isSelected && !rotatingTokenId && !isMobile && (
+                        {isSelected && !rotatingTokenId && !isMobile && !isBoardDie && (
                             <div
                                 onMouseDown={(e) => handleResizeMouseDown(e, item)}
                                 onTouchStart={(e) => handleResizeMouseDown(e, item)}
@@ -7414,6 +8562,42 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             return { ...prev, items: newItems };
         });
     };
+
+    const getBoardDieRollBounds = useCallback((die) => {
+        const containerRect = containerRef.current?.getBoundingClientRect();
+        if (!containerRect || !die) return null;
+
+        const centerX = containerRect.width / 2 + offset.x + ((die.x + (die.width / 2) - (WORLD_SIZE / 2)) * zoom);
+        const centerY = containerRect.height / 2 + offset.y + ((die.y + (die.height / 2) - (WORLD_SIZE / 2)) * zoom);
+        const margin = Math.max(32, Math.min(die.width || 48, die.height || 48) * zoom * 0.75);
+
+        return {
+            left: Math.max(40, centerX - margin),
+            right: Math.max(40, containerRect.width - centerX - margin),
+            top: Math.max(40, centerY - margin),
+            bottom: Math.max(40, containerRect.height - centerY - margin),
+        };
+    }, [offset.x, offset.y, zoom]);
+
+    const rollBoardDie = useCallback((die, options = {}) => {
+        if (!die || !isBoardDieItem(die)) return;
+
+        const angle = Math.random() * Math.PI * 2;
+        const force = options.force ?? 0.45;
+        const velocity = options.velocity || {
+            x: Math.cos(angle) * force,
+            y: Math.sin(angle) * force,
+        };
+
+        window.dispatchEvent(new CustomEvent('roll-die', {
+            detail: {
+                id: die.id,
+                velocity,
+                settleInPlace: options.settleInPlace ?? false,
+                bounds: options.bounds || getBoardDieRollBounds(die),
+            }
+        }));
+    }, [getBoardDieRollBounds]);
 
     const handleResizeMouseDown = (e, item) => {
         e.stopPropagation();
@@ -9651,7 +10835,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 e.preventDefault();
-                                                                console.log("🔘 Transmit button clicked for scenario:", s.id);
+                                                                console.log("Transmit button clicked for scenario:", s.id);
                                                                 setGlobalActiveScenario(globalActiveId === s.id ? null : s.id);
                                                             }}
                                                             className={`p-2 rounded-lg border transition-all ${globalActiveId === s.id ? 'bg-[#c8aa6e] border-[#c8aa6e] text-[#0b1120] shadow-[0_0_15px_rgba(200,170,110,0.4)]' : 'bg-slate-900 border-slate-700 text-slate-500 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'}`}
@@ -9934,6 +11118,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                                     const accentColor = entry.reactionType === 'evadir' ? '#eab308' :
                                                         entry.reactionType === 'parar' ? '#3b82f6' : '#ef4444';
+                                                    const attackerName = fixMojibakeText(entry.attackerName);
+                                                    const targetName = fixMojibakeText(entry.targetName);
+                                                    const weaponName = fixMojibakeText(entry.weaponName);
+                                                    const abilityName = fixMojibakeText(entry.abilityName);
+                                                    const attackSourceLabel = fixMojibakeText(entry.attackSourceLabel);
+                                                    const defenderWeapon = fixMojibakeText(entry.defenderWeapon || 'su arma');
 
                                                     return (
                                                         <motion.div
@@ -9965,9 +11155,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                             {/* Main Text */}
                                                             <div className="space-y-1.5 px-0.5">
                                                                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                                                                    <span className="text-red-400 font-fantasy text-sm uppercase tracking-wide">{entry.attackerName}</span>
+                                                                    <span className="text-red-400 font-fantasy text-sm uppercase tracking-wide">{attackerName}</span>
                                                                     <span className="text-slate-600 text-[9px] font-bold uppercase tracking-widest">Ataca a</span>
-                                                                    <span className="text-blue-400 font-fantasy text-sm uppercase tracking-wide">{entry.targetName}</span>
+                                                                    <span className="text-blue-400 font-fantasy text-sm uppercase tracking-wide">{targetName}</span>
                                                                 </div>
 
                                                                 {(entry.weaponName || entry.abilityName) && (
@@ -9975,8 +11165,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                         <div className="w-3 h-[1px] bg-slate-800" />
                                                                         <span className="text-[9px] text-slate-500 italic lowercase tracking-wider">
                                                                             {entry.attackMode === 'barrido'
-                                                                                ? `usando ${entry.abilityName || 'barrido'}${entry.attackSourceLabel ? ` con ${entry.attackSourceLabel}` : ''}`
-                                                                                : `usando ${entry.weaponName}`}
+                                                                                ? `usando ${abilityName || 'barrido'}${attackSourceLabel ? ` con ${attackSourceLabel}` : ''}`
+                                                                                : `usando ${weaponName}`}
                                                                         </span>
                                                                     </div>
                                                                 )}
@@ -10118,10 +11308,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                     <p className="text-slate-300">
                                                                         <span className="text-blue-400/80 mr-1.5 italic font-bold">Parada:</span>
                                                                         {entry.elusionEffect ? <span className="text-cyan-300 font-bold">Elusión retiró el dado {entry.elusionEffect.value}. </span> : null}
-                                                                        {isPerfect ? `Desvió completamente el ataque con ${entry.defenderWeapon || 'su arma'}.` :
-                                                                            isCounter ? `Devolvió ${entry.counterDamage} de daño al atacante con ${entry.defenderWeapon || 'su arma'}.` :
-                                                                                isCounterPreventedByRange ? `Desvió el ataque con ${entry.defenderWeapon || 'su arma'}, pero no alcanza la distancia real para devolver el golpe.` :
-                                                                                `Parada parcial con ${entry.defenderWeapon || 'su arma'}, recibió ${entry.finalDamage} de daño.`}
+                                                                        {isPerfect ? `Desvió completamente el ataque con ${defenderWeapon}.` :
+                                                                            isCounter ? `Devolvió ${entry.counterDamage} de daño al atacante con ${defenderWeapon}.` :
+                                                                                isCounterPreventedByRange ? `Desvió el ataque con ${defenderWeapon}, pero no alcanza la distancia real para devolver el golpe.` :
+                                                                                `Parada parcial con ${defenderWeapon}, recibió ${entry.finalDamage} de daño.`}
                                                                     </p>
                                                                 )}
                                                                 {entry.reactionType === 'recibir' && (
@@ -10991,7 +12181,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     return (
                                         <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
                                             {/* Header Inspector */}
-                                            {/* Header Inspector — Centered between lines (using tab border as top) */}
+                                            {/* Header Inspector - Centered between lines (using tab border as top) */}
                                             <div className="flex flex-col items-center text-center gap-4 border-b border-slate-800/50 py-10 -mt-6 -mx-6 bg-gradient-to-b from-slate-900/20 to-transparent">
                                                 <div className={`${token.type === 'card' ? 'w-20 h-28 rounded-lg' : token.type === 'boardMarker' ? 'w-20 h-20 rounded-full' : 'w-20 h-20 rounded-xl'} bg-[#0b1120] border border-slate-800 overflow-hidden shrink-0 flex items-center justify-center text-[#c8aa6e] shadow-2xl relative group ring-1 ring-slate-800/40`}>
                                                     {token.type === 'light' ? (
@@ -11009,6 +12199,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         />
                                                     ) : token.type === 'boardMarker' ? (
                                                         <BoardMarkerVisual marker={{ ...token, width: 80, height: 80 }} />
+                                                    ) : token.type === 'boardDie' ? (
+                                                        <BoardDieVisual die={{ ...token, width: 80, height: 80 }} enableRollPhysics={false} />
                                                     ) : (
                                                         <TokenImageWithLoader
                                                             src={token.portrait || token.img}
@@ -11054,13 +12246,32 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         <div className="grid grid-cols-2 gap-3">
                                                             <div className="space-y-2">
                                                                 <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Valor</label>
-                                                                <input
-                                                                    type="number"
-                                                                    min="0"
-                                                                    value={Number.isFinite(Number(token.markerValue)) ? Number(token.markerValue) : 1}
-                                                                    onChange={(e) => updateItem(token.id, { markerValue: Number(e.target.value) || 0 })}
-                                                                    className="w-full bg-[#111827] border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-[#c8aa6e] outline-none transition-colors"
-                                                                />
+                                                                <div className="grid grid-cols-[44px_1fr_44px] overflow-hidden rounded border border-slate-800 bg-[#111827] focus-within:border-[#c8aa6e] md:grid-cols-[36px_1fr_36px]">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => updateItem(token.id, { markerValue: Math.max(0, (Number.isFinite(Number(token.markerValue)) ? Number(token.markerValue) : 1) - 1) })}
+                                                                        className="flex min-h-11 items-center justify-center border-r border-slate-800 text-xl font-black text-[#c8aa6e] transition-colors hover:bg-[#c8aa6e] hover:text-[#111827] active:bg-[#c8aa6e]/80 md:min-h-10 md:text-lg"
+                                                                        aria-label="Bajar valor"
+                                                                    >
+                                                                        -
+                                                                    </button>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="0"
+                                                                        inputMode="numeric"
+                                                                        value={Number.isFinite(Number(token.markerValue)) ? Number(token.markerValue) : 1}
+                                                                        onChange={(e) => updateItem(token.id, { markerValue: Math.max(0, Number(e.target.value) || 0) })}
+                                                                        className="w-full border-0 bg-transparent px-2 text-center text-base font-bold text-slate-100 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => updateItem(token.id, { markerValue: (Number.isFinite(Number(token.markerValue)) ? Number(token.markerValue) : 1) + 1 })}
+                                                                        className="flex min-h-11 items-center justify-center border-l border-slate-800 text-xl font-black text-[#c8aa6e] transition-colors hover:bg-[#c8aa6e] hover:text-[#111827] active:bg-[#c8aa6e]/80 md:min-h-10 md:text-lg"
+                                                                        aria-label="Subir valor"
+                                                                    >
+                                                                        +
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                             <div className="space-y-2">
                                                                 <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Color</label>
@@ -11073,24 +12284,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                             </div>
                                                         </div>
 
-                                                        <div className="space-y-2">
-                                                            <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Icono</label>
-                                                            <div className="grid grid-cols-3 gap-2">
-                                                                {BOARD_MARKER_ICON_OPTIONS.map(({ id, label, Icon }) => (
-                                                                    <button
-                                                                        key={id}
-                                                                        type="button"
-                                                                        onClick={() => updateItem(token.id, { markerIcon: id })}
-                                                                        className={`flex items-center justify-center gap-2 rounded border px-2 py-2 text-[8px] font-black uppercase tracking-widest transition-colors ${token.markerIcon === id ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f8e7b9]' : 'border-slate-800 bg-[#111827] text-slate-500 hover:border-[#c8aa6e]/45 hover:text-slate-300'}`}
-                                                                        title={label}
-                                                                    >
-                                                                        {Icon ? <Icon size={13} /> : <X size={13} />}
-                                                                        <span className="truncate">{label}</span>
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-
                                                         <div className="grid grid-cols-5 gap-2">
                                                             {PRESET_COLORS.map(color => (
                                                                 <button
@@ -11098,6 +12291,81 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                     type="button"
                                                                     onClick={() => updateItem(token.id, { markerColor: color })}
                                                                     className={`h-8 rounded border transition-transform hover:scale-105 ${token.markerColor === color ? 'border-white' : 'border-slate-800'}`}
+                                                                    style={{ backgroundColor: color }}
+                                                                    title={color}
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {token.type === 'boardDie' && (
+                                                    <div className="bg-[#0b1120] border border-[#c8aa6e]/20 rounded-lg p-3 space-y-4">
+                                                        <div className="space-y-2">
+                                                            <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Tipo de dado</label>
+                                                            <div className="grid grid-cols-3 gap-2">
+                                                                {BOARD_DIE_SIDES.map((sides) => (
+                                                                    <button
+                                                                        key={sides}
+                                                                        type="button"
+                                                                        onClick={() => updateItem(token.id, {
+                                                                            dieSides: sides,
+                                                                            dieValue: Math.min(Math.max(sides === 10 ? 0 : 1, Number.isFinite(Number(token.dieValue)) ? Number(token.dieValue) : 1), sides === 10 ? 9 : sides),
+                                                                            name: `Dado D${sides}`,
+                                                                            dieRotation3d: { x: 0, y: 0.25, z: 0 },
+                                                                        })}
+                                                                        className={`rounded border px-2 py-2 text-xs font-black uppercase tracking-widest transition-colors ${Number(token.dieSides) === sides ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f8e7b9]' : 'border-slate-800 bg-[#111827] text-slate-500 hover:border-[#c8aa6e]/45 hover:text-slate-300'}`}
+                                                                    >
+                                                                        D{sides}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-2 gap-3">
+                                                            <div className="space-y-2">
+                                                                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Resultado</label>
+                                                                <input
+                                                                    type="number"
+                                                                    min={Number(token.dieSides) === 10 ? 0 : 1}
+                                                                    max={Number(token.dieSides) === 10 ? 9 : Number(token.dieSides) || 20}
+                                                                    value={Math.min(Math.max(Number(token.dieSides) === 10 ? 0 : 1, Number.isFinite(Number(token.dieValue)) ? Number(token.dieValue) : 1), Number(token.dieSides) === 10 ? 9 : Number(token.dieSides) || 20)}
+                                                                    onChange={(e) => {
+                                                                        const sides = Number(token.dieSides) || 20;
+                                                                        const minValue = sides === 10 ? 0 : 1;
+                                                                        const maxValue = sides === 10 ? 9 : sides;
+                                                                        const value = Math.min(Math.max(minValue, Number(e.target.value) || minValue), maxValue);
+                                                                        updateItem(token.id, { dieValue: value });
+                                                                    }}
+                                                                    className="w-full bg-[#111827] border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-[#c8aa6e] outline-none transition-colors"
+                                                                />
+                                                            </div>
+                                                            <div className="space-y-2">
+                                                                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Color</label>
+                                                                <input
+                                                                    type="color"
+                                                                    value={token.dieColor || '#c8aa6e'}
+                                                                    onChange={(e) => updateItem(token.id, { dieColor: e.target.value })}
+                                                                    className="h-10 w-full cursor-pointer rounded border border-slate-800 bg-[#111827] p-1"
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => rollBoardDie(token)}
+                                                            className="w-full rounded border border-[#c8aa6e]/50 bg-[#c8aa6e]/10 px-3 py-2 text-xs font-black uppercase tracking-widest text-[#f8e7b9] transition-colors hover:bg-[#c8aa6e]/20"
+                                                        >
+                                                            Tirar dado
+                                                        </button>
+
+                                                        <div className="grid grid-cols-5 gap-2">
+                                                            {PRESET_COLORS.map(color => (
+                                                                <button
+                                                                    key={color}
+                                                                    type="button"
+                                                                    onClick={() => updateItem(token.id, { dieColor: color })}
+                                                                    className={`h-8 rounded border transition-transform hover:scale-105 ${token.dieColor === color ? 'border-white' : 'border-slate-800'}`}
                                                                     style={{ backgroundColor: color }}
                                                                     title={color}
                                                                 />
@@ -11690,7 +12958,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 {token.type === 'geometry' && (
                                                     <div className="pt-4 border-t border-slate-800/50 space-y-4">
                                                         <h4 className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-widest flex items-center gap-2">
-                                                            <Map size={12} /> Propiedades del Tapete
+                                                            <MapIcon size={12} /> Propiedades del Tapete
                                                         </h4>
 
                                                         <div className="bg-[#0b1120] p-3 rounded border border-slate-800 space-y-3">
@@ -11864,7 +13132,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 {(isCombatTokenItem(token)) && (() => {
                                                     const equippedItems = token.equippedItems || [];
 
-                                                    // Category tabs for adding items — mirrors LoadoutView
+                                                    // Category tabs for adding items - mirrors LoadoutView
                                                     const categories = [
                                                         { id: 'weapons', label: 'Armas', items: armas, type: 'weapon' },
                                                         { id: 'armor', label: 'Armaduras', items: armaduras, type: 'armor' },
@@ -12042,11 +13310,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             {isBoardMode && (
                                 <div className={`transition-all duration-300 transform flex flex-col gap-2 md:gap-3 ${activeLayer === 'TABLETOP' ? 'scale-100 opacity-100' : 'scale-0 opacity-0 h-0 overflow-hidden'}`}>
                                     <button
+                                        onClick={() => addBoardDieToBoard()}
+                                        className="w-10 h-10 md:w-12 md:h-12 bg-[#1a1b26] border border-[#c8aa6e]/30 text-[#c8aa6e] rounded-lg shadow-2xl flex items-center justify-center hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e] transition-all group active:scale-95"
+                                        title="Añadir dado 3D"
+                                    >
+                                        <BsDice6 className="w-5 h-5 md:w-6 md:h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
+                                    </button>
+                                    <button
                                         onClick={() => addBoardMarkerToBoard()}
                                         className="w-10 h-10 md:w-12 md:h-12 bg-[#1a1b26] border border-[#c8aa6e]/30 text-[#c8aa6e] rounded-lg shadow-2xl flex items-center justify-center hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e] transition-all group active:scale-95"
                                         title="Añadir ficha de recurso"
                                     >
-                                        <Zap className="w-5 h-5 md:w-6 md:h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
+                                        <Circle className="w-5 h-5 md:w-6 md:h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
                                     </button>
                                     <button
                                         onClick={() => addCardContainerToBoard()}
@@ -12094,13 +13369,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         className={`w-8 h-8 md:w-10 md:h-10 rounded flex items-center justify-center transition-all ${activeLayer === 'MAP' ? 'bg-[#c8aa6e] text-[#0b1120] shadow-lg' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}
                                         title="Capa de Tapete / Áreas"
                                     >
-                                        <Map size={16} className="md:hidden" />
-                                        <Map size={20} className="hidden md:block" />
+                                        <MapIcon size={16} className="md:hidden" />
+                                        <MapIcon size={20} className="hidden md:block" />
                                     </button>
                                 </div>
                             )}
 
-                            {/* ═══ ZOOM: Versión Desktop — Botones Verticales Clásicos ═══ */}
+                            {/*  ZOOM: Versión Desktop  Botones Verticales Clásicos  */}
                             <div className="hidden md:flex flex-col items-center gap-3">
                                 <div className="bg-[#1a1b26] border border-slate-700 rounded-lg p-1 shadow-2xl flex flex-col items-center">
                                     <button
@@ -12125,7 +13400,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             </div>
                         </div>
 
-                        {/* ═══ ZOOM RULER: Versión Móvil — Regla Vertical Derecha ═══ */}
+                        {/*  ZOOM RULER: Versión Móvil  Regla Vertical Derecha  */}
                         {
                             (() => {
                                 const RULER_MIN = 0.2, RULER_MAX = 3.0;
@@ -12214,7 +13489,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         }
 
                         {/* --- Instrucciones Rápidas --- */}
-                        <div className="absolute bottom-8 left-8 z-50 pointer-events-none opacity-50">
+                        <div className="absolute bottom-8 left-8 z-50 hidden pointer-events-none opacity-50 md:block">
                             <div className="flex items-center gap-2 text-xs text-slate-500 font-mono">
                                 <FiMove />
                                 <span>Click Central + Arrastrar para Mover</span>
@@ -12728,7 +14003,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             {/* MÁSCARA 2: NIEBLA DE GUERRA (Visión + Luces) */}
                                             <mask id="fog-mask">
                                                 <rect x={mapX - bleed} y={mapY - bleed} width={mapBounds.width + bleed * 2} height={mapBounds.height + bleed * 2} fill="white" />
-                                                {/* Vision de los Tokens: Filtrado por selección para el Master */}
+                                                {/* Visión de los Tokens: Filtrado por selección para el Master */}
                                                 {(() => {
                                                     // Determinar qué tokens otorgan visión al rol actual
                                                     const perspectiveTokens = (activeScenario?.items || []).filter(i =>
@@ -13309,7 +14584,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                 {/* --- CAPA GLOBAL DE TARGETING (Fuera de Niebla de Guerra y de Permisos) --- */}
                                 <div className="absolute inset-0 z-[100] pointer-events-none">
-                                    {/* --- LÍNEAS TÁCTICAS DE ATAQUE --- */}
+                                    {/* --- LNEAS TCTICAS DE ATAQUE --- */}
                                     <svg className="absolute inset-0 w-full h-full overflow-visible">
                                         {(() => {
                                             const items = activeScenario?.items || [];
@@ -13650,7 +14925,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                 return (
                     <>
-                        {/* Toggle Button — solo flecha, centro inferior */}
+                        {/* Toggle Button  solo flecha, centro inferior */}
                         <AnimatePresence mode="wait">
                             {!showMasterCombatHUD && (
                                 <motion.div
@@ -13747,7 +15022,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         transition={{ duration: 0.15 }}
                                         className="relative"
                                     >
-                                        {/* Botón de plegar HUD — solo flecha */}
+                                        {/* Botón de plegar HUD  solo flecha */}
                                         <div className="fixed bottom-0 left-0 right-0 z-[60] flex justify-center pointer-events-none pb-0.5">
                                             <button
                                                 onClick={() => setShowMasterCombatHUD(false)}
@@ -13840,5 +15115,11 @@ CanvasSection.propTypes = {
 };
 
 export default CanvasSection;
+
+
+
+
+
+
 
 

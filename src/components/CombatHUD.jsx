@@ -492,7 +492,7 @@ const CombatHUD = ({
                 </div>
 
                 {cardsInHand.length === 0 ? (
-                    <div className="relative z-10 mx-auto mt-12 h-16 max-w-[240px] rounded-full border border-dashed border-[#c8aa6e]/18 bg-[#0b1120]/35 backdrop-blur-sm flex items-center justify-center text-[10px] font-bold uppercase tracking-widest text-slate-600 text-center px-4 md:mt-14 md:max-w-sm md:bg-transparent md:backdrop-blur-0 md:border-[#c8aa6e]/10 md:text-slate-700">
+                    <div className="relative z-10 mx-auto mt-12 h-16 max-w-[240px] rounded-full border-0 bg-[#0b1120]/35 backdrop-blur-sm flex items-center justify-center text-[10px] font-bold uppercase tracking-widest text-slate-600 text-center px-4 md:mt-14 md:max-w-sm md:border md:border-dashed md:border-[#c8aa6e]/10 md:bg-transparent md:backdrop-blur-0 md:text-slate-700">
                         Arrastra cartas aquí
                     </div>
                 ) : (
