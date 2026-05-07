@@ -5164,7 +5164,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             ));
 
             // LOGIC ADDED: Update pending cost LIVE while dragging (ONLY for players)
-            if (gridConfig.isCombatActive && isPlayerView && draggedTokenId) {
+            if (!isBoardMode && gridConfig.isCombatActive && isPlayerView && draggedTokenId) {
                 const draggedItem = newItems.find(i => i.id === draggedTokenId);
                 const original = tokenOriginalPos[draggedTokenId];
                 const isBlockedCombatDestination = nextCombatOccupancyFeedback?.tokenId === draggedTokenId;
@@ -5679,7 +5679,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 if (hasCollision) {
                     setActiveScenario(prev => ({ ...prev, items: finalItems }));
 
-                    if (gridConfig.isCombatActive && isPlayerView) {
+                    if (!isBoardMode && gridConfig.isCombatActive && isPlayerView) {
                         const original = tokenOriginalPos[draggedTokenId];
                         const token = finalItems.find(i => i.id === draggedTokenId);
                         if (original && token && token.x === original.x && token.y === original.y) {
@@ -5718,7 +5718,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 }
 
                 // --- GESTIÓN DE MOVIMIENTO EN MODO COMBATE (PENDIENTE) ---
-                if (gridConfig.isCombatActive && isPlayerView) {
+                if (!isBoardMode && gridConfig.isCombatActive && isPlayerView) {
                     const token = finalItems.find(i => i.id === draggedTokenId);
                     const original = tokenOriginalPos[draggedTokenId];
                     if (token && isCombatTokenItem(token) && original && (token.x !== original.x || token.y !== original.y)) {
@@ -5811,7 +5811,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             } else if (didReorderBoardMarkerStack) {
                 shouldSaveToFirebase = true;
             } else if (draggedTokenId) {
-                shouldSaveToFirebase = selectedTokenIds.some(id => {
+                const draggedItemIds = new globalThis.Set([draggedTokenId, ...Object.keys(tokenOriginalPos || {})]);
+                shouldSaveToFirebase = Array.from(draggedItemIds).some(id => {
                     const original = tokenOriginalPos[id];
                     const current = finalItems.find(i => i.id === id);
                     return original && current && (original.x !== current.x || original.y !== current.y);
@@ -6769,8 +6770,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             markerValue: 1,
             markerColor: '#c8aa6e',
             isCircular: true,
-            ownerId: currentUserId,
-            ownerName: playerName || 'Master',
             snapToGrid: false,
         };
 
@@ -6807,8 +6806,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             dieColor: '#c8aa6e',
             dieRotation3d: { x: 0, y: 0.25, z: 0 },
             dieLaunchMode: false,
-            ownerId: currentUserId,
-            ownerName: playerName || 'Master',
             snapToGrid: false,
         };
 
@@ -7242,22 +7239,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     token.handSeatId === playerName ||
                     token.handSeatName === playerName
                 )) ||
-                (isBoardMarkerItem(token) && isBoardMode && (
-                    !token.ownerName ||
-                    token.ownerName === playerName ||
-                    token.ownerId === currentUserId
-                )) ||
-                (isBoardDieItem(token) && isBoardMode && (
-                    !token.ownerName ||
-                    token.ownerName === playerName ||
-                    token.ownerId === currentUserId
-                )) ||
+                (isBoardMarkerItem(token) && isBoardMode) ||
+                (isBoardDieItem(token) && isBoardMode) ||
                 (isCardContainerItem(token) && isBoardMode) ||
                 (token.controlledBy && Array.isArray(token.controlledBy) && token.controlledBy.includes(playerName));
             if (!isOwner) return;
 
             // Restricción de Turno: Si tienes un turno pendiente con otro token, debes terminarlo primero
-            if (isPlayerView && gridConfig.isCombatActive && pendingTurnState && pendingTurnState.tokenId !== token.id) {
+            if (!isBoardMode && isPlayerView && gridConfig.isCombatActive && pendingTurnState && pendingTurnState.tokenId !== token.id) {
                 const totalPendingCost = (pendingTurnState.moveCost || 0) + (pendingTurnState.actionCost || 0);
                 if (totalPendingCost > 0) {
                     triggerToast("Turno en progreso", "Termina las acciones de tu otro token antes de cambiar", 'warning');
@@ -7270,7 +7259,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             }
 
             // RESTRICCIÓN DE MODO COMBATE: Solo mover si es tu turno (velocidad mínima)
-            if (gridConfig.isCombatActive && activeLayer === 'TABLETOP' && isCombatTokenItem(token)) {
+            if (!isBoardMode && gridConfig.isCombatActive && activeLayer === 'TABLETOP' && isCombatTokenItem(token)) {
                 const currentItems = (activeScenarioRef.current || activeScenario)?.items || [];
                 const combatTokens = currentItems.filter(i => i.type !== 'wall' && i.type !== 'light' && (i.isCircular || i.stats));
                 const minVel = Math.min(...combatTokens.map(t => t.velocidad || 0));
@@ -7773,7 +7762,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             if (!hasPermission) {
                 canInteract = false;
             }
-        } else if (isPlayerView && (isCard || isCardContainer || isBoardMarker || isBoardDie)) {
+        } else if (isPlayerView && (isBoardMarker || isBoardDie)) {
+            canInteract = isBoardMode;
+        } else if (isPlayerView && (isCard || isCardContainer)) {
             canInteract = isBoardMode && (
                 !item.ownerName ||
                 item.ownerName === playerName ||
