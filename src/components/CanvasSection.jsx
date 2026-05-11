@@ -2909,6 +2909,12 @@ const SaveToast = ({ show, type = 'success', message, subMessage }) => {
 // =============================================================================
 const SpeedTimeline = ({ tokens, selectedId, onSelect, isPlayerView, onReset, mode = 'speed' }) => {
     const isInitiativeMode = mode === 'initiative';
+    const scrollRef = useRef(null);
+    const dragStateRef = useRef(null);
+    const suppressClickRef = useRef(false);
+    const [hiddenCount, setHiddenCount] = useState(0);
+    const [hasTimelineOverflow, setHasTimelineOverflow] = useState(false);
+    const maxTimelineScrollRef = useRef(0);
     const getTimelineValue = (token) => (
         isInitiativeMode
             ? Math.max(0, Number(token.initiative) || 0)
@@ -2927,6 +2933,111 @@ const SpeedTimeline = ({ tokens, selectedId, onSelect, isPlayerView, onReset, mo
         });
     }, [tokens, isInitiativeMode]);
 
+    const updateHiddenCount = useCallback(() => {
+        const element = scrollRef.current;
+        if (!element) {
+            setHiddenCount(0);
+            return;
+        }
+
+        const tokenEntries = Array.from(element.querySelectorAll('[data-timeline-token="true"]'));
+        const lastToken = tokenEntries[tokenEntries.length - 1];
+        const lastTokenRight = lastToken ? lastToken.offsetLeft + lastToken.offsetWidth + 4 : 0;
+        const maxUsefulScroll = Math.max(0, lastTokenRight - element.clientWidth);
+        maxTimelineScrollRef.current = maxUsefulScroll;
+
+        if (element.scrollLeft > maxUsefulScroll + 1) {
+            element.scrollLeft = maxUsefulScroll;
+        }
+
+        const hasOverflow = maxUsefulScroll > 1;
+        setHasTimelineOverflow(hasOverflow);
+        if (!hasOverflow) {
+            setHiddenCount(0);
+            if (element.scrollLeft !== 0) element.scrollLeft = 0;
+            return;
+        }
+
+        const containerRect = element.getBoundingClientRect();
+        const hiddenTokens = tokenEntries.filter((entry) => (
+            entry.getBoundingClientRect().left >= containerRect.right - 2
+        ));
+        setHiddenCount(hiddenTokens.length);
+    }, []);
+
+    useEffect(() => {
+        updateHiddenCount();
+        const element = scrollRef.current;
+        if (!element) return undefined;
+
+        const resizeObserver = typeof ResizeObserver !== 'undefined'
+            ? new ResizeObserver(updateHiddenCount)
+            : null;
+        resizeObserver?.observe(element);
+
+        window.addEventListener('resize', updateHiddenCount);
+        return () => {
+            resizeObserver?.disconnect();
+            window.removeEventListener('resize', updateHiddenCount);
+        };
+    }, [sortedTokens.length, updateHiddenCount]);
+
+    const handleTimelinePointerDown = (event) => {
+        const element = scrollRef.current;
+        if (!element || !hasTimelineOverflow || maxTimelineScrollRef.current <= 1) return;
+
+        dragStateRef.current = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            scrollLeft: element.scrollLeft,
+            moved: false,
+        };
+        element.setPointerCapture?.(event.pointerId);
+    };
+
+    const handleTimelinePointerMove = (event) => {
+        const dragState = dragStateRef.current;
+        const element = scrollRef.current;
+        if (!dragState || !element || dragState.pointerId !== event.pointerId) return;
+
+        const deltaX = event.clientX - dragState.startX;
+        if (Math.abs(deltaX) > 4) {
+            dragState.moved = true;
+            event.preventDefault();
+        }
+
+        element.scrollLeft = dragState.scrollLeft - deltaX;
+        if (element.scrollLeft > maxTimelineScrollRef.current) {
+            element.scrollLeft = maxTimelineScrollRef.current;
+        }
+        updateHiddenCount();
+    };
+
+    const handleTimelinePointerEnd = (event) => {
+        const dragState = dragStateRef.current;
+        const element = scrollRef.current;
+        if (!dragState || dragState.pointerId !== event.pointerId) return;
+
+        element?.releasePointerCapture?.(event.pointerId);
+        if (dragState.moved) {
+            suppressClickRef.current = true;
+            window.setTimeout(() => {
+                suppressClickRef.current = false;
+            }, 0);
+        }
+        dragStateRef.current = null;
+        updateHiddenCount();
+    };
+
+    const handleTimelineTokenClick = (event, tokenId) => {
+        if (suppressClickRef.current) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
+        onSelect(tokenId);
+    };
+
     if (sortedTokens.length === 0) return null;
 
     const activeValue = getTimelineValue(sortedTokens[0]);
@@ -2939,79 +3050,97 @@ const SpeedTimeline = ({ tokens, selectedId, onSelect, isPlayerView, onReset, mo
         <div className="absolute top-10 left-1/2 -translate-x-1/2 z-[45] pointer-events-none flex flex-col items-center gap-1.5">
             {/* Main pill */}
             <div
-                className="flex items-center gap-0.5 bg-[#0b1120]/80 backdrop-blur-sm border border-[#c8aa6e]/20 shadow-[0_0_15px_rgba(200,170,110,0.2)] ring-1 ring-[#c8aa6e]/10 rounded-lg px-1.5 py-1 pointer-events-auto"
-                style={{ maxWidth: 'min(85vw, 500px)' }}
+                className="relative flex items-center gap-0.5 bg-[#0b1120]/80 backdrop-blur-sm border border-[#c8aa6e]/20 shadow-[0_0_15px_rgba(200,170,110,0.2)] ring-1 ring-[#c8aa6e]/10 rounded-lg px-1.5 py-1 pointer-events-auto"
+                style={{ maxWidth: 'min(85vw, 500px, calc(100vw - 9.5rem))' }}
             >
-                <AnimatePresence>
-                    {sortedTokens.map((token, idx) => {
-                        const value = getTimelineValue(token);
-                        const isNext = isInitiativeMode
-                            ? (hasMasterAtActiveValue ? token.id === activeMasterId : value === activeValue)
-                            : (idx === 0 || value === activeValue);
-                        const isSelectedToken = selectedId === token.id;
-                        return (
-                            <motion.div
-                                layout
-                                key={token.id}
-                                className="flex items-center shrink-0"
-                                initial={{ opacity: 0, x: -8 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: 8 }}
-                                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                            >
-                                <div
-                                    onClick={() => onSelect(token.id)}
-                                    className="relative group cursor-pointer"
+                <div
+                    ref={scrollRef}
+                    className={`flex min-w-0 max-w-full items-center gap-0.5 px-1 py-1 -mx-1 -my-1 scrollbar-hide select-none ${hasTimelineOverflow ? 'overflow-x-auto overflow-y-hidden cursor-grab active:cursor-grabbing' : 'overflow-visible cursor-default'}`}
+                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', touchAction: hasTimelineOverflow ? 'pan-x' : 'auto' }}
+                    onScroll={updateHiddenCount}
+                    onPointerDown={handleTimelinePointerDown}
+                    onPointerMove={handleTimelinePointerMove}
+                    onPointerUp={handleTimelinePointerEnd}
+                    onPointerCancel={handleTimelinePointerEnd}
+                >
+                    <AnimatePresence>
+                        {sortedTokens.map((token, idx) => {
+                            const value = getTimelineValue(token);
+                            const isNext = isInitiativeMode
+                                ? (hasMasterAtActiveValue ? token.id === activeMasterId : value === activeValue)
+                                : (idx === 0 || value === activeValue);
+                            const isSelectedToken = selectedId === token.id;
+                            return (
+                                <motion.div
+                                    layout
+                                    key={token.id}
+                                    className="flex items-center shrink-0"
+                                    initial={{ opacity: 0, x: -8 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: 8 }}
+                                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                                 >
-                                    {/* Portrait ring */}
-                                    <TokenImageWithLoader
-                                        src={token.portrait || token.img}
-                                        label={token.name || 'Token'}
-                                        className={`
-                                        w-7 h-7 md:w-8 md:h-8 rounded-full transition-all duration-200
-                                        ${isNext
-                                            ? 'ring-[1.5px] ring-[#c8aa6e] shadow-[0_0_8px_rgba(200,170,110,0.25)]'
-                                            : 'ring-1 ring-slate-700/60 opacity-60 grayscale-[30%]'
-                                        }
-                                        ${isSelectedToken ? 'ring-white/80 opacity-100 grayscale-0 scale-105' : ''}
-                                    `}
-                                        imageClassName="w-full h-full object-cover"
-                                    />
+                                    <div
+                                        data-timeline-token="true"
+                                        onClick={(event) => handleTimelineTokenClick(event, token.id)}
+                                        className="relative group cursor-pointer"
+                                    >
+                                        {/* Portrait ring */}
+                                        <TokenImageWithLoader
+                                            src={token.portrait || token.img}
+                                            label={token.name || 'Token'}
+                                            className={`
+                                            w-7 h-7 md:w-8 md:h-8 rounded-full transition-all duration-200
+                                            ${isNext
+                                                ? 'ring-[1.5px] ring-[#c8aa6e] shadow-[0_0_8px_rgba(200,170,110,0.25)]'
+                                                : 'ring-1 ring-slate-700/60 opacity-60 grayscale-[30%]'
+                                            }
+                                            ${isSelectedToken ? 'ring-white/80 opacity-100 grayscale-0 scale-105' : ''}
+                                        `}
+                                            imageClassName="w-full h-full object-cover"
+                                        />
 
-                                    {/* Speed counter  small badge bottom-right */}
-                                    <div className={`
-                                        absolute -bottom-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center
-                                        rounded-full text-[7px] font-bold leading-none px-[3px]
-                                        ${isNext
-                                            ? 'bg-[#c8aa6e] text-[#0b1120] shadow-[0_0_4px_rgba(200,170,110,0.4)]'
-                                            : 'bg-slate-800 text-slate-400 border border-slate-700/50'
-                                        }
-                                    `}>
-                                        {value}
+                                        {/* Speed counter  small badge bottom-right */}
+                                        <div className={`
+                                            absolute -bottom-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center
+                                            rounded-full text-[7px] font-bold leading-none px-[3px]
+                                            ${isNext
+                                                ? 'bg-[#c8aa6e] text-[#0b1120] shadow-[0_0_4px_rgba(200,170,110,0.4)]'
+                                                : 'bg-slate-800 text-slate-400 border border-slate-700/50'
+                                            }
+                                        `}>
+                                            {value}
+                                        </div>
+
+                                        {/* Active indicator */}
+                                        {isNext && idx === 0 && (
+                                            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#c8aa6e] shadow-[0_0_4px_#c8aa6e]" />
+                                        )}
+
+                                        {/* Tooltip */}
+                                        <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#0b1120] border border-slate-800 rounded px-1.5 py-0.5 text-[8px] text-slate-300 whitespace-nowrap z-[110] pointer-events-none font-bold tracking-wider uppercase">
+                                            {token.name} · {isInitiativeMode ? `${value} iniciativa` : `${value}🟡`}
+                                        </div>
                                     </div>
 
-                                    {/* Active indicator */}
-                                    {isNext && idx === 0 && (
-                                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#c8aa6e] shadow-[0_0_4px_#c8aa6e]" />
+                                    {/* Connector line */}
+                                    {idx < sortedTokens.length - 1 && (
+                                        <div className="mx-0.5 w-2 md:w-3 h-px bg-slate-700/20" />
                                     )}
+                                </motion.div>
+                            );
+                        })}
+                    </AnimatePresence>
+                </div>
 
-                                    {/* Tooltip */}
-                                    <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#0b1120] border border-slate-800 rounded px-1.5 py-0.5 text-[8px] text-slate-300 whitespace-nowrap z-[110] pointer-events-none font-bold tracking-wider uppercase">
-                                        {token.name} · {isInitiativeMode ? `${value} iniciativa` : `${value}🟡`}
-                                    </div>
-                                </div>
-
-                                {/* Connector line */}
-                                {idx < sortedTokens.length - 1 && (
-                                    <div className="mx-0.5 w-2 md:w-3 h-px bg-slate-700/20" />
-                                )}
-                            </motion.div>
-                        );
-                    })}
-                </AnimatePresence>
+                {hasTimelineOverflow && (
+                    <div className={`pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 rounded-full border border-[#c8aa6e]/30 bg-[#0b1120]/95 px-1.5 py-0.5 text-[8px] font-bold leading-none text-[#c8aa6e] shadow-[0_0_8px_rgba(0,0,0,0.45)] transition-opacity duration-200 ${hiddenCount > 0 ? 'opacity-100' : 'opacity-0'}`}>
+                        +{hiddenCount}
+                    </div>
+                )}
 
                 {/* Reset button  inline, icon-only for master */}
-                {!isPlayerView && (
+                {!isPlayerView && !isInitiativeMode && (
                     <button
                         onClick={(e) => { e.stopPropagation(); onReset(); }}
                         className="ml-1 w-5 h-5 md:w-6 md:h-6 flex items-center justify-center rounded text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0"
@@ -3127,6 +3256,7 @@ const CanvasAssetImage = ({
     loadingIconClassName = 'w-4 h-4 text-[#c8aa6e]/80 animate-spin drop-shadow-[0_0_8px_rgba(200,170,110,0.35)]',
     loadingTimeoutMs = 15000,
     fallback = null,
+    suppressNativeCallout = false,
 }) => {
     const [status, setStatus] = useState(src ? (isImageUrlLoaded(src) ? 'loaded' : 'loading') : 'idle');
     const imgRef = useRef(null);
@@ -3182,6 +3312,7 @@ const CanvasAssetImage = ({
                 alt=""
                 aria-label={label || undefined}
                 draggable={false}
+                onContextMenu={suppressNativeCallout ? (event) => event.preventDefault() : undefined}
                 onLoad={(event) => {
                     const nextStatus = event.currentTarget.naturalWidth > 0 ? 'loaded' : 'error';
                     if (nextStatus === 'loaded') markImageUrlLoaded(src);
@@ -3189,7 +3320,14 @@ const CanvasAssetImage = ({
                 }}
                 onError={() => setStatus('error')}
                 className={`${imageClassName} transition-opacity duration-500 ${status === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
-                style={imageStyle}
+                style={{
+                    ...imageStyle,
+                    ...(suppressNativeCallout ? {
+                        WebkitTouchCallout: 'none',
+                        WebkitUserSelect: 'none',
+                        userSelect: 'none',
+                    } : {})
+                }}
             />
             {overlayClassName && !showFallback && (
                 <div className={`${overlayClassName} transition-opacity duration-500 ${status === 'loaded' ? 'opacity-100' : 'opacity-0'}`} />
@@ -3243,11 +3381,16 @@ const CardImageWithLoader = ({
     className = 'absolute inset-0 w-full h-full',
     imageClassName = 'w-full h-full object-cover',
 }) => (
-    <div className={`relative overflow-hidden bg-[#111827] ${className}`}>
+    <div
+        className={`relative overflow-hidden bg-[#111827] ${className}`}
+        onContextMenu={(event) => event.preventDefault()}
+        style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
+    >
         <CanvasAssetImage
             src={src}
             label={label}
             imageClassName={imageClassName}
+            suppressNativeCallout
             loadingClassName="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_50%_20%,rgba(200,170,110,0.18),transparent_45%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(35,43,58,0.96),rgba(8,13,22,0.98))] pointer-events-none"
             loadingRingClassName="absolute inset-2 rounded border border-[#c8aa6e]/20 animate-pulse"
             loadingIconClassName="w-4 h-4 text-[#c8aa6e]/80 animate-spin drop-shadow-[0_0_8px_rgba(200,170,110,0.35)]"
@@ -4031,9 +4174,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [dragVisualOrigin, setDragVisualOrigin] = useState({}); // Ancla visual fija del ghost/linea durante el drag
     const [combatOccupancyFeedback, setCombatOccupancyFeedback] = useState(null);
     const [selectedTokenIds, setSelectedTokenIds] = useState([]); // Array de IDs seleccionados
+    const [activeBoardHandTokenId, setActiveBoardHandTokenId] = useState(null);
     const [rotatingTokenId, setRotatingTokenId] = useState(null);
     const [resizingTokenId, setResizingTokenId] = useState(null); // Nuevo estado para resize
     const [draggingHandCard, setDraggingHandCard] = useState(null);
+    const [previewedBoardCard, setPreviewedBoardCard] = useState(null);
     const [currentDieRollSpeed, setCurrentDieRollSpeed] = useState(0);
     const [dragDirection, setDragDirection] = useState(0);
     const resizeStartRef = useRef(null); // { x, y, width, height }
@@ -4130,6 +4275,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     useEffect(() => { draggedTokenIdRef.current = draggedTokenId; }, [draggedTokenId]);
     const selectedTokenIdsRef = useRef([]);
     useEffect(() => { selectedTokenIdsRef.current = selectedTokenIds; }, [selectedTokenIds]);
+
+    useEffect(() => {
+        if (!isBoardMode || !activeScenario?.items) return;
+        const selectedCombatToken = activeScenario.items.find(item => (
+            selectedTokenIds.includes(item.id) &&
+            isCombatTokenItem(item) &&
+            (!isPlayerView || item.controlledBy?.includes(playerName))
+        ));
+        if (selectedCombatToken) {
+            setActiveBoardHandTokenId(selectedCombatToken.id);
+        }
+    }, [activeScenario?.items, isBoardMode, isPlayerView, playerName, selectedTokenIds]);
     const rotatingTokenIdRef = useRef(null);
     useEffect(() => { rotatingTokenIdRef.current = rotatingTokenId; }, [rotatingTokenId]);
     const resizingTokenIdRef = useRef(null);
@@ -4137,6 +4294,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const pendingTurnStateRef = useRef(null);
     useEffect(() => { pendingTurnStateRef.current = pendingTurnState; }, [pendingTurnState]);
     const cardStackQuickActionBlockUntilRef = useRef(0);
+    const cardPreviewHoldRef = useRef(null);
+    const cardPreviewSuppressTouchEndRef = useRef(false);
     useEffect(() => {
         if (pendingTurnState && !isUsablePendingTurnState(pendingTurnState)) {
             pendingTurnStateRef.current = null;
@@ -4658,6 +4817,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         return () => unsub();
     }, [activeScenario?.id]);
+
     // --- Manejo del Zoom (Rueda del Mouse - Igual que MinimapV2) ---
     // Listener no pasivo para prevenir el scroll por defecto correctamente
     useEffect(() => {
@@ -5234,10 +5394,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         // --- Lógica de REDIMENSIÓN ---
         if (resizingTokenId && activeScenarioRef.current && resizeStartRef.current) {
+            if (e.cancelable) e.preventDefault();
             const currentScenario = activeScenarioRef.current;
             const { startX, startY, startWidth, startHeight } = resizeStartRef.current;
-            const deltaX = (curX - startX) / zoom;
-            const deltaY = (curY - startY) / zoom; // Asumiendo aspect ratio libre o control
+            const resizePoint = getEventCoords(e, resizeStartRef.current.identifier ?? null);
+            const deltaX = (resizePoint.x - startX) / zoom;
+            const deltaY = (resizePoint.y - startY) / zoom; // Asumiendo aspect ratio libre o control
 
             let newWidth = startWidth + deltaX;
             let newHeight = startHeight + deltaY;
@@ -5287,6 +5449,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     };
 
     const handleMouseUp = (e) => {
+        if (cardPreviewSuppressTouchEndRef.current) {
+            setDraggedTokenId(null);
+            setRotatingTokenId(null);
+            setResizingTokenId(null);
+            setDraggingWallHandle(null);
+            setTokenOriginalPos({});
+            setDragVisualOrigin({});
+            setCombatOccupancyFeedback(null);
+            document.body.style.cursor = 'default';
+            return;
+        }
+
         if (cardStackQuickActionBlockUntilRef.current > Date.now()) {
             setDraggedTokenId(null);
             setRotatingTokenId(null);
@@ -6620,16 +6794,22 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const selectedControlledToken = isPlayerView
             ? items.find(item => selectedTokenIds.includes(item.id) && isCombatTokenItem(item) && item.controlledBy?.includes(playerName))
             : null;
+        const activeBoardHandToken = activeBoardHandTokenId
+            ? items.find(item => item.id === activeBoardHandTokenId && isCombatTokenItem(item))
+            : null;
+        const activeControlledBoardHandToken = isPlayerView && activeBoardHandToken?.controlledBy?.includes(playerName)
+            ? activeBoardHandToken
+            : null;
         const fallbackControlledToken = isPlayerView
             ? items.find(item => isCombatTokenItem(item) && item.controlledBy?.includes(playerName))
             : null;
         const rememberedCombatToken = items.find(item => item.id === lastMasterHudTokenIdRef.current && isCombatTokenItem(item));
         const fallbackCombatToken = items.find(item => isCombatTokenItem(item));
         if (isPlayerView) {
-            return selectedControlledToken || fallbackControlledToken || null;
+            return selectedControlledToken || activeControlledBoardHandToken || fallbackControlledToken || null;
         }
 
-        return selectedCombatToken || rememberedCombatToken || fallbackCombatToken || null;
+        return selectedCombatToken || activeBoardHandToken || rememberedCombatToken || fallbackCombatToken || null;
     };
 
     const getHandSeatForToken = (token) => {
@@ -6964,6 +7144,133 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }).catch(err => console.error("Error playing hand card:", err));
     };
 
+    const getBoardCardPreviewImage = (card) => (
+        card?.faceDown
+            ? (card.backImage || card.frontImage || card.img)
+            : (card?.frontImage || card?.img || card?.backImage)
+    );
+
+    const clearCardPreviewHold = () => {
+        const hold = cardPreviewHoldRef.current;
+        if (!hold) return;
+        if (hold.timer) clearTimeout(hold.timer);
+        hold.cleanup?.();
+        cardPreviewHoldRef.current = null;
+    };
+
+    const closeBoardCardPreview = () => {
+        setPreviewedBoardCard(null);
+        window.setTimeout(() => {
+            cardPreviewSuppressTouchEndRef.current = false;
+        }, 0);
+    };
+
+    const openBoardCardPreview = (card) => {
+        const image = getBoardCardPreviewImage(card);
+        if (image) {
+            const preload = new globalThis.Image();
+            preload.onload = () => markImageUrlLoaded(image);
+            preload.src = image;
+        }
+        setPreviewedBoardCard({
+            id: card.id,
+            name: card.name || 'Carta',
+            image,
+            faceDown: !!card.faceDown,
+        });
+    };
+
+    const startBoardCardLongPressPreview = (card, event, { cancelBoardDrag = false, allowTouchDragToBoard = false } = {}) => {
+        if (!isBoardMode || !isCardItem(card) || !event?.type?.startsWith('touch')) return false;
+        const startPoint = getEventCoords(event);
+        const touchId = event.touches?.[0]?.identifier ?? null;
+        const moveThreshold = 12;
+        const longPressMs = 480;
+        let openedPreview = false;
+        let startedHandDrag = false;
+
+        clearCardPreviewHold();
+        event.stopPropagation();
+        if (event.cancelable) event.preventDefault();
+
+        const cleanup = () => {
+            window.removeEventListener('touchmove', handleMove);
+            window.removeEventListener('touchend', handleEnd);
+            window.removeEventListener('touchcancel', handleEnd);
+        };
+
+        const startHandDragFromPoint = (point) => {
+            if (startedHandDrag) return;
+            startedHandDrag = true;
+            setDraggingHandCard({
+                card,
+                x: point.x,
+                y: point.y,
+                managedTouch: true,
+            });
+        };
+
+        const timer = window.setTimeout(() => {
+            if (startedHandDrag) return;
+            openedPreview = true;
+            cardPreviewSuppressTouchEndRef.current = true;
+            if (cancelBoardDrag) {
+                setDraggedTokenId(null);
+                setRotatingTokenId(null);
+                setResizingTokenId(null);
+                setTokenOriginalPos({});
+                setDragVisualOrigin({});
+                setCombatOccupancyFeedback(null);
+                document.body.style.cursor = 'default';
+            }
+            openBoardCardPreview(card);
+        }, longPressMs);
+
+        function handleMove(moveEvent) {
+            const point = getEventCoords(moveEvent, touchId);
+            const moved = Math.hypot(point.x - startPoint.x, point.y - startPoint.y);
+            if (openedPreview) {
+                if (moveEvent.cancelable) moveEvent.preventDefault();
+                return;
+            }
+            if (moved > moveThreshold) {
+                clearTimeout(timer);
+                if (allowTouchDragToBoard) {
+                    startHandDragFromPoint(point);
+                    setDraggingHandCard(prev => prev ? { ...prev, x: point.x, y: point.y } : prev);
+                    if (moveEvent.cancelable) moveEvent.preventDefault();
+                } else {
+                    cleanup();
+                    cardPreviewHoldRef.current = null;
+                }
+            }
+        }
+
+        function handleEnd(endEvent) {
+            clearTimeout(timer);
+            const point = getEventCoords(endEvent, touchId);
+            if (startedHandDrag) {
+                if (!isPointInsideBoardHand(point)) {
+                    playHandCardToBoard(card, point);
+                }
+                setDraggingHandCard(null);
+            }
+            if (openedPreview) {
+                closeBoardCardPreview();
+            }
+            cleanup();
+            cardPreviewHoldRef.current = null;
+        }
+
+        window.addEventListener('touchmove', handleMove, { passive: false });
+        window.addEventListener('touchend', handleEnd);
+        window.addEventListener('touchcancel', handleEnd);
+        cardPreviewHoldRef.current = { timer, cleanup };
+        return true;
+    };
+
+    useEffect(() => () => clearCardPreviewHold(), []);
+
     const handleHandCardDragStart = (card, event) => {
         if (!isBoardMode || !card?.id) return;
         const point = getEventCoords(event);
@@ -6975,6 +7282,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             preload.onload = () => markImageUrlLoaded(previewSrc);
             preload.src = previewSrc;
         }
+        if (event.type?.startsWith('touch')) {
+            startBoardCardLongPressPreview(card, event, { allowTouchDragToBoard: true });
+            return;
+        }
         setDraggingHandCard({
             card,
             x: point.x,
@@ -6983,7 +7294,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     };
 
     useEffect(() => {
-        if (!draggingHandCard) return;
+        if (!draggingHandCard || draggingHandCard.managedTouch) return;
 
         const handleMove = (event) => {
             const point = getEventCoords(event);
@@ -7244,6 +7555,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 (isCardContainerItem(token) && isBoardMode) ||
                 (token.controlledBy && Array.isArray(token.controlledBy) && token.controlledBy.includes(playerName));
             if (!isOwner) return;
+
+            if (isBoardMode && isCombatTokenItem(token)) {
+                setActiveBoardHandTokenId(token.id);
+            }
+            if (isBoardMode && isCardItem(token) && isTouch) {
+                startBoardCardLongPressPreview(token, e, { cancelBoardDrag: true });
+            }
 
             // Restricción de Turno: Si tienes un turno pendiente con otro token, debes terminarlo primero
             if (!isBoardMode && isPlayerView && gridConfig.isCombatActive && pendingTurnState && pendingTurnState.tokenId !== token.id) {
@@ -8525,13 +8843,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             </div>
                         )}
 
-                        {/* Resize Handle (Deshabilitado en móvil por errores de ux/redimensionado) */}
-                        {isSelected && !rotatingTokenId && !isMobile && !isBoardDie && (
-                            <div
-                                onMouseDown={(e) => handleResizeMouseDown(e, item)}
-                                onTouchStart={(e) => handleResizeMouseDown(e, item)}
-                                className="absolute -bottom-1 -right-1 w-3 h-3 bg-[#c8aa6e] border border-white rounded-sm cursor-nwse-resize z-50 shadow-sm hover:scale-125 transition-transform"
-                            />
+                        {/* Resize Handle */}
+                        {isSelected && !rotatingTokenId && !isBoardDie && (
+                            <>
+                                <div
+                                    onMouseDown={(e) => handleResizeMouseDown(e, item)}
+                                    className="absolute -bottom-1 -right-1 hidden h-3 w-3 cursor-nwse-resize rounded-sm border border-white bg-[#c8aa6e] shadow-sm transition-transform hover:scale-125 md:block z-50"
+                                />
+                                <div
+                                    onTouchStart={(e) => handleResizeMouseDown(e, item)}
+                                    className="absolute -bottom-3 -right-3 flex h-8 w-8 items-end justify-end cursor-nwse-resize z-50 touch-none select-none md:hidden"
+                                    style={{ touchAction: 'none', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
+                                >
+                                    <span className="block h-3 w-3 rounded-sm border border-white bg-[#c8aa6e] shadow-sm" />
+                                </div>
+                            </>
                         )}
                     </div>
                 </motion.div>
@@ -8592,16 +8918,20 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
     const handleResizeMouseDown = (e, item) => {
         e.stopPropagation();
-        if (!e.type.startsWith('touch')) e.preventDefault();
+        if (e.cancelable) e.preventDefault();
 
         setResizingTokenId(item.id);
         const { x, y } = getEventCoords(e);
+        const touchId = e.type.startsWith('touch') && e.touches?.[0]
+            ? e.touches[0].identifier
+            : null;
 
         resizeStartRef.current = {
             startX: x,
             startY: y,
             startWidth: item.width,
-            startHeight: item.height
+            startHeight: item.height,
+            identifier: touchId,
         };
     };
 
@@ -8630,7 +8960,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 return;
             }
 
-            if (!e.shiftKey) setSelectedTokenIds([]); // Limpiar selección si no es Shift
+            if (!e.shiftKey) {
+                setSelectedTokenIds([]); // Limpiar selección si no es Shift
+                if (isBoardMode) setActiveBoardHandTokenId(null);
+            }
 
             // Verificación de dispositivo móvil (Touch o pantalla pequeña)
             const isMobile = isTouch || window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 1024;
@@ -11045,15 +11378,27 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8 pb-32">
                                 {/* --- TAB: COMBAT LOG (EVERYONE) --- */}
                                 {activeTab === 'COMBAT_LOG' && (
-                                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                                        <div className="space-y-2">
-                                            <h4 className="text-[#c8aa6e] font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
-                                                <Swords className="w-3 h-3" />
-                                                Registro de Combate
-                                            </h4>
-                                            <p className="text-[10px] text-slate-500 italic">Últimos ataques y resoluciones.</p>
+                                    <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+                                        {/* Header Registro */}
+                                        <div className="flex flex-col items-center text-center gap-4 border-b border-slate-800/50 py-10 -mt-6 -mx-6 bg-gradient-to-b from-slate-900/20 to-transparent">
+                                            <div className="w-16 h-16 rounded-xl bg-[#0b1120] border border-slate-800 flex items-center justify-center text-[#c8aa6e] shadow-2xl relative ring-1 ring-slate-800/40">
+                                                <Swords className="w-8 h-8 drop-shadow-[0_0_8px_rgba(200,170,110,0.4)]" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <h4 className="text-[#f0e6d2] font-fantasy text-2xl tracking-widest uppercase drop-shadow-lg leading-none">
+                                                    Registro
+                                                </h4>
+                                                <div className="flex items-center justify-center gap-3">
+                                                    <div className="h-[1px] w-4 bg-gradient-to-r from-transparent to-[#c8aa6e]/40" />
+                                                    <span className="text-[10px] text-[#c8aa6e]/60 uppercase font-black tracking-[0.25em]">
+                                                        Combate & Dados
+                                                    </span>
+                                                    <div className="h-[1px] w-4 bg-gradient-to-l from-transparent to-[#c8aa6e]/40" />
+                                                </div>
+                                            </div>
                                         </div>
 
+                                        {/* Listado de Combate */}
                                         <div className="space-y-6">
                                             {combatLog.length === 0 ? (
                                                 <div className="flex flex-col items-center justify-center text-center gap-3 py-16 opacity-30">
@@ -11119,45 +11464,53 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     return (
                                                         <motion.div
                                                             key={entry.id}
-                                                            initial={{ opacity: 0, y: 10 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            className="relative pl-4 space-y-3"
+                                                            initial={{ opacity: 0, x: 20 }}
+                                                            animate={{ opacity: 1, x: 0 }}
+                                                            className="relative pl-6 py-1 space-y-4 group"
                                                         >
-                                                            {/* Accent Line */}
+                                                            {/* Accent Line Premium */}
                                                             <div
-                                                                className="absolute left-0 top-1 bottom-1 w-[1px] opacity-40"
-                                                                style={{ backgroundColor: accentColor }}
+                                                                className="absolute left-0 top-0 bottom-0 w-[2px] rounded-full transition-all group-hover:w-[3px]"
+                                                                style={{ 
+                                                                    backgroundColor: accentColor,
+                                                                    boxShadow: `0 0 10px ${accentColor}40`
+                                                                }}
                                                             />
 
                                                             {/* Header Row */}
-                                                            <div className="flex items-center justify-between text-[10px] tracking-tight">
+                                                            <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em] mb-1">
                                                                 <div className="flex items-center gap-2">
-                                                                    <span className="text-slate-500 font-mono opacity-60">
+                                                                    <span className="text-slate-600 opacity-60">
                                                                         {new Date(entry.timestamp?.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                                     </span>
-                                                                    <div className="w-1 h-1 rounded-full opacity-40" style={{ backgroundColor: accentColor }} />
-                                                                    <span className="text-slate-400 font-bold uppercase tracking-wider">
-                                                                        Resolución
+                                                                    <div className="w-1 h-1 rounded-full" style={{ backgroundColor: accentColor }} />
+                                                                    <span style={{ color: accentColor }} className="opacity-80">
+                                                                        Resolución de Ataque
                                                                     </span>
                                                                 </div>
-                                                                <Swords className="w-3 h-3 text-slate-600" />
+                                                                <div className="p-1 rounded bg-slate-900/40 border border-slate-800/50 text-slate-500">
+                                                                    <Swords className="w-3 h-3" />
+                                                                </div>
                                                             </div>
 
                                                             {/* Main Text */}
-                                                            <div className="space-y-1.5 px-0.5">
-                                                                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                                                                    <span className="text-red-400 font-fantasy text-sm uppercase tracking-wide">{attackerName}</span>
-                                                                    <span className="text-slate-600 text-[9px] font-bold uppercase tracking-widest">Ataca a</span>
-                                                                    <span className="text-blue-400 font-fantasy text-sm uppercase tracking-wide">{targetName}</span>
+                                                            <div className="space-y-2">
+                                                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                                                    <span className="text-red-400 font-fantasy text-base uppercase tracking-widest drop-shadow-sm">{attackerName}</span>
+                                                                    <div className="flex items-center gap-1 opacity-40">
+                                                                        <div className="w-1 h-[1px] bg-slate-500" />
+                                                                        <span className="text-slate-500 text-[8px] font-black uppercase tracking-[0.2em]">Vs</span>
+                                                                        <div className="w-1 h-[1px] bg-slate-500" />
+                                                                    </div>
+                                                                    <span className="text-blue-400 font-fantasy text-base uppercase tracking-widest drop-shadow-sm">{targetName}</span>
                                                                 </div>
 
                                                                 {(entry.weaponName || entry.abilityName) && (
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className="w-3 h-[1px] bg-slate-800" />
-                                                                        <span className="text-[9px] text-slate-500 italic lowercase tracking-wider">
+                                                                    <div className="flex items-center gap-2 py-0.5 px-2 rounded bg-white/5 border border-white/5 w-fit">
+                                                                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.15em]">
                                                                             {entry.attackMode === 'barrido'
-                                                                                ? `usando ${abilityName || 'barrido'}${attackSourceLabel ? ` con ${attackSourceLabel}` : ''}`
-                                                                                : `usando ${weaponName}`}
+                                                                                ? `${abilityName || 'barrido'}${attackSourceLabel ? ` · ${attackSourceLabel}` : ''}`
+                                                                                : weaponName}
                                                                         </span>
                                                                     </div>
                                                                 )}
@@ -11169,7 +11522,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                             </div>
 
                                                             {/* Results Section */}
-                                                            <div className="space-y-2 border-y border-slate-900/50 py-2">
+                                                            <div className="space-y-3 border-y border-slate-900/50 py-3">
                                                                 <div className="flex items-center gap-4 px-1">
                                                                     <div className="flex gap-1.5">
                                                                         {(entry.attackerDice || []).map((die, i) => {
@@ -11185,11 +11538,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                                                             const attrStyle = (!wasEvaded && matchedAttr && attrColorMap[matchedAttr]) ? attrColorMap[matchedAttr] : null;
 
-                                                                            // Render distinctively if critical
                                                                             if (wasEvaded) {
                                                                                 return (
                                                                                     <div key={i} className="relative flex-shrink-0" title={die.critical ? "Dado Crítico (Evadido)" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)} (Evadido)` : "Dado de Arma (Evadido)"}>
-                                                                                        <DiceSvg faces={die.faces} value={die.value} className="w-5 h-5 drop-shadow-sm" style={{ borderColor: 'rgba(153,27,27,0.3)', color: 'rgba(153,27,27,0.6)', backgroundColor: 'transparent', textDecoration: 'line-through' }} />
+                                                                                        <DiceSvg faces={die.faces} value={die.value} className="w-5 h-5 opacity-40 grayscale" style={{ borderColor: 'rgba(153,27,27,0.3)', color: 'rgba(153,27,27,0.6)' }} />
                                                                                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
                                                                                             <div className="w-full h-[1.5px] bg-red-600 rounded-full rotate-[-45deg] opacity-70"></div>
                                                                                         </div>
@@ -11197,7 +11549,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                                 );
                                                                             }
 
-                                                                            // Estilo Dorado Rojizo para el log de combate si el dado es Crítico
                                                                             return (
                                                                                 <div key={i} className="flex-shrink-0 focus:outline-none" title={die.critical ? "Dado Crítico" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)}` : "Dado de Arma"}>
                                                                                     <DiceSvg faces={die.faces} value={die.value}
@@ -11222,13 +11573,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                     </div>
                                                                     <div className="h-4 w-[1px] bg-slate-800" />
                                                                     <div className="flex items-center gap-1.5">
-                                                                        <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Total</span>
-                                                                        <span className="text-[#f0e6d2] text-xs font-bold">{entry.effectiveAttackTotal ?? entry.attackTotal}</span>
+                                                                        <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest opacity-60">Poder</span>
+                                                                        <span className="text-[#f0e6d2] text-xs font-black">{entry.effectiveAttackTotal ?? entry.attackTotal}</span>
                                                                     </div>
                                                                 </div>
 
                                                                  {entry.reactionType === 'parar' && entry.defenderDice && (
-                                                                     <div className="flex items-center gap-4 px-1 border-t border-slate-900/30 pt-2">
+                                                                     <div className="flex items-center gap-4 px-1 border-t border-slate-900/30 pt-3">
                                                                          <div className="flex gap-1.5">
                                                                              {entry.defenderDice.map((die, i) => {
                                                                                 const matchedAttr = typeof die.matchedAttr === 'string' ? die.matchedAttr.trim().toLowerCase() : null;
@@ -11272,32 +11623,32 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                                     </div>
                                                                                 );
                                                                             })}
-                                                                        </div>
-                                                                        <div className="h-4 w-[1px] bg-slate-800" />
-                                                                         <div className="flex items-center gap-1.5">
-                                                                             <span className="text-[9px] text-blue-500/60 uppercase font-bold tracking-widest">Parada</span>
-                                                                             <span className="text-blue-400 text-xs font-bold">{entry.defenderTotal}</span>
                                                                          </div>
-                                                                     </div>
+                                                                         <div className="h-4 w-[1px] bg-slate-800" />
+                                                                          <div className="flex items-center gap-1.5">
+                                                                              <span className="text-[9px] text-blue-500/60 uppercase font-black tracking-widest opacity-60">Bloqueo</span>
+                                                                              <span className="text-blue-400 text-xs font-black">{entry.defenderTotal}</span>
+                                                                          </div>
+                                                                      </div>
                                                                  )}
                                                                  <CombatTraitLine
                                                                      label="Parada"
                                                                      traits={entry.reactionType === 'parar' ? entry.defenderTraits : []}
                                                                      accent="blue"
                                                                  />
-                                                             </div>
+                                                            </div>
 
                                                             {/* Reaction Descriptive Text */}
                                                             <div className="px-1 text-[11px] leading-relaxed">
                                                                 {entry.reactionType === 'evadir' && (
                                                                     <p className="text-slate-300">
-                                                                        <span className="text-yellow-500/80 mr-1.5 italic font-bold">Evasión:</span>
+                                                                        <span className="text-yellow-500/80 mr-1.5 italic font-bold uppercase text-[9px] tracking-wider">Evasión</span>
                                                                         Evadió {(entry.evadedDiceIds || []).length} dados e impactó con <span className="text-white font-bold">{entry.finalDamage}</span> de daño.
                                                                     </p>
                                                                 )}
                                                                 {entry.reactionType === 'parar' && (
                                                                     <p className="text-slate-300">
-                                                                        <span className="text-blue-400/80 mr-1.5 italic font-bold">Parada:</span>
+                                                                        <span className="text-blue-400/80 mr-1.5 italic font-bold uppercase text-[9px] tracking-wider">Parada</span>
                                                                         {entry.elusionEffect ? <span className="text-cyan-300 font-bold">Elusión retiró el dado {entry.elusionEffect.value}. </span> : null}
                                                                         {isPerfect ? `Desvió completamente el ataque con ${defenderWeapon}.` :
                                                                             isCounter ? `Devolvió ${entry.counterDamage} de daño al atacante con ${defenderWeapon}.` :
@@ -11307,7 +11658,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                 )}
                                                                 {entry.reactionType === 'recibir' && (
                                                                     <p className="text-slate-400">
-                                                                        <span className="text-red-500/80 mr-1.5 italic font-bold">Impacto:</span>
+                                                                        <span className="text-red-500/80 mr-1.5 italic font-bold uppercase text-[9px] tracking-wider">Impacto</span>
                                                                         Recibió el golpe de lleno por <span className="text-white font-bold">{entry.finalDamage}</span> de daño.
                                                                     </p>
                                                                 )}
@@ -11315,7 +11666,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                                             {/* Damage Badges */}
                                                             {totalBlocks > 0 ? (
-                                                                <div className="flex gap-2 px-1 pt-1 opacity-80">
+                                                                <div className="flex flex-wrap gap-2 px-1 pt-1 opacity-80">
                                                                     {basePosturaLost > 0 && <span className="text-[9px] text-emerald-500/80 border-b border-emerald-900/40 pb-0.5">-{basePosturaLost} Postura</span>}
                                                                     {traitPosturaBonus > 0 && <span className="text-[9px] text-green-300 border-b border-green-500/40 pb-0.5">-{traitPosturaBonus} Postura</span>}
                                                                     {baseArmaduraLost > 0 && <span className="text-[9px] text-slate-400/80 border-b border-slate-800/40 pb-0.5">-{baseArmaduraLost} Armadura</span>}
@@ -11324,7 +11675,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                     {traitVidaBonus > 0 && <span className="text-[9px] text-amber-300 border-b border-amber-500/40 pb-0.5">-{traitVidaBonus} Vida</span>}
                                                                 </div>
                                                             ) : totalBlocks === 0 && entry.reactionType !== 'parar' && (
-                                                                <div className="px-1 pt-1 italic text-[9px] text-green-500/50 tracking-wider">Sin daño a bloques</div>
+                                                                <div className="px-1 pt-1 italic text-[9px] text-green-500/50 tracking-wider font-bold uppercase">Sin daño a bloques</div>
                                                             )}
                                                             {speedEffectBadges.length > 0 && (
                                                                 <div className="flex flex-wrap gap-2 px-1 pt-1">
@@ -11347,8 +11698,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                             key={`${entry.id}-push-${idx}`}
                                                                             className={`text-[9px] border-b pb-0.5 ${effect.applied ? 'text-sky-300 border-sky-400/40' : 'text-slate-500 border-slate-700/50'}`}
                                                                             title={effect.applied ? `${EMPUJE_EFFECT_LABEL}: ${effect.sideLabel} se desplaza 1 casilla` : `${EMPUJE_EFFECT_LABEL} bloqueado: ${effect.reason || 'sin desplazamiento'}`}
-                                                                        >
-                                                                            {effect.applied ? `1 Casilla · ${effect.label || EMPUJE_EFFECT_LABEL}` : `${effect.label || EMPUJE_EFFECT_LABEL} bloqueado`}
+                                                                        >                                                                            {effect.applied ? `1 Casilla · ${effect.label || EMPUJE_EFFECT_LABEL}` : `${effect.label || EMPUJE_EFFECT_LABEL} bloqueado`}
                                                                             {effect.sideLabel ? ` (${effect.sideLabel})` : ''}
                                                                         </span>
                                                                     ))}
@@ -14806,15 +15156,63 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 </div>
             )}
 
+            <AnimatePresence>
+                {previewedBoardCard && (
+                    <motion.div
+                        key="board-card-preview"
+                        className="fixed inset-0 z-[120] flex items-center justify-center bg-black/72 backdrop-blur-sm px-4 py-6"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.14 }}
+                        onMouseDown={(event) => {
+                            event.stopPropagation();
+                            closeBoardCardPreview();
+                        }}
+                        onTouchStart={(event) => {
+                            event.stopPropagation();
+                            closeBoardCardPreview();
+                        }}
+                    >
+                        <motion.div
+                            className="relative max-h-[86vh] w-[min(82vw,420px)] aspect-[5/7] overflow-hidden rounded-lg border border-[#c8aa6e]/75 bg-[#111827] shadow-[0_22px_80px_rgba(0,0,0,0.85),0_0_42px_rgba(200,170,110,0.22)]"
+                            initial={{ scale: 0.92, y: 10 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.96, y: 6 }}
+                            transition={{ type: 'spring', stiffness: 360, damping: 30 }}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onTouchStart={(event) => event.stopPropagation()}
+                        >
+                            {previewedBoardCard.image ? (
+                                <CardImageWithLoader
+                                    src={previewedBoardCard.image}
+                                    label={previewedBoardCard.name}
+                                    className="w-full h-full"
+                                    imageClassName="w-full h-full object-contain bg-[#050810]"
+                                />
+                            ) : (
+                                <div className="h-full w-full bg-slate-500" />
+                            )}
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* --- COMBAT HUD (PLAYER VIEW) --- */}
             {isPlayerView && activeScenario && (() => {
                 const myTokens = activeScenario.items?.filter(i =>
                     i.controlledBy?.includes(playerName) && isCombatTokenItem(i)
                 ) || [];
 
-                // Prioridad: 1. Seleccionado que controlo, 2. El primero de mi lista
+                // En Tablero, la mano solo debe ocupar pantalla cuando hay token seleccionado.
+                // En el canvas clásico mantenemos el fallback al primer token controlado.
                 const selectedControlled = myTokens.find(t => selectedTokenIds.includes(t.id));
-                const rawHudToken = selectedControlled || myTokens[0];
+                const activeBoardHandToken = isBoardMode
+                    ? myTokens.find(t => t.id === activeBoardHandTokenId)
+                    : null;
+                const rawHudToken = isBoardMode
+                    ? (selectedControlled || activeBoardHandToken)
+                    : (selectedControlled || myTokens[0]);
 
                 if (rawHudToken) {
                     const hudToken = enrichTokenWithCharacterData(rawHudToken);
@@ -14871,6 +15269,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             onPlayCard={playHandCardToBoard}
                             onFlipHandCard={toggleHandCardFace}
                             onHandCardDragStart={handleHandCardDragStart}
+                            onCardPreviewStart={handleHandCardDragStart}
                             isActive={(() => {
                                 if (!gridConfig.isCombatActive) return true;
                                 const combatTokens = activeScenario.items.filter(i => isCombatTokenItem(i) && (i.isCircular || i.stats));
@@ -14897,18 +15296,24 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 }
 
                 // Prioridad: 1. Token seleccionado actual, 2. Último token seleccionado
+                const activeBoardHandToken = isBoardMode
+                    ? allCombatTokens.find(t => t.id === activeBoardHandTokenId)
+                    : null;
                 const rawHudToken = selectedControlled || allCombatTokens.find(t => t.id === lastMasterHudTokenIdRef.current) || null;
 
                 if (isBoardMode) {
-                    const hudToken = rawHudToken ? enrichTokenWithCharacterData(rawHudToken) : null;
+                    const boardHudToken = selectedControlled || activeBoardHandToken;
+                    if (!boardHudToken) return null;
+                    const hudToken = enrichTokenWithCharacterData(boardHudToken);
                     return (
                         <CombatHUD
                             token={hudToken}
                             mode={mode}
-                            handCards={getHandCardsForToken(rawHudToken, activeScenario.items || [])}
+                            handCards={getHandCardsForToken(boardHudToken, activeScenario.items || [])}
                             onPlayCard={playHandCardToBoard}
                             onFlipHandCard={toggleHandCardFace}
                             onHandCardDragStart={handleHandCardDragStart}
+                            onCardPreviewStart={handleHandCardDragStart}
                             isActive={true}
                         />
                     );
@@ -15040,6 +15445,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             onPlayCard={playHandCardToBoard}
                                             onFlipHandCard={toggleHandCardFace}
                                             onHandCardDragStart={handleHandCardDragStart}
+                                            onCardPreviewStart={handleHandCardDragStart}
                                             isActive={(() => {
                                                 if (!gridConfig.isCombatActive) return true;
                                                 const combatTokens = activeScenario.items.filter(i => isCombatTokenItem(i) && (i.isCircular || i.stats));
