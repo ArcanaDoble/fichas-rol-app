@@ -194,12 +194,9 @@ const HudCardImage = ({ card }) => {
     );
 
     const loadingFace = (
-        <>
-            {cardBackFace}
-            <div className="absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#c8aa6e]/25 flex items-center justify-center">
-                <RotateCw className="h-3.5 w-3.5 animate-spin text-[#c8aa6e]/80 drop-shadow-[0_0_8px_rgba(200,170,110,0.35)]" />
-            </div>
-        </>
+        <div className="absolute inset-0 overflow-hidden bg-[#0b1120]/90 backdrop-blur-sm flex items-center justify-center">
+            <RotateCw className="h-5 w-5 animate-spin text-[#c8aa6e]/60 drop-shadow-md" />
+        </div>
     );
 
     if (!image || status === 'error') {

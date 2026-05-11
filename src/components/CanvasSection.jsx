@@ -46,6 +46,9 @@ const PRESET_COLORS = [
 ];
 
 const BOARD_DIE_SIDES = [4, 6, 8, 10, 12, 20];
+const BOARD_DICE_ROLL_SIDES = [4, 6, 8, 10, 12, 20];
+const MAX_BOARD_DICE_ROLL = 80;
+const MAX_BOARD_DICE_EXPLOSIONS = 20;
 const D10_FACE_VALUES = [9, 1, 7, 3, 5, 8, 0, 2, 6, 4];
 const D4_VERTEX_VALUES = [
     { value: 1, vertex: { x: -1, y: -1, z: 1 } },
@@ -3391,12 +3394,12 @@ const CardImageWithLoader = ({
             label={label}
             imageClassName={imageClassName}
             suppressNativeCallout
-            loadingClassName="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_50%_20%,rgba(200,170,110,0.18),transparent_45%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(35,43,58,0.96),rgba(8,13,22,0.98))] pointer-events-none"
-            loadingRingClassName="absolute inset-2 rounded border border-[#c8aa6e]/20 animate-pulse"
-            loadingIconClassName="w-4 h-4 text-[#c8aa6e]/80 animate-spin drop-shadow-[0_0_8px_rgba(200,170,110,0.35)]"
+            loadingClassName="absolute inset-0 flex items-center justify-center bg-[#0b1120]/90 backdrop-blur-sm pointer-events-none"
+            loadingRingClassName="hidden"
+            loadingIconClassName="w-5 h-5 text-[#c8aa6e]/60 animate-spin drop-shadow-md"
             fallback={
-                <div className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_50%_20%,rgba(200,170,110,0.18),transparent_45%),linear-gradient(135deg,rgba(15,23,42,0.98),rgba(35,43,58,0.96),rgba(8,13,22,0.98))]">
-                    <div className="h-2/3 w-2/3 rounded border border-[#c8aa6e]/25 bg-black/20 shadow-inner" />
+                <div className="absolute inset-0 flex items-center justify-center bg-[#0b1120]/90 backdrop-blur-sm">
+                    <div className="h-2/3 w-2/3 rounded border border-[#c8aa6e]/10 bg-black/40 shadow-inner" />
                 </div>
             }
         />
@@ -4206,6 +4209,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [resolvedEventCount, setResolvedEventCount] = useState(0);
     const locallyResolvedEventsRef = useRef(new Set()); // Track events resolved on THIS device
     const [combatLog, setCombatLog] = useState([]);
+    const [boardDicePool, setBoardDicePool] = useState(() => (
+        BOARD_DICE_ROLL_SIDES.reduce((acc, sides) => ({ ...acc, [sides]: sides === 20 ? 1 : 0 }), {})
+    ));
+    const [boardDiceExplosive, setBoardDiceExplosive] = useState(() => (
+        BOARD_DICE_ROLL_SIDES.reduce((acc, sides) => ({ ...acc, [sides]: false }), {})
+    ));
+    const [boardDiceRollLog, setBoardDiceRollLog] = useState([]);
+    const [isRollingBoardDice, setIsRollingBoardDice] = useState(false);
     // { tokenId, x, y, startX, startY, moveCost, actionCost, actionNames: [] }
 
     const effectiveCombatEventQueue = useMemo(() => {
@@ -4765,6 +4776,27 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         });
         return () => unsub();
     }, [activeScenario?.id]);
+
+    useEffect(() => {
+        if (!isBoardMode || !activeScenario?.id) {
+            setBoardDiceRollLog([]);
+            return;
+        }
+
+        const q = query(
+            collection(db, scenarioCollectionName, activeScenario.id, 'dice_rolls'),
+            orderBy('clientTimestamp', 'desc'),
+            limit(3)
+        );
+
+        const unsub = onSnapshot(q, (snapshot) => {
+            setBoardDiceRollLog(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        }, (error) => {
+            console.error('Error listening board dice rolls:', error);
+        });
+
+        return () => unsub();
+    }, [isBoardMode, activeScenario?.id, scenarioCollectionName]);
 
     useEffect(() => {
         if (!activeScenario?.id) return;
@@ -6997,6 +7029,170 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             items: nextItems,
             lastModified: Date.now()
         }).catch(err => console.error("Error saving board die:", err));
+    };
+
+    const adjustBoardDiceCount = (sides, delta) => {
+        setBoardDicePool(prev => {
+            const safeSides = Number(sides);
+            const current = Math.max(0, Number(prev[safeSides]) || 0);
+            return {
+                ...prev,
+                [safeSides]: Math.max(0, Math.min(MAX_BOARD_DICE_ROLL, current + delta))
+            };
+        });
+    };
+
+    const toggleBoardDiceExplosive = (sides) => {
+        const safeSides = Number(sides);
+        setBoardDiceExplosive(prev => ({ ...prev, [safeSides]: !prev[safeSides] }));
+    };
+
+    const clearBoardDicePool = () => {
+        setBoardDicePool(BOARD_DICE_ROLL_SIDES.reduce((acc, sides) => ({ ...acc, [sides]: 0 }), {}));
+    };
+
+    const rollBoardDiceValue = (sides) => {
+        const safeSides = Number(sides) || 20;
+        if (safeSides === 10) {
+            const rawValue = Math.floor(Math.random() * 10);
+            return {
+                value: rawValue === 0 ? 10 : rawValue,
+                displayValue: rawValue === 0 ? 0 : rawValue,
+                isMaximum: rawValue === 0,
+            };
+        }
+
+        const value = Math.floor(Math.random() * safeSides) + 1;
+        return {
+            value,
+            displayValue: value,
+            isMaximum: value === safeSides,
+        };
+    };
+
+    const rollBoardDicePool = async () => {
+        const currentScenario = activeScenarioRef.current || activeScenario;
+        if (!isBoardMode || !currentScenario?.id || isRollingBoardDice) return;
+
+        const poolEntries = BOARD_DICE_ROLL_SIDES
+            .map(sides => ({
+                sides,
+                count: Math.max(0, Math.floor(Number(boardDicePool[sides]) || 0)),
+                explosive: !!boardDiceExplosive[sides],
+            }))
+            .filter(entry => entry.count > 0);
+        const totalDice = poolEntries.reduce((sum, entry) => sum + entry.count, 0);
+
+        if (totalDice <= 0) {
+            triggerToast('Sin dados', 'Añade al menos un dado a la reserva.', 'warning');
+            return;
+        }
+
+        if (totalDice > MAX_BOARD_DICE_ROLL) {
+            triggerToast('Demasiados dados', `Máximo ${MAX_BOARD_DICE_ROLL} dados por tirada.`, 'warning');
+            return;
+        }
+
+        const rolls = [];
+        let explosionCount = 0;
+        poolEntries.forEach(({ sides, count, explosive }) => {
+            Array.from({ length: count }).forEach((_, baseIndex) => {
+                const chainId = `${sides}-${baseIndex}-${nanoid(5)}`;
+                let rollData = rollBoardDiceValue(sides);
+                let chainIndex = 0;
+                rolls.push({
+                    sides,
+                    value: rollData.value,
+                    displayValue: rollData.displayValue,
+                    explosive,
+                    chainId,
+                    chainIndex,
+                });
+
+                while (explosive && rollData.isMaximum && explosionCount < MAX_BOARD_DICE_EXPLOSIONS) {
+                    explosionCount += 1;
+                    chainIndex += 1;
+                    rollData = rollBoardDiceValue(sides);
+                    rolls.push({
+                        sides,
+                        value: rollData.value,
+                        displayValue: rollData.displayValue,
+                        explosive,
+                        exploded: true,
+                        chainId,
+                        chainIndex,
+                    });
+                }
+            });
+        });
+        const total = rolls.reduce((sum, roll) => sum + Number(roll.value || 0), 0);
+        const rollerName = isPlayerView
+            ? (playerName || characterData?.name || 'Jugador')
+            : 'Master';
+
+        setIsRollingBoardDice(true);
+        try {
+            await addDoc(collection(db, scenarioCollectionName, currentScenario.id, 'dice_rolls'), {
+                scenarioId: currentScenario.id,
+                rollerId: currentUserId || null,
+                rollerName,
+                pool: poolEntries,
+                rolls,
+                total,
+                timestamp: serverTimestamp(),
+                clientTimestamp: Date.now(),
+            });
+            const cleanupQuery = query(
+                collection(db, scenarioCollectionName, currentScenario.id, 'dice_rolls'),
+                orderBy('clientTimestamp', 'desc'),
+                limit(12)
+            );
+            const cleanupSnap = await getDocs(cleanupQuery);
+            await Promise.all(
+                cleanupSnap.docs.slice(3).map((oldDoc) => deleteDoc(oldDoc.ref))
+            );
+            triggerToast('Tirada registrada', `${totalDice} dado${totalDice === 1 ? '' : 's'} · Total ${total}`, 'success');
+        } catch (error) {
+            console.error('Error saving board dice roll:', error);
+            triggerToast('Error', 'No se pudo registrar la tirada.', 'error');
+        } finally {
+            setIsRollingBoardDice(false);
+        }
+    };
+
+    const toggleBoardDiceRollDie = async (roll, dieIndex) => {
+        const currentScenario = activeScenarioRef.current || activeScenario;
+        if (!isBoardMode || !currentScenario?.id || !roll?.id || !Number.isInteger(dieIndex)) return;
+
+        const rolls = Array.isArray(roll.rolls) ? roll.rolls : [];
+        if (dieIndex < 0 || dieIndex >= rolls.length) return;
+
+        const currentExcluded = Array.isArray(roll.excludedRollIndexes)
+            ? roll.excludedRollIndexes.filter(index => Number.isInteger(index))
+            : [];
+        const excludedSet = new globalThis.Set(currentExcluded);
+
+        if (excludedSet.has(dieIndex)) {
+            excludedSet.delete(dieIndex);
+        } else {
+            excludedSet.add(dieIndex);
+        }
+
+        const excludedRollIndexes = Array.from(excludedSet).sort((a, b) => a - b);
+        const effectiveTotal = rolls.reduce((sum, die, index) => (
+            excludedSet.has(index) ? sum : sum + (Number(die.value) || 0)
+        ), 0);
+
+        try {
+            await updateDoc(doc(db, scenarioCollectionName, currentScenario.id, 'dice_rolls', roll.id), {
+                excludedRollIndexes,
+                effectiveTotal,
+                lastModified: Date.now(),
+            });
+        } catch (error) {
+            console.error('Error toggling board dice roll die:', error);
+            triggerToast('Error', 'No se pudo modificar la tirada.', 'error');
+        }
     };
 
     const removeCardFromContainer = (containerId, cardId) => {
@@ -11382,7 +11578,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         {/* Header Registro */}
                                         <div className="flex flex-col items-center text-center gap-4 border-b border-slate-800/50 py-10 -mt-6 -mx-6 bg-gradient-to-b from-slate-900/20 to-transparent">
                                             <div className="w-16 h-16 rounded-xl bg-[#0b1120] border border-slate-800 flex items-center justify-center text-[#c8aa6e] shadow-2xl relative ring-1 ring-slate-800/40">
-                                                <Swords className="w-8 h-8 drop-shadow-[0_0_8px_rgba(200,170,110,0.4)]" />
+                                                {isBoardMode ? (
+                                                    <BsDice6 className="w-8 h-8 drop-shadow-[0_0_8px_rgba(200,170,110,0.4)]" />
+                                                ) : (
+                                                    <Swords className="w-8 h-8 drop-shadow-[0_0_8px_rgba(200,170,110,0.4)]" />
+                                                )}
                                             </div>
                                             <div className="space-y-1.5">
                                                 <h4 className="text-[#f0e6d2] font-fantasy text-2xl tracking-widest uppercase drop-shadow-lg leading-none">
@@ -11391,14 +11591,266 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 <div className="flex items-center justify-center gap-3">
                                                     <div className="h-[1px] w-4 bg-gradient-to-r from-transparent to-[#c8aa6e]/40" />
                                                     <span className="text-[10px] text-[#c8aa6e]/60 uppercase font-black tracking-[0.25em]">
-                                                        Combate & Dados
+                                                        {isBoardMode ? 'Tiradas de Tablero' : 'Combate & Dados'}
                                                     </span>
                                                     <div className="h-[1px] w-4 bg-gradient-to-l from-transparent to-[#c8aa6e]/40" />
                                                 </div>
                                             </div>
                                         </div>
 
+                                        {isBoardMode && (
+                                            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                                <div className="relative rounded-2xl border border-[#c8aa6e]/30 bg-[#0b1120]/90 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] overflow-hidden group/board-pool">
+                                                    <div className="absolute -inset-1 bg-gradient-to-r from-[#c8aa6e]/0 via-[#c8aa6e]/10 to-[#c8aa6e]/0 opacity-0 group-hover/board-pool:opacity-100 transition-opacity duration-1000 blur-xl"></div>
+                                                    
+                                                    <div className="relative px-4 py-3 border-b border-[#c8aa6e]/20 bg-gradient-to-r from-[#c8aa6e]/10 via-slate-900/60 to-transparent">
+                                                        <div className="absolute top-0 right-0 w-32 h-32 bg-[#c8aa6e]/20 blur-3xl rounded-full -mr-16 -mt-16 transition-transform duration-700 group-hover/board-pool:scale-150"></div>
+                                                        <div className="flex items-center justify-between gap-2 relative z-10">
+                                                            <div className="flex-1 min-w-0">
+                                                                <h5 className="text-[#f0e6d2] font-fantasy text-sm uppercase tracking-[0.15em] flex items-center gap-1.5">
+                                                                    <Sparkles className="w-3.5 h-3.5 text-[#c8aa6e] shrink-0" />
+                                                                    <span className="truncate">Lanzar dados</span>
+                                                                </h5>
+                                                                <p className="mt-0.5 text-[9px] text-slate-400 font-light tracking-wide leading-snug">Reserva compartida para tiradas rápidas del tablero.</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="relative p-4 space-y-5 bg-gradient-to-b from-transparent to-black/40">
+                                                        <div className="grid grid-cols-2 gap-3">
+                                                            {BOARD_DICE_ROLL_SIDES.map((sides) => {
+                                                                const count = Math.max(0, Number(boardDicePool[sides]) || 0);
+                                                                const isActive = count > 0;
+                                                                const isExplosive = !!boardDiceExplosive[sides];
+                                                                return (
+                                                                    <div
+                                                                        key={`board-dice-roll-${sides}`}
+                                                                        className={`group/die relative rounded-xl border p-3 transition-all duration-300 flex flex-col items-center justify-center ${isExplosive ? 'border-red-400/60 bg-gradient-to-br from-[#c8aa6e]/20 via-red-950/35 to-[#3f0f0f]/30 shadow-[0_0_26px_rgba(239,68,68,0.18)] scale-[1.02] z-10' : isActive ? 'border-[#c8aa6e]/60 bg-gradient-to-br from-[#c8aa6e]/20 to-[#c8aa6e]/5 shadow-[0_0_20px_rgba(200,170,110,0.15)] scale-[1.02] z-10' : 'border-slate-800/80 bg-slate-950/60 hover:bg-slate-900/80 hover:border-slate-700'}`}
+                                                                    >
+                                                                        {(isActive || isExplosive) && <div className={`absolute inset-0 rounded-xl animate-pulse ${isExplosive ? 'bg-gradient-to-br from-[#c8aa6e]/10 to-red-500/10' : 'bg-[#c8aa6e]/5'}`} />}
+                                                                        <div className="relative z-10 flex flex-col items-center gap-2 mb-3">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => toggleBoardDiceExplosive(sides)}
+                                                                                title={isExplosive ? 'Quitar crítico' : 'Marcar como crítico'}
+                                                                                className={`appearance-none bg-transparent border-0 p-0 outline-none focus:outline-none transition-transform duration-300 hover:scale-125 active:scale-95 ${isActive ? 'scale-110' : 'group-hover/die:scale-105'}`}
+                                                                            >
+                                                                                <DiceSvg
+                                                                                    faces={sides}
+                                                                                    value={sides === 10 ? 0 : sides}
+                                                                                    className="w-10 h-10 drop-shadow-md"
+                                                                                    style={{
+                                                                                        borderColor: isExplosive ? 'rgba(248,113,113,0.95)' : isActive ? 'rgba(200,170,110,1)' : 'rgba(148,163,184,0.4)',
+                                                                                        color: isExplosive ? 'rgba(254,226,226,1)' : isActive ? 'rgba(240,230,210,1)' : 'rgba(148,163,184,0.6)',
+                                                                                        backgroundColor: isExplosive ? 'rgba(239,68,68,0.08)' : 'transparent',
+                                                                                        cursor: 'pointer'
+                                                                                    }}
+                                                                                />
+                                                                            </button>
+                                                                            <div className="text-center">
+                                                                                <div className={`text-[9px] uppercase font-black tracking-[0.2em] mb-0.5 transition-colors ${isExplosive ? 'text-red-300' : isActive ? 'text-[#c8aa6e]' : 'text-slate-500'}`}>D{sides}</div>
+                                                                                <div className={`font-fantasy text-xl leading-none transition-colors ${isExplosive ? 'text-[#f0e6d2] drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]' : isActive ? 'text-[#f0e6d2] drop-shadow-[0_0_8px_rgba(200,170,110,0.8)]' : 'text-slate-600'}`}>{count}</div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="relative z-10 flex items-center overflow-hidden rounded-lg border border-slate-800/80 bg-black/40 backdrop-blur-sm shadow-inner w-full max-w-[100px]">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => adjustBoardDiceCount(sides, -1)}
+                                                                                className="h-8 w-8 flex-shrink-0 bg-slate-900/50 text-slate-400 hover:text-red-400 hover:bg-red-500/20 active:bg-red-900/60 active:scale-95 transition-all flex items-center justify-center group-hover/die:bg-slate-800/80"
+                                                                                aria-label={`Quitar D${sides}`}
+                                                                            >
+                                                                                <FiMinus className="w-3.5 h-3.5" />
+                                                                            </button>
+                                                                            <div className={`h-8 flex-1 flex items-center justify-center border-x border-slate-800/80 bg-slate-950/80 font-fantasy text-base leading-none transition-colors ${isActive ? 'text-[#c8aa6e]' : 'text-slate-400'}`}>
+                                                                                {count}
+                                                                            </div>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => adjustBoardDiceCount(sides, 1)}
+                                                                                className="h-8 w-8 flex-shrink-0 bg-slate-900/50 text-slate-400 hover:text-[#c8aa6e] hover:bg-[#c8aa6e]/20 active:bg-[#c8aa6e]/40 active:scale-95 transition-all flex items-center justify-center group-hover/die:bg-slate-800/80"
+                                                                                aria-label={`Añadir D${sides}`}
+                                                                            >
+                                                                                <FiPlus className="w-3.5 h-3.5" />
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+
+                                                        <div className="flex flex-col gap-3 pt-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={rollBoardDicePool}
+                                                                disabled={isRollingBoardDice}
+                                                                className="group relative w-full min-h-[48px] rounded-xl bg-gradient-to-r from-[#c8aa6e] via-[#e5d59f] to-[#785a28] text-[#0b1120] font-fantasy font-bold uppercase tracking-[0.15em] text-sm shadow-[0_0_24px_rgba(200,170,110,0.3)] hover:shadow-[0_0_32px_rgba(200,170,110,0.5)] hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] transition-all duration-300 overflow-hidden"
+                                                            >
+                                                                {!isRollingBoardDice && <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-[100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>}
+                                                                <span className="relative z-10 flex items-center justify-center gap-2 drop-shadow-md">
+                                                                    {isRollingBoardDice ? (
+                                                                        <>
+                                                                            <RotateCw className="w-4 h-4 animate-spin" /> Lanzando...
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <BsDice6 className="w-4 h-4" /> Lanzar reserva
+                                                                        </>
+                                                                    )}
+                                                                </span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={clearBoardDicePool}
+                                                                className="w-full min-h-[40px] rounded-xl bg-slate-950/60 border border-slate-700/60 text-slate-400 hover:text-red-400 hover:border-red-500/60 hover:bg-red-500/10 font-bold uppercase tracking-[0.15em] text-[10px] transition-all flex items-center justify-center gap-2"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                                Limpiar
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-5">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-[#c8aa6e]/40" />
+                                                        <h5 className="text-[#c8aa6e] font-bold uppercase tracking-[0.3em] text-[11px] flex items-center gap-2 shrink-0">
+                                                            <Activity className="w-4 h-4" />
+                                                            Últimas Tiradas
+                                                        </h5>
+                                                        <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-[#c8aa6e]/40" />
+                                                    </div>
+
+                                                    {boardDiceRollLog.length === 0 ? (
+                                                        <div className="flex flex-col items-center justify-center text-center gap-4 py-14 border border-dashed border-slate-800/60 rounded-2xl bg-slate-950/30 backdrop-blur-sm">
+                                                            <div className="w-16 h-16 rounded-full bg-slate-900/50 flex items-center justify-center mb-2">
+                                                                <BsDice6 className="w-8 h-8 text-slate-600" />
+                                                            </div>
+                                                            <p className="text-slate-500 text-[11px] uppercase font-bold tracking-[0.4em]">Sin tiradas todavía</p>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="space-y-4">
+                                                            <AnimatePresence>
+                                                                {boardDiceRollLog.map((roll) => {
+                                                                    const rollTime = roll.timestamp?.seconds
+                                                                        ? new Date(roll.timestamp.seconds * 1000)
+                                                                        : new Date(roll.clientTimestamp || Date.now());
+                                                                    const poolLabel = Array.isArray(roll.pool)
+                                                                        ? roll.pool.map(entry => `${entry.count}D${entry.sides}${entry.explosive ? ' crítico' : ''}`).join(' · ')
+                                                                        : '';
+                                                                    const safeRolls = Array.isArray(roll.rolls) ? roll.rolls : [];
+                                                                    const excludedRollIndexes = Array.isArray(roll.excludedRollIndexes)
+                                                                        ? roll.excludedRollIndexes.filter(index => Number.isInteger(index))
+                                                                        : [];
+                                                                    const excludedRollIndexSet = new globalThis.Set(excludedRollIndexes);
+                                                                    const effectiveTotal = safeRolls.reduce((sum, die, index) => (
+                                                                        excludedRollIndexSet.has(index) ? sum : sum + (Number(die.value) || 0)
+                                                                    ), 0);
+                                                                    const hasExcludedRolls = excludedRollIndexes.length > 0;
+                                                                    return (
+                                                                        <motion.div
+                                                                            key={roll.id}
+                                                                            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                                                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                                            exit={{ opacity: 0, scale: 0.95 }}
+                                                                            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                                                                            className="relative p-5 rounded-2xl border border-slate-800/50 bg-gradient-to-br from-[#0f172a]/90 to-[#020617]/90 shadow-[0_4px_20px_rgba(0,0,0,0.4)] group hover:border-[#c8aa6e]/40 hover:shadow-[0_8px_30px_rgba(200,170,110,0.1)] transition-all duration-300 overflow-hidden"
+                                                                        >
+                                                                            <div className="absolute top-0 left-0 bottom-0 w-1 bg-gradient-to-b from-[#c8aa6e] to-[#785a28]" />
+                                                                            <div className="absolute top-0 right-0 w-32 h-32 bg-[#c8aa6e]/5 blur-3xl rounded-full -mr-16 -mt-16 group-hover:bg-[#c8aa6e]/10 transition-colors" />
+                                                                            
+                                                                            <div className="relative z-10 mb-4">
+                                                                                <div className="flex items-start justify-between gap-4">
+                                                                                    <div className="space-y-2 min-w-0 flex-1">
+                                                                                        <div className="inline-block text-slate-500 bg-slate-900/80 px-2 py-0.5 rounded border border-slate-800 text-[10px] font-black uppercase tracking-[0.2em] mb-2">
+                                                                                            {rollTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                                        </div>
+                                                                                        <div className="text-[#c8aa6e] text-[10px] font-black uppercase tracking-[0.25em] mb-1">
+                                                                                            Tirada
+                                                                                        </div>
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <span className="text-[#f0e6d2] font-fantasy text-xl uppercase tracking-widest drop-shadow-sm">{fixMojibakeText(roll.rollerName || 'Jugador')}</span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className="shrink-0 text-right bg-black/40 p-3 rounded-xl border border-slate-800/80 backdrop-blur-md min-w-[80px]">
+                                                                                        <div className="text-[10px] text-slate-400 uppercase font-black tracking-[0.3em] mb-1">Total</div>
+                                                                                        <div className="text-[#c8aa6e] font-fantasy text-4xl leading-none drop-shadow-[0_0_12px_rgba(200,170,110,0.6)]">{effectiveTotal}</div>
+                                                                                        {hasExcludedRolls && (
+                                                                                            <div className="mt-1 text-[8px] text-red-400/70 uppercase font-black tracking-[0.18em]">
+                                                                                                Base {Number(roll.total) || 0}
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                                {poolLabel && (
+                                                                                    <div className="mt-2 flex items-start gap-2">
+                                                                                        <div className="w-3 h-[1px] bg-slate-600 mt-2 shrink-0"></div>
+                                                                                        <div className="text-[11px] italic text-slate-400 font-light leading-relaxed">
+                                                                                            {poolLabel}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+
+                                                                            <div className="relative z-10 flex flex-wrap gap-3 pt-4 border-t border-slate-800/60">
+                                                                                {safeRolls.map((die, index) => {
+                                                                                    const isExcluded = excludedRollIndexSet.has(index);
+                                                                                    const isExplosiveDie = !!die.explosive;
+                                                                                    const isExplodedDie = !!die.exploded;
+                                                                                    const displayValue = die.displayValue ?? die.value;
+                                                                                    return (
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            key={`${roll.id}-${index}`}
+                                                                                            onClick={() => toggleBoardDiceRollDie(roll, index)}
+                                                                                            onMouseDown={(event) => event.preventDefault()}
+                                                                                            onFocus={(event) => event.currentTarget.blur()}
+                                                                                            className={`relative group/die-result border-0 bg-transparent p-0 appearance-none outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 active:outline-none active:ring-0 active:scale-95 transition-all ${isExcluded ? 'opacity-45 grayscale' : ''}`}
+                                                                                            style={{
+                                                                                                WebkitTapHighlightColor: 'transparent',
+                                                                                                outline: 'none',
+                                                                                                boxShadow: 'none',
+                                                                                                touchAction: 'manipulation',
+                                                                                            }}
+                                                                                            title={isExcluded ? 'Reactivar dado' : 'Anular dado'}
+                                                                                        >
+                                                                                            <div className={`absolute -inset-1 rounded-full blur-md transition-opacity ${isExcluded ? 'bg-red-500/25 opacity-60' : isExplosiveDie ? 'bg-gradient-to-r from-[#c8aa6e]/25 to-red-500/30 opacity-60 group-hover/die-result:opacity-100' : 'bg-[#c8aa6e]/20 opacity-0 group-hover/die-result:opacity-100'}`} />
+                                                                                            <DiceSvg
+                                                                                                faces={die.sides}
+                                                                                                value={displayValue}
+                                                                                                className={`relative w-10 h-10 sm:w-11 sm:h-11 drop-shadow-lg transform transition-transform ${isExcluded ? '' : 'group-hover/die-result:scale-110 group-hover/die-result:-translate-y-1'}`}
+                                                                                                style={{
+                                                                                                    borderColor: isExcluded ? 'rgba(239,68,68,0.65)' : isExplosiveDie ? 'rgba(248,113,113,0.72)' : 'rgba(200,170,110,0.7)',
+                                                                                                    color: isExcluded ? 'rgba(239,68,68,0.82)' : isExplosiveDie ? 'rgba(254,226,226,1)' : 'rgba(240,230,210,1)',
+                                                                                                    backgroundColor: isExcluded ? 'rgba(127,29,29,0.1)' : isExplosiveDie ? 'rgba(239,68,68,0.09)' : 'rgba(200,170,110,0.1)'
+                                                                                                }}
+                                                                                            />
+                                                                                            {isExplodedDie && !isExcluded && (
+                                                                                                <span className="absolute -right-0.5 -top-1.5 z-20 text-[14px] font-black text-red-400 drop-shadow-[0_0_5px_rgba(239,68,68,0.9)]">
+                                                                                                    +
+                                                                                                </span>
+                                                                                            )}
+                                                                                            {isExcluded && (
+                                                                                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                                                                    <div className="w-[125%] h-0.5 bg-red-500 rotate-45 absolute shadow-[0_0_5px_rgba(239,68,68,0.85)]" />
+                                                                                                    <div className="w-[125%] h-0.5 bg-red-500 -rotate-45 absolute shadow-[0_0_5px_rgba(239,68,68,0.85)]" />
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </button>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+                                                                        </motion.div>
+                                                                    );
+                                                                })}
+                                                            </AnimatePresence>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {/* Listado de Combate */}
+                                        {!isBoardMode && (
                                         <div className="space-y-6">
                                             {combatLog.length === 0 ? (
                                                 <div className="flex flex-col items-center justify-center text-center gap-3 py-16 opacity-30">
@@ -11709,6 +12161,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 })
                                             )}
                                         </div>
+                                        )}
                                     </div>
                                 )}
                                 {/* --- TAB: ACCESO (MASTER ONLY) --- */}
