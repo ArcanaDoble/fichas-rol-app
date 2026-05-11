@@ -213,12 +213,14 @@ const HudCardImage = ({ card }) => {
                 src={image}
                 alt={card?.name || 'Carta'}
                 draggable={false}
+                onContextMenu={(event) => event.preventDefault()}
                 onLoad={() => {
                     markImageUrlLoaded(image);
                     setStatus('loaded');
                 }}
                 onError={() => setStatus('error')}
                 className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${status === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
+                style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
             />
         </>
     );
@@ -241,7 +243,8 @@ const CombatHUD = ({
     handCards = [],
     onPlayCard = null,
     onFlipHandCard = null,
-    onHandCardDragStart = null
+    onHandCardDragStart = null,
+    onCardPreviewStart = null
 }) => {
     const customEquipmentImages = useCustomEquipmentImages();
     const isBoardMode = mode === 'board';
@@ -257,6 +260,9 @@ const CombatHUD = ({
     const [selectedSweepWeaponIdx, setSelectedSweepWeaponIdx] = useState(null);
     const [handViewportWidth, setHandViewportWidth] = useState(
         typeof window !== 'undefined' ? window.innerWidth : 1200
+    );
+    const [handViewportHeight, setHandViewportHeight] = useState(
+        typeof window !== 'undefined' ? window.innerHeight : 900
     );
 
     // Efecto para forzar la apertura del menú de armas si se solicita externamente (ej: tras seleccionar objetivo)
@@ -310,10 +316,13 @@ const CombatHUD = ({
 
     React.useEffect(() => {
         if (!isBoardMode) return;
-        const updateWidth = () => setHandViewportWidth(window.innerWidth);
-        updateWidth();
-        window.addEventListener('resize', updateWidth);
-        return () => window.removeEventListener('resize', updateWidth);
+        const updateViewport = () => {
+            setHandViewportWidth(window.innerWidth);
+            setHandViewportHeight(window.innerHeight);
+        };
+        updateViewport();
+        window.addEventListener('resize', updateViewport);
+        return () => window.removeEventListener('resize', updateViewport);
     }, [isBoardMode]);
 
     if (!token && !isBoardMode) return null;
@@ -458,7 +467,15 @@ const CombatHUD = ({
         }
     };
 
-    const renderBoardHand = () => (
+    const renderBoardHand = () => {
+        const isCompactHandViewport = handViewportWidth < 768;
+        const desktopHandScale = isCompactHandViewport
+            ? 1
+            : Math.max(0.78, Math.min(1, handViewportWidth / 1880, handViewportHeight / 1030));
+        const desktopHandHeight = Math.round(300 * desktopHandScale);
+        const desktopHoverLift = Math.round(44 * desktopHandScale);
+
+        return (
         <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pointer-events-none px-3 pb-3 md:pb-5">
             <style>{`
                 .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -478,14 +495,18 @@ const CombatHUD = ({
                 }
                 @media (min-width: 768px) {
                     .board-hand-card:hover {
-                        transform: translateY(-44px) scale(1.16) rotate(0deg);
+                        transform: translateY(var(--board-hand-hover-lift, -44px)) scale(1.16) rotate(0deg);
                     }
                 }
             `}</style>
 
             <div
                 data-board-hand-drop-zone="true"
-                className="pointer-events-auto w-full max-w-full md:max-w-6xl bg-transparent border-0 shadow-none relative min-h-[172px] overflow-visible md:min-h-[300px]"
+                className="pointer-events-auto w-full max-w-full md:max-w-6xl bg-transparent border-0 shadow-none relative min-h-[172px] overflow-visible"
+                style={{
+                    '--board-hand-hover-lift': `-${desktopHoverLift}px`,
+                    minHeight: isCompactHandViewport ? undefined : `${desktopHandHeight}px`,
+                }}
             >
                 <div className="absolute left-1/2 bottom-2 z-0 -translate-x-1/2 px-3 py-1 rounded-full bg-[#0b1120]/70 border border-[#c8aa6e]/15 text-[8px] md:text-[9px] font-black uppercase tracking-[0.22em] text-[#c8aa6e]/70 pointer-events-none md:bottom-3">
                     Mano · {cardsInHand.length}
@@ -497,20 +518,24 @@ const CombatHUD = ({
                     </div>
                 ) : (
                     <div
-                        className="relative z-10 h-[162px] md:h-[300px] overflow-visible"
-                        style={{ msOverflowStyle: 'none', scrollbarWidth: 'none' }}
+                        className="relative z-10 h-[162px] overflow-visible"
+                        style={{
+                            msOverflowStyle: 'none',
+                            scrollbarWidth: 'none',
+                            height: isCompactHandViewport ? undefined : `${desktopHandHeight}px`,
+                        }}
                     >
                         {cardsInHand.map((card, index) => {
                             const count = Math.max(cardsInHand.length, 1);
                             const isCompactHand = handViewportWidth < 768;
+                            const handScale = isCompactHand ? 1 : desktopHandScale;
                             const availableWidth = Math.max(
                                 isCompactHand ? 280 : 720,
-                                Math.min(handViewportWidth * (isCompactHand ? 0.92 : 0.82), isCompactHand ? handViewportWidth - 18 : 1160)
+                                Math.min(handViewportWidth * (isCompactHand ? 0.92 : 0.78), isCompactHand ? handViewportWidth - 18 : Math.round(1160 * handScale))
                             );
-                            const baseCardWidth = isCompactHand ? 82 : 150;
-                            const maxCardWidth = isCompactHand ? 86 : 156;
-                            const minCardWidth = isCompactHand ? 54 : 104;
-                            const naturalStep = isCompactHand ? 48 : 96;
+                            const maxCardWidth = isCompactHand ? 86 : Math.round(156 * handScale);
+                            const minCardWidth = isCompactHand ? 54 : Math.max(82, Math.round(104 * handScale));
+                            const naturalStep = isCompactHand ? 48 : Math.round(96 * handScale);
                             const idealWidth = count <= 1 ? maxCardWidth : (availableWidth - (naturalStep * (count - 1))) / 1.05;
                             const cardWidth = Math.max(minCardWidth, Math.min(maxCardWidth, idealWidth > 0 ? idealWidth : minCardWidth));
                             const cardHeight = Math.round(cardWidth * 1.44);
@@ -527,8 +552,9 @@ const CombatHUD = ({
                                 : Math.min(7, Math.max(2.2, 34 / count));
                             const tilt = Math.max(-24, Math.min(24, relativeIndex * tiltStep));
                             const distanceFromCenter = Math.abs(index - middle);
-                            const arc = Math.min(isCompactHand ? 22 : 34, normalizedDistance * normalizedDistance * (isCompactHand ? 22 : 34));
-                            const baseBottom = isCompactHand ? 40 : 48;
+                            const arcLimit = isCompactHand ? 22 : Math.round(34 * handScale);
+                            const arc = Math.min(arcLimit, normalizedDistance * normalizedDistance * arcLimit);
+                            const baseBottom = isCompactHand ? 40 : Math.round(48 * handScale);
                             const bottomOffset = baseBottom - arc;
                             const zIndex = 100 - Math.round(distanceFromCenter * 10);
 
@@ -549,9 +575,13 @@ const CombatHUD = ({
                                     <button
                                         type="button"
                                         onMouseDown={(event) => onHandCardDragStart && onHandCardDragStart(card, event)}
-                                        onTouchStart={(event) => onHandCardDragStart && onHandCardDragStart(card, event)}
+                                        onTouchStart={(event) => (
+                                            onCardPreviewStart || onHandCardDragStart
+                                        ) && (onCardPreviewStart || onHandCardDragStart)(card, event)}
                                         onClick={(event) => event.preventDefault()}
+                                        onContextMenu={(event) => event.preventDefault()}
                                         className="board-hand-card relative w-full h-full rounded-md overflow-hidden bg-[#111827] border border-[#c8aa6e]/35 hover:border-[#f0e6d2] shadow-xl hover:shadow-[0_0_28px_rgba(200,170,110,0.36)]"
+                                        style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
                                         title="Arrastrar al tablero"
                                     >
                                         <HudCardImage card={card} />
@@ -564,7 +594,8 @@ const CombatHUD = ({
                 )}
             </div>
         </div>
-    );
+        );
+    };
 
     if (isBoardMode) {
         return renderBoardHand();

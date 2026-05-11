@@ -60,6 +60,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Selector de ficha centrado** - Muestra el nombre personalizado de cada token
 - **Canvas táctico integrado** - VTT principal con escenarios, grid, tokens y combate automatizado
 - **Tablero de cartas** - El modo Tablero permite crear tableros transparentes y redimensionables para ordenar cartas en mesa, apilar cartas y mantener manos separadas por jugador para que la iniciativa y el HUD muestren la mano real de cada token.
+- **Mano contextual en Tablero** - La mano de cartas se escala en escritorio según la resolución disponible y se oculta al deseleccionar el token haciendo clic en una zona vacía del tablero.
 - **Fichas de recurso en Tablero** - Añade marcadores circulares compactos en 3D real con valor y color editable para representar costes, recuperación de velocidad u otros recursos sandbox directamente sobre la mesa; los tableros suman su valor, las arrastran consigo al moverlos y todos los participantes pueden manipularlas.
 - **Dados 3D en Tablero** - Permite generar dados D4, D6, D8, D10, D12 y D20 como objetos compartidos, con color editable, caras numeradas, tamaño inicial de 0.75 casillas y modo alternable para moverlos libremente o lanzarlos por gesto de tensión.
 - **Fichas de token personalizadas** - Cada token puede tener su propia hoja de personaje
@@ -1991,5 +1992,9 @@ Guía rápida: ver `docs/Minimapa.md`.
 - Los marcadores `Peligro` y `Escalera` del canvas SVG usan ahora patrones vectoriales adaptativos: las líneas se recalculan al redimensionar la zona para mantener legibilidad sin deformarse.
 - El marcador `Escalera` usa un diseño de planta con peldaños, marco y sombreado de desnivel, ocupando todo su recuadro; las zonas de mapa se renderizan siempre por debajo de muros y tokens.
 - La sección `Tablero` permite añadir cartas a la mesa o a la mano del token activo; en este modo el HUD de combate sustituye acciones, ataques y objetos por una mano horizontal de cartas entre retrato y fin de turno, con volteo y salida rápida a mesa.
+- La mano del `Tablero` queda asociada al último token activo y solo se oculta al pulsar en vacío, permitiendo seleccionar o arrastrar cartas de la mesa sin perder el destino de mano.
+- En móvil, mantener pulsada una carta del `Tablero` o de la mano abre una previsualización ampliada; si el dedo se desplaza, se cancela la lectura y continúa el arrastre normal.
+- El tirador amarillo de redimensionado del canvas usa ahora un área táctil ampliada en móvil y bloquea los gestos nativos mientras se arrastra, manteniendo el mismo aspecto visual.
+- La barra de iniciativa/velocidad del canvas se convierte en un carrusel compacto cuando no caben todos los tokens: oculta la barra de scroll, muestra un contador `+N` y permite deslizar con ratón o dedo.
 - Las cartas del `Tablero` pueden apilarse arrastrando una sobre otra; la carta arrastrada queda arriba, la pila sustituye el nombre inferior por miniaturas de las cartas ocultas y el inspector permite sacar una carta concreta.
 - Las cartas nuevas de la mano se ordenan al extremo derecho del abanico, desplazando las anteriores hacia la izquierda.
