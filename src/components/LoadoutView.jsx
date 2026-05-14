@@ -44,14 +44,75 @@ const getArmorProficiencyType = (item) => {
     return null;
 };
 
+const normalizeRarityKey = (value) => (value || '')
+    .toString()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+const getRarityName = (itemOrRarity) => {
+    if (typeof itemOrRarity === 'string') return itemOrRarity;
+    return itemOrRarity?.rareza || itemOrRarity?.rarity || itemOrRarity?.Rareza || itemOrRarity?.Rarity || '';
+};
+
+const hexToRgba = (color, alpha) => {
+    if (typeof color !== 'string') return `rgba(200, 170, 110, ${alpha})`;
+    const hex = color.trim().replace('#', '');
+    if (!/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(hex)) return color;
+
+    const fullHex = hex.length === 3
+        ? hex.split('').map((char) => `${char}${char}`).join('')
+        : hex;
+    const intValue = parseInt(fullHex, 16);
+    const r = (intValue >> 16) & 255;
+    const g = (intValue >> 8) & 255;
+    const b = intValue & 255;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+const resolveRarityColor = (rarity, rarityColorMap = {}) => {
+    if (!rarity || !rarityColorMap || typeof rarityColorMap !== 'object') return null;
+    const rawKey = rarity.toString().trim();
+    const normalizedKey = normalizeRarityKey(rawKey);
+
+    for (const [key, value] of Object.entries(rarityColorMap)) {
+        if (!value) continue;
+        const currentKey = (key || '').toString().trim();
+        if (
+            currentKey === rawKey ||
+            currentKey.toLowerCase() === rawKey.toLowerCase() ||
+            normalizeRarityKey(currentKey) === normalizedKey
+        ) {
+            return value;
+        }
+    }
+
+    return null;
+};
+
 // Función para obtener los colores de rareza
-const getRarityColors = (item) => {
-    const rareza = (item?.rareza || '').toLowerCase();
-    if (rareza.includes('legendari')) return { border: 'border-orange-500', bg: 'bg-orange-900/30', text: 'text-orange-400', glow: 'from-orange-900/80', stripe: 'bg-orange-500', gradient: 'from-orange-900/50' };
-    if (rareza.includes('épic') || rareza.includes('epic')) return { border: 'border-purple-500', bg: 'bg-purple-900/30', text: 'text-purple-400', glow: 'from-purple-900/80', stripe: 'bg-purple-500', gradient: 'from-purple-900/50' };
-    if (rareza.includes('rar')) return { border: 'border-blue-500', bg: 'bg-blue-900/30', text: 'text-blue-400', glow: 'from-blue-900/80', stripe: 'bg-blue-500', gradient: 'from-blue-900/50' };
-    if (rareza.includes('poco com')) return { border: 'border-green-500', bg: 'bg-green-900/30', text: 'text-green-400', glow: 'from-green-900/80', stripe: 'bg-green-500', gradient: 'from-green-900/50' };
-    return { border: 'border-slate-600', bg: 'bg-slate-800/30', text: 'text-slate-400', glow: 'from-slate-800', stripe: 'bg-slate-600', gradient: 'from-slate-800/50' };
+const getRarityColors = (itemOrRarity, rarityColorMap = {}) => {
+    const rarityName = getRarityName(itemOrRarity);
+    const rareza = normalizeRarityKey(rarityName);
+    let fallback = { border: 'border-slate-600', bg: 'bg-slate-800/30', text: 'text-slate-400', glow: 'from-slate-800', stripe: 'bg-slate-600', gradient: 'from-slate-800/50' };
+
+    if (rareza.includes('legendari')) fallback = { border: 'border-orange-500', bg: 'bg-orange-900/30', text: 'text-orange-400', glow: 'from-orange-900/80', stripe: 'bg-orange-500', gradient: 'from-orange-900/50' };
+    else if (rareza.includes('epic')) fallback = { border: 'border-purple-500', bg: 'bg-purple-900/30', text: 'text-purple-400', glow: 'from-purple-900/80', stripe: 'bg-purple-500', gradient: 'from-purple-900/50' };
+    else if (rareza.includes('rar')) fallback = { border: 'border-blue-500', bg: 'bg-blue-900/30', text: 'text-blue-400', glow: 'from-blue-900/80', stripe: 'bg-blue-500', gradient: 'from-blue-900/50' };
+    else if (rareza.includes('poco com')) fallback = { border: 'border-green-500', bg: 'bg-green-900/30', text: 'text-green-400', glow: 'from-green-900/80', stripe: 'bg-green-500', gradient: 'from-green-900/50' };
+
+    const customColor = resolveRarityColor(rarityName, rarityColorMap);
+    if (!customColor) return fallback;
+
+    return {
+        ...fallback,
+        borderStyle: { borderColor: hexToRgba(customColor, 0.72) },
+        textStyle: { color: customColor },
+        stripeStyle: { backgroundColor: customColor },
+        glowStyle: { background: `linear-gradient(90deg, ${hexToRgba(customColor, 0.5)}, transparent 72%)` },
+        gradientStyle: { background: `linear-gradient(135deg, ${hexToRgba(customColor, 0.35)}, transparent 70%)` }
+    };
 };
 
 // Función para obtener imagen de objetos genéricos (public/objetos)
@@ -176,7 +237,7 @@ const formatItemName = (name) => {
     return formatted;
 };
 
-const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary = [], onAddEquipment, onRemoveEquipment, onUpdateTalent, onUpdateProficiency, onUpdateEquipped }) => {
+const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary = [], rarityColorMap = {}, onAddEquipment, onRemoveEquipment, onUpdateTalent, onUpdateProficiency, onUpdateEquipped }) => {
     const customEquipmentImages = useCustomEquipmentImages();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('weapons');
@@ -628,24 +689,17 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                 return <Shield className="w-10 h-10 text-slate-400" />;
                                             };
 
-                                            // Determinar colores basados en rareza
-                                            const getRarityColors = () => {
-                                                const rareza = (item.rareza || '').toLowerCase();
-                                                if (rareza.includes('legendari')) return { border: 'bg-orange-500', text: 'text-orange-500', glow: 'from-orange-900/80' };
-                                                if (rareza.includes('épic') || rareza.includes('epic')) return { border: 'bg-purple-500', text: 'text-purple-500', glow: 'from-purple-900/80' };
-                                                if (rareza.includes('rar')) return { border: 'bg-blue-500', text: 'text-blue-500', glow: 'from-blue-900/80' };
-                                                if (rareza.includes('poco com')) return { border: 'bg-green-500', text: 'text-green-500', glow: 'from-green-900/80' };
-                                                return { border: 'bg-slate-600', text: 'text-slate-500', glow: 'from-slate-800' };
-                                            };
-
-                                            const rarityColors = getRarityColors();
+                                            const rarityColors = getRarityColors(item, rarityColorMap);
                                             const objectImage = getObjectImage(item, customEquipmentImages);
 
                                             return (
                                                 <div key={index} className="group bg-[#161f32] border border-slate-700 hover:border-[#c8aa6e] p-1 rounded-lg transition-all duration-500 cursor-pointer hover:-translate-y-1 hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] flex overflow-hidden relative h-full">
 
                                                     {/* Dynamic Background Gradient & Particles (Hover Effect) */}
-                                                    <div className={`absolute inset-0 bg-gradient-to-r ${rarityColors.glow} via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-0`}></div>
+                                                    <div
+                                                        className={`absolute inset-0 bg-gradient-to-r ${rarityColors.glow} via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-0`}
+                                                        style={rarityColors.glowStyle || undefined}
+                                                    ></div>
 
                                                     {/* Stardust/Noise Texture Overlay */}
                                                     <div className="absolute inset-0 opacity-0 group-hover:opacity-30 transition-opacity duration-700 z-0 pointer-events-none"
@@ -656,7 +710,10 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                     ></div>
 
                                                     {/* Rarity Stripe */}
-                                                    <div className={`w-1 absolute left-0 top-0 bottom-0 z-20 ${rarityColors.border}`}></div>
+                                                    <div
+                                                        className={`w-1 absolute left-0 top-0 bottom-0 z-20 ${rarityColors.stripe}`}
+                                                        style={rarityColors.stripeStyle || undefined}
+                                                    ></div>
 
                                                     {/* Image/Icon Section */}
                                                     <div className="w-24 bg-black/50 relative shrink-0 ml-2 flex flex-col z-10 backdrop-blur-sm overflow-hidden rounded-l">
@@ -678,7 +735,10 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                             )}
                                                             {/* Rarity Label - Only show if exists */}
                                                             {item.rareza ? (
-                                                                <span className={`text-[0.6rem] uppercase font-bold ${rarityColors.text} text-center leading-tight px-1 drop-shadow-md`}>
+                                                                <span
+                                                                    className={`text-[0.6rem] uppercase font-bold ${rarityColors.text} text-center leading-tight px-1 drop-shadow-md`}
+                                                                    style={rarityColors.textStyle || undefined}
+                                                                >
                                                                     {item.rareza}
                                                                 </span>
                                                             ) : (
@@ -788,7 +848,7 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                 const equippedItem = equippedItems[key];
                                                 const proficiencyWarning = equippedItem ? getWeaponProficiencyWarning(equippedItem) : null;
                                                 const isSlotActive = activeSlotSelector === key;
-                                                const rarityColors = equippedItem ? getRarityColors(equippedItem) : null;
+                                                const rarityColors = equippedItem ? getRarityColors(equippedItem, rarityColorMap) : null;
 
                                                 const weaponImage = equippedItem ? getObjectImage(equippedItem, customEquipmentImages) : null;
 
@@ -809,6 +869,7 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                                 }
                                                                 ${isSlotActive ? 'ring-2 ring-[#c8aa6e]' : ''}
                                                             `}
+                                                            style={equippedItem && !proficiencyWarning ? rarityColors?.borderStyle || undefined : undefined}
                                                         >
                                                             {equippedItem ? (
                                                                 <>
@@ -826,7 +887,10 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
 
                                                                     {/* Rarity Gradient Background (bottom-right corner) */}
                                                                     {!weaponImage && (
-                                                                        <div className={`absolute inset-0 bg-gradient-to-tl ${rarityColors?.gradient || 'from-slate-800/30'} via-transparent to-transparent opacity-60 group-hover:opacity-100 transition-opacity duration-500 z-0`}></div>
+                                                                        <div
+                                                                            className={`absolute inset-0 bg-gradient-to-tl ${rarityColors?.gradient || 'from-slate-800/30'} via-transparent to-transparent opacity-60 group-hover:opacity-100 transition-opacity duration-500 z-0`}
+                                                                            style={rarityColors?.gradientStyle || undefined}
+                                                                        ></div>
                                                                     )}
 
                                                                     {/* Noise Texture Overlay (hover) */}
@@ -840,12 +904,18 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
 
                                                                     {/* Icon - Hide if image exists */}
                                                                     {!weaponImage && (
-                                                                        <Sword className={`w-8 h-8 ${rarityColors?.text || 'text-[#c8aa6e]'} mb-1 relative z-10`} />
+                                                                        <Sword
+                                                                            className={`w-8 h-8 ${rarityColors?.text || 'text-[#c8aa6e]'} mb-1 relative z-10`}
+                                                                            style={rarityColors?.textStyle || undefined}
+                                                                        />
                                                                     )}
 
                                                                     {/* Rarity Badge - Hide if common */}
                                                                     {equippedItem.rareza && equippedItem.rareza.toLowerCase() !== 'común' && (
-                                                                        <span className={`text-[9px] uppercase font-bold ${rarityColors?.text || 'text-slate-400'} relative z-10`}>
+                                                                        <span
+                                                                            className={`text-[9px] uppercase font-bold ${rarityColors?.text || 'text-slate-400'} relative z-10`}
+                                                                            style={rarityColors?.textStyle || undefined}
+                                                                        >
                                                                             {equippedItem.rareza}
                                                                         </span>
                                                                     )}
@@ -998,7 +1068,7 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                 const equippedArmor = equippedItems.body;
                                                 const proficiencyWarning = equippedArmor ? getArmorProficiencyWarning(equippedArmor) : null;
                                                 const isSlotActive = activeSlotSelector === 'body';
-                                                const rarityColors = equippedArmor ? getRarityColors(equippedArmor) : null;
+                                                const rarityColors = equippedArmor ? getRarityColors(equippedArmor, rarityColorMap) : null;
 
                                                 // Helper to get armor image
                                                 const getArmorImage = (armorName) => {
@@ -1039,6 +1109,7 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                                 }
                                                                 ${isSlotActive ? 'ring-2 ring-[#c8aa6e]' : ''}
                                                             `}
+                                                            style={equippedArmor && !proficiencyWarning ? rarityColors?.borderStyle || undefined : undefined}
                                                         >
                                                             {equippedArmor ? (
                                                                 <>
@@ -1056,7 +1127,10 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
 
                                                                     {/* Rarity Gradient Background (bottom-right corner) */}
                                                                     {!armorImage && (
-                                                                        <div className={`absolute inset-0 bg-gradient-to-tl ${rarityColors?.gradient || 'from-slate-800/30'} via-transparent to-transparent opacity-60 group-hover:opacity-100 transition-opacity duration-500 z-0`}></div>
+                                                                        <div
+                                                                            className={`absolute inset-0 bg-gradient-to-tl ${rarityColors?.gradient || 'from-slate-800/30'} via-transparent to-transparent opacity-60 group-hover:opacity-100 transition-opacity duration-500 z-0`}
+                                                                            style={rarityColors?.gradientStyle || undefined}
+                                                                        ></div>
                                                                     )}
 
                                                                     {/* Noise Texture Overlay (hover) */}
@@ -1075,12 +1149,18 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                                         I'll hide the generic shield icon if there is an image, to show off the art. 
                                                                     */}
                                                                     {!armorImage && (
-                                                                        <Shield className={`w-6 h-6 ${rarityColors?.text || 'text-[#c8aa6e]'} mb-1 relative z-10`} />
+                                                                        <Shield
+                                                                            className={`w-6 h-6 ${rarityColors?.text || 'text-[#c8aa6e]'} mb-1 relative z-10`}
+                                                                            style={rarityColors?.textStyle || undefined}
+                                                                        />
                                                                     )}
 
                                                                     {/* Rarity Badge - Hide if common */}
                                                                     {equippedArmor.rareza && equippedArmor.rareza.toLowerCase() !== 'común' && (
-                                                                        <span className={`text-[9px] uppercase font-bold ${rarityColors?.text || 'text-slate-400'} relative z-10 drop-shadow-md`}>
+                                                                        <span
+                                                                            className={`text-[9px] uppercase font-bold ${rarityColors?.text || 'text-slate-400'} relative z-10 drop-shadow-md`}
+                                                                            style={rarityColors?.textStyle || undefined}
+                                                                        >
                                                                             {equippedArmor.rareza}
                                                                         </span>
                                                                     )}
@@ -1214,7 +1294,7 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                 // Filter available objects for belt slots
                                                 const availableObjects = equipment.filter(item => item.itemType === 'object');
                                                 const objectImage = equippedItem ? getObjectImage(equippedItem, customEquipmentImages) : null;
-                                                const itemRarityColors = equippedItem ? getRarityColors(equippedItem.rareza) : null;
+                                                const itemRarityColors = equippedItem ? getRarityColors(equippedItem, rarityColorMap) : null;
 
                                                 return (
                                                     <div key={idx} className="relative">
@@ -1230,6 +1310,7 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                                         ? 'border-dashed border-[#c8aa6e] bg-[#c8aa6e]/5 ring-1 ring-[#c8aa6e]'
                                                                         : 'border-dashed border-slate-700 hover:border-[#c8aa6e]/50 hover:bg-[#c8aa6e]/5'
                                                                 }`}
+                                                            style={equippedItem ? itemRarityColors?.borderStyle || undefined : undefined}
                                                         >
                                                             {equippedItem ? (
                                                                 <>
@@ -1496,7 +1577,7 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                 const slotKey = `accessory_${slotNum}`;
                                                 const equippedAccessory = equippedItems[slotKey];
                                                 const isSlotActive = activeSlotSelector === slotKey;
-                                                const rarityColors = equippedAccessory ? getRarityColors(equippedAccessory) : null;
+                                                const rarityColors = equippedAccessory ? getRarityColors(equippedAccessory, rarityColorMap) : null;
                                                 const accessoryImage = equippedAccessory ? getObjectImage(equippedAccessory, customEquipmentImages) : null;
 
                                                 return (
@@ -1513,6 +1594,7 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                                 }
                                                                 ${isSlotActive ? 'ring-2 ring-[#c8aa6e]' : ''}
                                                             `}
+                                                            style={equippedAccessory ? rarityColors?.borderStyle || undefined : undefined}
                                                         >
                                                             {equippedAccessory ? (
                                                                 <>
@@ -1530,7 +1612,10 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
 
                                                                     {/* Rarity Gradient Background */}
                                                                     {!accessoryImage && (
-                                                                        <div className={`absolute inset-0 bg-gradient-to-tl ${rarityColors?.gradient || 'from-slate-800/30'} via-transparent to-transparent opacity-60 group-hover:opacity-100 transition-opacity duration-500 z-0`}></div>
+                                                                        <div
+                                                                            className={`absolute inset-0 bg-gradient-to-tl ${rarityColors?.gradient || 'from-slate-800/30'} via-transparent to-transparent opacity-60 group-hover:opacity-100 transition-opacity duration-500 z-0`}
+                                                                            style={rarityColors?.gradientStyle || undefined}
+                                                                        ></div>
                                                                     )}
 
                                                                     {/* Noise Texture Overlay (hover) */}
@@ -1544,7 +1629,10 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
 
                                                                     {/* Icon - Hide if image exists */}
                                                                     {!accessoryImage && (
-                                                                        <Gem className={`w-6 h-6 ${rarityColors?.text || 'text-[#c8aa6e]'} mb-1 relative z-10`} />
+                                                                        <Gem
+                                                                            className={`w-6 h-6 ${rarityColors?.text || 'text-[#c8aa6e]'} mb-1 relative z-10`}
+                                                                            style={rarityColors?.textStyle || undefined}
+                                                                        />
                                                                     )}
 
                                                                     {/* Name */}
@@ -1602,6 +1690,7 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                                         const isAlreadyEquipped =
                                                                             (equippedItems.accessory_1 && equippedItems.accessory_1._index === accessory._index) ||
                                                                             (equippedItems.accessory_2 && equippedItems.accessory_2._index === accessory._index);
+                                                                        const accessoryRarityColors = getRarityColors(accessory, rarityColorMap);
 
                                                                         return (
                                                                             <button
@@ -1623,7 +1712,14 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                                                     <div className="text-sm text-[#f0e6d2] font-medium truncate">{accessory.name || accessory.nombre}</div>
                                                                                     <div className="flex gap-2 text-[10px]">
                                                                                         {(accessory.defense || accessory.defensa) && <span className="text-blue-300">Defensa: {accessory.defense || accessory.defensa}</span>}
-                                                                                        {accessory.rareza && accessory.rareza.toLowerCase() !== 'común' && <span className="text-slate-500">{accessory.rareza}</span>}
+                                                                                        {accessory.rareza && accessory.rareza.toLowerCase() !== 'común' && (
+                                                                                            <span
+                                                                                                className={accessoryRarityColors.text || 'text-slate-500'}
+                                                                                                style={accessoryRarityColors.textStyle || undefined}
+                                                                                            >
+                                                                                                {accessory.rareza}
+                                                                                            </span>
+                                                                                        )}
                                                                                     </div>
                                                                                 </div>
                                                                                 {isAlreadyEquipped && (
@@ -2043,6 +2139,7 @@ LoadoutView.propTypes = {
         armor: PropTypes.array,
         abilities: PropTypes.array
     }),
+    rarityColorMap: PropTypes.objectOf(PropTypes.string),
     onAddEquipment: PropTypes.func,
     onRemoveEquipment: PropTypes.func,
     onUpdateTalent: PropTypes.func,

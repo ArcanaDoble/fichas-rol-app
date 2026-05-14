@@ -5012,6 +5012,7 @@ const ClassList = ({
               isCharacter={isPlayerMode}
               equipmentCatalog={equipmentCatalog}
               glossary={glossary}
+              rarityColorMap={rarityColorMap}
               onAddEquipment={handleAddEquipment}
               onRemoveEquipment={handleRemoveEquipment}
               onUpdateTalent={handleUpdateTalent}
