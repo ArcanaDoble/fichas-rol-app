@@ -41,6 +41,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Ficha de configuración responsiva** que aprovecha todo el ancho disponible, evita recortes en pantallas ultrapanorámicas, ajusta el retrato a un ancho máximo seguro y mantiene contenedores desplazables dentro de cada bloque para conservar el layout compacto.
 - **Seguimiento de niveles completados** mediante casillas activables por nivel con resaltado esmeralda que conservan el progreso dentro de la ficha.
 - **Vista previa de equipación refinada** con iconos automáticos para consumos y cargas, categorías saneadas y paneles de rareza que conservan el efecto hover incluso en armas especiales.
+- **Rarezas coherentes en equipables**: armas, habilidades, armaduras, accesorios y objetos equipados usan el color exacto definido en el glosario de rarezas.
 - **Edición de etiquetas corregida en móvil** para que el botón «Añadir etiqueta» vuelva a funcionar tras los ajustes responsive.
 
 ### ⚡ **Sistema de Velocidad Avanzado (NUEVO)**
@@ -59,6 +60,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Modo "hot seat"** - Alterna entre fichas controladas con Tab o el selector
 - **Selector de ficha centrado** - Muestra el nombre personalizado de cada token
 - **Canvas táctico integrado** - VTT principal con escenarios, grid, tokens y combate automatizado
+- **Zonas del canvas con anclaje de rotación** - Las zonas rectangulares, circulares, de peligro y de escalera/desnivel se ajustan suavemente a 0°, 90°, 180° y 270° al rotarlas libremente.
 - **Tablero de cartas** - El modo Tablero permite crear tableros transparentes y redimensionables para ordenar cartas en mesa, apilar cartas y mantener manos separadas por jugador para que la iniciativa y el HUD muestren la mano real de cada token.
 - **Mano contextual en Tablero** - La mano de cartas se escala en escritorio según la resolución disponible y se oculta al deseleccionar el token haciendo clic en una zona vacía del tablero.
 - **Fichas de recurso en Tablero** - Añade marcadores circulares compactos en 3D real con valor y color editable para representar costes, recuperación de velocidad u otros recursos sandbox directamente sobre la mesa; los tableros suman su valor, las arrastran consigo al moverlos y todos los participantes pueden manipularlas.

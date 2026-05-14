@@ -45,6 +45,8 @@ const PRESET_COLORS = [
     '#0f172a', '#14b8a6'  // Ink, Teal
 ];
 
+const GRID_LINE_COLOR_PRESETS = PRESET_COLORS.slice(0, 8);
+
 const BOARD_DIE_SIDES = [4, 6, 8, 10, 12, 20];
 const BOARD_DICE_ROLL_SIDES = [4, 6, 8, 10, 12, 20];
 const MAX_BOARD_DICE_ROLL = 80;
@@ -1163,40 +1165,52 @@ const renderGeometryVisual = (item = {}) => {
     const color = item.backgroundColor || (kind === 'hazard' ? '#ef4444' : kind === 'stairs' ? '#c8aa6e' : '#22c55e');
     const opacity = Number.isFinite(Number(item.opacity)) ? Number(item.opacity) : (kind === 'hazard' ? 0.1 : 0.28);
     const safeId = `${item.id || 'geometry'}-${kind}`.replace(/[^a-zA-Z0-9_-]/g, '');
-
     if (kind === 'hazard') {
+        const baseOpacity = Math.max(0.3, opacity + 0.1);
         return (
             <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
                 <defs>
-                    <pattern id={`hazard-${safeId}`} width="42" height="42" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-                        <line x1="0" y1="0" x2="0" y2="42" stroke={color} strokeWidth="4" strokeLinecap="round" opacity="0.9" />
+                    <pattern id={`hazard-stripes-${safeId}`} width="56" height="56" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                        <rect width="28" height="56" fill={color} opacity="0.8" />
+                        <rect x="28" width="28" height="56" fill="transparent" />
                     </pattern>
+                    <radialGradient id={`hazard-glow-${safeId}`} cx="50%" cy="50%" r="75%">
+                        <stop offset="0%" stopColor={color} stopOpacity={Math.min(opacity, 0.2)} />
+                        <stop offset="100%" stopColor={color} stopOpacity={Math.min(opacity + 0.2, 0.5)} />
+                    </radialGradient>
                 </defs>
-                <rect x="0" y="0" width="100%" height="100%" fill={color} opacity={Math.min(opacity, 0.18)} />
-                <rect x="0" y="0" width="100%" height="100%" fill={`url(#hazard-${safeId})`} opacity="0.82" />
-                <rect x="1" y="1" width="98%" height="98%" fill="none" stroke={color} strokeWidth="3" opacity="0.85" />
+                <rect x="0" y="0" width="100%" height="100%" fill={`url(#hazard-glow-${safeId})`} />
+                <rect x="0" y="0" width="100%" height="100%" fill={`url(#hazard-stripes-${safeId})`} opacity={baseOpacity} />
+                <rect x="0" y="0" width="100%" height="100%" fill="none" stroke={color} strokeWidth="8" opacity="0.9" />
             </svg>
         );
     }
 
     if (kind === 'stairs') {
+        const stepOpacity = Math.max(0.3, opacity + 0.1);
         return (
             <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
                 <defs>
-                    <pattern id={`stairs-${safeId}`} width="24" height="24" patternUnits="userSpaceOnUse">
-                        <line x1="0" y1="0" x2="0" y2="24" stroke={color} strokeWidth="3" strokeLinecap="square" opacity="0.85" />
-                    </pattern>
-                    <linearGradient id={`stairs-depth-${safeId}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={color} stopOpacity="0.28" />
-                        <stop offset="50%" stopColor={color} stopOpacity="0.08" />
-                        <stop offset="100%" stopColor={color} stopOpacity="0.22" />
+                    <linearGradient id={`stairs-step-${safeId}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#ffffff" stopOpacity="0.25" />
+                        <stop offset="20%" stopColor="#ffffff" stopOpacity="0.05" />
+                        <stop offset="80%" stopColor="#000000" stopOpacity="0.15" />
+                        <stop offset="100%" stopColor="#000000" stopOpacity="0.5" />
                     </linearGradient>
+                    <pattern id={`stairs-pattern-${safeId}`} width="48" height="48" patternUnits="userSpaceOnUse">
+                        <rect x="0" y="0" width="48" height="48" fill={color} opacity={stepOpacity} />
+                        <rect x="0" y="0" width="48" height="48" fill={`url(#stairs-step-${safeId})`} />
+                        <line x1="0" y1="1" x2="48" y2="1" stroke="#ffffff" strokeWidth="2" opacity="0.4" />
+                        <line x1="0" y1="47" x2="48" y2="47" stroke="#000000" strokeWidth="2" opacity="0.5" />
+                    </pattern>
+                    <radialGradient id={`stairs-shadow-${safeId}`} cx="50%" cy="50%" r="75%">
+                        <stop offset="0%" stopColor="#000000" stopOpacity="0" />
+                        <stop offset="100%" stopColor="#000000" stopOpacity="0.4" />
+                    </radialGradient>
                 </defs>
-                <rect x="0" y="0" width="100%" height="100%" fill={`url(#stairs-depth-${safeId})`} opacity={Math.min(opacity + 0.18, 0.45)} />
-                <rect x="8" y="10" width="94%" height="84%" fill={`url(#stairs-${safeId})`} opacity="0.95" />
-                <line x1="5%" y1="5%" x2="95%" y2="5%" stroke={color} strokeWidth="4" strokeLinecap="square" opacity="0.72" />
-                <line x1="5%" y1="95%" x2="95%" y2="95%" stroke={color} strokeWidth="4" strokeLinecap="square" opacity="0.72" />
-                <line x1="8%" y1="88%" x2="92%" y2="88%" stroke={color} strokeWidth="5" strokeLinecap="square" opacity="0.55" />
+                <rect x="0" y="0" width="100%" height="100%" fill={`url(#stairs-pattern-${safeId})`} />
+                <rect x="0" y="0" width="100%" height="100%" fill={`url(#stairs-shadow-${safeId})`} />
+
             </svg>
         );
     }
@@ -4185,6 +4199,52 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [currentDieRollSpeed, setCurrentDieRollSpeed] = useState(0);
     const [dragDirection, setDragDirection] = useState(0);
     const resizeStartRef = useRef(null); // { x, y, width, height }
+    const dieLaunchFeedbackRef = useRef({
+        frame: null,
+        speed: 0,
+        direction: 0,
+    });
+
+    const queueDieLaunchFeedback = useCallback((speed, direction) => {
+        const nextSpeed = Math.max(0, Math.min(1, Number(speed) || 0));
+        const nextDirection = Number.isFinite(direction) ? direction : 0;
+        dieLaunchFeedbackRef.current.speed = nextSpeed;
+        dieLaunchFeedbackRef.current.direction = nextDirection;
+
+        if (dieLaunchFeedbackRef.current.frame !== null) {
+            return;
+        }
+
+        dieLaunchFeedbackRef.current.frame = requestAnimationFrame(() => {
+            dieLaunchFeedbackRef.current.frame = null;
+            setCurrentDieRollSpeed((prev) => (
+                Math.abs(prev - dieLaunchFeedbackRef.current.speed) < 0.004
+                    ? prev
+                    : dieLaunchFeedbackRef.current.speed
+            ));
+            setDragDirection((prev) => (
+                Math.abs(prev - dieLaunchFeedbackRef.current.direction) < 0.15
+                    ? prev
+                    : dieLaunchFeedbackRef.current.direction
+            ));
+        });
+    }, []);
+
+    const resetDieLaunchFeedback = useCallback(() => {
+        if (dieLaunchFeedbackRef.current.frame !== null) {
+            cancelAnimationFrame(dieLaunchFeedbackRef.current.frame);
+            dieLaunchFeedbackRef.current.frame = null;
+        }
+        dieLaunchFeedbackRef.current.speed = 0;
+        dieLaunchFeedbackRef.current.direction = 0;
+        setCurrentDieRollSpeed(0);
+    }, []);
+
+    useEffect(() => () => {
+        if (dieLaunchFeedbackRef.current.frame !== null) {
+            cancelAnimationFrame(dieLaunchFeedbackRef.current.frame);
+        }
+    }, []);
 
     // Detección de móvil para deshabilitar ciertas funcionalidades problemáticas
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
@@ -4879,10 +4939,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
     const handleTouchStart = (e) => {
         if (e.touches.length === 2) {
+            if (e.cancelable) e.preventDefault();
             // Start Pinch
             setIsDragging(false);
             lastPinchDist.current = getTouchDistance(e.touches);
         } else if (e.touches.length === 1) {
+            if (e.cancelable) e.preventDefault();
             // Start Pan
             const touch = e.touches[0];
             setIsDragging(true);
@@ -4892,7 +4954,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     };
 
     const handleTouchMove = (e) => {
+        if (draggedTokenId || rotatingTokenId || resizingTokenId || draggingWallHandle || selectionBox || isDrawingWall) {
+            if (e.cancelable) e.preventDefault();
+            handleMouseMove(e);
+            return;
+        }
+
         if (e.touches.length === 2 && lastPinchDist.current !== null) {
+            if (e.cancelable) e.preventDefault();
             // Pinch Zoom - Zoom focalizado en el punto medio de los dedos
             const newDist = getTouchDistance(e.touches);
             const delta = newDist - lastPinchDist.current;
@@ -4928,6 +4997,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
             lastPinchDist.current = newDist;
         } else if (e.touches.length === 1 && isDragging) {
+            if (e.cancelable) e.preventDefault();
             // Pan (con factor de suavizado para móvil)
             const touch = e.touches[0];
             const rawDeltaX = touch.clientX - lastTouchPos.current.x;
@@ -4947,7 +5017,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }
     };
 
-    const handleTouchEnd = () => {
+    const handleTouchEnd = (e) => {
+        if (draggedTokenId || rotatingTokenId || resizingTokenId || draggingWallHandle || selectionBox || isDrawingWall) {
+            if (e.cancelable) e.preventDefault();
+            handleMouseUp(e);
+            return;
+        }
+
         setIsDragging(false);
         lastPinchDist.current = null;
     };
@@ -5240,7 +5316,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const deltaY = curY - tokenScreenY;
 
             let angleDeg = (Math.atan2(deltaY, deltaX) * 180 / Math.PI) + 90;
-            if (isCardItem(token)) {
+            if (isCardItem(token) || token.type === 'geometry') {
                 angleDeg = snapCardRotationAngle(angleDeg);
             }
 
@@ -5254,6 +5330,22 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             });
             setActiveScenario(prev => ({ ...prev, items: newItems }));
             return;
+        }
+
+        if (draggedTokenId && activeScenarioRef.current) {
+            const currentScenario = activeScenarioRef.current;
+            const draggedItem = currentScenario.items.find(item => item.id === draggedTokenId);
+            if (isBoardMode && isBoardDieItem(draggedItem) && draggedItem.dieLaunchMode) {
+                if (e.cancelable) e.preventDefault();
+                const screenDeltaX = curX - tokenDragStart.x;
+                const screenDeltaY = curY - tokenDragStart.y;
+                const dragDistance = Math.hypot(screenDeltaX, screenDeltaY);
+                const cancelRadius = Math.max(20, Math.min(draggedItem.width || 48, draggedItem.height || 48) * 0.42);
+                const tension = Math.min(Math.max((dragDistance - cancelRadius) / 220, 0), 1);
+                const direction = Math.atan2(screenDeltaY, screenDeltaX) * 180 / Math.PI + 90;
+                queueDieLaunchFeedback(tension, direction);
+                return;
+            }
         }
 
         if (draggedTokenId && activeScenarioRef.current) {
@@ -5411,13 +5503,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     const dragDistance = Math.hypot(curX - tokenDragStart.x, curY - tokenDragStart.y);
                     const cancelRadius = Math.max(20, Math.min(draggedItem.width || 48, draggedItem.height || 48) * 0.42);
                     const tension = Math.min(Math.max((dragDistance - cancelRadius) / 220, 0), 1);
-                    setCurrentDieRollSpeed(tension);
-                    setDragDirection(Math.atan2(curY - tokenDragStart.y, curX - tokenDragStart.x) * 180 / Math.PI + 90);
+                    queueDieLaunchFeedback(
+                        tension,
+                        Math.atan2(curY - tokenDragStart.y, curX - tokenDragStart.x) * 180 / Math.PI + 90
+                    );
                 } else if (currentDieRollSpeed !== 0) {
-                    setCurrentDieRollSpeed(0);
+                    resetDieLaunchFeedback();
                 }
             } else if (currentDieRollSpeed !== 0) {
-                setCurrentDieRollSpeed(0);
+                resetDieLaunchFeedback();
             }
 
             setActiveScenario(prev => ({ ...prev, items: newItems }));
@@ -5646,7 +5740,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         setTokenOriginalPos({});
                         setDragVisualOrigin({});
                         setCombatOccupancyFeedback(null);
-                        setCurrentDieRollSpeed(0);
+                        resetDieLaunchFeedback();
                         document.body.style.cursor = 'default';
                         return;
                     }
@@ -5673,7 +5767,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     setTokenOriginalPos({});
                     setDragVisualOrigin({});
                     setCombatOccupancyFeedback(null);
-                    setCurrentDieRollSpeed(0);
+                    resetDieLaunchFeedback();
                     document.body.style.cursor = 'default';
                     return;
                 }
@@ -12696,7 +12790,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         </div>
                                                         {/* Presets */}
                                                         <div className="flex-1 grid grid-cols-4 gap-2">
-                                                            {PRESET_COLORS.map(c => (
+                                                            {GRID_LINE_COLOR_PRESETS.map(c => (
                                                                 <button
                                                                     key={c}
                                                                     onClick={() => handleConfigChange('color', c)}

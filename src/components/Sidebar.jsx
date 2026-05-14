@@ -2,6 +2,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import { FiUser, FiBarChart2, FiBriefcase, FiShield, FiBookOpen, FiSave } from 'react-icons/fi';
 import { Coins } from 'lucide-react';
+import LoadingImage from './LoadingImage';
 
 // Menú items compartidos entre desktop y mobile
 const menuItems = [
@@ -114,7 +115,12 @@ const Sidebar = ({
                     <div className="w-24 h-24 rounded-full p-[2px] bg-gradient-to-tr from-[#c8aa6e] to-[#785a28]">
                         <div className="w-full h-full rounded-full bg-[#0b1120] p-1 overflow-hidden">
                             {characterAvatar || characterImage ? (
-                                <img src={characterAvatar || characterImage} alt={characterName} className="w-full h-full object-cover rounded-full opacity-90 group-hover:opacity-100 transition-opacity" />
+                                <LoadingImage
+                                    src={characterAvatar || characterImage}
+                                    alt={characterName}
+                                    imageClassName="h-full w-full rounded-full object-cover opacity-90 transition-opacity group-hover:opacity-100"
+                                    skeletonClassName="rounded-full"
+                                />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center bg-slate-800 rounded-full">
                                     <FiUser className="w-10 h-10 text-slate-500" />
