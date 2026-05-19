@@ -335,6 +335,7 @@ const BestiaryView = ({ onBack, readOnly = false, highlightText }) => {
                     <EnemyDetailView
                         key={selectedEnemy.id}
                         enemy={selectedEnemy}
+                        enemies={enemies}
                         onClose={() => setSelectedEnemy(null)}
                         onUpdate={readOnly ? undefined : handleUpdateEnemy}
                         onDelete={readOnly ? undefined : () => handleDeleteEnemy(selectedEnemy.id)}

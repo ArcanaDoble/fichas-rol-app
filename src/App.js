@@ -265,6 +265,9 @@ const dataUrlToFile = async (dataUrl, filename = 'portrait.jpg') => {
 
 const DEFAULT_ENEMY_THEME_COLOR = '#facc15';
 const DEFAULT_ENEMY_TAGS = ['Criatura', 'Enemigo'];
+const ENEMY_PORTRAIT_ASPECT = 3 / 4;
+const PORTRAIT_CROP_MIN_ZOOM = 1;
+const PORTRAIT_CROP_MAX_ZOOM = 4;
 const DEFAULT_ENEMY_THEME = {
   base: DEFAULT_ENEMY_THEME_COLOR,
   accent: '#fbbf24',
@@ -3496,7 +3499,7 @@ function App() {
       setImageCropSource(reader.result);
       setImageCropName(file.name || 'retrato.jpg');
       setImageCrop({ x: 0, y: 0 });
-      setImageCropZoom(1);
+      setImageCropZoom(PORTRAIT_CROP_MIN_ZOOM);
       setImageCropAreaPixels(null);
       setShowImageCropper(true);
     };
@@ -3516,7 +3519,7 @@ function App() {
     setImageCropSource(null);
     setImageCropAreaPixels(null);
     setImageCrop({ x: 0, y: 0 });
-    setImageCropZoom(1);
+    setImageCropZoom(PORTRAIT_CROP_MIN_ZOOM);
     setImageCropLoading(false);
   }, []);
 
@@ -3565,7 +3568,7 @@ function App() {
     setImageCropSource(newEnemy.portrait);
     setImageCropName('retrato.jpg');
     setImageCrop({ x: 0, y: 0 });
-    setImageCropZoom(1);
+    setImageCropZoom(PORTRAIT_CROP_MIN_ZOOM);
     setImageCropAreaPixels(null);
     setShowImageCropper(true);
   }, [newEnemy?.portrait]);
@@ -6453,13 +6456,80 @@ function App() {
                         onChange={handleImageUpload}
                         className="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
                       />
-                      {newEnemy.portrait && (
+                      {showImageCropper && imageCropSource ? (
+                        <div className="mt-3 w-full max-w-xs space-y-3">
+                          <div className="relative aspect-[3/4] w-full overflow-hidden rounded-xl border border-amber-300/40 bg-black shadow-[0_18px_45px_rgba(0,0,0,0.38)] ring-1 ring-amber-950/70">
+                            <Cropper
+                              image={imageCropSource}
+                              crop={imageCrop}
+                              zoom={imageCropZoom}
+                              aspect={ENEMY_PORTRAIT_ASPECT}
+                              cropShape="rect"
+                              showGrid
+                              minZoom={PORTRAIT_CROP_MIN_ZOOM}
+                              maxZoom={PORTRAIT_CROP_MAX_ZOOM}
+                              zoomSpeed={0.18}
+                              onCropChange={setImageCrop}
+                              onCropComplete={handleCropComplete}
+                              onZoomChange={setImageCropZoom}
+                              objectFit="cover"
+                              restrictPosition
+                            />
+                            <div className="pointer-events-none absolute inset-3 rounded-lg border border-amber-100/20 shadow-[inset_0_0_0_1px_rgba(180,83,9,0.35)]" />
+                            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/45 to-transparent" />
+                          </div>
+                          <div className="rounded-xl border border-amber-400/20 bg-gray-950/60 p-3 shadow-inner">
+                            <div className="flex items-center justify-between gap-4">
+                              <label
+                                htmlFor="enemy-portrait-inline-zoom"
+                                className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-200/70"
+                              >
+                                Zoom
+                              </label>
+                              <span className="font-mono text-xs text-amber-100/70">
+                                {Math.round(imageCropZoom * 100)}%
+                              </span>
+                            </div>
+                            <input
+                              id="enemy-portrait-inline-zoom"
+                              type="range"
+                              min={PORTRAIT_CROP_MIN_ZOOM}
+                              max={PORTRAIT_CROP_MAX_ZOOM}
+                              step="0.01"
+                              value={imageCropZoom}
+                              onChange={(e) => setImageCropZoom(Number(e.target.value))}
+                              className="mt-3 h-1 w-full cursor-pointer appearance-none rounded-full bg-amber-500/20 accent-amber-300"
+                            />
+                            <div className="mt-4 flex gap-2">
+                              <button
+                                type="button"
+                                onClick={closeCropper}
+                                disabled={imageCropLoading}
+                                className="flex-1 rounded-lg border border-gray-600 px-3 py-1.5 text-xs font-medium text-gray-200 transition hover:border-gray-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleConfirmCrop}
+                                disabled={imageCropLoading}
+                                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-amber-400/50 bg-amber-500/20 px-3 py-1.5 text-xs font-semibold text-amber-100 transition hover:border-amber-300/70 hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {imageCropLoading && (
+                                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-amber-200 border-t-transparent" />
+                                )}
+                                Aplicar
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : newEnemy.portrait && (
                         <div className="mt-2 flex w-full max-w-md flex-col items-center gap-3">
-                          <div className="aspect-square w-full overflow-hidden rounded-lg border border-gray-700 bg-gray-800/80 shadow-inner">
+                          <div className="aspect-[3/4] w-full max-w-xs overflow-hidden rounded-xl border border-amber-400/30 bg-gray-950/80 shadow-[0_18px_45px_rgba(0,0,0,0.38)]">
                             <img
                               src={newEnemy.portrait}
                               alt="Preview"
-                              className="h-full w-full object-contain object-center"
+                              className="h-full w-full object-cover object-center"
                             />
                           </div>
                           <button
@@ -7151,72 +7221,6 @@ function App() {
                   >
                     Cancelar
                   </Boton>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-        {showImageCropper && imageCropSource && (
-          <div
-            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4"
-            onClick={closeCropper}
-          >
-            <div
-              className="relative w-full max-w-3xl rounded-2xl bg-gray-900/95 p-6 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h3 className="text-lg font-semibold text-amber-100">Ajustar retrato</h3>
-              <p className="mt-1 text-sm text-gray-300">
-                Arrastra la imagen y usa el zoom para elegir qué parte se mostrará en la carta del enemigo.
-              </p>
-              <div className="relative mt-4 h-[55vh] min-h-[320px] w-full overflow-hidden rounded-xl border border-amber-300/30 bg-black/40">
-                <Cropper
-                  image={imageCropSource}
-                  crop={imageCrop}
-                  zoom={imageCropZoom}
-                  aspect={3 / 4}
-                  cropShape="rect"
-                  showGrid={false}
-                  onCropChange={setImageCrop}
-                  onCropComplete={handleCropComplete}
-                  onZoomChange={setImageCropZoom}
-                  objectFit="cover"
-                />
-              </div>
-              <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <label className="flex w-full max-w-sm items-center gap-3 text-sm text-amber-100/80">
-                  <span className="uppercase tracking-[0.24em] text-amber-200/70">Zoom</span>
-                  <input
-                    type="range"
-                    min="1"
-                    max="3"
-                    step="0.01"
-                    value={imageCropZoom}
-                    onChange={(e) => setImageCropZoom(Number(e.target.value))}
-                    className="h-1 flex-1 cursor-pointer appearance-none rounded-full bg-amber-500/20 accent-amber-300"
-                  />
-                </label>
-                <div className="flex flex-1 justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={closeCropper}
-                    disabled={imageCropLoading}
-                    className="rounded-full border border-gray-600 px-4 py-2 text-sm font-medium text-gray-200 transition hover:border-gray-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleConfirmCrop}
-                    disabled={imageCropLoading}
-                    className={`inline-flex items-center gap-2 rounded-full border border-amber-400/50 bg-amber-500/20 px-5 py-2 text-sm font-semibold text-amber-100 transition hover:border-amber-300/70 hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-60 ${imageCropLoading ? 'cursor-wait' : ''
-                      }`}
-                  >
-                    {imageCropLoading && (
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-200 border-t-transparent" />
-                    )}
-                    Guardar recorte
-                  </button>
                 </div>
               </div>
             </div>

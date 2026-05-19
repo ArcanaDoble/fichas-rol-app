@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Skull, Shield, Heart, Activity, Camera, Save, Trash2, Edit2, X, Plus, Play, Minus, Target, Brain, Zap } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { Skull, Shield, Heart, Activity, Camera, Save, Trash2, Edit2, X, Plus, Play, Minus, Target, Brain, Zap, Search } from 'lucide-react';
 import { FiX, FiEdit2, FiPlus, FiCheckSquare, FiMinus } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { storage } from '../firebase';
@@ -228,7 +228,15 @@ const EditableField = ({
     );
 };
 
-export const EnemyDetailView = ({ enemy, onClose, onUpdate, onDelete, onPlay, highlightText }) => {
+const normalizeAbilityKey = (value = '') =>
+    value
+        .toString()
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+export const EnemyDetailView = ({ enemy, enemies = [], onClose, onUpdate, onDelete, onPlay, highlightText }) => {
     // Initial State Setup with Fallbacks for Attributes and Stats
     const [localEnemy, setLocalEnemy] = useState(() => {
         const initial = { ...enemy };
@@ -264,7 +272,60 @@ export const EnemyDetailView = ({ enemy, onClose, onUpdate, onDelete, onPlay, hi
 
     const [isUploading, setIsUploading] = useState(false);
     const [isStatsEditing, setIsStatsEditing] = useState(false);
+    const [abilitySearchTerm, setAbilitySearchTerm] = useState('');
+    const [isAbilitySearchOpen, setIsAbilitySearchOpen] = useState(false);
     const fileInputRef = useRef(null);
+    const abilitySearchRef = useRef(null);
+
+    const abilityLibrary = useMemo(() => {
+        const seen = new Set();
+        return (enemies || []).flatMap((sourceEnemy) =>
+            (sourceEnemy.abilities || []).map((ability) => {
+                const name = typeof ability === 'string' ? ability : ability?.name || '';
+                const description = typeof ability === 'string' ? '' : ability?.description || '';
+                return {
+                    name: name.trim(),
+                    description: description.trim(),
+                    sourceName: sourceEnemy.name || 'Enemigo',
+                };
+            })
+        ).filter((ability) => {
+            if (!ability.name) return false;
+            const key = `${normalizeAbilityKey(ability.name)}::${normalizeAbilityKey(ability.description)}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        }).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    }, [enemies]);
+
+    const filteredAbilityLibrary = useMemo(() => {
+        const currentAbilityKeys = new Set((localEnemy.abilities || []).map((ability) => {
+            const name = typeof ability === 'string' ? ability : ability?.name || '';
+            const description = typeof ability === 'string' ? '' : ability?.description || '';
+            return `${normalizeAbilityKey(name)}::${normalizeAbilityKey(description)}`;
+        }));
+        const query = normalizeAbilityKey(abilitySearchTerm);
+
+        return abilityLibrary
+            .filter((ability) => {
+                const key = `${normalizeAbilityKey(ability.name)}::${normalizeAbilityKey(ability.description)}`;
+                if (currentAbilityKeys.has(key)) return false;
+                if (!query) return true;
+                return normalizeAbilityKey(`${ability.name} ${ability.description} ${ability.sourceName}`).includes(query);
+            })
+            .slice(0, 6);
+    }, [abilityLibrary, abilitySearchTerm, localEnemy.abilities]);
+
+    useEffect(() => {
+        const handleAbilitySearchOutside = (event) => {
+            if (abilitySearchRef.current && !abilitySearchRef.current.contains(event.target)) {
+                setIsAbilitySearchOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleAbilitySearchOutside);
+        return () => document.removeEventListener('mousedown', handleAbilitySearchOutside);
+    }, []);
 
     // Sync local state if prop changes, preserving structure
     useEffect(() => {
@@ -404,6 +465,23 @@ export const EnemyDetailView = ({ enemy, onClose, onUpdate, onDelete, onPlay, hi
             onUpdate(updated);
             return updated;
         });
+    };
+
+    const handleAddExistingAbility = (ability) => {
+        const newAbilities = [
+            ...(localEnemy.abilities || []),
+            {
+                name: ability.name,
+                description: ability.description || '',
+            }
+        ];
+        setLocalEnemy(prev => {
+            const updated = { ...prev, abilities: newAbilities };
+            onUpdate(updated);
+            return updated;
+        });
+        setAbilitySearchTerm('');
+        setIsAbilitySearchOpen(false);
     };
 
     const handleDeleteAbility = (index) => {
@@ -627,17 +705,85 @@ export const EnemyDetailView = ({ enemy, onClose, onUpdate, onDelete, onPlay, hi
 
                             {/* ABILITIES SECTION - Compact 2-Col Grid */}
                             <div className="flex-1 min-h-0 flex flex-col">
-                                <div className="flex items-center justify-between mb-4 border-b border-red-900/30 pb-1">
+                                <div className="flex flex-col gap-3 mb-4 border-b border-red-900/30 pb-1 sm:flex-row sm:items-center sm:justify-between">
                                     <h4 className="text-red-500 font-['Cinzel'] text-sm tracking-widest flex items-center gap-2">
                                         <span className="w-8 h-[1px] bg-red-500"></span>
                                         HABILIDADES
                                     </h4>
-                                    <button
-                                        onClick={handleAddAbility}
-                                        className="text-[10px] text-red-500/70 hover:text-red-400 font-bold uppercase tracking-wider flex items-center gap-1 transition-colors"
-                                    >
-                                        <Plus className="w-3 h-3" /> Añadir
-                                    </button>
+                                    <div className="flex w-full items-center justify-end gap-4 sm:w-auto">
+                                        <div ref={abilitySearchRef} className="relative w-[8.5rem] shrink-0 sm:w-[9rem]">
+                                            <label className="group/search flex cursor-text items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-red-500/70 transition-colors focus-within:text-red-300 hover:text-red-400">
+                                                <Search className="h-3 w-3 shrink-0" />
+                                                <input
+                                                    type="text"
+                                                    value={abilitySearchTerm}
+                                                    onChange={(event) => {
+                                                        setAbilitySearchTerm(event.target.value);
+                                                        setIsAbilitySearchOpen(true);
+                                                    }}
+                                                    onFocus={() => setIsAbilitySearchOpen(true)}
+                                                    placeholder="Buscar rasgo"
+                                                    className="w-full appearance-none border-0 bg-transparent p-0 font-['Cinzel'] text-[10px] font-bold uppercase tracking-wider text-red-100 outline-none placeholder:text-red-500/70 focus:border-0 focus:outline-none focus:ring-0"
+                                                />
+                                            </label>
+
+                                            <AnimatePresence>
+                                                {isAbilitySearchOpen && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                                                        transition={{ duration: 0.16, ease: 'easeOut' }}
+                                                        className="absolute right-0 top-full z-50 mt-2 w-full min-w-[280px] overflow-hidden rounded border border-red-900/40 bg-[#070b13]/95 shadow-[0_18px_45px_rgba(0,0,0,0.65),0_0_25px_rgba(127,29,29,0.18)] backdrop-blur-md"
+                                                    >
+                                                        <div className="border-b border-red-900/30 px-3 py-2 text-[9px] font-bold uppercase tracking-[0.24em] text-red-500/70">
+                                                            Rasgos reutilizables
+                                                        </div>
+                                                        <div className="max-h-72 overflow-y-auto p-1 custom-scrollbar">
+                                                            {filteredAbilityLibrary.length > 0 ? (
+                                                                filteredAbilityLibrary.map((ability) => (
+                                                                    <button
+                                                                        key={`${ability.name}-${ability.description}-${ability.sourceName}`}
+                                                                        type="button"
+                                                                        onClick={() => handleAddExistingAbility(ability)}
+                                                                        className="group/item w-full rounded-sm px-3 py-2.5 text-left transition-colors hover:bg-red-950/30"
+                                                                    >
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="h-1.5 w-1.5 shrink-0 rotate-45 bg-red-600 shadow-[0_0_8px_rgba(220,38,38,0.65)]"></span>
+                                                                            <span className="truncate font-['Cinzel'] text-xs font-bold uppercase tracking-wide text-red-100 group-hover/item:text-red-300">
+                                                                                {ability.name}
+                                                                            </span>
+                                                                        </div>
+                                                                        {ability.description && (
+                                                                            <p className="mt-1 line-clamp-2 pl-3.5 font-serif text-[10px] italic leading-snug text-slate-500 group-hover/item:text-slate-300">
+                                                                                {ability.description}
+                                                                            </p>
+                                                                        )}
+                                                                        <div className="mt-1 pl-3.5 text-[8px] font-bold uppercase tracking-[0.2em] text-red-800 group-hover/item:text-red-500/80">
+                                                                            {ability.sourceName}
+                                                                        </div>
+                                                                    </button>
+                                                                ))
+                                                            ) : (
+                                                                <div className="px-3 py-5 text-center font-serif text-xs italic text-slate-600">
+                                                                    {abilityLibrary.length === 0
+                                                                        ? 'Aún no hay rasgos guardados en otros enemigos.'
+                                                                        : 'No hay coincidencias disponibles.'}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </div>
+
+                                        <button
+                                            onClick={handleAddAbility}
+                                            className="text-[10px] text-red-500/70 hover:text-red-400 font-bold uppercase tracking-wider flex items-center gap-1 transition-colors"
+                                        >
+                                            <Plus className="w-3 h-3" /> Añadir
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 overflow-y-auto pr-1 flex-1 custom-scrollbar content-start">

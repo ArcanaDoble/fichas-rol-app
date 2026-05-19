@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs, doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiSearch, FiX, FiPlus, FiMinus, FiShield, FiActivity, FiZap, FiMenu, FiCpu, FiTrash2 } from 'react-icons/fi';
+import { FiSearch, FiX, FiPlus, FiMinus, FiTrash2 } from 'react-icons/fi';
 import {
     Swords, Skull, Heart, Shield, Brain, Zap, Ghost,
     EyeOff, VolumeX, Hand, XCircle, Eye, Pause, Box, Droplet,
@@ -31,47 +31,94 @@ const CONDITIONS = [
     { id: 'Ardiendo', icon: Flame, color: 'text-orange-500 border-orange-500', label: 'Ardiendo' },
 ];
 
-const SegmentedStatControl = ({ icon: Icon, value, max, color, onChange, label }) => {
-    if (max <= 0) return null;
+const STAT_THEME = {
+    postura: {
+        icon: Shield,
+        label: 'POSTURA',
+        color: 'text-emerald-400',
+        bar: 'bg-emerald-400',
+        glow: 'shadow-[0_0_10px_rgba(52,211,153,0.45)]',
+        border: 'border-emerald-500/20',
+    },
+    vida: {
+        icon: Heart,
+        label: 'VIDA',
+        color: 'text-red-400',
+        bar: 'bg-red-400',
+        glow: 'shadow-[0_0_10px_rgba(248,113,113,0.5)]',
+        border: 'border-red-500/25',
+    },
+    ingenio: {
+        icon: Zap,
+        label: 'INGENIO',
+        color: 'text-blue-400',
+        bar: 'bg-blue-400',
+        glow: 'shadow-[0_0_10px_rgba(96,165,250,0.45)]',
+        border: 'border-blue-500/20',
+    },
+    cordura: {
+        icon: Brain,
+        label: 'CORDURA',
+        color: 'text-purple-400',
+        bar: 'bg-purple-400',
+        glow: 'shadow-[0_0_10px_rgba(192,132,252,0.45)]',
+        border: 'border-purple-500/20',
+    },
+    armadura: {
+        icon: Shield,
+        label: 'ARMADURA',
+        color: 'text-slate-300',
+        bar: 'bg-slate-300',
+        glow: 'shadow-[0_0_10px_rgba(203,213,225,0.35)]',
+        border: 'border-slate-400/20',
+    },
+};
 
-    // Use smaller blocks if max is large to fit
-    const isLarge = max > 10;
+const STAT_ORDER = ['postura', 'vida', 'ingenio', 'cordura', 'armadura'];
+
+const getStatValue = (combatant, key) => combatant.stats?.[key] || { current: 0, max: 0 };
+
+const SegmentedStatControl = ({ icon: Icon, value, max, theme, onChange, label }) => {
+    if (max <= 0) return null;
+    const segmentCount = Math.min(max, 16);
+    const filledSegments = max > segmentCount ? Math.round((value / max) * segmentCount) : value;
 
     return (
-        <div className={`flex flex-col w-full max-w-[140px] ${color}`}>
-            <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-1.5 opacity-90">
-                    <Icon className="w-3 h-3" />
-                    <span className="text-[9px] font-bold uppercase tracking-wider">{label}</span>
+        <div className={`min-w-0 rounded border ${theme.border} bg-black/18 p-2.5`}>
+            <div className="mb-2 flex items-center justify-between gap-3">
+                <div className={`flex min-w-0 items-center gap-1.5 ${theme.color}`}>
+                    <Icon className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate text-[10px] font-bold uppercase tracking-[0.18em]">{label}</span>
                 </div>
-                <div className="flex items-center gap-1 bg-black/40 rounded px-1 border border-white/5">
+                <div className="flex h-6 shrink-0 items-center overflow-hidden rounded border border-white/5 bg-black/45">
                     <button
                         onClick={(e) => { e.stopPropagation(); onChange(Math.max(0, value - 1)); }}
-                        className="hover:text-white transition-colors px-1"
+                        className="flex h-full w-6 items-center justify-center text-slate-500 transition-colors hover:bg-white/5 hover:text-white"
+                        aria-label={`Reducir ${label}`}
                     >
-                        <FiMinus className="w-3 h-3" />
+                        <FiMinus className="h-3 w-3" />
                     </button>
-                    <span className="min-w-[20px] text-center font-['Cinzel'] font-bold text-xs">{value}</span>
+                    <span className="min-w-[2rem] border-x border-white/5 px-2 text-center font-['Cinzel'] text-xs font-bold text-red-50">{value}</span>
                     <button
                         onClick={(e) => { e.stopPropagation(); onChange(Math.min(max, value + 1)); }}
-                        className="hover:text-white transition-colors px-1"
+                        className="flex h-full w-6 items-center justify-center text-slate-500 transition-colors hover:bg-white/5 hover:text-white"
+                        aria-label={`Aumentar ${label}`}
                     >
-                        <FiPlus className="w-3 h-3" />
+                        <FiPlus className="h-3 w-3" />
                     </button>
                 </div>
             </div>
 
-            {/* Segments */}
-            <div className="flex gap-[2px] h-2 w-full">
-                {Array.from({ length: max }).map((_, i) => (
+            <div className="flex h-2.5 w-full gap-[3px]">
+                {Array.from({ length: segmentCount }).map((_, i) => (
                     <div
                         key={i}
-                        className={`flex-1 h-full rounded-[1px] transition-all duration-300 ${i < value
-                            ? 'bg-current shadow-[0_0_8px_currentColor] opacity-100'
-                            : 'bg-current opacity-10'
-                            }`}
+                        className={`h-full min-w-[5px] flex-1 rounded-[1px] transition-all duration-300 ${i < filledSegments ? `${theme.bar} ${theme.glow}` : 'bg-slate-700/30'}`}
                     />
                 ))}
+            </div>
+            <div className="mt-1 flex justify-end font-mono text-[10px] text-slate-500">
+                {value} / {max}
             </div>
         </div>
     );
@@ -92,111 +139,121 @@ const CombatantCard = ({ combatant, onUpdate, onRemove, onViewDetails, onOpencon
         onUpdate(combatant.instanceId, { conditions: current.filter(c => c !== conditionId) });
     };
 
+    const activeConditionCount = (combatant.conditions || []).length;
+
     return (
         <motion.div
             layout
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="group relative bg-[#120505] border border-red-900/30 rounded-lg overflow-hidden flex flex-col md:flex-row shadow-lg"
+            className="group relative overflow-hidden rounded border border-red-900/30 bg-[#0a101d] shadow-[0_18px_55px_rgba(0,0,0,0.28)] transition-colors hover:border-red-500/40"
         >
-            {/* Portrait / Info Section */}
-            <div
-                className="relative w-full md:w-32 h-64 md:h-auto shrink-0 bg-black cursor-pointer group/portrait"
-                onClick={() => onViewDetails(combatant)}
-                title="Ver Ficha Completa"
-            >
-                {combatant.image ? (
-                    <img
-                        src={combatant.image}
-                        alt={combatant.name}
-                        className="w-full h-full object-cover object-top opacity-80 group-hover/portrait:opacity-100 transition-opacity"
-                    />
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-red-900/20">
-                        <Skull className="w-10 h-10 text-red-900/50" />
-                    </div>
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-black/90 via-black/40 to-transparent"></div>
-                <button
-                    onClick={(e) => { e.stopPropagation(); onRemove(combatant.instanceId); }}
-                    className="absolute top-2 left-2 p-1.5 bg-black/50 hover:bg-red-900 text-red-500 rounded-full transition-colors z-10"
+            <div className="absolute inset-0 bg-gradient-to-r from-red-950/25 via-transparent to-transparent opacity-80" />
+            <div className="relative grid grid-cols-1 lg:grid-cols-[20rem_minmax(0,1fr)_11rem]">
+                <div
+                    className="relative grid min-h-[11rem] cursor-pointer grid-cols-[7rem_minmax(0,1fr)] overflow-hidden border-b border-red-900/20 bg-[#120707] lg:block lg:border-b-0 lg:border-r lg:border-red-900/25"
+                    onClick={() => onViewDetails(combatant)}
+                    title="Ver ficha completa"
                 >
-                    <FiTrash2 className="w-3 h-3" />
-                </button>
-                <div className="absolute bottom-2 left-2 right-2 text-left pointer-events-none">
-                    <h3 className="text-xl md:text-sm font-['Cinzel'] font-bold text-white leading-tight truncate drop-shadow-md">{combatant.name}</h3>
-                    <p className="text-xs md:text-[10px] text-red-400 font-bold uppercase tracking-wider drop-shadow-md">{combatant.type}</p>
-                </div>
-            </div>
-
-            {/* Stats Controls */}
-            <div className="flex-1 p-4 flex flex-col gap-4 justify-center">
-                <div className="flex flex-wrap items-start justify-center md:justify-start gap-x-8 gap-y-6">
-                    <SegmentedStatControl
-                        icon={Shield}
-                        label="POSTURA"
-                        value={combatant.stats.postura.current}
-                        max={combatant.stats.postura.max}
-                        color="text-green-500"
-                        onChange={(v) => updateStat('postura', v)}
-                    />
-                    <SegmentedStatControl
-                        icon={Heart}
-                        label="VIDA"
-                        value={combatant.stats.vida.current}
-                        max={combatant.stats.vida.max}
-                        color="text-red-500"
-                        onChange={(v) => updateStat('vida', v)}
-                    />
-                    <SegmentedStatControl
-                        icon={Zap}
-                        label="INGENIO"
-                        value={combatant.stats.ingenio.current}
-                        max={combatant.stats.ingenio.max}
-                        color="text-blue-500"
-                        onChange={(v) => updateStat('ingenio', v)}
-                    />
-                    <SegmentedStatControl
-                        icon={Brain}
-                        label="CORDURA"
-                        value={combatant.stats.cordura.current}
-                        max={combatant.stats.cordura.max}
-                        color="text-purple-500"
-                        onChange={(v) => updateStat('cordura', v)}
-                    />
-                    <SegmentedStatControl
-                        icon={Shield}
-                        label="ARMADURA"
-                        value={combatant.stats.armadura.current}
-                        max={combatant.stats.armadura.max}
-                        color="text-slate-400"
-                        onChange={(v) => updateStat('armadura', v)}
-                    />
-                </div>
-            </div>
-
-            {/* Status Effects Tags */}
-            <div className="p-2 md:w-32 border-t md:border-t-0 md:border-l border-red-900/20 bg-black/20 flex flex-wrap content-start gap-1 justify-center md:justify-start">
-                {(combatant.conditions || []).map(conditionId => {
-                    const def = CONDITIONS.find(c => c.id === conditionId) || { id: conditionId, color: 'text-gray-400 border-gray-400', label: conditionId };
-                    const Icon = def.icon || FiActivity;
-                    return (
+                    <div className="relative h-full min-h-[11rem] overflow-hidden bg-black lg:absolute lg:inset-y-0 lg:left-0 lg:w-32">
+                        {combatant.image ? (
+                            <img
+                                src={combatant.image}
+                                alt={combatant.name}
+                                className="h-full w-full object-cover object-top opacity-75 grayscale-[0.15] transition-all duration-500 group-hover:scale-105 group-hover:opacity-100 group-hover:grayscale-0"
+                            />
+                        ) : (
+                            <div className="flex h-full w-full items-center justify-center bg-red-900/20">
+                                <Skull className="h-10 w-10 text-red-900/50" />
+                            </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent lg:bg-gradient-to-r" />
                         <button
-                            key={conditionId}
-                            onClick={() => removeCondition(conditionId)}
-                            className={`flex items-center gap-1 px-1.5 py-0.5 text-[9px] uppercase font-bold tracking-wider rounded border bg-black/40 hover:bg-red-900/30 transition-all ${def.color}`}
+                            onClick={(e) => { e.stopPropagation(); onRemove(combatant.instanceId); }}
+                            className="absolute left-2 top-2 z-10 rounded-full border border-red-900/40 bg-black/55 p-1.5 text-red-500 transition-colors hover:border-red-500 hover:bg-red-950"
+                            aria-label={`Eliminar ${combatant.name}`}
                         >
-                            <Icon className="w-3 h-3" /> {def.label}
+                            <FiTrash2 className="h-3 w-3" />
                         </button>
-                    );
-                })}
-                <button
-                    onClick={() => onOpenconditions(combatant)}
-                    className="flex items-center gap-1 px-2 py-0.5 text-[9px] uppercase font-bold tracking-wider rounded border border-dashed border-slate-600 text-slate-500 hover:border-slate-400 hover:text-slate-300 transition-all ml-1"
-                >
-                    <FiPlus className="w-3 h-3" /> ESTADO
-                </button>
+                    </div>
+                    <div className="relative flex min-w-0 flex-col justify-end p-4 lg:ml-32 lg:min-h-[11rem]">
+                        <div className="mb-3 w-fit border border-red-900/40 bg-black/25 px-2 py-1 text-[8px] font-bold uppercase tracking-[0.22em] text-red-500/80">
+                            En combate
+                        </div>
+                        <h3 className="break-words font-['Cinzel'] text-2xl font-bold uppercase leading-tight text-red-50 drop-shadow-md lg:text-xl">{combatant.name}</h3>
+                        <p className="mt-1 truncate text-[10px] font-bold uppercase tracking-[0.22em] text-red-400/80">{combatant.type}</p>
+                        <button
+                            type="button"
+                            className="mt-4 w-fit text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500 transition-colors hover:text-red-300"
+                        >
+                            Ver ficha
+                        </button>
+                    </div>
+                </div>
+
+                <div className="relative p-4 lg:p-5">
+                    <div className="mb-4 flex items-center justify-between gap-4 border-b border-red-900/20 pb-3">
+                        <div>
+                            <div className="font-['Cinzel'] text-xs font-bold uppercase tracking-[0.24em] text-red-400">Recursos</div>
+                            <div className="mt-1 text-[10px] uppercase tracking-[0.18em] text-slate-600">Ajuste rápido de bloques</div>
+                        </div>
+                        <div className="hidden text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600 sm:block">
+                            {activeConditionCount} estados
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {STAT_ORDER.map((statKey) => {
+                            const theme = STAT_THEME[statKey];
+                            const stat = getStatValue(combatant, statKey);
+                            return (
+                                <SegmentedStatControl
+                                    key={statKey}
+                                    icon={theme.icon}
+                                    label={theme.label}
+                                    value={stat.current}
+                                    max={stat.max}
+                                    theme={theme}
+                                    onChange={(v) => updateStat(statKey, v)}
+                                />
+                            );
+                        })}
+                    </div>
+                </div>
+
+                <div className="relative border-t border-red-900/20 bg-black/20 p-4 lg:border-l lg:border-t-0">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                        <span className="font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.22em] text-red-400/90">Estados</span>
+                        <button
+                            onClick={() => onOpenconditions(combatant)}
+                            className="flex items-center gap-1 rounded border border-dashed border-red-900/40 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-slate-500 transition-all hover:border-red-500/50 hover:text-red-300"
+                        >
+                            <FiPlus className="h-3 w-3" /> Estado
+                        </button>
+                    </div>
+                    <div className="flex flex-wrap content-start gap-1.5 lg:flex-col">
+                        {(combatant.conditions || []).length > 0 ? (
+                            (combatant.conditions || []).map(conditionId => {
+                                const def = CONDITIONS.find(c => c.id === conditionId) || { id: conditionId, color: 'text-gray-400 border-gray-400', label: conditionId };
+                                const Icon = def.icon || AlertCircle;
+                                return (
+                                    <button
+                                        key={conditionId}
+                                        onClick={() => removeCondition(conditionId)}
+                                        className={`flex items-center gap-1.5 rounded border bg-black/40 px-2 py-1 text-[9px] font-bold uppercase tracking-wider transition-all hover:bg-red-900/30 ${def.color}`}
+                                        title="Quitar estado"
+                                    >
+                                        <Icon className="h-3 w-3" /> {def.label}
+                                    </button>
+                                );
+                            })
+                        ) : (
+                            <div className="rounded border border-dashed border-slate-800 px-3 py-2 text-[10px] italic text-slate-600">
+                                Sin estados activos
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
         </motion.div>
     );
@@ -318,6 +375,12 @@ export const CombatTrackerView = ({ onBack, onUpdateEnemy }) => {
         e.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    const totalActiveConditions = combatants.reduce((total, combatant) => total + (combatant.conditions || []).length, 0);
+    const woundedCombatants = combatants.filter((combatant) => {
+        const vida = getStatValue(combatant, 'vida');
+        return vida.max > 0 && vida.current < vida.max;
+    }).length;
+
     const handleOpenDetails = (combatant) => {
         // Find the original template to show the "general" sheet
         const original = allEnemies.find(e => e.id === combatant.id);
@@ -325,42 +388,72 @@ export const CombatTrackerView = ({ onBack, onUpdateEnemy }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-[#050b14] text-slate-200 z-[60] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-[60] flex flex-col overflow-hidden bg-[#050b14] text-slate-200">
             {/* Toolbar */}
-            <div className="h-16 bg-[#0a1222] border-b border-red-900/30 flex items-center justify-between px-4 shadow-xl shrink-0">
-                <div className="flex items-center gap-4">
-                    <button onClick={onBack} className="p-2 border border-red-900/30 rounded-full hover:border-red-500 hover:text-red-500 text-slate-400 transition-colors">
-                        <FiX className="w-5 h-5" />
-                    </button>
-                    <div>
-                        <h2 className="text-xl font-['Cinzel'] font-bold text-red-100 flex items-center gap-2">
-                            <Swords className="w-5 h-5 text-red-500" /> GESTOR DE COMBATE
-                        </h2>
-                        <span className="text-[10px] text-red-500/60 font-bold uppercase tracking-widest hidden md:inline-block">Sincronizado en tiempo real</span>
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                    {combatants.length > 0 && (
-                        <button
-                            onClick={clearCombat}
-                            className="px-3 py-2 text-xs font-bold text-red-900 hover:text-red-500 uppercase tracking-wider mr-2"
-                        >
-                            Limpiar
+            <div className="shrink-0 border-b border-red-900/30 bg-[#0a1222]/95 shadow-[0_18px_45px_rgba(0,0,0,0.25)] backdrop-blur">
+                <div className="mx-auto flex min-h-16 w-full max-w-[1600px] flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:px-8">
+                    <div className="flex min-w-0 items-center gap-4">
+                        <button onClick={onBack} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-red-900/40 text-slate-500 transition-colors hover:border-red-500 hover:text-red-400">
+                            <FiX className="h-5 w-5" />
                         </button>
-                    )}
-                    <button
-                        onClick={() => setShowAddModal(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-red-800 hover:bg-red-700 text-white rounded font-bold uppercase tracking-wider text-sm shadow-[0_0_15px_rgba(220,38,38,0.3)] transition-all"
-                    >
-                        <FiPlus className="w-4 h-4" /> <span className="hidden md:inline">Añadir Enemigo</span>
-                    </button>
+                        <div className="min-w-0">
+                            <h2 className="flex items-center gap-2 truncate font-['Cinzel'] text-lg font-bold uppercase tracking-wide text-red-50 sm:text-xl">
+                                <Swords className="h-5 w-5 shrink-0 text-red-500" /> Gestor de Combate
+                            </h2>
+                            <span className="block truncate text-[10px] font-bold uppercase tracking-[0.25em] text-red-500/60">Sincronizado en tiempo real</span>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2">
+                        {combatants.length > 0 && (
+                            <button
+                                onClick={clearCombat}
+                                className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-red-900 transition-colors hover:text-red-400"
+                            >
+                                Limpiar
+                            </button>
+                        )}
+                        <button
+                            onClick={() => setShowAddModal(true)}
+                            className="flex items-center gap-2 rounded bg-red-800 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-[0_0_18px_rgba(220,38,38,0.28)] transition-all hover:bg-red-700"
+                        >
+                            <FiPlus className="h-4 w-4" /> <span>Añadir Enemigo</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
             {/* Combatants List */}
-            <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative">
-                <div className="max-w-4xl mx-auto flex flex-col gap-4 pb-20">
+            <div className="relative flex-1 overflow-y-auto p-4 custom-scrollbar md:p-8">
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-[radial-gradient(circle_at_50%_0%,rgba(127,29,29,0.2),transparent_55%)]" />
+                <div className="relative mx-auto flex w-full max-w-[1400px] flex-col gap-5 pb-20">
+                    <div className="grid gap-4 border-b border-red-900/20 pb-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
+                        <div>
+                            <div className="mb-2 flex items-center gap-3">
+                                <div className="h-[1px] w-10 bg-red-500/70" />
+                                <h3 className="font-['Cinzel'] text-sm font-bold uppercase tracking-[0.28em] text-red-400">Encuentro activo</h3>
+                            </div>
+                            <p className="max-w-2xl text-sm text-slate-500">
+                                Ajusta recursos, revisa estados y abre la ficha completa de cada enemigo desde una sola vista.
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-3 overflow-hidden rounded border border-red-900/25 bg-[#0a101d]/80">
+                            <div className="border-r border-red-900/20 p-3 text-center">
+                                <div className="font-['Cinzel'] text-xl font-bold text-red-50">{combatants.length}</div>
+                                <div className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-600">Enemigos</div>
+                            </div>
+                            <div className="border-r border-red-900/20 p-3 text-center">
+                                <div className="font-['Cinzel'] text-xl font-bold text-red-300">{woundedCombatants}</div>
+                                <div className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-600">Heridos</div>
+                            </div>
+                            <div className="p-3 text-center">
+                                <div className="font-['Cinzel'] text-xl font-bold text-purple-300">{totalActiveConditions}</div>
+                                <div className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-600">Estados</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <AnimatePresence>
                         {combatants.map(combatant => (
                             <CombatantCard
@@ -375,10 +468,16 @@ export const CombatTrackerView = ({ onBack, onUpdateEnemy }) => {
                     </AnimatePresence>
 
                     {combatants.length === 0 && (
-                        <div className="text-center py-20 opacity-30 flex flex-col items-center">
-                            <Swords className="w-16 h-16 mb-4" />
-                            <p className="font-['Cinzel'] text-xl">EL CAMPO DE BATALLA ESTÁ VACÍO</p>
-                            <p className="text-sm">Añade enemigos para comenzar el encuentro</p>
+                        <div className="flex min-h-[42vh] flex-col items-center justify-center rounded border border-dashed border-red-900/25 bg-[#0a101d]/45 px-6 py-16 text-center">
+                            <Swords className="mb-4 h-14 w-14 text-red-900/60" />
+                            <p className="font-['Cinzel'] text-xl uppercase tracking-wider text-red-100/70">El campo de batalla está vacío</p>
+                            <p className="mt-2 max-w-md text-sm text-slate-500">Añade enemigos para comenzar el encuentro y controlar sus recursos en tiempo real.</p>
+                            <button
+                                onClick={() => setShowAddModal(true)}
+                                className="mt-6 flex items-center gap-2 rounded border border-red-900/40 bg-red-950/20 px-4 py-2 text-xs font-bold uppercase tracking-wider text-red-300 transition-colors hover:border-red-500/60 hover:bg-red-900/30"
+                            >
+                                <FiPlus className="h-4 w-4" /> Añadir enemigo
+                            </button>
                         </div>
                     )}
                 </div>
@@ -397,14 +496,14 @@ export const CombatTrackerView = ({ onBack, onUpdateEnemy }) => {
                     >
                         <motion.div
                             variants={modalVariants}
-                            className="bg-[#0b1120]/95 border border-[#c8aa6e]/30 rounded-2xl shadow-2xl p-8 max-w-lg w-full max-h-[85vh] overflow-y-auto custom-scrollbar relative"
+                            className="relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded border border-red-900/35 bg-[#0b1120]/95 p-6 shadow-2xl custom-scrollbar sm:p-8"
                             onClick={e => e.stopPropagation()}
                         >
-                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#c8aa6e]/50 to-transparent" />
+                            <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
 
                             <div className="flex items-center justify-between mb-8">
-                                <h3 className="font-['Cinzel'] font-bold text-xl text-[#f0e6d2] uppercase tracking-wider">Estados Alterados</h3>
-                                <button onClick={() => setConditionPickerTarget(null)} className="text-slate-500 hover:text-[#c8aa6e] transition-colors p-1"><FiX size={20} /></button>
+                                <h3 className="font-['Cinzel'] font-bold text-xl text-red-50 uppercase tracking-wider">Estados Alterados</h3>
+                                <button onClick={() => setConditionPickerTarget(null)} className="text-slate-500 hover:text-red-300 transition-colors p-1"><FiX size={20} /></button>
                             </div>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 {CONDITIONS.map(({ id, icon: Icon, color, label }) => {
@@ -416,12 +515,12 @@ export const CombatTrackerView = ({ onBack, onUpdateEnemy }) => {
                                             className={`
                                                 flex flex-col items-center justify-center p-4 rounded-xl border transition-all gap-3 relative overflow-hidden group
                                                 ${isActive
-                                                    ? 'bg-[#c8aa6e]/10 border-[#c8aa6e]/50 shadow-[0_0_20px_rgba(200,170,110,0.15)]'
-                                                    : 'bg-black/40 border-slate-800 hover:border-[#c8aa6e]/30 hover:bg-black/60'}
+                                                    ? 'bg-red-950/20 border-red-500/45 shadow-[0_0_20px_rgba(220,38,38,0.15)]'
+                                                    : 'bg-black/40 border-slate-800 hover:border-red-500/30 hover:bg-black/60'}
                                             `}
                                         >
                                             <Icon className={`w-10 h-10 ${color.split(' ')[0]} ${isActive ? 'drop-shadow-[0_0_12px_currentColor]' : 'opacity-40 group-hover:opacity-100'} transition-all`} />
-                                            <span className={`text-[10px] font-bold uppercase tracking-widest ${isActive ? 'text-[#f0e6d2]' : 'text-slate-500 group-hover:text-slate-300'}`}>{label}</span>
+                                            <span className={`text-[10px] font-bold uppercase tracking-widest ${isActive ? 'text-red-50' : 'text-slate-500 group-hover:text-slate-300'}`}>{label}</span>
                                             {isActive && <div className={`absolute inset-0 border-2 ${color.split(' ')[1]} rounded-xl opacity-30`}></div>}
                                         </button>
                                     );
@@ -473,18 +572,18 @@ export const CombatTrackerView = ({ onBack, onUpdateEnemy }) => {
                     >
                         <motion.div
                             variants={modalVariants}
-                            className="bg-[#0b1120]/95 w-full max-w-2xl h-[80vh] rounded-2xl border border-[#c8aa6e]/30 shadow-2xl flex flex-col overflow-hidden relative"
+                            className="relative flex h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded border border-red-900/35 bg-[#0b1120]/95 shadow-2xl"
                             onClick={e => e.stopPropagation()}
                         >
-                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#c8aa6e]/50 to-transparent" />
+                            <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
 
-                            <div className="p-6 border-b border-[#c8aa6e]/20 flex items-center gap-4 bg-[#161f32]/50 backdrop-blur-md">
-                                <FiSearch className="text-[#c8aa6e] w-5 h-5" />
+                            <div className="flex items-center gap-4 border-b border-red-900/25 bg-[#101827]/70 p-5 backdrop-blur-md sm:p-6">
+                                <FiSearch className="h-5 w-5 text-red-400" />
                                 <input
                                     autoFocus
                                     type="text"
                                     placeholder="BUSCAR ENEMIGO..."
-                                    className="bg-transparent border-none outline-none text-[#f0e6d2] placeholder-[#c8aa6e]/30 font-['Cinzel'] font-bold text-xl w-full"
+                                    className="w-full border-none bg-transparent font-['Cinzel'] text-lg font-bold text-red-50 outline-none placeholder:text-red-500/30 sm:text-xl"
                                     value={searchTerm}
                                     onChange={e => setSearchTerm(e.target.value)}
                                 />
@@ -496,20 +595,20 @@ export const CombatTrackerView = ({ onBack, onUpdateEnemy }) => {
                                     <div
                                         key={enemy.id}
                                         onClick={() => addCombatant(enemy)}
-                                        className="group flex items-center gap-4 p-4 bg-[#050b14]/50 border border-white/5 hover:border-[#c8aa6e]/50 rounded-xl cursor-pointer transition-all hover:bg-[#c8aa6e]/5"
+                                        className="group flex cursor-pointer items-center gap-4 rounded border border-white/5 bg-[#050b14]/50 p-4 transition-all hover:border-red-500/45 hover:bg-red-950/10"
                                     >
-                                        <div className="w-16 h-16 bg-black rounded-lg overflow-hidden shrink-0 border border-white/10 group-hover:border-[#c8aa6e]/50 shadow-lg">
+                                        <div className="h-16 w-16 shrink-0 overflow-hidden rounded bg-black shadow-lg ring-1 ring-white/10 transition-all group-hover:ring-red-500/50">
                                             {enemy.image ? (
                                                 <img src={enemy.image} className="w-full h-full object-cover" alt="" />
                                             ) : (
-                                                <div className="w-full h-full flex items-center justify-center bg-[#1a1b26]"><Skull className="w-8 h-8 text-[#c8aa6e]/20" /></div>
+                                                <div className="flex h-full w-full items-center justify-center bg-[#1a1b26]"><Skull className="h-8 w-8 text-red-500/20" /></div>
                                             )}
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                            <h4 className="font-['Cinzel'] font-bold text-lg text-[#f0e6d2] truncate group-hover:text-[#c8aa6e] transition-colors">{enemy.name}</h4>
+                                            <h4 className="font-['Cinzel'] font-bold text-lg text-red-50 truncate group-hover:text-red-300 transition-colors">{enemy.name}</h4>
                                             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{enemy.type}</p>
                                         </div>
-                                        <div className="w-8 h-8 rounded-full border border-[#c8aa6e]/30 flex items-center justify-center text-[#c8aa6e] opacity-0 group-hover:opacity-100 transition-all">
+                                        <div className="flex h-8 w-8 items-center justify-center rounded-full border border-red-500/30 text-red-300 opacity-0 transition-all group-hover:opacity-100">
                                             <FiPlus size={16} />
                                         </div>
                                     </div>
