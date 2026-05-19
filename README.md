@@ -193,7 +193,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Controles de estadísticas del creador de enemigos rediseñados con steppers oscuros y táctiles, sin los botones numéricos nativos blancos del navegador.
 - Cabecera del creador de enemigos ajustada para móvil: el botón «Guardar enemigo» pasa a una fila segura y se elimina el desbordamiento horizontal.
 - Buscador de rasgos reutilizables en la línea de habilidades de la ficha de enemigo para añadir títulos y descripciones ya usados en otros enemigos sin copiarlos manualmente.
-- Gestor de combate del bestiario rediseñado con panel de encuentro, filas de enemigo más anchas, recursos segmentados y zona de estados integrada para mejorar lectura y uso en escritorio y móvil.
+- Gestor de combate del bestiario rediseñado con panel de encuentro, filas de enemigo más anchas, recursos segmentados manipulables y franja de efectos activos integrada para mejorar lectura y uso en escritorio y móvil.
 - Cartas de enemigos más compactas en escritorio con cuatro columnas y líneas divisorias punteadas entre ellas.
 - Indicadores de Ataque y Defensa con etiquetas claras y textos de ayuda para explicar los valores mostrados.
 - Botones de acciones de enemigo rediseñados con iconos y degradados acordes al estilo coleccionable.

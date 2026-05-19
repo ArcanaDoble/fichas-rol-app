@@ -36,40 +36,35 @@ const STAT_THEME = {
         icon: Shield,
         label: 'POSTURA',
         color: 'text-emerald-400',
-        bar: 'bg-emerald-400',
-        glow: 'shadow-[0_0_10px_rgba(52,211,153,0.45)]',
+        rgb: '52, 211, 153',
         border: 'border-emerald-500/20',
     },
     vida: {
         icon: Heart,
         label: 'VIDA',
         color: 'text-red-400',
-        bar: 'bg-red-400',
-        glow: 'shadow-[0_0_10px_rgba(248,113,113,0.5)]',
+        rgb: '248, 113, 113',
         border: 'border-red-500/25',
     },
     ingenio: {
         icon: Zap,
         label: 'INGENIO',
         color: 'text-blue-400',
-        bar: 'bg-blue-400',
-        glow: 'shadow-[0_0_10px_rgba(96,165,250,0.45)]',
+        rgb: '96, 165, 250',
         border: 'border-blue-500/20',
     },
     cordura: {
         icon: Brain,
         label: 'CORDURA',
         color: 'text-purple-400',
-        bar: 'bg-purple-400',
-        glow: 'shadow-[0_0_10px_rgba(192,132,252,0.45)]',
+        rgb: '192, 132, 252',
         border: 'border-purple-500/20',
     },
     armadura: {
         icon: Shield,
         label: 'ARMADURA',
         color: 'text-slate-300',
-        bar: 'bg-slate-300',
-        glow: 'shadow-[0_0_10px_rgba(203,213,225,0.35)]',
+        rgb: '203, 213, 225',
         border: 'border-slate-400/20',
     },
 };
@@ -80,44 +75,60 @@ const getStatValue = (combatant, key) => combatant.stats?.[key] || { current: 0,
 
 const SegmentedStatControl = ({ icon: Icon, value, max, theme, onChange, label }) => {
     if (max <= 0) return null;
-    const segmentCount = Math.min(max, 16);
+    const segmentCount = Math.min(max, 12);
     const filledSegments = max > segmentCount ? Math.round((value / max) * segmentCount) : value;
+    const segmentClipPath = 'polygon(0 0, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, 0 100%, 7px 50%)';
+
+    const handleSegmentClick = (index) => {
+        const nextValue = Math.max(0, Math.min(max, Math.ceil(((index + 1) / segmentCount) * max)));
+        onChange(nextValue);
+    };
 
     return (
-        <div className={`min-w-0 rounded border ${theme.border} bg-black/18 p-2.5`}>
-            <div className="mb-2 flex items-center justify-between gap-3">
+        <div className={`min-w-0 rounded-sm border ${theme.border} bg-[#070d18]/70 px-3 py-3 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.015)]`}>
+            <div className="mb-3 flex items-center justify-between gap-3">
                 <div className={`flex min-w-0 items-center gap-1.5 ${theme.color}`}>
-                    <Icon className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate text-[10px] font-bold uppercase tracking-[0.18em]">{label}</span>
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="truncate text-[11px] font-black uppercase tracking-[0.22em]">{label}</span>
                 </div>
-                <div className="flex h-6 shrink-0 items-center overflow-hidden rounded border border-white/5 bg-black/45">
+                <div className="flex h-8 shrink-0 items-center overflow-hidden rounded-sm border border-white/5 bg-black/45 shadow-[0_8px_20px_rgba(0,0,0,0.28)]">
                     <button
                         onClick={(e) => { e.stopPropagation(); onChange(Math.max(0, value - 1)); }}
-                        className="flex h-full w-6 items-center justify-center text-slate-500 transition-colors hover:bg-white/5 hover:text-white"
+                        className="flex h-full w-9 items-center justify-center text-slate-500 transition-colors hover:bg-white/5 hover:text-white active:bg-red-950/40"
                         aria-label={`Reducir ${label}`}
                     >
-                        <FiMinus className="h-3 w-3" />
+                        <FiMinus className="h-3.5 w-3.5" />
                     </button>
-                    <span className="min-w-[2rem] border-x border-white/5 px-2 text-center font-['Cinzel'] text-xs font-bold text-red-50">{value}</span>
+                    <span className="min-w-[3.25rem] border-x border-white/5 px-2 text-center font-['Cinzel'] text-sm font-bold text-red-50">{value}</span>
                     <button
                         onClick={(e) => { e.stopPropagation(); onChange(Math.min(max, value + 1)); }}
-                        className="flex h-full w-6 items-center justify-center text-slate-500 transition-colors hover:bg-white/5 hover:text-white"
+                        className="flex h-full w-9 items-center justify-center text-slate-500 transition-colors hover:bg-white/5 hover:text-white active:bg-red-950/40"
                         aria-label={`Aumentar ${label}`}
                     >
-                        <FiPlus className="h-3 w-3" />
+                        <FiPlus className="h-3.5 w-3.5" />
                     </button>
                 </div>
             </div>
 
-            <div className="flex h-2.5 w-full gap-[3px]">
+            <div className="grid h-4 w-full gap-[3px]" style={{ gridTemplateColumns: `repeat(${segmentCount}, minmax(0, 1fr))` }}>
                 {Array.from({ length: segmentCount }).map((_, i) => (
-                    <div
+                    <button
                         key={i}
-                        className={`h-full min-w-[5px] flex-1 rounded-[1px] transition-all duration-300 ${i < filledSegments ? `${theme.bar} ${theme.glow}` : 'bg-slate-700/30'}`}
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleSegmentClick(i); }}
+                        className="h-full min-w-[10px] transition-all duration-200 hover:brightness-125 focus:outline-none focus:ring-1 focus:ring-red-300/40"
+                        style={{
+                            clipPath: segmentClipPath,
+                            background: i < filledSegments
+                                ? `linear-gradient(90deg, rgba(${theme.rgb}, 0.82), rgba(${theme.rgb}, 1))`
+                                : 'rgba(51, 65, 85, 0.34)',
+                            boxShadow: i < filledSegments ? `0 0 14px rgba(${theme.rgb}, 0.42)` : 'inset 0 0 0 1px rgba(148, 163, 184, 0.05)',
+                        }}
+                        aria-label={`Ajustar ${label} a ${Math.ceil(((i + 1) / segmentCount) * max)}`}
                     />
                 ))}
             </div>
-            <div className="mt-1 flex justify-end font-mono text-[10px] text-slate-500">
+            <div className="mt-2 flex justify-end font-mono text-[10px] font-bold tracking-widest text-slate-500">
                 {value} / {max}
             </div>
         </div>
@@ -150,7 +161,7 @@ const CombatantCard = ({ combatant, onUpdate, onRemove, onViewDetails, onOpencon
             className="group relative overflow-hidden rounded border border-red-900/30 bg-[#0a101d] shadow-[0_18px_55px_rgba(0,0,0,0.28)] transition-colors hover:border-red-500/40"
         >
             <div className="absolute inset-0 bg-gradient-to-r from-red-950/25 via-transparent to-transparent opacity-80" />
-            <div className="relative grid grid-cols-1 lg:grid-cols-[20rem_minmax(0,1fr)_11rem]">
+            <div className="relative grid grid-cols-1 lg:grid-cols-[20rem_minmax(0,1fr)]">
                 <div
                     className="relative grid min-h-[11rem] cursor-pointer grid-cols-[7rem_minmax(0,1fr)] overflow-hidden border-b border-red-900/20 bg-[#120707] lg:block lg:border-b-0 lg:border-r lg:border-red-900/25"
                     onClick={() => onViewDetails(combatant)}
@@ -198,11 +209,12 @@ const CombatantCard = ({ combatant, onUpdate, onRemove, onViewDetails, onOpencon
                             <div className="font-['Cinzel'] text-xs font-bold uppercase tracking-[0.24em] text-red-400">Recursos</div>
                             <div className="mt-1 text-[10px] uppercase tracking-[0.18em] text-slate-600">Ajuste rápido de bloques</div>
                         </div>
-                        <div className="hidden text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600 sm:block">
-                            {activeConditionCount} estados
+                        <div className="hidden items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600 sm:flex">
+                            <span className="h-1.5 w-1.5 rotate-45 bg-red-800" />
+                            {activeConditionCount} activos
                         </div>
                     </div>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
                         {STAT_ORDER.map((statKey) => {
                             const theme = STAT_THEME[statKey];
                             const stat = getStatValue(combatant, statKey);
@@ -219,39 +231,48 @@ const CombatantCard = ({ combatant, onUpdate, onRemove, onViewDetails, onOpencon
                             );
                         })}
                     </div>
-                </div>
 
-                <div className="relative border-t border-red-900/20 bg-black/20 p-4 lg:border-l lg:border-t-0">
-                    <div className="mb-3 flex items-center justify-between gap-2">
-                        <span className="font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.22em] text-red-400/90">Estados</span>
-                        <button
-                            onClick={() => onOpenconditions(combatant)}
-                            className="flex items-center gap-1 rounded border border-dashed border-red-900/40 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-slate-500 transition-all hover:border-red-500/50 hover:text-red-300"
-                        >
-                            <FiPlus className="h-3 w-3" /> Estado
-                        </button>
-                    </div>
-                    <div className="flex flex-wrap content-start gap-1.5 lg:flex-col">
-                        {(combatant.conditions || []).length > 0 ? (
-                            (combatant.conditions || []).map(conditionId => {
-                                const def = CONDITIONS.find(c => c.id === conditionId) || { id: conditionId, color: 'text-gray-400 border-gray-400', label: conditionId };
-                                const Icon = def.icon || AlertCircle;
-                                return (
-                                    <button
-                                        key={conditionId}
-                                        onClick={() => removeCondition(conditionId)}
-                                        className={`flex items-center gap-1.5 rounded border bg-black/40 px-2 py-1 text-[9px] font-bold uppercase tracking-wider transition-all hover:bg-red-900/30 ${def.color}`}
-                                        title="Quitar estado"
-                                    >
-                                        <Icon className="h-3 w-3" /> {def.label}
-                                    </button>
-                                );
-                            })
-                        ) : (
-                            <div className="rounded border border-dashed border-slate-800 px-3 py-2 text-[10px] italic text-slate-600">
-                                Sin estados activos
+                    <div className="mt-4 border-t border-red-900/20 pt-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="h-[1px] w-8 bg-red-900/70" />
+                                <div>
+                                    <div className="font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.24em] text-red-400/90">Efectos activos</div>
+                                    <div className="mt-1 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-700">
+                                        {activeConditionCount ? `${activeConditionCount} alteraciones` : 'Sin alteraciones'}
+                                    </div>
+                                </div>
                             </div>
-                        )}
+                            <div className="flex flex-wrap items-center gap-2">
+                                {(combatant.conditions || []).length > 0 ? (
+                                    (combatant.conditions || []).map(conditionId => {
+                                        const def = CONDITIONS.find(c => c.id === conditionId) || { id: conditionId, color: 'text-gray-400 border-gray-400', label: conditionId };
+                                        const Icon = def.icon || AlertCircle;
+                                        return (
+                                            <button
+                                                key={conditionId}
+                                                onClick={() => removeCondition(conditionId)}
+                                                className={`flex min-h-8 items-center gap-1.5 rounded-sm border bg-black/40 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider transition-all hover:bg-red-900/30 ${def.color}`}
+                                                title="Quitar estado"
+                                            >
+                                                <Icon className="h-3.5 w-3.5" /> {def.label}
+                                            </button>
+                                        );
+                                    })
+                                ) : (
+                                    <span className="rounded-sm border border-dashed border-slate-800 px-3 py-2 text-[10px] italic text-slate-600">
+                                        Ninguno aplicado
+                                    </span>
+                                )}
+                                <button
+                                    onClick={() => onOpenconditions(combatant)}
+                                    className="flex min-h-8 items-center gap-1.5 rounded-sm border border-red-900/40 bg-red-950/10 px-3 py-1 text-[9px] font-bold uppercase tracking-wider text-red-300/75 transition-all hover:border-red-500/60 hover:bg-red-900/20 hover:text-red-100"
+                                    aria-label={`Añadir estado a ${combatant.name}`}
+                                >
+                                    <FiPlus className="h-3.5 w-3.5" /> Añadir
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
