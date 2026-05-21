@@ -168,7 +168,7 @@ const defaultResourcesList = defaultRecursos.map((name) => ({
 
 const RESOURCE_MAX = 20;
 const CLAVE_MAX = 10;
-const dadoImgUrl = (dado) => `/dados/${dado}.png`;
+const dadoImgUrl = (dado) => `/dados/${dado}.webp`;
 
 const CLOCK_SKEW_MS = 5000;
 

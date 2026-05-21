@@ -195,7 +195,7 @@ export const MinimapView = ({ onBack, currentUserId = 'user-dm', userRole = 'DM'
                 data.push({
                     id: docSnap.id,
                     name: config.label,
-                    img: `/estados/${config.label}.png`, // For legacy image support
+                    img: `/estados/${config.label}.webp`, // For legacy image support
                     ...config
                 });
             });

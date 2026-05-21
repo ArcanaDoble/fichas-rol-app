@@ -23,7 +23,7 @@ const atributoColor = {
   intelecto: '#60a5fa',
   voluntad: '#a78bfa',
 };
-const dadoImgUrl = (d) => `/dados/${d}.png`;
+const dadoImgUrl = (d) => `/dados/${d}.webp`;
 
 const normalizeText = (value = '') =>
   value

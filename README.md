@@ -6,6 +6,38 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ## ✨ Características principales
 
+### ⚔️ Gestor de Combate del Bestiario (Estilo de Campaña Gótica)
+
+- **Estética Visual de Campaña Gótica**: Fusión estética total con el Bestiario, utilizando un fondo de pantalla oscuro de campaña (`bg-[#050b14]`), tarjetas carmesí profundo (`bg-[#1a0505]`), bordes finos óxido/carmesí (`border-red-900/30`), tipografía clásica medieval (`font-['Cinzel']`) y esquinas rectas (`rounded-none` / `rounded-sm`).
+- **Responsividad Completa Adaptativa**:
+  - **Tabletas (desde `md: 768px`)**: La barra de herramientas principal se organiza horizontalmente en una sola línea compacta y las métricas de "Encuentro Activo" se disponen en fila para optimizar el espacio de control.
+  - **Móviles (`< 768px`)**: Layout ultra compacto y 100% responsivo. La barra de herramientas se colapsa inteligentemente en dos filas: el título con botón de retroceso arriba y los botones de acción ("Limpiar Encuentro" y "Añadir Enemigo") abajo, distribuidos al 50% de ancho útil simétricamente y evitando cualquier desbordamiento horizontal.
+  - **Sencillo, Elegante y Simétrico**: El bloque de resumen de "Encuentro Activo" se transforma en una grilla simétrica de 3 columnas divididas por bordes rústicos, donde los indicadores ("ENEMIGOS", "HERIDOS", "ALTERACIONES") se apilan verticalmente sobre el número en pantallas pequeñas, evitando textos encimados.
+  - **Sincronización Perfecta de Botones**: Ajuste simétrico de los botones "Limpiar Encuentro" y "Añadir Enemigo" en la cabecera para tener la misma tipografía `Cinzel`, idénticas dimensiones y una altura fija estandarizada (`h-11` en móvil, `h-10` en tablets y escritorio) para asegurar un alineamiento perfecto.
+  - **Retratos de Enemigo Limpios**: Reubicación estratégica del botón de eliminar enemigo (`FiTrash2`), retirándolo del retrato donde tapaba la ilustración del monstruo y posicionándolo en la esquina superior derecha del bloque de información básica (`absolute right-2 top-2 sm:right-3 sm:top-3 z-10`).
+  - **Protección de Textos**: Incorporación de un padding de seguridad responsivo (`pr-8 md:pr-0` en nombre y tipo) para prevenir solapamientos con el botón en móviles, mientras se conserva el ancho completo en PC para evitar cortes de texto o saltos de línea indeseados.
+  - **Retratos Góticos Expandidos con Soporte de Acento en PC**: El retrato en PC se expande ocupando todo el ancho de la columna izquierda (18rem) sin divisores. Los textos flotan con soporte responsivo y se anclan visualmente con un **pilar vertical carmesí** en el margen izquierdo (`md:border-l-2 md:border-red-500/40 md:pl-4 md:bg-gradient-to-r md:from-[#0c0202]/85 md:via-[#0c0202]/40 md:to-transparent`), reaccionando al pasar el cursor con un brillo intenso (`group-hover:md:border-red-500/70`). El botón de eliminar enemigo se ubica de forma independiente en la esquina superior derecha del retrato.
+- **Controles de Recursos Segmentados Interactivos**:
+  - Escalas rúnicas de bloques medievales dibujadas con polígonos recortados (`clip-path`) en perfecta coherencia con las barras de estado de la Ficha de Detalle.
+  - Ajuste de celdas mediante clic directo e interactivo, complementado con steppers (`+` / `-`) en los laterales para modificaciones precisas en móviles.
+- **Estados y Alteraciones de Campaña**:
+  - **Animaciones Cinematográficas con Cero Latencia y Máscaras**: Transiciones ultra fluidas al añadir/quitar alteraciones de estado.
+    - **Zero-Latency Height Tracking**: La altura de la tarjeta de combate sigue reactivamente al `ResizeObserver` con latencia cero en actualizaciones de estados, eliminando el efecto elástico y logrando un ajuste en tiempo real perfecto.
+    - **Técnica de Máscaras (Outer Wrapper Masking)**: Los estados activos están envueltos en un contenedor de máscara `inline-block overflow-hidden` que colapsa su ancho, alto y márgenes (horizontal y vertical) de forma simultánea. El botón interno permanece estático, **evitando cualquier deformación tipográfica o compresión visual de textos e iconos**.
+    - **Desplazamiento Flexbox 100% Fluido**: Al colapsar los márgenes dinámicamente a `0` en la salida (`exit`), el layout flexbox se reorganiza gradualmente frame-a-frame, eliminando por completo los saltos bruscos de 1 frame de altura al desmontarse del DOM.
+    - **Colapso de Tarjeta Elegantísimo**: Al eliminar un enemigo de la lista, la tarjeta principal colapsa su altura a `0` de forma coordinada con su desvanecimiento, logrando que los enemigos inferiores se desplacen verticalmente con suavidad cinematográfica.
+  - Limpieza de badges redundantes (eliminación de la etiqueta "En combate" y remoción completa del marcador de marcador de posición "Sin alteraciones" para priorizar el espacio visual).
+  - Píldoras de estado con colores góticos armoniosos y desaturados (gama de slate, rose, teal, indigo, amber, red, cyan, yellow, stone, emerald, orange, blue, violet, sky, flame) que se sincronizan perfectamente en su estado activo y visualización en el modal de selección.
+-   **Buscador y Modales en Bloque**: Búsqueda integrada fluida con divisor carmesí y modales planos con bordes reforzados estilo campaña.
+-   **Retratos a Sangre en Bloque Limpio (Cero Bandas Negras)**: Integración de retratos adaptativos en corte completo (`object-cover object-center`) en el bloque de columna izquierda (`w-20 sm:w-24`) de las tarjetas en el modal de selección ("Añadir Enemigo"). Esto asegura que la ilustración de cualquier criatura rellene por completo el área visual flush a los bordes, eliminando bandas negras horizontales (letterboxing) o verticales (pillarboxing) sin importar la relación de aspecto original de la imagen. Se acompaña de un degradado de difuminado lateral y un pilar rúnico carmesí en el hover.
+- **Peanas de Color y Secuenciador de Duplicados (Tabletop RPG)**:
+  - **Numeración Romana Inteligente**: Al añadir enemigos repetidos, el sistema calcula de forma autónoma el primer número entero libre (ej. *Maniquí I*, *Maniquí II*), rellenando huecos en caso de eliminaciones de manera autocurativa.
+  - **Identificador de Peana Táctico**: Cada contendiente posee un badge interactivo con brillo rúnico. Al pulsarlo, cicla en tiempo real entre 6 tonalidades góticas (Carmesí, Ámbar, Esmeralda, Zafiro, Amatista, Ceniza), sincronizándose instantáneamente con Firestore.
+  - **Retroiluminación Dinámica en PC**: En la vista de escritorio, el color seleccionado tiñe y genera un halo luminoso (glow) sobre el pilar decorativo vertical izquierdo de la tarjeta, facilitando la identificación visual rápida a distancia.
+- **Layout Compacto Móvil**: Reducción de más del 60% en la altura de la tarjeta de enemigo en móvil para eliminar scroll innecesario. Muestra la información básica horizontalmente y condensa las 5 estadísticas en una cuadrícula simétrica de mini-badges táctiles con micro-barras de progreso.
+- **Ajustador Táctil (Tactile Bottom Sheet Drawer)**: Cajón deslizante animado desde la base del móvil con interfaz gótica de alto contraste. Incorpora botones táctiles gigantes para `+`/`-` de 64px, visualización gigante de valor, atajos rápidos tácticos ("CURAR MÁXIMO" y "DERROTAR") y barra rúnica de segmentos gruesos optimizada para el pulgar.
+- **Selector de Color de Etiquetas Interactivo**: Sistema premium de 5 esferas (4 presets góticos carmesí, ámbar, esmeralda y zafiro con brillo rúnico individual + 1 esfera blanca premium con punto arcoíris y selector nativo de color hexadecimal) que permite personalizar el color de cada etiqueta de forma independiente, visible al pasar el ratón en PC (hover) o al enfocar en móvil (focus con retardo de 150ms para registro de toques). Los tags calculan dinámicamente sus bordes al 50% de opacidad y fondo al 10% de opacidad, y las etiquetas vacías se limpian del almacenamiento `tagName|#hexColor` de forma automática al perder el foco.
+
 ### ⚖️ Karma exclusivo de Yuuzu
 
 - Estadística especial "Karma" disponible únicamente en la ficha de Yuuzu, con control fino entre -10 y +10 y visualización como balanza (blanco para karma positivo, negro para karma negativo y neutro sin color).
@@ -64,7 +96,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Tablero de cartas** - El modo Tablero permite crear tableros transparentes y redimensionables para ordenar cartas en mesa, apilar cartas y mantener manos separadas por jugador para que la iniciativa y el HUD muestren la mano real de cada token.
 - **Mano contextual en Tablero** - La mano de cartas se escala en escritorio según la resolución disponible y se oculta al deseleccionar el token haciendo clic en una zona vacía del tablero.
 - **Fichas de recurso en Tablero** - Añade marcadores circulares compactos en 3D real con valor y color editable para representar costes, recuperación de velocidad u otros recursos sandbox directamente sobre la mesa; los tableros suman su valor, las arrastran consigo al moverlos y todos los participantes pueden manipularlas.
-- **Dados 3D en Tablero** - Permite generar dados D4, D6, D8, D10, D12 y D20 como objetos compartidos, con color editable, caras numeradas, tamaño inicial de 0.75 casillas y modo alternable para moverlos libremente o lanzarlos por gesto de tensión.
+- **Dados 3D en Tablero** - Permite generar dados D4, D6, D8, D10, D12 y D20 como objetos compartidos con color y tamaño configurables. Incluye la mecánica premium de **Lanzamiento por Tirachinas con Tensión Elástica**, donde el arrastre limitado a 150px renderiza una banda elástica rúnica y brillante que transita dinámicamente de Amarillo/Ámbar a Carmesí mediante HSL. Al soltar, el dado es disparado físicamente con precisión sincrónica (vía `flushSync`) en la dirección contraria al vector de arrastre.
 - **Registro de tiradas en Tablero** - La pestaña Logs incorpora un lanzador múltiple de D4, D6, D8, D10, D12 y D20 con historial compartido, total de la reserva y desglose visual de cada dado usando la misma estética del inspector; cada tipo de dado puede marcarse como crítico/explosivo y cada dado del registro puede anularse o reactivarse para recalcular el total.
 - **Fichas de token personalizadas** - Cada token puede tener su propia hoja de personaje
 - **Copiar tokens conserva su hoja personalizada** - Al duplicar un token se clona su ficha con todos los valores (base, total y modificados), colores y visibilidad de estadísticas manteniendo IDs independientes en los mapas del máster y del jugador
@@ -156,6 +188,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Panel de filtros de enemigos con diseño encapsulado, bordes suaves y resultados destacados, mejorando la estética en escritorio y móvil.
 - Controles de búsqueda, orden y filtros más accesibles y responsivos, con indicadores compactos y botón de retratos en formato pill.
 - Sistema de rarezas personalizadas para armas, armaduras y poderes, con paletas de color aplicadas automáticamente en fichas y catálogos.
+
+**Resumen de cambios v2.4.68:**
+
+- Optimización de assets locales: imágenes de armas, armaduras, objetos, dados, estados y marcas convertidas a WebP para reducir drásticamente el peso del proyecto sin pérdida visual perceptible.
 
 **Resumen de cambios v2.4.67:**
 
@@ -2006,3 +2042,8 @@ Guía rápida: ver `docs/Minimapa.md`.
 - La barra de iniciativa/velocidad del canvas se convierte en un carrusel compacto cuando no caben todos los tokens: oculta la barra de scroll, muestra un contador `+N` y permite deslizar con ratón o dedo.
 - Las cartas del `Tablero` pueden apilarse arrastrando una sobre otra; la carta arrastrada queda arriba, la pila sustituye el nombre inferior por miniaturas de las cartas ocultas y el inspector permite sacar una carta concreta.
 - Las cartas nuevas de la mano se ordenan al extremo derecho del abanico, desplazando las anteriores hacia la izquierda.
+- Se perfeccionó el flujo de animaciones en el Gestor de Combate (`CombatTrackerView.jsx`), logrando transiciones de redimensionamiento y colapso de estados completamente fluidas y libres de tirones.
+- Se implementó la clase `min-w-0` en los botones de alteraciones activas para sobreescribir el ancho mínimo por defecto de flexbox, permitiendo que Framer Motion colapse su ancho de forma 100% progresiva.
+- Se eliminó el conflicto entre la clase CSS `transition-all` y los fotogramas clave de Framer Motion, sustituyéndola por transiciones hover selectivas para `background-color`, `border-color`, `filter` y `color`.
+- Se añadió `layout="position"` en badges de estado y en el botón "+ Añadir" (ahora un `<motion.button>`), permitiendo que todos los elementos hermanos se deslicen de forma continua a sus nuevas coordenadas y fila durante el reflow.
+- Se calibró la curva de animación de los badges a `0.25s` con aceleración `easeInOut` para un tacto sedoso, lineal y de calidad cinematográfica.

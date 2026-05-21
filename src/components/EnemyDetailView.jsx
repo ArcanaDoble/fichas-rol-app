@@ -30,7 +30,7 @@ const DiceSelector = ({ value, onChange }) => {
                 className="flex items-center justify-center w-[60px] h-[60px] transition-transform hover:scale-110 focus:outline-none"
             >
                 <img
-                    src={`/dados/${value.toUpperCase()}.png`}
+                    src={`/dados/${value.toUpperCase()}.webp`}
                     alt={value}
                     className="w-full h-full object-contain drop-shadow-[0_0_5px_rgba(220,38,38,0.5)]"
                 />
@@ -55,7 +55,7 @@ const DiceSelector = ({ value, onChange }) => {
                                 className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all duration-200 group ${value === dice ? 'bg-red-500/20 border border-red-500/50' : 'hover:bg-red-500/10 border border-transparent'}`}
                             >
                                 <div className="w-8 h-8 mb-1 transition-transform group-hover:scale-110">
-                                    <img src={`/dados/${dice.toUpperCase()}.png`} alt={dice} className="w-full h-full object-contain" />
+                                    <img src={`/dados/${dice.toUpperCase()}.webp`} alt={dice} className="w-full h-full object-contain" />
                                 </div>
                                 <span className={`text-[10px] font-bold uppercase tracking-wider ${value === dice ? 'text-red-500' : 'text-slate-400 group-hover:text-red-500'}`}>
                                     {dice.toUpperCase()}
@@ -152,6 +152,10 @@ const EditableField = ({
     autoSelect = true,
     showEditIcon = true,
     displayRenderer = null,
+    onFocus = null,
+    onBlur = null,
+    style = {},
+    inputStyle = {},
 }) => {
     const [isEditing, setIsEditing] = useState(false);
     const inputRef = useRef(null);
@@ -168,6 +172,7 @@ const EditableField = ({
     const handleBlur = () => {
         setIsEditing(false);
         if (onCommit) onCommit();
+        if (onBlur) onBlur();
     };
 
     const handleKeyDown = (event) => {
@@ -200,6 +205,7 @@ const EditableField = ({
                         onKeyDown={handleKeyDown}
                         className={`${baseInputClasses} min-h-[100px] resize-none ${inputClassName}`}
                         placeholder={placeholder}
+                        style={inputStyle}
                     />
                 ) : (
                     <input
@@ -211,14 +217,21 @@ const EditableField = ({
                         onKeyDown={handleKeyDown}
                         className={`${baseInputClasses} ${inputClassName}`}
                         placeholder={placeholder}
+                        style={inputStyle}
                     />
                 )
             ) : (
                 <div
-                    onClick={() => setIsEditing(true)}
+                    onClick={() => {
+                        setIsEditing(true);
+                        if (onFocus) onFocus();
+                    }}
                     className="relative cursor-pointer flex items-center gap-2"
                 >
-                    <span className={`${textClassName} ${isPlaceholder ? 'opacity-50 italic' : ''}`}>
+                    <span 
+                        className={`${textClassName} ${isPlaceholder ? 'opacity-50 italic' : ''}`}
+                        style={style}
+                    >
                         {displayRenderer ? displayRenderer(displayValue) : displayValue}
                     </span>
                     {showEditIcon && <FiEdit2 className="w-3 h-3 text-slate-500 opacity-0 group-hover/edit:opacity-100 transition-opacity" />}
@@ -274,6 +287,7 @@ export const EnemyDetailView = ({ enemy, enemies = [], onClose, onUpdate, onDele
     const [isStatsEditing, setIsStatsEditing] = useState(false);
     const [abilitySearchTerm, setAbilitySearchTerm] = useState('');
     const [isAbilitySearchOpen, setIsAbilitySearchOpen] = useState(false);
+    const [activeEditingTagIndex, setActiveEditingTagIndex] = useState(null);
     const fileInputRef = useRef(null);
     const abilitySearchRef = useRef(null);
 
@@ -380,8 +394,11 @@ export const EnemyDetailView = ({ enemy, enemies = [], onClose, onUpdate, onDele
     // but EditableField uses this for text/desc
     const handleCommit = () => {
         setLocalEnemy(prev => {
-            // Filter out empty tags on commit
-            const cleanTags = (prev.tags || []).filter(t => t.trim() !== '');
+            // Filter out empty tags on commit (checking name portion)
+            const cleanTags = (prev.tags || []).filter(t => {
+                const parts = t.split('|');
+                return parts[0] && parts[0].trim() !== '';
+            });
 
             // Only update if changes occurred (optimization, but simple check is okay)
             const updated = { ...prev, tags: cleanTags };
@@ -633,19 +650,101 @@ export const EnemyDetailView = ({ enemy, enemies = [], onClose, onUpdate, onDele
                             </div>
 
                             {/* Dynamic Tags */}
-                            {(localEnemy.tags || []).map((tag, index) => (
-                                <div key={index} className="flex relative">
-                                    <EditableField
-                                        value={tag}
-                                        onChange={(val) => handleTagChange(index, val)}
-                                        onCommit={handleCommit}
-                                        showEditIcon={false}
-                                        textClassName="px-3 py-1 bg-red-900/10 border border-red-500/50 text-red-500 text-[10px] font-bold uppercase tracking-[0.2em] block min-w-[60px] text-center"
-                                        inputClassName="px-2 py-1 bg-black text-red-500 text-[10px] font-bold uppercase tracking-[0.2em] border border-red-500/50 text-center min-w-[60px]"
-                                        placeholder="ETIQUETA"
-                                    />
-                                </div>
-                            ))}
+                            {(localEnemy.tags || []).map((tag, index) => {
+                                const parts = tag.split('|');
+                                const tagName = parts[0];
+                                const tagColor = parts[1] || '#ef4444';
+
+                                const PRESET_COLORS = [
+                                    { hex: '#ef4444', label: 'Carmesí', glow: 'rgba(239,68,68,0.7)' },
+                                    { hex: '#f59e0b', label: 'Ámbar', glow: 'rgba(245,158,11,0.7)' },
+                                    { hex: '#10b981', label: 'Esmeralda', glow: 'rgba(16,185,129,0.7)' },
+                                    { hex: '#3b82f6', label: 'Zafiro', glow: 'rgba(59,130,246,0.7)' },
+                                ];
+
+                                return (
+                                    <div key={index} className="flex relative group/tag justify-center items-center">
+                                        {/* Color selector bubble */}
+                                        <div 
+                                            className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 flex items-center justify-center gap-1.5 bg-[#050b14]/95 backdrop-blur-md px-2.5 py-1.5 rounded-full border border-slate-800 shadow-[0_4px_12px_rgba(0,0,0,0.6)] z-30 transition-all duration-200 pointer-events-none opacity-0 group-hover/tag:opacity-100 group-hover/tag:pointer-events-auto ${activeEditingTagIndex === index ? 'opacity-100 pointer-events-auto' : ''}`}
+                                        >
+                                            {PRESET_COLORS.map((preset) => (
+                                                <button
+                                                    key={preset.hex}
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleTagChange(index, tagName + '|' + preset.hex);
+                                                        setLocalEnemy(prev => {
+                                                            const newTags = [...(prev.tags || [])];
+                                                            newTags[index] = tagName + '|' + preset.hex;
+                                                            const updated = { ...prev, tags: newTags };
+                                                            onUpdate(updated);
+                                                            return updated;
+                                                        });
+                                                    }}
+                                                    className="w-3.5 h-3.5 rounded-full border border-white/20 hover:scale-110 active:scale-90 transition-all cursor-pointer"
+                                                    style={{
+                                                        backgroundColor: preset.hex,
+                                                        boxShadow: `0 0 6px ${preset.glow}`,
+                                                    }}
+                                                    title={preset.label}
+                                                />
+                                            ))}
+
+                                            {/* Custom color selector sphere */}
+                                            <div
+                                                className="relative w-3.5 h-3.5 rounded-full bg-gradient-to-br from-white via-slate-100 to-slate-300 border border-white/40 hover:scale-110 active:scale-90 transition-all cursor-pointer flex items-center justify-center shadow-[0_0_6px_rgba(255,255,255,0.7)]"
+                                                title="Color personalizado"
+                                            >
+                                                <div className="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-red-500 via-green-500 to-blue-500 pointer-events-none" />
+                                                <input
+                                                    type="color"
+                                                    value={tagColor}
+                                                    onChange={(e) => {
+                                                        const newColor = e.target.value;
+                                                        handleTagChange(index, tagName + '|' + newColor);
+                                                        setLocalEnemy(prev => {
+                                                            const newTags = [...(prev.tags || [])];
+                                                            newTags[index] = tagName + '|' + newColor;
+                                                            const updated = { ...prev, tags: newTags };
+                                                            onUpdate(updated);
+                                                            return updated;
+                                                        });
+                                                    }}
+                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer rounded-full"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <EditableField
+                                            value={tagName}
+                                            onChange={(val) => handleTagChange(index, val + '|' + tagColor)}
+                                            onCommit={handleCommit}
+                                            showEditIcon={false}
+                                            onFocus={() => setActiveEditingTagIndex(index)}
+                                            onBlur={() => {
+                                                setTimeout(() => {
+                                                    setActiveEditingTagIndex(null);
+                                                }, 150);
+                                            }}
+                                            style={{
+                                                color: tagColor,
+                                                borderColor: tagColor + '80',
+                                                backgroundColor: tagColor + '1a',
+                                            }}
+                                            inputStyle={{
+                                                color: tagColor,
+                                                borderColor: tagColor + '80',
+                                                backgroundColor: '#000000',
+                                            }}
+                                            textClassName="px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] block min-w-[60px] text-center rounded border transition-all duration-300 font-sans"
+                                            inputClassName="px-2 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-center min-w-[60px] rounded border transition-all duration-300 font-sans"
+                                            placeholder="ETIQUETA"
+                                        />
+                                    </div>
+                                );
+                            })}
 
                             {/* Add Tag Button */}
                             <button
