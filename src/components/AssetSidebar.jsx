@@ -758,7 +758,7 @@ const AssetSidebar = ({
                           const img =
                             sides &&
                               [4, 6, 8, 10, 12, 20, 100].includes(Number(sides))
-                              ? `/dados/calculadora/calculadora-D${sides}.png`
+                              ? `/dados/calculadora/calculadora-D${sides}.webp`
                               : null;
                           return (
                             <div

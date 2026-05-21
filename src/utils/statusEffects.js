@@ -200,7 +200,7 @@ export const ESTADOS = Object.entries(DEFAULT_STATUS_EFFECTS)
     .map(([id, config]) => ({
     id,
     name: config.label,
-    img: `/estados/${config.label}.png`,
+    img: `/estados/${config.label}.webp`,
     desc: config.desc,
     hex: config.hex
 }));

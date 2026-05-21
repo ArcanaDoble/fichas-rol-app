@@ -3,21 +3,21 @@ import PropTypes from 'prop-types';
 
 const variantStyles = {
   weapon: {
-    icon: '/marcas/Espada.png',
+    icon: '/marcas/Espada.webp',
     fallbackIcon: '⚔️',
     gradient: 'from-red-900/20 to-orange-900/20',
     border: 'border-red-700/50 hover:border-red-600/70',
     glow: '',
   },
   armor: {
-    icon: '/marcas/Armadura.png',
+    icon: '/marcas/Armadura.webp',
     fallbackIcon: '🛡️',
     gradient: 'from-blue-900/20 to-cyan-900/20',
     border: 'border-blue-700/50 hover:border-blue-600/70',
     glow: 'hover:shadow-blue-500/20',
   },
   power: {
-    icon: '/marcas/Músculo.png',
+    icon: '/marcas/Músculo.webp',
     fallbackIcon: '💪',
     gradient: 'from-purple-900/20 to-pink-900/20',
     border: 'border-purple-700/50 hover:border-purple-600/70',

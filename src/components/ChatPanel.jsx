@@ -120,7 +120,7 @@ const ChatPanel = ({ playerName = '', isMaster = false }) => {
                     {m.result.details.map((d, i) => {
                       const match = d.type === 'dice' ? d.formula.match(/d(\d+)/) : null;
                       const sides = match ? match[1] : null;
-                      const img = sides && [4, 6, 8, 10, 12, 20, 100].includes(Number(sides)) ? `/dados/calculadora/calculadora-D${sides}.png` : null;
+                      const img = sides && [4, 6, 8, 10, 12, 20, 100].includes(Number(sides)) ? `/dados/calculadora/calculadora-D${sides}.webp` : null;
                       return (
                         <div key={i} className="bg-gray-800/50 rounded p-1 text-center">
                           {d.type === 'dice' && (

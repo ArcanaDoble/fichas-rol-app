@@ -134,92 +134,92 @@ const getObjectImage = (item, customImages) => {
     const target = `${name} ${type} ${category}`;
 
     // Specific Item/Weapon Overrides (Higher Priority)
-    if (name.includes('llave inglesa')) return '/armas/llave_inglesa.png';
-    if (name.includes('gancho de alcantarilla')) return '/armas/gancho_de_alcantarilla.png';
-    if (target.includes('antorcha')) return '/armas/antorcha.png';
-    if (name.includes('porra de jade')) return '/armas/Porra de jade.png';
-    if (name.includes('sanguinaria')) return '/armas/la_sanguinaria.png';
-    if (name.includes('mazo glacial')) return '/armas/mazo_glacial.png';
-    if (name.includes('cuchillo')) return '/armas/cuchillo.png';
-    if (name.includes('tuberia') || name.includes('tubería')) return '/armas/tuberia.png';
+    if (name.includes('llave inglesa')) return '/armas/llave_inglesa.webp';
+    if (name.includes('gancho de alcantarilla')) return '/armas/gancho_de_alcantarilla.webp';
+    if (target.includes('antorcha')) return '/armas/antorcha.webp';
+    if (name.includes('porra de jade')) return '/armas/Porra de jade.webp';
+    if (name.includes('sanguinaria')) return '/armas/la_sanguinaria.webp';
+    if (name.includes('mazo glacial')) return '/armas/mazo_glacial.webp';
+    if (name.includes('cuchillo')) return '/armas/cuchillo.webp';
+    if (name.includes('tuberia') || name.includes('tubería')) return '/armas/tuberia.webp';
 
     // Standard Weapons
-    if (name.includes('revolver') || name.includes('revólver')) return '/armas/revolver.png';
-    if (name.includes('pistola')) return '/armas/pistola.png';
-    if (name.includes('rifle')) return '/armas/rifle.png';
-    if (name.includes('escopeta')) return '/armas/escopeta.png';
-    if (name.includes('granarco')) return '/armas/arco_largo.png';
-    if (name.includes('arco')) return '/armas/arco_corto.png';
-    if (name.includes('gran clava') || name.includes('granclava')) return '/armas/gran_clava.png';
-    if (name.includes('clava')) return '/armas/clava.png';
-    if (name.includes('jabalina')) return '/armas/jabalina.png';
-    if (name.includes('lanza')) return '/armas/lanza.png';
-    if (name.includes('daga')) return '/armas/daga.png';
-    if (name.includes('hacha de mano')) return '/armas/hacha_de_mano.png';
-    if (name.includes('honda')) return '/armas/honda.png';
-    if (name.includes('tirachinas')) return '/armas/tirachinas.png';
-    if (name.includes('estoque')) return '/armas/estoque.png';
-    if (name.includes('ballesta pesada') || name.includes('granballesta')) return '/armas/ballesta_pesada.png';
-    if (name.includes('ultraballesta')) return '/armas/ultraballesta.jpg';
-    if (name.includes('ballesta de mano')) return '/armas/ballesta_de_mano.png';
-    if (name.includes('ballesta')) return '/armas/ballesta_ligera.png';
+    if (name.includes('revolver') || name.includes('revólver')) return '/armas/revolver.webp';
+    if (name.includes('pistola')) return '/armas/pistola.webp';
+    if (name.includes('rifle')) return '/armas/rifle.webp';
+    if (name.includes('escopeta')) return '/armas/escopeta.webp';
+    if (name.includes('granarco')) return '/armas/arco_largo.webp';
+    if (name.includes('arco')) return '/armas/arco_corto.webp';
+    if (name.includes('gran clava') || name.includes('granclava')) return '/armas/gran_clava.webp';
+    if (name.includes('clava')) return '/armas/clava.webp';
+    if (name.includes('jabalina')) return '/armas/jabalina.webp';
+    if (name.includes('lanza')) return '/armas/lanza.webp';
+    if (name.includes('daga')) return '/armas/daga.webp';
+    if (name.includes('hacha de mano')) return '/armas/hacha_de_mano.webp';
+    if (name.includes('honda')) return '/armas/honda.webp';
+    if (name.includes('tirachinas')) return '/armas/tirachinas.webp';
+    if (name.includes('estoque')) return '/armas/estoque.webp';
+    if (name.includes('ballesta pesada') || name.includes('granballesta')) return '/armas/ballesta_pesada.webp';
+    if (name.includes('ultraballesta')) return '/armas/ultraballesta.webp';
+    if (name.includes('ballesta de mano')) return '/armas/ballesta_de_mano.webp';
+    if (name.includes('ballesta')) return '/armas/ballesta_ligera.webp';
 
     // Hammers
-    if (name.includes('martillo de mano')) return '/armas/martillo_de_mano.png';
-    if (name.includes('martillo de guerra')) return '/armas/martillo_de_guerra.png';
-    if (name.includes('gran martillo')) return '/armas/gran_martillo.png';
-    if (name.includes('ultramartillo')) return '/armas/ultramartillo.png';
+    if (name.includes('martillo de mano')) return '/armas/martillo_de_mano.webp';
+    if (name.includes('martillo de guerra')) return '/armas/martillo_de_guerra.webp';
+    if (name.includes('gran martillo')) return '/armas/gran_martillo.webp';
+    if (name.includes('ultramartillo')) return '/armas/ultramartillo.webp';
 
     // Swords (Check longer/specific names first)
-    if (name.includes('espada bastarda')) return '/armas/espada_bastarda.png';
-    if (name.includes('espada larga')) return '/armas/espada_larga.png';
-    if (name.includes('espada corta')) return '/armas/espada_corta.png';
-    if (name.includes('mandoble')) return '/armas/mandoble.png';
-    if (name.includes('cimitarra')) return '/armas/cimitarra.png';
-    if (name.includes('espada')) return '/armas/espada_de_acero.png';
+    if (name.includes('espada bastarda')) return '/armas/espada_bastarda.webp';
+    if (name.includes('espada larga')) return '/armas/espada_larga.webp';
+    if (name.includes('espada corta')) return '/armas/espada_corta.webp';
+    if (name.includes('mandoble')) return '/armas/mandoble.webp';
+    if (name.includes('cimitarra')) return '/armas/cimitarra.webp';
+    if (name.includes('espada')) return '/armas/espada_de_acero.webp';
 
     // Natural Weapons
-    if (name.includes('fauces')) return '/armas/fauces.png';
-    if (name.includes('garras')) return '/armas/garras.png';
+    if (name.includes('fauces')) return '/armas/fauces.webp';
+    if (name.includes('garras')) return '/armas/garras.webp';
 
     // Generic Object Checks
-    if (target.includes('chatarra')) return '/objetos/chatarra.jpg';
-    if (target.includes('comida')) return '/objetos/comida.png';
-    if (target.includes('remedio') || target.includes('vendaje')) return '/objetos/vendaje.png';
-    if (target.includes('dinero') || target.includes('moneda')) return '/objetos/dinero.png';
-    if (target.includes('elixir') || target.includes('poción') || target.includes('pocion')) return '/objetos/elixir.png';
-    if (target.includes('libro')) return '/objetos/libro.png';
-    if (target.includes('llave')) return '/objetos/llave.png';
-    if (target.includes('municion') || target.includes('munición')) return '/objetos/municion.png';
-    if (target.includes('pergamino')) return '/objetos/pergamino.png';
-    if (target.includes('polvora') || target.includes('pólvora')) return '/objetos/polvora.png';
-    if (target.includes('coctel molotov') || target.includes('cóctel molotov')) return '/objetos/coctel_molotov.png';
-    if (target.includes('herramientas') || target.includes('herramienta')) return '/objetos/herramientas.png';
-    if (target.includes('recurso')) return '/objetos/recurso.jpg';
-    if (target.includes('accesorio')) return '/objetos/accesorio.png';
-    if (target.includes('arma') && !target.includes('armadura')) return '/objetos/arma.png';
+    if (target.includes('chatarra')) return '/objetos/chatarra.webp';
+    if (target.includes('comida')) return '/objetos/comida.webp';
+    if (target.includes('remedio') || target.includes('vendaje')) return '/objetos/vendaje.webp';
+    if (target.includes('dinero') || target.includes('moneda')) return '/objetos/dinero.webp';
+    if (target.includes('elixir') || target.includes('poción') || target.includes('pocion')) return '/objetos/elixir.webp';
+    if (target.includes('libro')) return '/objetos/libro.webp';
+    if (target.includes('llave')) return '/objetos/llave.webp';
+    if (target.includes('municion') || target.includes('munición')) return '/objetos/municion.webp';
+    if (target.includes('pergamino')) return '/objetos/pergamino.webp';
+    if (target.includes('polvora') || target.includes('pólvora')) return '/objetos/polvora.webp';
+    if (target.includes('coctel molotov') || target.includes('cóctel molotov')) return '/objetos/coctel_molotov.webp';
+    if (target.includes('herramientas') || target.includes('herramienta')) return '/objetos/herramientas.webp';
+    if (target.includes('recurso')) return '/objetos/recurso.webp';
+    if (target.includes('accesorio')) return '/objetos/accesorio.webp';
+    if (target.includes('arma') && !target.includes('armadura')) return '/objetos/arma.webp';
 
     // Specific Armor Checks (Prioritize over generic 'armadura')
-    if (target.includes('ultraarmadura de hierro')) return '/armaduras/armadura_de_coloso.png';
-    if (target.includes('armadura de placas')) return '/armaduras/armadura_de_placas.png';
-    if (target.includes('armadura de hierro')) return '/armaduras/armadura_de_hierro.png';
-    if (target.includes('armadura de acero reforzado')) return '/armaduras/armadura_de_acero_reforzado.png';
-    if (target.includes('armadura de acero')) return '/armaduras/armadura_de_acero.png';
-    if (target.includes('armadura de coloso')) return '/armaduras/armadura_de_coloso.png';
-    if (target.includes('armadura de escamas')) return '/armaduras/armadura_de_escamas.png';
-    if (target.includes('armadura bandeada')) return '/armaduras/armadura bandeada.png';
-    if (target.includes('armadura acolchada')) return '/armaduras/armadura_acolchada.png';
-    if (target.includes('armadura de piel') || target.includes('armadura de pieles')) return '/armaduras/armadura_de_piel.png';
-    if (target.includes('armadura de cuero tachonado')) return '/armaduras/armadura_de_cuero_tachonado.png';
-    if (target.includes('armadura de cuero')) return '/armaduras/armadura_de_cuero.png';
-    if (target.includes('camisote de mallas')) return '/armaduras/cota_de_malla.png';
+    if (target.includes('ultraarmadura de hierro')) return '/armaduras/armadura_de_coloso.webp';
+    if (target.includes('armadura de placas')) return '/armaduras/armadura_de_placas.webp';
+    if (target.includes('armadura de hierro')) return '/armaduras/armadura_de_hierro.webp';
+    if (target.includes('armadura de acero reforzado')) return '/armaduras/armadura_de_acero_reforzado.webp';
+    if (target.includes('armadura de acero')) return '/armaduras/armadura_de_acero.webp';
+    if (target.includes('armadura de coloso')) return '/armaduras/armadura_de_coloso.webp';
+    if (target.includes('armadura de escamas')) return '/armaduras/armadura_de_escamas.webp';
+    if (target.includes('armadura bandeada')) return '/armaduras/armadura bandeada.webp';
+    if (target.includes('armadura acolchada')) return '/armaduras/armadura_acolchada.webp';
+    if (target.includes('armadura de piel') || target.includes('armadura de pieles')) return '/armaduras/armadura_de_piel.webp';
+    if (target.includes('armadura de cuero tachonado')) return '/armaduras/armadura_de_cuero_tachonado.webp';
+    if (target.includes('armadura de cuero')) return '/armaduras/armadura_de_cuero.webp';
+    if (target.includes('camisote de mallas')) return '/armaduras/cota_de_malla.webp';
 
     // Generic Armor Fallback
-    if (target.includes('armadura')) return '/objetos/armadura.png';
+    if (target.includes('armadura')) return '/objetos/armadura.webp';
 
     // Accessories
-    if (name.includes('casco de minero')) return '/accesorios/casco_de_minero.png';
-    if (name.includes('guante blanco')) return '/accesorios/guante_blanco.png';
+    if (name.includes('casco de minero')) return '/accesorios/casco_de_minero.webp';
+    if (name.includes('guante blanco')) return '/accesorios/guante_blanco.webp';
 
     return null;
 };
@@ -1075,19 +1075,19 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                     if (!armorName) return null;
                                                     const name = armorName.toLowerCase();
                                                     // Check specific/longer names first to avoid partial matches
-                                                    if (name.includes('ultraarmadura de hierro')) return '/armaduras/armadura_de_coloso.png';
-                                                    if (name.includes('armadura de placas')) return '/armaduras/armadura_de_placas.png';
-                                                    if (name.includes('armadura de hierro')) return '/armaduras/armadura_de_hierro.png';
-                                                    if (name.includes('armadura de acero reforzado')) return '/armaduras/armadura_de_acero_reforzado.png';
-                                                    if (name.includes('armadura de acero')) return '/armaduras/armadura_de_acero.png';
-                                                    if (name.includes('armadura de coloso')) return '/armaduras/armadura_de_coloso.png';
-                                                    if (name.includes('armadura de escamas')) return '/armaduras/armadura_de_escamas.png';
-                                                    if (name.includes('armadura bandeada')) return '/armaduras/armadura bandeada.png';
-                                                    if (name.includes('armadura acolchada')) return '/armaduras/armadura_acolchada.png';
-                                                    if (name.includes('armadura de piel') || name.includes('armadura de pieles')) return '/armaduras/armadura_de_piel.png';
-                                                    if (name.includes('armadura de cuero tachonado')) return '/armaduras/armadura_de_cuero_tachonado.png';
-                                                    if (name.includes('armadura de cuero')) return '/armaduras/armadura_de_cuero.png';
-                                                    if (name.includes('camisote de mallas')) return '/armaduras/cota_de_malla.png';
+                                                    if (name.includes('ultraarmadura de hierro')) return '/armaduras/armadura_de_coloso.webp';
+                                                    if (name.includes('armadura de placas')) return '/armaduras/armadura_de_placas.webp';
+                                                    if (name.includes('armadura de hierro')) return '/armaduras/armadura_de_hierro.webp';
+                                                    if (name.includes('armadura de acero reforzado')) return '/armaduras/armadura_de_acero_reforzado.webp';
+                                                    if (name.includes('armadura de acero')) return '/armaduras/armadura_de_acero.webp';
+                                                    if (name.includes('armadura de coloso')) return '/armaduras/armadura_de_coloso.webp';
+                                                    if (name.includes('armadura de escamas')) return '/armaduras/armadura_de_escamas.webp';
+                                                    if (name.includes('armadura bandeada')) return '/armaduras/armadura bandeada.webp';
+                                                    if (name.includes('armadura acolchada')) return '/armaduras/armadura_acolchada.webp';
+                                                    if (name.includes('armadura de piel') || name.includes('armadura de pieles')) return '/armaduras/armadura_de_piel.webp';
+                                                    if (name.includes('armadura de cuero tachonado')) return '/armaduras/armadura_de_cuero_tachonado.webp';
+                                                    if (name.includes('armadura de cuero')) return '/armaduras/armadura_de_cuero.webp';
+                                                    if (name.includes('camisote de mallas')) return '/armaduras/cota_de_malla.webp';
                                                     return null;
                                                 };
 

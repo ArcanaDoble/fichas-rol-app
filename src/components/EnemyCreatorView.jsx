@@ -1,8 +1,5 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { ChevronLeft, Save, Upload, User, Shield, Zap, Activity, Brain, Ghost, Skull } from 'lucide-react';
-import Cropper from 'react-easy-crop';
-import Modal from './Modal';
-import Boton from './Boton';
+import React, { useState, useRef } from 'react';
+import { ChevronLeft, Save, Upload, User, Shield, Zap, Activity, Brain, Ghost, Skull, RotateCcw, ZoomIn, ZoomOut, Move, Minus, Plus } from 'lucide-react';
 import { storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
@@ -15,37 +12,15 @@ const DEFAULT_STATS = {
 };
 
 const DICE_OPTIONS = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
+const CROP_MIN_ZOOM = 0.5;
+const CROP_MAX_ZOOM = 3;
+const STAT_MIN = 1;
+const STAT_MAX = 50;
 
-const createImage = (url) =>
-    new Promise((resolve, reject) => {
-        const image = new Image();
-        image.addEventListener('load', () => resolve(image));
-        image.addEventListener('error', (error) => reject(error));
-        image.setAttribute('crossOrigin', 'anonymous');
-        image.src = url;
-    });
-
-const getCroppedImage = async (imageSrc, crop) => {
-    if (!imageSrc || !crop) return null;
-    const image = await createImage(imageSrc);
-    const canvas = document.createElement('canvas');
-    canvas.width = crop.width;
-    canvas.height = crop.height;
-    const ctx = canvas.getContext('2d');
-
-    ctx.drawImage(
-        image,
-        crop.x,
-        crop.y,
-        crop.width,
-        crop.height,
-        0,
-        0,
-        crop.width,
-        crop.height
-    );
-
-    return canvas.toDataURL('image/png');
+const clampStatValue = (value) => {
+    const numeric = Number.parseInt(value, 10);
+    if (!Number.isFinite(numeric)) return STAT_MIN;
+    return Math.min(STAT_MAX, Math.max(STAT_MIN, numeric));
 };
 
 export const EnemyCreatorView = ({ onBack, onSave }) => {
@@ -72,10 +47,14 @@ export const EnemyCreatorView = ({ onBack, onSave }) => {
         imageSrc: null,
         crop: { x: 0, y: 0 },
         zoom: 1,
-        croppedAreaPixels: null,
+        refWidth: 300,
     });
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const [isSaving, setIsSaving] = useState(false);
     const fileInputRef = useRef(null);
+    const cropContainerRef = useRef(null);
+    const imageRef = useRef(null);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -93,11 +72,12 @@ export const EnemyCreatorView = ({ onBack, onSave }) => {
     };
 
     const handleStatChange = (statName, field, value) => {
+        const nextValue = clampStatValue(value);
         setFormData(prev => ({
             ...prev,
             stats: {
                 ...prev.stats,
-                [statName]: { ...prev.stats[statName], [field]: Number(value), current: Number(value) }
+                [statName]: { ...prev.stats[statName], [field]: nextValue, current: nextValue }
             }
         }));
     };
@@ -107,28 +87,107 @@ export const EnemyCreatorView = ({ onBack, onSave }) => {
             const file = e.target.files[0];
             const reader = new FileReader();
             reader.addEventListener('load', () => {
-                setCropperState(prev => ({ ...prev, imageSrc: reader.result }));
+                setCropperState({
+                    imageSrc: reader.result,
+                    crop: { x: 0, y: 0 },
+                    zoom: 1,
+                    refWidth: cropContainerRef.current?.clientWidth || 300,
+                });
                 setIsCropping(true);
             });
             reader.readAsDataURL(file);
+            e.target.value = '';
         }
     };
 
-    const handleCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
-        setCropperState((prev) => ({ ...prev, croppedAreaPixels }));
-    }, []);
+    const handleCropPointerDown = (event) => {
+        if (!cropperState.imageSrc) return;
+        event.preventDefault();
+        const point = 'touches' in event ? event.touches[0] : event;
+        setIsDragging(true);
+        setDragStart({
+            x: point.clientX - cropperState.crop.x,
+            y: point.clientY - cropperState.crop.y,
+        });
+    };
+
+    const handleCropPointerMove = (event) => {
+        if (!isDragging) return;
+        event.preventDefault();
+        const point = 'touches' in event ? event.touches[0] : event;
+        const currentWidth = cropContainerRef.current?.clientWidth || 300;
+        setCropperState((prev) => ({
+            ...prev,
+            crop: {
+                x: point.clientX - dragStart.x,
+                y: point.clientY - dragStart.y,
+            },
+            refWidth: currentWidth,
+        }));
+    };
+
+    const handleCropPointerUp = () => {
+        setIsDragging(false);
+    };
+
+    const updateCropZoom = (nextZoom) => {
+        const zoom = Math.min(CROP_MAX_ZOOM, Math.max(CROP_MIN_ZOOM, nextZoom));
+        setCropperState((prev) => ({ ...prev, zoom }));
+    };
+
+    const handleCropWheel = (event) => {
+        if (!cropperState.imageSrc) return;
+        event.preventDefault();
+        updateCropZoom(cropperState.zoom + (event.deltaY > 0 ? -0.05 : 0.05));
+    };
+
+    const generatePortraitImage = async () => {
+        if (!cropperState.imageSrc || !imageRef.current) return formData.image;
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return formData.image;
+
+        const width = 600;
+        const height = 900;
+        canvas.width = width;
+        canvas.height = height;
+        ctx.fillStyle = '#0b1120';
+        ctx.fillRect(0, 0, width, height);
+
+        const img = imageRef.current;
+        const visualToCanvasRatio = width / (cropperState.refWidth || 300);
+
+        ctx.translate(width / 2, height / 2);
+        ctx.translate(cropperState.crop.x * visualToCanvasRatio, cropperState.crop.y * visualToCanvasRatio);
+        ctx.scale(cropperState.zoom, cropperState.zoom);
+
+        const imgAspectRatio = img.naturalHeight / img.naturalWidth;
+        const drawWidth = width;
+        const drawHeight = width * imgAspectRatio;
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+
+        return canvas.toDataURL('image/jpeg', 0.9);
+    };
+
+    const handleCropCancel = () => {
+        setIsCropping(false);
+        setIsDragging(false);
+        setCropperState({
+            imageSrc: null,
+            crop: { x: 0, y: 0 },
+            zoom: 1,
+            refWidth: 300,
+        });
+    };
 
     const handleCropSave = async () => {
-        try {
-            const croppedImage = await getCroppedImage(
-                cropperState.imageSrc,
-                cropperState.croppedAreaPixels
-            );
-            setFormData(prev => ({ ...prev, image: croppedImage }));
-            setIsCropping(false);
-        } catch (e) {
-            console.error(e);
-        }
+        const croppedImage = await generatePortraitImage();
+        setFormData(prev => ({ ...prev, image: croppedImage }));
+        setIsCropping(false);
     };
 
     const handleSave = async () => {
@@ -141,7 +200,9 @@ export const EnemyCreatorView = ({ onBack, onSave }) => {
 
         try {
             const enemyId = `enemy-${Date.now()}`;
-            let imageUrl = formData.image;
+            let imageUrl = isCropping && cropperState.imageSrc
+                ? await generatePortraitImage()
+                : formData.image;
 
             // If image is a Base64 string (from cropper), upload it to Storage
             if (imageUrl && imageUrl.startsWith('data:')) {
@@ -185,55 +246,184 @@ export const EnemyCreatorView = ({ onBack, onSave }) => {
     };
 
     return (
-        <div className="absolute inset-0 bg-[#050b14] text-slate-200 overflow-y-auto custom-scrollbar p-8">
+        <div className="absolute inset-0 overflow-x-hidden overflow-y-auto bg-[#050b14] p-4 text-slate-200 custom-scrollbar sm:p-6 lg:p-8">
             <div className="max-w-6xl mx-auto">
                 {/* Header */}
-                <div className="flex items-center justify-between mb-8 border-b border-red-900/30 pb-6">
-                    <div className="flex items-center gap-4">
-                        <button onClick={onBack} className="p-2 rounded-full border border-red-900/50 hover:border-red-500 text-red-900/50 hover:text-red-500 transition-colors">
-                            <ChevronLeft className="w-6 h-6" />
-                        </button>
-                        <div>
-                            <h1 className="text-3xl font-['Cinzel'] text-red-100 uppercase">Crear Nuevo Enemigo</h1>
-                            <p className="text-red-500/60 text-xs font-bold uppercase tracking-widest">Añade una amenaza al bestiario</p>
+                <div className="mb-8 border-b border-red-900/30 pb-6">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-4">
+                            <button onClick={onBack} className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-red-900/50 text-red-900/70 transition-colors hover:border-red-500 hover:text-red-500 sm:mt-0">
+                                <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
+                            </button>
+                            <div className="min-w-0">
+                                <h1 className="font-['Cinzel'] text-[2rem] leading-[1.05] text-red-100 uppercase sm:text-3xl">Crear Nuevo Enemigo</h1>
+                                <p className="text-red-500/60 text-xs font-bold uppercase tracking-widest">Añade una amenaza al bestiario</p>
+                            </div>
                         </div>
+                        <button
+                            onClick={handleSave}
+                            disabled={isSaving}
+                            className={`flex w-full min-w-0 items-center justify-center gap-2 rounded-sm bg-red-800 px-4 py-3 font-['Cinzel'] text-sm font-bold uppercase tracking-wider text-white shadow-lg transition-all hover:bg-red-700 sm:w-auto sm:px-8 sm:text-base ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                            <Save className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" />
+                            <span className="truncate">{isSaving ? 'Guardando...' : 'Guardar Enemigo'}</span>
+                        </button>
                     </div>
-                    <button
-                        onClick={handleSave}
-                        disabled={isSaving}
-                        className={`flex items-center gap-2 px-8 py-3 bg-red-800 hover:bg-red-700 text-white font-bold font-['Cinzel'] uppercase tracking-wider rounded-sm shadow-lg transition-all ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                        <Save className="w-5 h-5" /> {isSaving ? 'Guardando...' : 'Guardar Enemigo'}
-                    </button>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
 
                     {/* Left Column: Visuals */}
                     <div className="space-y-6">
-                        <div
-                            className="relative aspect-[3/4.5] bg-[#0b1120] rounded-lg border-2 border-dashed border-red-900/30 flex flex-col items-center justify-center overflow-hidden group cursor-pointer hover:border-red-500 hover:bg-red-900/10 transition-all"
-                            onClick={() => fileInputRef.current?.click()}
-                        >
-                            {formData.image ? (
-                                <img src={formData.image} alt="Preview" className="absolute inset-0 w-full h-full object-cover" />
-                            ) : (
-                                <div className="text-center p-6">
-                                    <Upload className="w-12 h-12 text-red-700 group-hover:text-red-500 transition-colors mx-auto mb-4" />
-                                    <p className="text-sm font-bold uppercase tracking-widest text-red-200 mb-2">Subir Imagen</p>
-                                    <p className="text-xs text-red-500/60">Click para seleccionar</p>
+                        <div className="space-y-4">
+                            <div
+                                className={`relative aspect-[3/4.5] bg-[#0b1120] rounded-lg border-2 border-dashed border-red-900/30 overflow-hidden group transition-all ${isCropping ? 'border-red-500/50 cursor-grab' : 'cursor-pointer hover:border-red-500 hover:bg-red-900/10'}`}
+                                onClick={() => {
+                                    if (!isCropping) fileInputRef.current?.click();
+                                }}
+                            >
+                                {isCropping && cropperState.imageSrc ? (
+                                    <div
+                                        ref={cropContainerRef}
+                                        className={`relative h-full w-full overflow-hidden ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                                        onMouseDown={handleCropPointerDown}
+                                        onMouseMove={handleCropPointerMove}
+                                        onMouseUp={handleCropPointerUp}
+                                        onMouseLeave={handleCropPointerUp}
+                                        onTouchStart={handleCropPointerDown}
+                                        onTouchMove={handleCropPointerMove}
+                                        onTouchEnd={handleCropPointerUp}
+                                        onWheel={handleCropWheel}
+                                    >
+                                        <img
+                                            ref={imageRef}
+                                            src={cropperState.imageSrc}
+                                            alt="Preview"
+                                            draggable={false}
+                                            crossOrigin="anonymous"
+                                            className="absolute max-w-none origin-center pointer-events-none select-none transition-transform duration-75 ease-out"
+                                            style={{
+                                                left: '50%',
+                                                top: '50%',
+                                                width: '100%',
+                                                height: 'auto',
+                                                transform: `translate(-50%, -50%) translate(${cropperState.crop.x}px, ${cropperState.crop.y}px) scale(${cropperState.zoom})`,
+                                            }}
+                                        />
+                                        <div className="pointer-events-none absolute inset-0 z-10 grid grid-cols-3 grid-rows-3 opacity-20">
+                                            <div className="border-r border-b border-white"></div><div className="border-r border-b border-white"></div><div className="border-b border-white"></div>
+                                            <div className="border-r border-b border-white"></div><div className="border-r border-b border-white"></div><div className="border-b border-white"></div>
+                                            <div className="border-r border-white"></div><div className="border-r border-white"></div><div></div>
+                                        </div>
+                                        <div className="pointer-events-none absolute inset-0 z-20 border-[4px] border-red-500/70"></div>
+                                        <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-20 flex h-[35%] items-end justify-center bg-gradient-to-t from-[#0b1120] via-[#0b1120]/80 to-transparent pb-6">
+                                            <div className="rounded border border-red-400/20 px-2 py-1 text-[8px] font-bold uppercase tracking-widest text-red-200/30">Zona Texto</div>
+                                        </div>
+                                        <div className="absolute right-2 top-2 z-30 flex gap-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                                            <button
+                                                type="button"
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    fileInputRef.current?.click();
+                                                }}
+                                                className="rounded-full border border-white/10 bg-black/60 p-1.5 text-slate-300 backdrop-blur hover:border-red-500 hover:text-white"
+                                                aria-label="Cambiar imagen"
+                                            >
+                                                <Upload className="h-3.5 w-3.5" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    setCropperState((prev) => ({
+                                                        ...prev,
+                                                        crop: { x: 0, y: 0 },
+                                                        zoom: 1,
+                                                    }));
+                                                }}
+                                                className="rounded-full border border-white/10 bg-black/60 p-1.5 text-slate-300 backdrop-blur hover:border-red-500 hover:text-white"
+                                                aria-label="Centrar imagen"
+                                            >
+                                                <RotateCcw className="h-3.5 w-3.5" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : formData.image ? (
+                                    <img src={formData.image} alt="Preview" className="absolute inset-0 w-full h-full object-cover" />
+                                ) : (
+                                    <div className="flex h-full flex-col items-center justify-center p-6 text-center">
+                                        <Upload className="w-12 h-12 text-red-700 group-hover:text-red-500 transition-colors mx-auto mb-4" />
+                                        <p className="text-sm font-bold uppercase tracking-widest text-red-200 mb-2">Subir Imagen</p>
+                                        <p className="text-xs text-red-500/60">Click para seleccionar</p>
+                                    </div>
+                                )}
+                                {!isCropping && formData.image && (
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <span className="text-white font-bold uppercase tracking-wider text-sm bg-red-900/80 px-3 py-1 rounded backdrop-blur-sm">Cambiar Imagen</span>
+                                    </div>
+                                )}
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    onChange={handleImageUpload}
+                                    accept="image/*"
+                                    className="hidden"
+                                />
+                            </div>
+
+                            {isCropping && (
+                                <div className="rounded border border-red-900/30 bg-[#0a101d]/90 p-4 shadow-xl">
+                                    <div className="mb-3 flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-red-400">
+                                        <div className="flex items-center gap-2">
+                                            <Move className="h-3 w-3" /> Zoom
+                                        </div>
+                                        <div>{(cropperState.zoom * 100).toFixed(0)}%</div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => updateCropZoom(cropperState.zoom - 0.1)}
+                                            className="text-slate-500 transition hover:text-red-400"
+                                            aria-label="Reducir zoom"
+                                        >
+                                            <ZoomOut className="h-4 w-4" />
+                                        </button>
+                                        <input
+                                            type="range"
+                                            min={CROP_MIN_ZOOM}
+                                            max={CROP_MAX_ZOOM}
+                                            step="0.05"
+                                            value={cropperState.zoom}
+                                            onChange={(event) => updateCropZoom(Number(event.target.value))}
+                                            className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-slate-800 accent-red-500"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => updateCropZoom(cropperState.zoom + 0.1)}
+                                            className="text-slate-500 transition hover:text-red-400"
+                                            aria-label="Aumentar zoom"
+                                        >
+                                            <ZoomIn className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                    <div className="mt-4 flex gap-2 border-t border-red-900/30 pt-3">
+                                        <button
+                                            type="button"
+                                            onClick={handleCropCancel}
+                                            className="flex-1 border border-slate-700 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleCropSave}
+                                            className="flex-1 bg-red-700 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white shadow-lg shadow-red-900/30 transition hover:bg-red-600"
+                                        >
+                                            Aplicar
+                                        </button>
+                                    </div>
                                 </div>
                             )}
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                <span className="text-white font-bold uppercase tracking-wider text-sm bg-red-900/80 px-3 py-1 rounded backdrop-blur-sm">Cambiar Imagen</span>
-                            </div>
-                            <input
-                                type="file"
-                                ref={fileInputRef}
-                                onChange={handleImageUpload}
-                                accept="image/*"
-                                className="hidden"
-                            />
                         </div>
                     </div>
 
@@ -312,7 +502,7 @@ export const EnemyCreatorView = ({ onBack, onSave }) => {
                             <h3 className="text-red-500 font-['Cinzel'] text-lg mb-4 flex items-center gap-2">
                                 <Activity className="w-5 h-5" /> Configuración de Estadísticas
                             </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
                                 {[
                                     { id: 'postura', label: 'Postura', icon: <Shield className="w-4 h-4 text-green-500" /> },
                                     { id: 'vida', label: 'Vida', icon: <Activity className="w-4 h-4 text-red-500" /> },
@@ -320,17 +510,44 @@ export const EnemyCreatorView = ({ onBack, onSave }) => {
                                     { id: 'cordura', label: 'Cordura', icon: <Brain className="w-4 h-4 text-purple-500" /> },
                                     { id: 'armadura', label: 'Armadura', icon: <Ghost className="w-4 h-4 text-slate-500" /> },
                                 ].map((stat) => (
-                                    <div key={stat.id} className="bg-[#050b14] p-3 rounded border border-red-900/30 text-center group hover:border-red-500/50 transition-colors">
+                                    <div key={stat.id} className="bg-[#050b14] p-4 sm:p-3 rounded border border-red-900/30 text-center group hover:border-red-500/50 transition-colors">
                                         <div className="flex justify-center mb-2">{stat.icon}</div>
                                         <label className="block text-[10px] font-bold uppercase text-red-400/60 mb-2">{stat.label}</label>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            max="50"
-                                            value={formData.stats[stat.id].max}
-                                            onChange={(e) => handleStatChange(stat.id, 'max', parseInt(e.target.value))}
-                                            className="w-16 mx-auto bg-[#0a101d] border border-red-900/30 rounded text-center text-red-100 font-bold focus:border-red-500 outline-none"
-                                        />
+                                        <div className="mx-auto grid h-12 w-full max-w-[10rem] grid-cols-[2.75rem_minmax(3rem,1fr)_2.75rem] overflow-hidden rounded-xl border border-red-900/40 bg-[#080d17] shadow-[inset_0_0_18px_rgba(0,0,0,0.35)] focus-within:border-red-500/70 xl:max-w-[6.25rem] xl:grid-cols-[2rem_2.25rem_2rem]">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleStatChange(stat.id, 'max', formData.stats[stat.id].max - 1)}
+                                                className="flex h-full items-center justify-center border-r border-red-900/35 text-red-300 transition hover:bg-red-950/50 hover:text-red-100 active:bg-red-900/50 disabled:cursor-not-allowed disabled:opacity-35"
+                                                disabled={formData.stats[stat.id].max <= STAT_MIN}
+                                                aria-label={`Reducir ${stat.label}`}
+                                            >
+                                                <Minus className="h-4 w-4" />
+                                            </button>
+                                            <input
+                                                type="number"
+                                                min={STAT_MIN}
+                                                max={STAT_MAX}
+                                                inputMode="numeric"
+                                                value={formData.stats[stat.id].max}
+                                                onChange={(e) => {
+                                                    if (/^\d{0,2}$/.test(e.target.value)) {
+                                                        handleStatChange(stat.id, 'max', e.target.value);
+                                                    }
+                                                }}
+                                                onFocus={(e) => e.target.select()}
+                                                className="h-full w-full border-0 bg-[#0d1422] px-1 text-center font-mono text-xl font-black leading-none text-white opacity-100 outline-none [appearance:textfield] [-moz-appearance:textfield] placeholder:text-red-200 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                                aria-label={`${stat.label} máximo`}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => handleStatChange(stat.id, 'max', formData.stats[stat.id].max + 1)}
+                                                className="flex h-full items-center justify-center border-l border-red-900/35 text-red-300 transition hover:bg-red-950/50 hover:text-red-100 active:bg-red-900/50 disabled:cursor-not-allowed disabled:opacity-35"
+                                                disabled={formData.stats[stat.id].max >= STAT_MAX}
+                                                aria-label={`Aumentar ${stat.label}`}
+                                            >
+                                                <Plus className="h-4 w-4" />
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -340,64 +557,6 @@ export const EnemyCreatorView = ({ onBack, onSave }) => {
                 </div>
             </div>
 
-            {/* Crop Modal */}
-            <Modal
-                isOpen={isCropping}
-                onClose={() => setIsCropping(false)}
-                title="Ajustar retrato"
-                size="xl"
-                footer={
-                    <>
-                        <Boton color="gray" onClick={() => setIsCropping(false)}>
-                            Cancelar
-                        </Boton>
-                        <Boton color="red" onClick={handleCropSave}>
-                            Guardar recorte
-                        </Boton>
-                    </>
-                }
-            >
-                <div className="flex flex-col gap-6">
-                    <div className="relative h-[360px] overflow-hidden rounded-2xl border border-red-900/30 bg-[#050b14]">
-                        {cropperState.imageSrc ? (
-                            <Cropper
-                                image={cropperState.imageSrc}
-                                crop={cropperState.crop}
-                                zoom={cropperState.zoom}
-                                aspect={3 / 4.5}
-                                minZoom={0.3}
-                                maxZoom={6}
-                                onCropChange={(crop) => setCropperState((prev) => ({ ...prev, crop }))}
-                                onZoomChange={(zoom) => setCropperState((prev) => ({ ...prev, zoom }))}
-                                onCropComplete={handleCropComplete}
-                                restrictPosition
-                                objectFit="cover"
-                            />
-                        ) : (
-                            <div className="flex h-full items-center justify-center text-sm text-red-400">
-                                Selecciona una imagen para comenzar.
-                            </div>
-                        )}
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <label htmlFor="zoom" className="text-xs uppercase tracking-[0.4em] text-red-500">
-                            Zoom
-                        </label>
-                        <input
-                            id="zoom"
-                            type="range"
-                            min={0.3}
-                            max={6}
-                            step={0.05}
-                            value={cropperState.zoom}
-                            onChange={(event) =>
-                                setCropperState((prev) => ({ ...prev, zoom: Number(event.target.value) }))
-                            }
-                            className="accent-red-500"
-                        />
-                    </div>
-                </div>
-            </Modal>
         </div>
     );
 };

@@ -15,13 +15,13 @@ const DiceCalculator = ({ playerName, onBack }) => {
 
   // Tipos de dados disponibles con imágenes
   const diceTypes = [
-    { sides: 4, color: 'bg-red-500', image: '/dados/calculadora/calculadora-D4.png' },
-    { sides: 6, color: 'bg-blue-500', image: '/dados/calculadora/calculadora-D6.png' },
-    { sides: 8, color: 'bg-green-500', image: '/dados/calculadora/calculadora-D8.png' },
-    { sides: 10, color: 'bg-yellow-500', image: '/dados/calculadora/calculadora-D10.png' },
-    { sides: 12, color: 'bg-purple-500', image: '/dados/calculadora/calculadora-D12.png' },
-    { sides: 20, color: 'bg-pink-500', image: '/dados/calculadora/calculadora-D20.png' },
-    { sides: 100, color: 'bg-gray-500', image: '/dados/calculadora/calculadora-D100.png' }
+    { sides: 4, color: 'bg-red-500', image: '/dados/calculadora/calculadora-D4.webp' },
+    { sides: 6, color: 'bg-blue-500', image: '/dados/calculadora/calculadora-D6.webp' },
+    { sides: 8, color: 'bg-green-500', image: '/dados/calculadora/calculadora-D8.webp' },
+    { sides: 10, color: 'bg-yellow-500', image: '/dados/calculadora/calculadora-D10.webp' },
+    { sides: 12, color: 'bg-purple-500', image: '/dados/calculadora/calculadora-D12.webp' },
+    { sides: 20, color: 'bg-pink-500', image: '/dados/calculadora/calculadora-D20.webp' },
+    { sides: 100, color: 'bg-gray-500', image: '/dados/calculadora/calculadora-D100.webp' }
   ];
 
   // Cargar historial del localStorage

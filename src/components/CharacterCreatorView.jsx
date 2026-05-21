@@ -33,7 +33,7 @@ const DiceSelector = ({ value, onChange }) => {
                 className="flex items-center justify-center w-[50px] h-[50px] transition-transform hover:scale-110 focus:outline-none"
             >
                 <img
-                    src={`/dados/${value.toUpperCase()}.png`}
+                    src={`/dados/${value.toUpperCase()}.webp`}
                     alt={value}
                     className="w-full h-full object-contain drop-shadow-[0_0_5px_rgba(200,170,110,0.5)]"
                 />
@@ -67,7 +67,7 @@ const DiceSelector = ({ value, onChange }) => {
                                     className={`flex flex-col items-center justify-center p-1 rounded-lg transition-all duration-200 group ${gridPos} ${value === dice ? 'bg-[#c8aa6e]/20 border border-[#c8aa6e]/50' : 'hover:bg-[#c8aa6e]/10 border border-transparent'}`}
                                 >
                                     <div className="w-8 h-8 mb-0.5 transition-transform group-hover:scale-110">
-                                        <img src={`/dados/${dice.toUpperCase()}.png`} alt={dice} className="w-full h-full object-contain" />
+                                        <img src={`/dados/${dice.toUpperCase()}.webp`} alt={dice} className="w-full h-full object-contain" />
                                     </div>
                                     <span className={`text-[9px] font-bold uppercase tracking-tighter ${value === dice ? 'text-[#c8aa6e]' : 'text-slate-400 group-hover:text-[#c8aa6e]'}`}>
                                         {dice.toUpperCase()}
