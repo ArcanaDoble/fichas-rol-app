@@ -55,7 +55,7 @@ import { db, storage } from '../firebase';
 import Sidebar, { MobileNav } from './Sidebar';
 import ProgressionView from './ProgressionView';
 import LoadoutView from './LoadoutView';
-import { StoreView } from './StoreView';
+import CardBuilder from './CardBuilder';
 import HexIcon from './HexIcon';
 import { RelicsView } from './RelicsView';
 import KarmaBar from './KarmaBar';
@@ -5030,23 +5030,7 @@ const ClassList = ({
           );
         case 'store':
           return (
-            <StoreView
-              equipmentCatalog={equipmentCatalog}
-              storeItems={dndClass.storeItems}
-              money={dndClass.money !== undefined ? dndClass.money : 4697}
-              onUpdateStoreItems={(newItems) => {
-                setEditingClass((prev) => ({
-                  ...prev,
-                  storeItems: newItems
-                }));
-              }}
-              onUpdateMoney={(newMoney) => {
-                setEditingClass((prev) => ({
-                  ...prev,
-                  money: newMoney
-                }));
-              }}
-            />
+            <CardBuilder mode={isPlayerMode ? 'player' : 'master'} />
           );
         default:
           return null;
