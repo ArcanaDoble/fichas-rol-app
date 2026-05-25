@@ -45,7 +45,7 @@ export const getCombatQueueDisplayState = ({ queue, resolvedCount = 0, activeEve
     activeEntry,
     activeIndex,
     queueTotal: safeQueue.length + resolvedCount,
-    queueResolved: resolvedCount,
+    queueResolved: trackerIndex,
     queueCurrent: trackerIndex,
   };
 };

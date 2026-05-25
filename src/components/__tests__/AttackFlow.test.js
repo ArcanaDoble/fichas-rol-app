@@ -112,9 +112,11 @@ describe('Attack flow', () => {
   test('auto resolves if defense is unanswered', async () => {
     jest.useFakeTimers();
     addDoc.mockResolvedValue({ id: 'r1' });
-    getDoc
-      .mockResolvedValueOnce({ exists: () => false })
-      .mockResolvedValueOnce({ exists: () => true, data: () => ({ completed: false }) });
+    getDoc.mockImplementation((ref) => Promise.resolve(
+      ref?.id === 'r1'
+        ? { exists: () => true, data: () => ({ completed: false }) }
+        : { exists: () => false }
+    ));
     render(
       <AttackModal
         isOpen

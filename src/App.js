@@ -63,6 +63,7 @@ import { CharacterCreatorView } from './components/CharacterCreatorView';
 import { CharacterListView } from './components/CharacterListView';
 import InitiativeTracker from './components/InitiativeTracker';
 import CanvasSection from './components/CanvasSection';
+import CardBuilder from './components/CardBuilder';
 import EnemyViewModal from './components/EnemyViewModal';
 import BestiaryView from './components/BestiaryView';
 import StatusEffectsManager from './components/StatusEffectsManager';
@@ -5682,6 +5683,11 @@ function App() {
       />
     );
   }
+  if (userType === 'master' && authenticated && chosenView === 'card_builder') {
+    return withTooltips(
+      <CardBuilder mode="master" onBack={() => setChosenView(null)} />
+    );
+  }
 
   // MODO MÁSTER -> BESTIARIO (NUEVO)
   if (userType === 'master' && authenticated && chosenView === 'enemies') {
@@ -7326,6 +7332,11 @@ function App() {
           />
         </div>
       </div>
+    );
+  }
+  if (userType === 'master' && authenticated && chosenView === 'card_builder') {
+    return withTooltips(
+      <CardBuilder mode="master" onBack={() => setChosenView(null)} />
     );
   }
   if (userType === 'master' && authenticated && !chosenView) {

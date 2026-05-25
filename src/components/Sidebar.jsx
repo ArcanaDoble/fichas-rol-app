@@ -1,7 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { FiUser, FiBarChart2, FiBriefcase, FiShield, FiBookOpen, FiSave } from 'react-icons/fi';
-import { Coins } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import LoadingImage from './LoadingImage';
 
 // Menú items compartidos entre desktop y mobile
@@ -10,7 +10,7 @@ const menuItems = [
     { id: 'progression', label: 'CONSTELACIÓN', sub: 'Progresión', icon: <FiBarChart2 className="w-5 h-5" />, mobileLabel: 'Nivel' },
     { id: 'loadout', label: 'MAZO INICIAL', sub: 'Equipamiento', icon: <FiBriefcase className="w-5 h-5" />, mobileLabel: 'Equipo' },
     { id: 'feats', label: 'RELIQUIAS', sub: 'Talentos', icon: <FiShield className="w-5 h-5" />, mobileLabel: 'Reliq.' },
-    { id: 'store', label: 'TIENDA', sub: 'Mejoras', icon: <Coins className="w-5 h-5" />, mobileLabel: 'Tienda' },
+    { id: 'store', label: 'CARTAS', sub: 'Constructor', icon: <Layers className="w-5 h-5" />, mobileLabel: 'Cartas' },
 ];
 
 // Componente de navegación móvil (barra inferior)

@@ -82,6 +82,15 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
             isNew: true,
         },
         {
+            id: 'card_builder',
+            title: 'Constructor de Cartas',
+            description: 'Crea cartas desde fondos base y prepara nuevos assets visuales para la campaña.',
+            color: 'indigo',
+            icon: FiImage,
+            features: ['Canvas', 'Fondos', 'Nombre'],
+            isNew: true,
+        },
+        {
             id: 'minimap',
             title: 'Minimapa',
             description: 'Constructor rápido de entornos y referencias visuales.',
