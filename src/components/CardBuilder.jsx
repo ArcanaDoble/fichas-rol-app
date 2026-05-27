@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { ChevronLeft, Download, Palette, RotateCcw, Tag, Type } from 'lucide-react';
+import HexColorInput from './HexColorInput';
 
 export const CARD_BACKGROUNDS = [
   'Amarillo_1.webp',
@@ -40,6 +41,19 @@ const CARD_TYPES = [
   { id: 'trap', label: 'Trampa', maxTraits: 1, layout: 'trap' },
   { id: 'action', label: 'Acción', maxTraits: 0, layout: 'none' },
   { id: 'skill', label: 'Habilidad', maxTraits: 6, layout: 'weapon' },
+  { id: 'status', label: 'Estado', maxTraits: 1, layout: 'trap' },
+];
+
+export const ELEMENT_TYPES = [
+  { id: 'Agua', label: 'Agua' },
+  { id: 'Fuego', label: 'Fuego' },
+  { id: 'Hielo', label: 'Hielo' },
+  { id: 'Luz', label: 'Luz' },
+  { id: 'Oscuridad', label: 'Oscuridad' },
+  { id: 'Rayo', label: 'Rayo' },
+  { id: 'Tierra', label: 'Tierra' },
+  { id: 'Veneno', label: 'Veneno' },
+  { id: 'Viento', label: 'Viento' }
 ];
 
 const DEFAULT_TRAITS = ['-', '-', '-', '-', '-', '-', '-', '-'];
@@ -91,7 +105,7 @@ const drawDiceIcon = (context, x, y, size, imgElement, qty) => {
   const qtyX = x + size/2 + 24;
   context.fillStyle = '#ffffff';
   context.strokeStyle = '#000000';
-  context.lineWidth = 26;
+  context.lineWidth = 38; // Trazo negro más grueso para mayor contraste
   context.lineJoin = 'round';
   context.textAlign = 'left';
   context.textBaseline = 'middle';
@@ -104,6 +118,12 @@ const drawDiceIcon = (context, x, y, size, imgElement, qty) => {
 
 const drawRuler = (context, x, y, width, selectedIndex, labelY = y + 90) => {
   context.save();
+  if ('letterSpacing' in context) {
+    context.letterSpacing = '0px';
+  }
+  if ('fontKerning' in context) {
+    context.fontKerning = 'normal';
+  }
   
   const tickNames = ['TOQUE', 'CERCANO', 'INTERMEDIO', 'LEJANO', 'EXTREMO'];
   const startX = x - width / 2;
@@ -112,7 +132,7 @@ const drawRuler = (context, x, y, width, selectedIndex, labelY = y + 90) => {
   // 1. Draw the horizontal ruler line with black outline
   // Outline
   context.strokeStyle = '#000000';
-  context.lineWidth = 40; // Double width for outline (was 32)
+  context.lineWidth = 56; // Trazo negro más grueso para la regla
   context.lineCap = 'round';
   context.beginPath();
   context.moveTo(startX, y);
@@ -134,7 +154,7 @@ const drawRuler = (context, x, y, width, selectedIndex, labelY = y + 90) => {
     
     // Draw tick line with outline
     context.strokeStyle = '#000000';
-    context.lineWidth = isSelected ? 44 : 28;
+    context.lineWidth = isSelected ? 58 : 38; // Trazo negro más grueso para las marcas
     context.lineCap = 'round';
     context.beginPath();
     context.moveTo(tickX, y - (isSelected ? 36 : 24));
@@ -156,7 +176,7 @@ const drawRuler = (context, x, y, width, selectedIndex, labelY = y + 90) => {
   context.textBaseline = 'middle';
   context.fillStyle = '#ffffff';
   context.strokeStyle = '#000000';
-  context.lineWidth = 16;
+  context.lineWidth = 24; // Trazo negro más grueso para el texto del rango
   context.lineJoin = 'round';
   context.font = '900 82px Lato, Arial, sans-serif'; // Scaled up font from 68px to 82px
   context.strokeText(labelText, x, labelY);
@@ -232,132 +252,227 @@ const getActionDicePositions = (qty) => {
 };
 
 const drawActionConsumptionRail = (context, consumptionSlots, resourceImages) => {
-  const y = 2372;
-  const height = 168;
+  const y = 2356;
+  const height = 156;
   const slotSize = 122;
+  const circleSize = 108; // Rediseñado a 108px para separación y proporción estéticas de los círculos
   const railWidth = 780;
   const railX = (CANVAS_WIDTH - railWidth) / 2; // Centered
   const slotGap = 8;
   const slotsWidth = slotSize * 5 + slotGap * 4;
   const startX = railX + (railWidth - slotsWidth) / 2 + slotSize / 2;
 
-  drawRailBase(context, railX, y, railWidth, height, 'left');
+  drawRailBase(context, railX, y, railWidth, height, 'center');
 
   const displayConsumptionSlots = [...consumptionSlots].reverse();
 
   displayConsumptionSlots.forEach((slot, index) => {
     const x = startX + index * (slotSize + slotGap);
     const slotY = y + height / 2;
-    drawEmptyCircleSlot(context, x, slotY, slotSize);
-    drawSlotIcon(context, resourceImages[`consumption:${slot}`], x, slotY, slotSize, 'circle');
+    drawEmptyCircleSlot(context, x, slotY, circleSize);
+    drawSlotIcon(context, resourceImages[`consumption:${slot}`], x, slotY, circleSize, 'circle');
   });
 };
 
 const createRailPath = (context, x, y, width, height, side = 'left') => {
   const bevel = 82;
+  const cornerRadius = 16; // Mismo radio de redondeo que el slot de rombo para unificar la estética
   context.beginPath();
   if (side === 'left') {
-    context.moveTo(x, y + height / 2);
-    context.lineTo(x + bevel, y);
+    // Extremo izquierdo recto, extremo derecho en pico con punta sutilmente redondeada
+    context.moveTo(x, y);
     context.lineTo(x + width - bevel, y);
-    context.lineTo(x + width, y + height / 2);
+    context.arcTo(x + width, y + height / 2, x + width - bevel, y + height, cornerRadius);
+    context.lineTo(x + width - bevel, y + height);
+    context.lineTo(x, y + height);
+  } else if (side === 'right') {
+    // Extremo izquierdo en pico con punta sutilmente redondeada, extremo derecho recto
+    context.moveTo(x + width, y);
+    context.lineTo(x + bevel, y);
+    context.arcTo(x, y + height / 2, x + bevel, y + height, cornerRadius);
+    context.lineTo(x + bevel, y + height);
+    context.lineTo(x + width, y + height);
+  } else if (side === 'center') {
+    // Ambos extremos en pico con puntas redondeadas
+    context.moveTo(x + bevel, y);
+    context.lineTo(x + width - bevel, y);
+    context.arcTo(x + width, y + height / 2, x + width - bevel, y + height, cornerRadius);
     context.lineTo(x + width - bevel, y + height);
     context.lineTo(x + bevel, y + height);
-  } else {
-    context.moveTo(x, y + height / 2);
+    context.arcTo(x, y + height / 2, x + bevel, y, cornerRadius);
     context.lineTo(x + bevel, y);
-    context.lineTo(x + width - bevel, y);
-    context.lineTo(x + width, y + height / 2);
-    context.lineTo(x + width - bevel, y + height);
-    context.lineTo(x + bevel, y + height);
   }
   context.closePath();
 };
 
+const drawPlateGrain = (context, x, y, width, height, seed = 1, count = 38) => {
+  context.save();
+  context.globalCompositeOperation = 'screen';
+  for (let i = 0; i < count; i++) {
+    const t = i + seed * 17;
+    const px = x + ((Math.sin(t * 12.9898) + 1) / 2) * width;
+    const py = y + ((Math.sin(t * 78.233) + 1) / 2) * height;
+    const lineWidth = 18 + ((Math.sin(t * 37.719) + 1) / 2) * 62;
+    const alpha = 0.018 + ((Math.sin(t * 19.19) + 1) / 2) * 0.035;
+    context.strokeStyle = `rgba(255,255,255,${alpha})`;
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(px - lineWidth / 2, py);
+    context.lineTo(px + lineWidth / 2, py + Math.sin(t) * 5);
+    context.stroke();
+  }
+  context.restore();
+};
+
+const strokeRailOutline = (context, x, y, width, height, side) => {
+  const bevel = 82;
+  const cornerRadius = 16; // Mismo radio de redondeo que el slot de rombo
+  context.beginPath();
+  if (side === 'left') {
+    // Carga: El trazo va por arriba y el pico redondeado (no por abajo ni por la izquierda plana)
+    context.moveTo(x, y);
+    context.lineTo(x + width - bevel, y);
+    context.arcTo(x + width, y + height / 2, x + width - bevel, y + height, cornerRadius);
+    context.lineTo(x + width - bevel, y + height);
+  } else if (side === 'right') {
+    // Consumo: El trazo va por arriba y el pico redondeado (no por abajo ni por la derecha plana)
+    context.moveTo(x + width, y);
+    context.lineTo(x + bevel, y);
+    context.arcTo(x, y + height / 2, x + bevel, y + height, cornerRadius);
+    context.lineTo(x + bevel, y + height);
+  } else {
+    // Riel centrado (Acción): Trazamos todo el contorno bebelado redondeado
+    createRailPath(context, x, y, width, height, 'center');
+  }
+};
+
 const drawRailBase = (context, x, y, width, height, side) => {
   context.save();
+
   createRailPath(context, x, y, width, height, side);
-  context.shadowColor = 'rgba(255,255,255,0.28)';
-  context.shadowBlur = 16;
-  context.fillStyle = 'rgba(0,0,0,0.96)';
+  context.shadowColor = 'rgba(0,0,0,0.82)';
+  context.shadowBlur = 18;
+
+  const gradient = context.createLinearGradient(x, y, x, y + height);
+  gradient.addColorStop(0, 'rgba(10,10,12,0.72)');
+  gradient.addColorStop(0.48, 'rgba(0,0,0,0.96)');
+  gradient.addColorStop(1, 'rgba(10,10,12,0.82)');
+  context.fillStyle = gradient;
   context.fill();
-  context.shadowBlur = 0;
-  context.lineWidth = 5;
-  context.strokeStyle = 'rgba(255,255,255,0.12)';
+
+  context.save();
+  createRailPath(context, x, y, width, height, side);
+  context.clip();
+  drawPlateGrain(context, x, y, width, height, side === 'right' ? 9 : side === 'center' ? 5 : 3, 44);
+  context.restore();
+
+  // Creamos la ruta de trazo personalizada para evitar líneas blancas en la base y lados exteriores
+  strokeRailOutline(context, x, y, width, height, side);
+  
+  // 1. Trazado del glow blanco difuminado para iluminar las líneas no fusionadas
+  context.save();
+  context.shadowColor = 'rgba(255, 255, 255, 0.48)';
+  context.shadowBlur = 24;
+  context.lineWidth = 4;
+  context.strokeStyle = 'rgba(255, 255, 255, 0.28)';
   context.stroke();
+  context.restore();
+
+  // 2. Trazado del núcleo plateado brillante para gran contraste físico
+  context.save();
+  context.shadowBlur = 0;
+  context.lineWidth = 2.5;
+  context.strokeStyle = 'rgba(255, 255, 255, 0.58)';
+  context.stroke();
+  context.restore();
+
   context.restore();
 };
 
 const drawDiamondSlotPath = (context, x, y, size) => {
+  context.save();
+  context.translate(x, y);
+  context.rotate(Math.PI / 4); // Rotación de 45 grados
+  const s = size / Math.sqrt(2); // Lado del cuadrado para que la diagonal sea 'size'
+  const radius = 16; // Radio de redondeo para emparejar la estética del WebP
+  
   context.beginPath();
-  context.moveTo(x, y - size / 2);
-  context.lineTo(x + size / 2, y);
-  context.lineTo(x, y + size / 2);
-  context.lineTo(x - size / 2, y);
+  context.moveTo(-s / 2 + radius, -s / 2);
+  context.lineTo(s / 2 - radius, -s / 2);
+  context.quadraticCurveTo(s / 2, -s / 2, s / 2, -s / 2 + radius);
+  context.lineTo(s / 2, s / 2 - radius);
+  context.quadraticCurveTo(s / 2, s / 2, s / 2 - radius, s / 2);
+  context.lineTo(-s / 2 + radius, s / 2);
+  context.quadraticCurveTo(-s / 2, s / 2, -s / 2, s / 2 - radius);
+  context.lineTo(-s / 2, -s / 2 + radius);
+  context.quadraticCurveTo(-s / 2, -s / 2, -s / 2 + radius, -s / 2);
   context.closePath();
+  context.restore();
 };
 
 const drawEmptyDiamondSlot = (context, x, y, size) => {
   context.save();
   drawDiamondSlotPath(context, x, y, size);
+  
+  // Sunken metallic/charcoal socket gradient for rich physical depth
   const gradient = context.createLinearGradient(x - size / 2, y - size / 2, x + size / 2, y + size / 2);
-  gradient.addColorStop(0, '#4a4a4a');
-  gradient.addColorStop(0.5, '#626262');
-  gradient.addColorStop(1, '#2d2d2d');
+  gradient.addColorStop(0, '#101012');
+  gradient.addColorStop(0.5, '#202024');
+  gradient.addColorStop(1, '#0c0c0e');
   context.fillStyle = gradient;
-  context.shadowColor = 'rgba(255,255,255,0.16)';
-  context.shadowBlur = 12;
   context.fill();
-  context.lineWidth = 4;
-  context.strokeStyle = 'rgba(0,0,0,0.5)';
+  
+  // Subtle chiseled inner white outline
+  context.lineWidth = 3;
+  context.strokeStyle = 'rgba(255, 255, 255, 0.16)';
   context.stroke();
+  
   context.restore();
 };
 
 const drawEmptyCircleSlot = (context, x, y, size) => {
   context.save();
   const radius = size / 2;
-  const gradient = context.createRadialGradient(x - radius * 0.28, y - radius * 0.35, radius * 0.1, x, y, radius);
-  gradient.addColorStop(0, '#737373');
-  gradient.addColorStop(0.58, '#555555');
-  gradient.addColorStop(1, '#2b2b2b');
   context.beginPath();
   context.arc(x, y, radius, 0, Math.PI * 2);
+  
+  // Sunken metallic/charcoal socket linear gradient for rich physical depth matching the diamond
+  const gradient = context.createLinearGradient(x - size / 2, y - size / 2, x + size / 2, y + size / 2);
+  gradient.addColorStop(0, '#101012');
+  gradient.addColorStop(0.5, '#202024');
+  gradient.addColorStop(1, '#0c0c0e');
   context.fillStyle = gradient;
-  context.shadowColor = 'rgba(255,255,255,0.16)';
-  context.shadowBlur = 12;
   context.fill();
-  context.lineWidth = 4;
-  context.strokeStyle = 'rgba(0,0,0,0.58)';
+  
+  // Subtle chiseled inner white outline matching the diamond
+  context.lineWidth = 3;
+  context.strokeStyle = 'rgba(255, 255, 255, 0.16)';
   context.stroke();
+  
   context.restore();
 };
 
 const drawSlotIcon = (context, iconImage, x, y, size, shape) => {
   if (!iconImage) return;
   context.save();
-  const iconSize = shape === 'diamond' ? size * 1.16 : size * 1.08;
-  if (shape === 'diamond') {
-    drawDiamondSlotPath(context, x, y, size);
-  } else {
-    context.beginPath();
-    context.arc(x, y, size / 2, 0, Math.PI * 2);
-  }
-  context.clip();
+  // Dibujamos el icono completo a 0.98 del tamaño para lucir su propio contorno nativo sin recortes ni bordes superpuestos
+  const iconSize = size * 0.98;
   context.drawImage(iconImage, x - iconSize / 2, y - iconSize / 2, iconSize, iconSize);
   context.restore();
 };
 
 const drawWeaponResourceRails = (context, chargeSlots, consumptionSlots, resourceImages) => {
-  const y = 2372;
-  const height = 168;
+  const y = 2356;
+  const height = 156;
   const slotSize = 122;
-  const chargeRail = { x: 78, y, width: 780, height };
-  const consumptionRail = { x: 1030, y, width: 780, height };
+  const circleSize = 108;
   const slotGap = 8;
-  const slotsWidth = slotSize * 5 + slotGap * 4;
-  const chargeStartX = chargeRail.x + (chargeRail.width - slotsWidth) / 2 + slotSize / 2;
-  const consumptionStartX = consumptionRail.x + consumptionRail.width - ((consumptionRail.width - slotsWidth) / 2) - slotSize / 2;
+  const railWidth = 720; // Longitud unificada y simétrica de 720px para ambos letreros
+  const chargeRail = { x: 127, y, width: railWidth, height };
+  const consumptionRail = { x: 1761 - railWidth, y, width: railWidth, height };
+  
+  const chargeStartX = chargeRail.x + 81; // 20px de margen + slotSize/2
+  const consumptionStartX = consumptionRail.x + consumptionRail.width - 81;
 
   drawRailBase(context, chargeRail.x, chargeRail.y, chargeRail.width, chargeRail.height, 'left');
   drawRailBase(context, consumptionRail.x, consumptionRail.y, consumptionRail.width, consumptionRail.height, 'right');
@@ -374,8 +489,8 @@ const drawWeaponResourceRails = (context, chargeSlots, consumptionSlots, resourc
   displayConsumptionSlots.forEach((slot, index) => {
     const x = consumptionStartX - (4 - index) * (slotSize + slotGap);
     const slotY = consumptionRail.y + consumptionRail.height / 2;
-    drawEmptyCircleSlot(context, x, slotY, slotSize);
-    drawSlotIcon(context, resourceImages[`consumption:${slot}`], x, slotY, slotSize, 'circle');
+    drawEmptyCircleSlot(context, x, slotY, circleSize);
+    drawSlotIcon(context, resourceImages[`consumption:${slot}`], x, slotY, circleSize, 'circle');
   });
 };
 
@@ -384,23 +499,47 @@ const normalizeCardName = (value) => {
   return trimmed.length > 0 ? trimmed : DEFAULT_CARD_NAME;
 };
 
-const fitTitleFont = (context, title) => {
-  const maxWidth = CANVAS_WIDTH * 0.82;
-  let size = 125;
-  let letterSpacing = Math.round(size * 0.14);
+const TITLE_HEADER_CENTER_X = CANVAS_WIDTH / 2;
+const TITLE_HEADER_CENTER_Y = 272;
+const TITLE_HEADER_MAX_WIDTH = CANVAS_WIDTH * 0.85;
 
-  while (size > 60) {
-    letterSpacing = Math.round(size * 0.14);
+const measureSpacedText = (context, text, letterSpacing) => {
+  return Array.from(text).reduce((total, char, index, chars) => {
+    const charWidth = context.measureText(char).width;
+    return total + charWidth + (index < chars.length - 1 ? letterSpacing : 0);
+  }, 0);
+};
+
+const fitTitleFont = (context, title) => {
+  let size = 125;
+  let letterSpacing = Math.round(size * 0.1);
+
+  context.save();
+  while (size > 38) {
+    letterSpacing = Math.round(size * 0.1);
     context.font = `900 ${size}px Cinzel, Georgia, serif`;
     if ('letterSpacing' in context) {
-      context.letterSpacing = `${letterSpacing}px`;
+      context.letterSpacing = '0px';
     }
-    const measuredWidth = context.measureText(title).width + letterSpacing * Math.max(title.length - 1, 0);
-    if (measuredWidth <= maxWidth) break;
-    size -= 4;
+    const measuredWidth = measureSpacedText(context, title, letterSpacing);
+    if (measuredWidth <= TITLE_HEADER_MAX_WIDTH) break;
+    size -= 2;
   }
+  context.restore();
 
   return { size, letterSpacing };
+};
+
+const drawCenteredSpacedText = (context, text, centerX, centerY, letterSpacing) => {
+  const chars = Array.from(text);
+  const totalWidth = measureSpacedText(context, text, letterSpacing);
+  let cursorX = centerX - totalWidth / 2;
+
+  chars.forEach((char, index) => {
+    const charWidth = context.measureText(char).width;
+    context.fillText(char, cursorX + charWidth / 2, centerY);
+    cursorX += charWidth + (index < chars.length - 1 ? letterSpacing : 0);
+  });
 };
 
 const getTraitSlots = (layout) => {
@@ -412,7 +551,7 @@ const getTraitSlots = (layout) => {
   }
 
   if (layout === 'trap') {
-    return [{ x: 574, y: 558, width: 740, height: 185 }];
+    return [{ x: 574, y: 508, width: 740, height: 185 }];
   }
 
   if (layout === 'weapon') {
@@ -425,8 +564,8 @@ const getTraitSlots = (layout) => {
   return [];
 };
 
-const fitTraitFont = (context, text, maxWidth) => {
-  let size = 60;
+const fitTraitFont = (context, text, maxWidth, maxFontSize = 60) => {
+  let size = maxFontSize;
   while (size > 34) {
     context.font = `900 ${size}px Lato, Arial, sans-serif`;
     if (context.measureText(text).width <= maxWidth) break;
@@ -442,27 +581,60 @@ const drawTraitBadge = (context, slot, label) => {
   const text = label.trim().toUpperCase();
 
   context.save();
-  context.beginPath();
-  context.moveTo(x + bevel + radius, y);
-  context.lineTo(x + width - bevel - radius, y);
-  context.quadraticCurveTo(x + width - bevel, y, x + width - bevel + radius * 0.35, y + radius * 0.35);
-  context.lineTo(x + width, y + height / 2);
-  context.lineTo(x + width - bevel + radius * 0.35, y + height - radius * 0.35);
-  context.quadraticCurveTo(x + width - bevel, y + height, x + width - bevel - radius, y + height);
-  context.lineTo(x + bevel + radius, y + height);
-  context.quadraticCurveTo(x + bevel, y + height, x + bevel - radius * 0.35, y + height - radius * 0.35);
-  context.lineTo(x, y + height / 2);
-  context.lineTo(x + bevel - radius * 0.35, y + radius * 0.35);
-  context.quadraticCurveTo(x + bevel, y, x + bevel + radius, y);
-  context.closePath();
 
-  context.shadowColor = 'rgba(255,255,255,0.48)';
-  context.shadowBlur = 34;
-  context.fillStyle = 'rgba(0,0,0,0.96)';
+  const traceBadgePath = (grow = 0) => {
+    const gx = x - grow;
+    const gy = y - grow * 0.65;
+    const gw = width + grow * 2;
+    const gh = height + grow * 1.3;
+    const gBevel = bevel + grow * 0.55;
+    const gRadius = radius + grow * 0.2;
+
+    context.beginPath();
+    context.moveTo(gx + gBevel + gRadius, gy);
+    context.lineTo(gx + gw - gBevel - gRadius, gy);
+    context.quadraticCurveTo(gx + gw - gBevel, gy, gx + gw - gBevel + gRadius * 0.35, gy + gRadius * 0.35);
+    context.lineTo(gx + gw, gy + gh / 2);
+    context.lineTo(gx + gw - gBevel + gRadius * 0.35, gy + gh - gRadius * 0.35);
+    context.quadraticCurveTo(gx + gw - gBevel, gy + gh, gx + gw - gBevel - gRadius, gy + gh);
+    context.lineTo(gx + gBevel + gRadius, gy + gh);
+    context.quadraticCurveTo(gx + gBevel, gy + gh, gx + gBevel - gRadius * 0.35, gy + gh - gRadius * 0.35);
+    context.lineTo(gx, gy + gh / 2);
+    context.lineTo(gx + gBevel - gRadius * 0.35, gy + gRadius * 0.35);
+    context.quadraticCurveTo(gx + gBevel, gy, gx + gBevel + gRadius, gy);
+    context.closePath();
+  };
+
+  traceBadgePath(18);
+  context.shadowColor = 'rgba(255,255,255,0.24)';
+  context.shadowBlur = 30;
+  context.fillStyle = 'rgba(255,255,255,0.045)';
   context.fill();
+
+  traceBadgePath();
+  context.shadowColor = 'rgba(0,0,0,0.75)';
+  context.shadowBlur = 14;
+  const fillGradient = context.createLinearGradient(x, y, x, y + height);
+  fillGradient.addColorStop(0, 'rgba(10,10,12,0.76)');
+  fillGradient.addColorStop(0.45, 'rgba(0,0,0,0.98)');
+  fillGradient.addColorStop(1, 'rgba(12,12,14,0.84)');
+  context.fillStyle = fillGradient;
+  context.fill();
+
+  context.save();
+  traceBadgePath();
+  context.clip();
+  drawPlateGrain(context, x, y, width, height, Math.round((x + y) / 31), 32);
+  context.restore();
+
   context.shadowBlur = 0;
-  context.lineWidth = 4;
-  context.strokeStyle = 'rgba(255,255,255,0.19)';
+  traceBadgePath();
+  context.lineWidth = 7;
+  context.strokeStyle = 'rgba(255,255,255,0.055)';
+  context.stroke();
+  traceBadgePath();
+  context.lineWidth = 2.5;
+  context.strokeStyle = 'rgba(255,255,255,0.22)';
   context.stroke();
 
   if (text) {
@@ -472,7 +644,8 @@ const drawTraitBadge = (context, slot, label) => {
     context.textAlign = 'center';
     context.textBaseline = 'middle';
     if ('letterSpacing' in context) context.letterSpacing = '2px';
-    context.font = `900 ${fitTraitFont(context, text, width - bevel * 1.22)}px Lato, Arial, sans-serif`;
+    const maxFontSize = height > 180 ? 78 : 60;
+    context.font = `900 ${fitTraitFont(context, text, width - bevel * 1.22, maxFontSize)}px Lato, Arial, sans-serif`;
     context.fillText(text, x + width / 2, y + height / 2 + 2);
   }
 
@@ -498,23 +671,23 @@ const getDescriptionLayouts = (typeConfig, showTraits) => {
         x: 210,
         y: 815,
         width: 1470,
-        height: 500,
-        fontSize: 78,
-        lineHeight: 95,
+        height: 480,
+        fontSize: 85,
+        lineHeight: 104,
         italic: false,
-        weight: 700,
-        family: "Cinzel, Georgia, serif",
+        weight: 600,
+        family: "Georgia, serif",
       },
       flavor: {
         x: 210,
-        y: 1320,
+        y: 1350,
         width: 1470,
-        height: hasRails ? 1020 : 1120,
-        fontSize: 68,
-        lineHeight: 83,
+        height: hasRails ? 990 : 1090,
+        fontSize: 80,
+        lineHeight: 98,
         italic: true,
-        weight: 700,
-        family: "Cinzel, Georgia, serif",
+        weight: 600,
+        family: "Georgia, serif",
       },
     };
   }
@@ -525,13 +698,132 @@ const getDescriptionLayouts = (typeConfig, showTraits) => {
       y: 1545,
       width: 1470,
       height: hasRails ? 800 : 895,
-      fontSize: 68,
-      lineHeight: 83,
-      italic: false,
-      weight: 700,
-      family: "Cinzel, Georgia, serif",
+      fontSize: 85,
+      lineHeight: 104,
+      italic: true,
+      weight: 600,
+      family: "Georgia, serif",
     },
   };
+};
+
+const getSyllables = (word) => {
+  if (word.length <= 1) return [word];
+
+  const vowels = "aeiouáéíóúüAEIOUÁÉÍÓÚÜ";
+  const isVowel = (c) => vowels.includes(c);
+
+  const chars = Array.from(word);
+  const syllables = [];
+  const splits = new Set();
+
+  const isStrong = (c) => "aeoáéíóAEOÁÉÍÓ".includes(c);
+  const isWeak = (c) => "iuüíúIUÜÍÚ".includes(c);
+  const isAccentedWeak = (c) => "íúÍÚ".includes(c);
+
+  const isDiphthong = (v1, v2) => {
+    if (v1.toLowerCase() === v2.toLowerCase()) return false;
+    if (isStrong(v1) && isStrong(v2)) return false;
+    if (isAccentedWeak(v1) || isAccentedWeak(v2)) return false;
+    return true;
+  };
+
+  const isTriphthong = (v1, v2, v3) => {
+    return isWeak(v1) && !isAccentedWeak(v1) &&
+           isStrong(v2) &&
+           isWeak(v3) && !isAccentedWeak(v3);
+  };
+
+  const isCluster = (c1, c2) => {
+    const l1 = c1.toLowerCase();
+    const l2 = c2.toLowerCase();
+    if (l1 === 'c' && l2 === 'h') return true;
+    if (l1 === 'l' && l2 === 'l') return true;
+    if (l1 === 'r' && l2 === 'r') return true;
+    if ('bcfgp'.includes(l1) && l2 === 'l') return true;
+    if ('bcdfgpt'.includes(l1) && l2 === 'r') return true;
+    return false;
+  };
+
+  let i = 0;
+  while (i < word.length) {
+    if (!isVowel(chars[i])) {
+      i++;
+      continue;
+    }
+
+    let j = i;
+    while (j < word.length && isVowel(chars[j])) {
+      j++;
+    }
+    const vowelCount = j - i;
+
+    if (vowelCount === 2) {
+      if (!isDiphthong(chars[i], chars[i+1])) {
+        splits.add(i);
+      }
+    } else if (vowelCount === 3) {
+      if (!isTriphthong(chars[i], chars[i+1], chars[i+2])) {
+        if (isDiphthong(chars[i], chars[i+1])) {
+          splits.add(i+1);
+        } else if (isDiphthong(chars[i+1], chars[i+2])) {
+          splits.add(i);
+        } else {
+          splits.add(i);
+          splits.add(i+1);
+        }
+      }
+    } else if (vowelCount > 3) {
+      for (let k = i; k < j - 1; k++) {
+        splits.add(k);
+      }
+    }
+
+    let nextVowelIndex = j;
+    while (nextVowelIndex < word.length && !isVowel(chars[nextVowelIndex])) {
+      nextVowelIndex++;
+    }
+
+    if (nextVowelIndex === word.length) {
+      break;
+    }
+
+    const consCount = nextVowelIndex - j;
+
+    if (consCount === 1) {
+      splits.add(j - 1);
+    } else if (consCount === 2) {
+      if (isCluster(chars[j], chars[j+1])) {
+        splits.add(j - 1);
+      } else {
+        splits.add(j);
+      }
+    } else if (consCount === 3) {
+      if (isCluster(chars[j+1], chars[j+2])) {
+        splits.add(j);
+      } else {
+        splits.add(j+1);
+      }
+    } else if (consCount === 4) {
+      splits.add(j+1);
+    }
+
+    i = j;
+  }
+
+  let current = '';
+  for (let k = 0; k < word.length; k++) {
+    current += chars[k];
+    if (splits.has(k) && k < word.length - 1) {
+      syllables.push(current);
+      current = '';
+    }
+  }
+  if (current) {
+    syllables.push(current);
+  }
+
+  return syllables;
 };
 
 const splitLongWord = (context, word, maxWidth) => {
@@ -554,7 +846,7 @@ const splitLongWord = (context, word, maxWidth) => {
   return chunks;
 };
 
-const wrapDescriptionText = (context, text, maxWidth) => {
+const wrapDescriptionText = (context, text, maxWidth, hyphenate = false) => {
   const paragraphs = text
     .trim()
     .split(/\n+/)
@@ -566,16 +858,52 @@ const wrapDescriptionText = (context, text, maxWidth) => {
     const words = paragraph.split(/\s+/).flatMap((word) => splitLongWord(context, word, maxWidth));
     let line = '';
 
-    words.forEach((word) => {
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i];
       const nextLine = line ? `${line} ${word}` : word;
+
       if (context.measureText(nextLine).width <= maxWidth || !line) {
         line = nextLine;
-        return;
+        continue;
+      }
+
+      if (hyphenate) {
+        const match = word.match(/^([^a-zA-ZáéíóúüÁÉÍÓÚÜñÑ]*)(.*?)([^a-zA-ZáéíóúüÁÉÍÓÚÜñÑ]*)$/);
+        const leadingPunct = match[1];
+        const cleanWord = match[2];
+        const trailingPunct = match[3];
+
+        if (cleanWord.length > 3) {
+          const rawSyllables = getSyllables(cleanWord);
+          if (rawSyllables.length > 1) {
+            const syllables = [...rawSyllables];
+            syllables[0] = leadingPunct + syllables[0];
+            syllables[syllables.length - 1] = syllables[syllables.length - 1] + trailingPunct;
+
+            let hyphenated = false;
+            for (let k = syllables.length - 1; k >= 1; k--) {
+              const prefix = syllables.slice(0, k).join('') + '-';
+              const suffix = syllables.slice(k).join('');
+              const testLine = line ? `${line} ${prefix}` : prefix;
+
+              if (context.measureText(testLine).width <= maxWidth) {
+                lines.push(testLine);
+                line = suffix;
+                hyphenated = true;
+                break;
+              }
+            }
+
+            if (hyphenated) {
+              continue;
+            }
+          }
+        }
       }
 
       lines.push(line);
       line = word;
-    });
+    }
 
     if (line) lines.push(line);
     if (paragraphIndex < paragraphs.length - 1) lines.push('');
@@ -584,16 +912,16 @@ const wrapDescriptionText = (context, text, maxWidth) => {
   return lines;
 };
 
-const fitDescriptionFont = (context, text, layout) => {
+const fitDescriptionFont = (context, text, layout, hyphenate = false) => {
   let size = layout.fontSize;
   let lineHeight = layout.lineHeight;
   let lines = [];
   const style = layout.italic ? 'italic ' : '';
-  const family = layout.family || "Cinzel, Georgia, serif";
+  const family = layout.family || "Georgia, serif";
 
   while (size > 48) {
     context.font = `${style}${layout.weight} ${size}px ${family}`;
-    lines = wrapDescriptionText(context, text, layout.width);
+    lines = wrapDescriptionText(context, text, layout.width, hyphenate);
     const textHeight = lines.length * lineHeight;
     if (textHeight <= layout.height) break;
     size -= 1;
@@ -604,7 +932,7 @@ const fitDescriptionFont = (context, text, layout) => {
 };
 
 const drawPreviewText = (context, text, layout) => {
-  const family = layout.family || "Cinzel, Georgia, serif";
+  const family = layout.family || "Georgia, serif";
   const style = layout.italic ? 'italic ' : '';
   let size = Math.min(layout.fontSize, 70);
 
@@ -649,7 +977,7 @@ const drawJustifiedLine = (context, line, x, y, maxWidth) => {
   });
 };
 
-const drawTextBlock = (context, textValue, layout, previewText = '') => {
+const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate = false) => {
   const hasUserText = textValue.trim().length > 0;
   const text = hasUserText ? textValue.trim() : previewText;
   if (!text || !layout) return;
@@ -672,9 +1000,9 @@ const drawTextBlock = (context, textValue, layout, previewText = '') => {
 
   const isPrimary = previewText === PRIMARY_DESCRIPTION_PREVIEW_TEXT;
   const dynamicLayout = getDynamicStartingLayout(layout, text, isPrimary);
-  const fitted = fitDescriptionFont(context, text, dynamicLayout);
+  const fitted = fitDescriptionFont(context, text, dynamicLayout, hyphenate);
   const style = dynamicLayout.italic ? 'italic ' : '';
-  const family = dynamicLayout.family || "Cinzel, Georgia, serif";
+  const family = dynamicLayout.family || "Georgia, serif";
   context.font = `${style}${dynamicLayout.weight} ${fitted.size}px ${family}`;
 
   let y = dynamicLayout.y;
@@ -693,16 +1021,16 @@ const drawTextBlock = (context, textValue, layout, previewText = '') => {
   context.restore();
 };
 
-const drawDescription = (context, description, flavorText, typeConfig, showTraits) => {
+const drawDescription = (context, description, flavorText, typeConfig, showTraits, hyphenate = false) => {
   const layouts = getDescriptionLayouts(typeConfig, showTraits);
 
   if (layouts.primary) {
-    drawTextBlock(context, description, layouts.primary, PRIMARY_DESCRIPTION_PREVIEW_TEXT);
-    drawTextBlock(context, flavorText, layouts.flavor, FLAVOR_DESCRIPTION_PREVIEW_TEXT);
+    drawTextBlock(context, description, layouts.primary, PRIMARY_DESCRIPTION_PREVIEW_TEXT, hyphenate);
+    drawTextBlock(context, flavorText, layouts.flavor, FLAVOR_DESCRIPTION_PREVIEW_TEXT, hyphenate);
     return;
   }
 
-  drawTextBlock(context, description, layouts.flavor, DESCRIPTION_PREVIEW_TEXT);
+  drawTextBlock(context, description, layouts.flavor, DESCRIPTION_PREVIEW_TEXT, hyphenate);
 };
 
 const drawCardCanvas = (
@@ -723,11 +1051,47 @@ const drawCardCanvas = (
   chargeSlots = DEFAULT_CHARGE_SLOTS,
   consumptionSlots = DEFAULT_CONSUMPTION_SLOTS,
   resourceImages = {},
+  hyphenate = true,
+  elementIconImg = null,
+  customColorActive = false,
+  customColor = '#c8aa6e',
 ) => {
   const context = canvas.getContext('2d');
 
   context.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   context.drawImage(image, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  if (customColorActive && customColor) {
+    context.save();
+    context.beginPath();
+    const rx = 125;
+    const ry = 410;
+    const rw = 1630;
+    const rh = 2100;
+    const radius = 50; // Beautifully rounded corners to match the frame
+
+    if (context.roundRect) {
+      context.roundRect(rx, ry, rw, rh, radius);
+    } else {
+      // Fallback path drawing rounded rect for backward compatibility
+      context.moveTo(rx + radius, ry);
+      context.lineTo(rx + rw - radius, ry);
+      context.quadraticCurveTo(rx + rw, ry, rx + rw, ry + radius);
+      context.lineTo(rx + rw, ry + rh - radius);
+      context.quadraticCurveTo(rx + rw, ry + rh, rx + rw - radius, ry + rh);
+      context.lineTo(rx + radius, ry + rh);
+      context.quadraticCurveTo(rx, ry + rh, rx, ry + rh - radius);
+      context.lineTo(rx, ry + radius);
+      context.quadraticCurveTo(rx, ry, rx + radius, ry);
+    }
+    context.closePath();
+
+    context.globalCompositeOperation = 'color';
+    context.fillStyle = customColor;
+    context.fill();
+    context.restore();
+  }
+
 
   const title = normalizeCardName(cardName).toUpperCase();
   const titleFont = fitTitleFont(context, title);
@@ -743,9 +1107,15 @@ const drawCardCanvas = (
     context.fontKerning = 'normal';
   }
   if ('letterSpacing' in context) {
-    context.letterSpacing = `${titleFont.letterSpacing}px`;
+    context.letterSpacing = '0px';
   }
-  context.fillText(title, CANVAS_WIDTH / 2, 287);
+  drawCenteredSpacedText(
+    context,
+    title,
+    TITLE_HEADER_CENTER_X,
+    TITLE_HEADER_CENTER_Y,
+    titleFont.letterSpacing,
+  );
   context.restore();
 
   // Draw weapon interface if cardType is weapon or armor or action!
@@ -776,6 +1146,15 @@ const drawCardCanvas = (
       });
     }
     drawActionConsumptionRail(context, consumptionSlots, resourceImages);
+  } else if (cardType === 'status') {
+    if (elementIconImg) {
+      context.save();
+      const cx = CANVAS_WIDTH / 2;
+      const cy = 1120;
+      const size = 600;
+      context.drawImage(elementIconImg, cx - size / 2, cy - size / 2, size, size);
+      context.restore();
+    }
   }
 
   const typeConfig = CARD_TYPES.find((type) => type.id === cardType) || CARD_TYPES[0];
@@ -787,7 +1166,7 @@ const drawCardCanvas = (
   }
 
   if (cardType !== 'action') {
-    drawDescription(context, description, flavorText, typeConfig, showTraits);
+    drawDescription(context, description, flavorText, typeConfig, showTraits, hyphenate);
   }
 };
 
@@ -800,11 +1179,15 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
   const [cardName, setCardName] = useState('Gris');
   const [description, setDescription] = useState(DEFAULT_DESCRIPTION);
   const [flavorText, setFlavorText] = useState(DEFAULT_FLAVOR_TEXT);
+  const [hyphenate, setHyphenate] = useState(true);
   const [cardType, setCardType] = useState('weapon');
   const [showTraits, setShowTraits] = useState(true);
   const [traits, setTraits] = useState(DEFAULT_TRAITS);
   const [selectedBackground, setSelectedBackground] = useState('Gris.webp');
   const [imageStatus, setImageStatus] = useState('loading');
+  const [selectedElement, setSelectedElement] = useState('Fuego');
+  const [customColorActive, setCustomColorActive] = useState(false);
+  const [customColor, setCustomColor] = useState('#c8aa6e');
 
   // New states for Weapon properties
   const [weaponType, setWeaponType] = useState('Daga');
@@ -900,7 +1283,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
 
     if (cardType === 'weapon' || cardType === 'action') {
       // Load Dice Icon Image
-      const diceSrc = `${process.env.PUBLIC_URL || ''}/dados/${diceType}.webp`;
+      const diceSrc = `${process.env.PUBLIC_URL || ''}/dados/cartas/${diceType}.webp`;
       diceIconImg = imageCacheRef.current.get(diceSrc);
       if (!diceIconImg) {
         try {
@@ -952,6 +1335,26 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       }));
     }
 
+    let elementIconImg = null;
+    if (cardType === 'status') {
+      const elementSrc = `${process.env.PUBLIC_URL || ''}/elementos/${selectedElement}.webp`;
+      elementIconImg = imageCacheRef.current.get(elementSrc);
+      if (!elementIconImg) {
+        try {
+          elementIconImg = await new Promise((resolve, reject) => {
+            const img = new Image();
+            img.decoding = 'async';
+            img.src = elementSrc;
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+          });
+          imageCacheRef.current.set(elementSrc, elementIconImg);
+        } catch (e) {
+          console.error("Could not load element icon image:", e);
+        }
+      }
+    }
+
     if (drawId !== drawSequenceRef.current) return undefined;
 
     // 2. Draw the card canvas.
@@ -973,11 +1376,15 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       chargeSlots,
       consumptionSlots,
       resourceImages,
+      hyphenate,
+      elementIconImg,
+      customColorActive,
+      customColor,
     );
 
     setImageStatus('ready');
     return undefined;
-  }, [activeBackground, cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots]);
+  }, [activeBackground, cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, hyphenate, selectedElement, customColorActive, customColor]);
 
   useEffect(() => {
     let cleanup;
@@ -1014,6 +1421,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     setCardName('Gris');
     setDescription(DEFAULT_DESCRIPTION);
     setFlavorText(DEFAULT_FLAVOR_TEXT);
+    setHyphenate(true);
     setCardType('weapon');
     setShowTraits(true);
     setTraits(DEFAULT_TRAITS);
@@ -1024,6 +1432,9 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     setDiceQty(1);
     setChargeSlots(DEFAULT_CHARGE_SLOTS);
     setConsumptionSlots(DEFAULT_CONSUMPTION_SLOTS);
+    setSelectedElement('Fuego');
+    setCustomColorActive(false);
+    setCustomColor('#c8aa6e');
   };
 
   const handleTraitChange = (index, value) => {
@@ -1064,6 +1475,14 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
         nextTraits[0] = nextTraits[0]?.trim() ? nextTraits[0] : 'TRAMPA';
         return nextTraits;
       });
+    } else if (typeId === 'status') {
+      setShowTraits(true);
+      setTraits((currentTraits) => {
+        const nextTraits = [...currentTraits];
+        nextTraits[0] = nextTraits[0]?.trim() ? nextTraits[0] : 'ESTADO';
+        return nextTraits;
+      });
+      setCardName((name) => name === 'Gris' ? 'ARDIENDO' : name);
     } else if (typeId === 'armor') {
       setConsumptionSlots((currentSlots) => {
         const nextSlots = [...currentSlots];
@@ -1072,6 +1491,17 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       });
     } else if (typeId === 'action') {
       setDiceQty((qty) => Math.min(6, qty));
+      setConsumptionSlots((currentSlots) => {
+        const nextSlots = [...currentSlots];
+        nextSlots[0] = 'Tiempo';
+        return nextSlots;
+      });
+    } else if (typeId === 'weapon') {
+      setConsumptionSlots((currentSlots) => {
+        const nextSlots = [...currentSlots];
+        nextSlots[0] = 'Tiempo';
+        return nextSlots;
+      });
     }
   };
 
@@ -1193,10 +1623,13 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
               </div>
             </div>
 
-            {(cardType === 'weapon' || cardType === 'armor' || cardType === 'action') && (
+            {(cardType === 'weapon' || cardType === 'armor' || cardType === 'action' || cardType === 'status') && (
               <div className="space-y-4 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
                 <div className="font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
-                  {cardType === 'weapon' ? 'Propiedades del Arma' : cardType === 'armor' ? 'Propiedades de la Armadura' : 'Propiedades de la Acción'}
+                  {cardType === 'weapon' ? 'Propiedades del Arma' : 
+                   cardType === 'armor' ? 'Propiedades de la Armadura' : 
+                   cardType === 'action' ? 'Propiedades de la Acción' : 
+                   'Propiedades del Estado'}
                 </div>
                 
                 {cardType === 'weapon' && (
@@ -1230,7 +1663,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                             key={label}
                             type="button"
                             onClick={() => setAlcance(index)}
-                            className={`border py-1.5 text-[10px] font-bold uppercase tracking-wider transition ${alcance === index
+                            className={`border py-1.5 text-[8.5px] xs:text-[9px] sm:text-[10px] font-bold uppercase tracking-tighter xs:tracking-normal sm:tracking-wider transition ${alcance === index
                               ? 'border-[#c8aa6e] bg-[#c8aa6e]/20 text-[#f0e6d2]'
                               : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-slate-700 hover:text-[#c8aa6e]'
                               }`}
@@ -1360,15 +1793,44 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                     ))}
                   </div>
                 </div>
+                {cardType === 'status' && (
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      Elemento / Estado
+                    </label>
+                    <select
+                      value={selectedElement}
+                      onChange={(event) => setSelectedElement(event.target.value)}
+                      className="w-full border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 py-2 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70"
+                    >
+                      {ELEMENT_TYPES.map((type) => (
+                        <option key={type.id} value={type.id}>
+                          {type.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             )}
 
             {activeType.id !== 'action' && (
               <div className="space-y-2">
-                <label className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
-                  <Type className="h-4 w-4" />
-                  {hasSplitDescription ? 'Texto principal' : 'Descripción'}
-                </label>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
+                    <Type className="h-4 w-4" />
+                    {hasSplitDescription ? 'Texto principal' : 'Descripción'}
+                  </label>
+                  <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                    <input
+                      type="checkbox"
+                      checked={hyphenate}
+                      onChange={(event) => setHyphenate(event.target.checked)}
+                      className="h-4 w-4 accent-[#c8aa6e]"
+                    />
+                    Guionizar
+                  </label>
+                </div>
                 <textarea
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
@@ -1475,18 +1937,52 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                   );
                 })}
               </div>
+
+              {/* Custom background color overlay controls */}
+              <div className="mt-3 space-y-2.5 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={customColorActive}
+                      onChange={(event) => {
+                        setCustomColorActive(event.target.checked);
+                        if (event.target.checked) {
+                          setSelectedBackground('Gris.webp');
+                        }
+                      }}
+                      className="h-4 w-4 accent-[#c8aa6e]"
+                    />
+                    Personalizar color
+                  </label>
+                </div>
+                {customColorActive && (
+                  <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-2.5">
+                    <HexColorInput value={customColor} onChange={setCustomColor} />
+                    <p className="text-[10px] italic leading-normal text-slate-400">
+                      * Se recomienda usar el fondo <strong>Gris</strong> como base para obtener colores puros.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </aside>
 
-          <main className="sticky top-0 z-10 order-1 flex min-h-[520px] items-center justify-start overflow-x-auto overflow-y-hidden border border-[#c8aa6e]/15 bg-[radial-gradient(circle_at_center,_rgba(200,170,110,0.14),_rgba(9,9,11,0)_56%)] p-4 md:p-8 lg:static lg:order-2 lg:min-h-[620px] lg:items-start lg:justify-center lg:overflow-hidden">
+          <main className="sticky top-0 z-10 order-1 flex min-h-[520px] items-center justify-center overflow-x-hidden border border-[#c8aa6e]/15 bg-[#05070d]/30 p-4 md:p-8 lg:static lg:order-2 lg:min-h-[620px] lg:items-start lg:justify-center lg:overflow-hidden">
             <div className="pointer-events-none absolute inset-0 bg-[#05070d]/50" />
-            <div className="relative flex h-full min-w-max items-center justify-center lg:min-w-0 lg:w-full lg:items-start">
-              <div className="relative h-[480px] w-[345px] shrink-0 lg:h-auto lg:w-full lg:max-w-[520px]">
+            <div className="relative flex h-full w-full max-w-full items-center justify-center lg:w-full lg:items-start">
+              <div 
+                className="relative w-full max-w-[335px] sm:max-w-[440px] lg:max-w-[520px] shrink-0"
+                style={{ aspectRatio: '1888/2624' }}
+              >
+                {/* Glow radial centrado exactamente detrás de la previsualización de la carta */}
+                <div className="pointer-events-none absolute -inset-[32%] bg-[radial-gradient(circle_at_center,_rgba(200,170,110,0.18)_0%,_rgba(9,9,11,0)_70%)] z-0" />
+                
                 <canvas
                   ref={canvasRef}
                   width={CANVAS_WIDTH}
                   height={CANVAS_HEIGHT}
-                  className="block aspect-[1888/2624] h-full w-auto border border-white/15 bg-black shadow-[0_28px_90px_rgba(0,0,0,0.7)] lg:h-auto lg:max-h-[calc(100vh-220px)] lg:w-full"
+                  className="relative z-10 block w-full h-full border border-white/15 bg-black shadow-[0_28px_90px_rgba(0,0,0,0.7)] lg:max-h-[calc(100vh-220px)]"
                 />
                 {imageStatus === 'loading' && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs font-bold uppercase tracking-[0.25em] text-[#c8aa6e]">
