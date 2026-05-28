@@ -157,7 +157,14 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.72**
+> **Versión actual: 2.4.73**
+
+**Resumen de cambios v2.4.73:**
+
+- **Corrección Estética en Regla de Alcance (CardBuilder)**: Reordenado el flujo de dibujo del canvas en `CardBuilder.jsx` para garantizar que las marcas verticales normales (blancas) se integren perfectamente y sin costuras con la línea horizontal central (eliminando cualquier trazo de contorno negro que corte la línea blanca principal). Solo la marca seleccionada (roja) conserva su contorno negro completo y continuo por encima de todo.
+- **Ticks Consistentes y Robustos**: Redimensionado el alto de todos los ticks para que tengan la misma altura majestuosa que el tick seleccionado (`y - 36` a `y + 36`), y aumentado su grosor (outline negro de 48px, línea interna blanca de 22px) para que se sientan equilibrados y con peso visual en la composición.
+- **Cero Protrusiones en Extremos**: Desplazados los puntos de inicio y fin de la barra horizontal central 15px hacia el interior de forma que sus extremos redondeados queden totalmente contenidos dentro del área de los ticks exteriores, eliminando cualquier imperfección de contornos salientes a los lados.
+- **Separación de Texto de Rango**: Incrementada la distancia vertical de la etiqueta del rango ("TOQUE", "CERCANO", etc.) a `labelY = y + 120` (y a 635px en la llamada) para proporcionar un espacio limpio y despejado bajo los nuevos ticks grandes.
 
 **Resumen de cambios v2.4.72:**
 

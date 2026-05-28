@@ -116,7 +116,7 @@ const drawDiceIcon = (context, x, y, size, imgElement, qty) => {
   context.restore();
 };
 
-const drawRuler = (context, x, y, width, selectedIndex, labelY = y + 90) => {
+const drawRuler = (context, x, y, width, selectedIndex, labelY = y + 120) => {
   context.save();
   if ('letterSpacing' in context) {
     context.letterSpacing = '0px';
@@ -129,48 +129,76 @@ const drawRuler = (context, x, y, width, selectedIndex, labelY = y + 90) => {
   const startX = x - width / 2;
   const step = width / 4;
   
-  // 1. Draw the horizontal ruler line with black outline
-  // Outline
+  // 1. Draw horizontal ruler line outline (black)
+  // Shifted inward by 15px so that the rounded ends are completely inside the leftmost and rightmost vertical ticks
   context.strokeStyle = '#000000';
   context.lineWidth = 56; // Trazo negro más grueso para la regla
   context.lineCap = 'round';
   context.beginPath();
-  context.moveTo(startX, y);
-  context.lineTo(startX + width, y);
+  context.moveTo(startX + 15, y);
+  context.lineTo(startX + width - 15, y);
   context.stroke();
   
-  // Inner white line
-  context.strokeStyle = '#ffffff';
-  context.lineWidth = 20; // Inner white line thickness (was 16)
-  context.beginPath();
-  context.moveTo(startX, y);
-  context.lineTo(startX + width, y);
-  context.stroke();
-  
-  // 2. Draw the 5 ticks
+  // 2. Draw all non-selected (white) ticks' outlines (black)
+  context.strokeStyle = '#000000';
+  context.lineWidth = 48; // Trazo negro más grueso para las marcas normales
+  context.lineCap = 'round';
   for (let i = 0; i < 5; i++) {
-    const tickX = startX + i * step;
-    const isSelected = i === selectedIndex;
+    if (i !== selectedIndex) {
+      const tickX = startX + i * step;
+      context.beginPath();
+      context.moveTo(tickX, y - 36); // Altura consistente, igual a la seleccionada
+      context.lineTo(tickX, y + 36);
+      context.stroke();
+    }
+  }
+  
+  // 3. Draw horizontal inner white line, erasing vertical black borders inside the main bar
+  context.strokeStyle = '#ffffff';
+  context.lineWidth = 20; // Espesor de la línea blanca interna
+  context.lineCap = 'round';
+  context.beginPath();
+  context.moveTo(startX + 15, y);
+  context.lineTo(startX + width - 15, y);
+  context.stroke();
+  
+  // 4. Draw non-selected (white) ticks' inner white lines, merging seamlessly
+  context.strokeStyle = '#ffffff';
+  context.lineWidth = 22; // Espesor consistente de la línea blanca interna
+  context.lineCap = 'round';
+  for (let i = 0; i < 5; i++) {
+    if (i !== selectedIndex) {
+      const tickX = startX + i * step;
+      context.beginPath();
+      context.moveTo(tickX, y - 36);
+      context.lineTo(tickX, y + 36);
+      context.stroke();
+    }
+  }
+  
+  // 5. Draw selected (red) tick completely on top, preserving its full outline
+  if (selectedIndex >= 0 && selectedIndex < 5) {
+    const selectedTickX = startX + selectedIndex * step;
     
-    // Draw tick line with outline
+    // Outline
     context.strokeStyle = '#000000';
-    context.lineWidth = isSelected ? 58 : 38; // Trazo negro más grueso para las marcas
+    context.lineWidth = 58; // Trazo negro más grueso para la marca seleccionada
     context.lineCap = 'round';
     context.beginPath();
-    context.moveTo(tickX, y - (isSelected ? 36 : 24));
-    context.lineTo(tickX, y + (isSelected ? 36 : 24));
+    context.moveTo(selectedTickX, y - 36);
+    context.lineTo(selectedTickX, y + 36);
     context.stroke();
     
-    // Inner tick line (Red if selected, White if not)
-    context.strokeStyle = isSelected ? '#e51c23' : '#ffffff';
-    context.lineWidth = isSelected ? 26 : 14;
+    // Inner red line
+    context.strokeStyle = '#e51c23';
+    context.lineWidth = 26;
     context.beginPath();
-    context.moveTo(tickX, y - (isSelected ? 36 : 24));
-    context.lineTo(tickX, y + (isSelected ? 36 : 24));
+    context.moveTo(selectedTickX, y - 36);
+    context.lineTo(selectedTickX, y + 36);
     context.stroke();
   }
   
-  // 3. Draw the active range text centered below the ruler
+  // 6. Draw the active range text centered below the ruler
   const labelText = tickNames[selectedIndex] || 'TOQUE';
   context.textAlign = 'center';
   context.textBaseline = 'middle';
@@ -1125,8 +1153,8 @@ const drawCardCanvas = (
       drawDiceIcon(context, 290, 615, 200, diceIconImg, diceQty);
     }
 
-    // 2. Draw Ruler (width increased to 720, label lowered to 615)
-    drawRuler(context, CANVAS_WIDTH / 2, 512, 720, alcance, 615);
+    // 2. Draw Ruler (width increased to 720, label lowered to 635)
+    drawRuler(context, CANVAS_WIDTH / 2, 512, 720, alcance, 635);
 
     // 3. Draw Weapon Type Icon
     if (weaponIconImg) {
