@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Skull, Shield, Heart, Activity, Camera, Save, Trash2, Edit2, X, Plus, Play, Minus, Target, Brain, Zap, Search } from 'lucide-react';
+import { Skull, Shield, Heart, Activity, Camera, Save, Trash2, Edit2, X, Plus, Play, Minus, Target, Brain, Zap, Search, GripVertical } from 'lucide-react';
 import { FiX, FiEdit2, FiPlus, FiCheckSquare, FiMinus } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { storage } from '../firebase';
@@ -291,6 +291,10 @@ export const EnemyDetailView = ({ enemy, enemies = [], onClose, onUpdate, onDele
     const fileInputRef = useRef(null);
     const abilitySearchRef = useRef(null);
 
+    // States and refs for ability list drag and drop reordering (mouse and touch)
+    const [draggedIndex, setDraggedIndex] = useState(null);
+    const touchDraggedIndexRef = useRef(null);
+
     const abilityLibrary = useMemo(() => {
         const seen = new Set();
         return (enemies || []).flatMap((sourceEnemy) =>
@@ -509,6 +513,76 @@ export const EnemyDetailView = ({ enemy, enemies = [], onClose, onUpdate, onDele
             onUpdate(updated);
             return updated;
         });
+    };
+
+    // --- DRAG & DROP HANDLERS (MOUSE) ---
+    const handleDragStart = (e, index) => {
+        const card = e.currentTarget.closest('[data-ability-index]');
+        if (card && e.dataTransfer.setDragImage) {
+            // Set the drag ghost image to the entire card instead of just the handle
+            e.dataTransfer.setDragImage(card, 20, 20);
+        }
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', index);
+        setDraggedIndex(index);
+    };
+
+    const handleDragOver = (e, index) => {
+        e.preventDefault();
+        if (draggedIndex === null || draggedIndex === index) return;
+
+        // Swap elements in the local state for fluid live reordering
+        const newAbilities = [...(localEnemy.abilities || [])];
+        const temp = newAbilities[draggedIndex];
+        newAbilities[draggedIndex] = newAbilities[index];
+        newAbilities[index] = temp;
+
+        setLocalEnemy(prev => ({ ...prev, abilities: newAbilities }));
+        setDraggedIndex(index);
+    };
+
+    const handleDragEnd = () => {
+        if (draggedIndex !== null) {
+            setDraggedIndex(null);
+            // Save final reordered array to database
+            onUpdate({ ...localEnemy });
+        }
+    };
+
+    // --- DRAG & DROP HANDLERS (TOUCH/MOBILE) ---
+    const handleTouchStart = (e, index) => {
+        touchDraggedIndexRef.current = index;
+    };
+
+    const handleTouchMove = (e) => {
+        if (touchDraggedIndexRef.current === null) return;
+
+        const touch = e.touches[0];
+        const element = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (!element) return;
+
+        const cardElement = element.closest('[data-ability-index]');
+        if (cardElement) {
+            const targetIndex = parseInt(cardElement.getAttribute('data-ability-index'), 10);
+            if (targetIndex !== touchDraggedIndexRef.current) {
+                // Swap elements in the local state for fluid live touch reordering
+                const newAbilities = [...(localEnemy.abilities || [])];
+                const temp = newAbilities[touchDraggedIndexRef.current];
+                newAbilities[touchDraggedIndexRef.current] = newAbilities[targetIndex];
+                newAbilities[targetIndex] = temp;
+
+                setLocalEnemy(prev => ({ ...prev, abilities: newAbilities }));
+                touchDraggedIndexRef.current = targetIndex;
+            }
+        }
+    };
+
+    const handleTouchEnd = () => {
+        if (touchDraggedIndexRef.current !== null) {
+            touchDraggedIndexRef.current = null;
+            // Save final touch-reordered array to database
+            onUpdate({ ...localEnemy });
+        }
     };
 
     const handleImageUpload = async (e) => {
@@ -890,39 +964,63 @@ export const EnemyDetailView = ({ enemy, enemies = [], onClose, onUpdate, onDele
                                         (localEnemy.abilities || []).map((ability, idx) => {
                                             const abilityName = typeof ability === 'string' ? ability : ability.name || '';
                                             const abilityDesc = typeof ability === 'string' ? '' : ability.description || '';
+                                            const isTallCard = abilityDesc && (abilityDesc.length > 90 || abilityDesc.includes('\n'));
 
                                             return (
-                                                <div key={idx} className="flex flex-col gap-1 p-3 bg-red-900/5 border border-red-900/10 hover:border-red-900/30 rounded transition-all group/ability relative h-fit">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-1.5 h-1.5 bg-red-600 rotate-45 shrink-0"></div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <EditableField
-                                                                value={abilityName}
-                                                                onChange={(val) => handleAbilityChange(idx, 'name', val)}
-                                                                onCommit={handleCommit}
-                                                                textClassName="font-['Cinzel'] font-bold text-red-100 block text-xs uppercase tracking-wide cursor-text truncate"
-                                                                inputClassName="font-['Cinzel'] font-bold text-red-100 bg-black/50 border-red-500/50 w-full text-xs"
-                                                                placeholder="NOMBRE"
-                                                            />
-                                                        </div>
-                                                        <button
-                                                            onClick={() => handleDeleteAbility(idx)}
-                                                            className="opacity-0 group-hover/ability:opacity-100 text-slate-600 hover:text-red-500 transition-all flex-shrink-0"
-                                                            title="Eliminar"
-                                                        >
-                                                            <X className="w-3 h-3" />
-                                                        </button>
+                                                <div 
+                                                    key={idx} 
+                                                    data-ability-index={idx}
+                                                    onDragOver={(e) => handleDragOver(e, idx)}
+                                                    className={`flex gap-3 p-3 bg-red-900/5 border border-red-900/10 hover:border-red-900/30 rounded transition-all group/ability relative h-fit ${draggedIndex === idx ? 'opacity-30 border-dashed border-red-500 bg-red-950/20' : ''}`}
+                                                >
+                                                    {/* Left: Drag Handle Column (centered when tall, bottom-aligned when short/2-lined) */}
+                                                    <div 
+                                                        draggable="true"
+                                                        onDragStart={(e) => handleDragStart(e, idx)}
+                                                        onDragEnd={handleDragEnd}
+                                                        className={`flex flex-col items-center cursor-grab active:cursor-grabbing touch-none select-none text-red-700/60 hover:text-red-500 transition-colors shrink-0 px-0.5 ${
+                                                            isTallCard ? 'justify-center' : 'justify-end pb-1.5'
+                                                        }`}
+                                                        onTouchStart={(e) => handleTouchStart(e, idx)}
+                                                        onTouchMove={handleTouchMove}
+                                                        onTouchEnd={handleTouchEnd}
+                                                    >
+                                                        <GripVertical className="w-3.5 h-6 text-red-700/50 group-hover/ability:text-red-500 transition-colors" />
                                                     </div>
-                                                    <EditableField
-                                                        value={abilityDesc}
-                                                        onChange={(val) => handleAbilityChange(idx, 'description', val)}
-                                                        onCommit={handleCommit}
-                                                        multiline={true}
-                                                        textClassName="text-slate-400 font-serif text-[10px] cursor-text hover:text-slate-300 transition-colors leading-snug line-clamp-4 italic"
-                                                        inputClassName="text-slate-300 font-serif text-[10px] bg-black/50 border-red-500/50 min-h-[60px] italic"
-                                                        placeholder="Descripción..."
-                                                        displayRenderer={highlightText}
-                                                    />
+
+                                                    {/* Right: Main text contents and controls */}
+                                                    <div className="flex-1 flex flex-col gap-1 min-w-0 font-sans">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-1.5 h-1.5 bg-red-600 rotate-45 shrink-0 shadow-[0_0_6px_rgba(220,38,38,0.7)]"></div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <EditableField
+                                                                    value={abilityName}
+                                                                    onChange={(val) => handleAbilityChange(idx, 'name', val)}
+                                                                    onCommit={handleCommit}
+                                                                    textClassName="font-['Cinzel'] font-bold text-red-100 block text-xs uppercase tracking-wide cursor-text truncate"
+                                                                    inputClassName="font-['Cinzel'] font-bold text-red-100 bg-black/50 border-red-500/50 w-full text-xs"
+                                                                    placeholder="NOMBRE"
+                                                                />
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handleDeleteAbility(idx)}
+                                                                className="opacity-0 group-hover/ability:opacity-100 text-slate-600 hover:text-red-500 transition-all flex-shrink-0"
+                                                                title="Eliminar"
+                                                            >
+                                                                <X className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
+                                                        <EditableField
+                                                            value={abilityDesc}
+                                                            onChange={(val) => handleAbilityChange(idx, 'description', val)}
+                                                            onCommit={handleCommit}
+                                                            multiline={true}
+                                                            textClassName="text-slate-400 font-serif text-[10px] cursor-text hover:text-slate-300 transition-colors leading-snug line-clamp-4 italic"
+                                                            inputClassName="text-slate-300 font-serif text-[10px] bg-black/50 border-red-500/50 min-h-[60px] italic"
+                                                            placeholder="Descripción..."
+                                                            displayRenderer={highlightText}
+                                                        />
+                                                    </div>
                                                 </div>
                                             );
                                         })

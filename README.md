@@ -157,7 +157,22 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.71**
+> **Versión actual: 2.4.73**
+
+**Resumen de cambios v2.4.73:**
+
+- **Corrección Estética en Regla de Alcance (CardBuilder)**: Reordenado el flujo de dibujo del canvas en `CardBuilder.jsx` para garantizar que las marcas verticales normales (blancas) se integren perfectamente y sin costuras con la línea horizontal central (eliminando cualquier trazo de contorno negro que corte la línea blanca principal). Solo la marca seleccionada (roja) conserva su contorno negro completo y continuo por encima de todo.
+- **Ticks Consistentes y Robustos**: Redimensionado el alto de todos los ticks para que tengan la misma altura majestuosa que el tick seleccionado (`y - 36` a `y + 36`), y aumentado su grosor (outline negro de 48px, línea interna blanca de 22px) para que se sientan equilibrados y con peso visual en la composición.
+- **Cero Protrusiones en Extremos**: Desplazados los puntos de inicio y fin de la barra horizontal central 15px hacia el interior de forma que sus extremos redondeados queden totalmente contenidos dentro del área de los ticks exteriores, eliminando cualquier imperfección de contornos salientes a los lados.
+- **Separación de Texto de Rango**: Incrementada la distancia vertical de la etiqueta del rango ("TOQUE", "CERCANO", etc.) a `labelY = y + 120` (y a 635px en la llamada) para proporcionar un espacio limpio y despejado bajo los nuevos ticks grandes.
+
+**Resumen de cambios v2.4.72:**
+
+- **Reordenación de Habilidades por Arrastrar y Soltar (Bestiario)**: Implementada la funcionalidad completa de Drag & Drop para las habilidades de un enemigo en la vista de detalle.
+- **Soporte Híbrido Completo (Ratón y Táctil)**:
+  - **Ratón**: Soporte para la API HTML5 Drag and Drop nativa. Permite hacer clic en cualquier parte de la tarjeta de habilidad (excepto campos editables y botones) y arrastrarla para cambiar su posición con una elegante previsualización semitransparente (`opacity-30`) y borde discontinuo carmesí.
+  - **Táctil (Dedo/Móvil)**: Tirador de arrastre táctil integrado mediante un icono de agarre (`GripVertical`) junto al punto decorativo de cada habilidad. Utiliza la regla de diseño `touch-none` para desactivar el scroll del navegador solo en el tirador, permitiendo un arrastre táctil preciso y natural sin desplazamientos de pantalla accidentales.
+- **Optimización de Firestore**: Para evitar escrituras masivas e innecesarias en la base de datos, el reordenamiento visual se realiza de forma instantánea en memoria local y la sincronización con Firebase (Firestore `setDoc`) se pospone de forma óptima hasta el momento exacto en que se suelta la habilidad (`onDragEnd` / `onTouchEnd`).
 
 **Resumen de cambios v2.4.71:**
 
@@ -2048,3 +2063,4 @@ Guía rápida: ver `docs/Minimapa.md`.
 - Se eliminó el conflicto entre la clase CSS `transition-all` y los fotogramas clave de Framer Motion, sustituyéndola por transiciones hover selectivas para `background-color`, `border-color`, `filter` y `color`.
 - Se añadió `layout="position"` en badges de estado y en el botón "+ Añadir" (ahora un `<motion.button>`), permitiendo que todos los elementos hermanos se deslicen de forma continua a sus nuevas coordenadas y fila durante el reflow.
 - Se calibró la curva de animación de los badges a `0.25s` con aceleración `easeInOut` para un tacto sedoso, lineal y de calidad cinematográfica.
+- Se corrigió un error visual en el creador de cartas (`CardBuilder.jsx`) donde el filtro de color personalizado (`customColorActive`) pintaba parcialmente el borde superior de la carta (bajo la cabecera); se reajustó la coordenada Y inicial (`ry = 410`) y la altura del rectángulo (`rh = 2100`) para que el filtro cubra con precisión milimétrica únicamente la textura interior de la carta sin solaparse con el marco dorado del borde superior.
