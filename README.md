@@ -167,7 +167,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.74**
+> **Versión actual: 2.4.75**
+
+**Resumen de cambios v2.4.75:**
+
+- **Desbloqueo de Scroll Táctico en PC (Ajuste Estético)**: Sustituidas las clases restrictivas del contenedor principal `<main>` en `CardBuilder.jsx` de `lg:static lg:overflow-hidden` a `lg:relative lg:overflow-visible` en escritorio. Esto corrige la limitación técnica del navegador que bloqueaba la posición sticky del canvas, permitiendo que la carta flote suavemente a lo largo del viewport con un elegante margen de 48px (`lg:top-12`) mientras el fondo oscuro y el encuadre de la tarjeta conservan su tamaño completo.
 
 **Resumen de cambios v2.4.74:**
 
