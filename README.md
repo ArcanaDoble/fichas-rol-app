@@ -167,7 +167,14 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.75**
+> **Versión actual: 2.4.76**
+
+**Resumen de cambios v2.4.76:**
+
+- **Previsualización Optimizada y sin Scroll en Móvil**:
+  - Reemplazado `overflow-x-hidden` por `overflow-hidden` en el contenedor `<main>` en móvil/tablet para ocultar la barra de scroll vertical interna no deseada, manteniendo `lg:overflow-visible` en PC para el preview flotante.
+  - Reducido el padding horizontal base de la previsualización de `p-4` a `p-3` en móvil para ganar mayor espacio horizontal útil.
+  - Aumentado el ancho máximo de la previsualización de la carta de `335px` a `380px` en móvil y de `440px` a `460px` en tabletas (`sm:`). Esto permite que el canvas de la carta aproveche de forma óptima el área del contenedor y se visualice significativamente más grande.
 
 **Resumen de cambios v2.4.75:**
 

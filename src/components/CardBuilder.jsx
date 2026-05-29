@@ -2155,11 +2155,11 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
             </div>
           </aside>
 
-          <main className="sticky top-0 z-10 order-1 flex min-h-[520px] items-center justify-center overflow-x-hidden border border-[#c8aa6e]/15 bg-[#05070d]/30 p-4 md:p-8 lg:relative lg:order-2 lg:min-h-[620px] lg:items-start lg:justify-center lg:overflow-visible">
+          <main className="sticky top-0 z-10 order-1 flex min-h-[520px] items-center justify-center overflow-hidden border border-[#c8aa6e]/15 bg-[#05070d]/30 p-3 md:p-8 lg:relative lg:order-2 lg:min-h-[620px] lg:items-start lg:justify-center lg:overflow-visible">
             <div className="pointer-events-none absolute inset-0 bg-[#05070d]/50" />
             <div className="relative flex h-full w-full max-w-full items-center justify-center lg:sticky lg:top-12 lg:self-start lg:h-fit lg:w-full lg:items-start">
               <div 
-                className="relative w-full max-w-[335px] sm:max-w-[440px] lg:max-w-[520px] shrink-0"
+                className="relative w-full max-w-[380px] sm:max-w-[460px] lg:max-w-[520px] shrink-0"
                 style={{ aspectRatio: '1888/2624' }}
               >
                 {/* Glow radial centrado exactamente detrás de la previsualización de la carta */}
