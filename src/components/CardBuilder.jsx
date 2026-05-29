@@ -75,24 +75,34 @@ const CONSUMPTION_TYPES = [
 
 const DEFAULT_CHARGE_SLOTS = ['Hambre', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
 const DEFAULT_CONSUMPTION_SLOTS = ['Tiempo', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
+const RESOURCE_MODE_BOTH = 'charge-consumption';
+const RESOURCE_MODE_CHARGE_ONLY = 'charge-only';
+const RESOURCE_CARD_TYPES = new Set(['weapon', 'armor', 'trap', 'skill']);
 
 export const WEAPON_TYPES = [
-  'Ametralladora',
-  'Arco',
-  'Ballesta',
-  'Clava',
-  'Daga',
-  'Escopeta',
-  'Espada',
-  'Fusil',
-  'Hacha',
-  'Lanza',
-  'Martillo',
-  'Maza',
-  'Pistola',
-  'Revólver',
-  'Rifle'
+  'Cuerpo a cuerpo',
+  'Distancia',
+  'Magia'
 ];
+
+const WEAPON_TYPE_ALIASES = [
+  {
+    type: 'Cuerpo a cuerpo',
+    aliases: ['cuerpo a cuerpo', 'cuerpo', 'melee', 'espada', 'daga', 'clava', 'hacha', 'lanza', 'martillo', 'maza'],
+  },
+  {
+    type: 'Distancia',
+    aliases: ['distancia', 'rango', 'arco', 'ballesta', 'escopeta', 'fusil', 'rifle', 'pistola', 'revolver', 'revólver', 'ametralladora'],
+  },
+  {
+    type: 'Magia',
+    aliases: ['magia', 'magico', 'mágico', 'conjuro', 'hechizo', 'arcano'],
+  },
+];
+
+const getWeaponTypeIconSrc = (weaponType) => (
+  `${process.env.PUBLIC_URL || ''}/tipo/${encodeURIComponent(weaponType)}.webp`
+);
 
 const drawDiceIcon = (context, x, y, size, imgElement, qty) => {
   if (!imgElement) return;
@@ -522,6 +532,26 @@ const drawWeaponResourceRails = (context, chargeSlots, consumptionSlots, resourc
   });
 };
 
+const drawCenteredChargeRail = (context, chargeSlots, resourceImages) => {
+  const y = 2356;
+  const height = 156;
+  const slotSize = 122;
+  const slotGap = 8;
+  const railWidth = 780;
+  const railX = (CANVAS_WIDTH - railWidth) / 2;
+  const slotY = y + height / 2;
+  const totalSlotsWidth = chargeSlots.length * slotSize + (chargeSlots.length - 1) * slotGap;
+  const chargeStartX = railX + (railWidth - totalSlotsWidth) / 2 + slotSize / 2;
+
+  drawRailBase(context, railX, y, railWidth, height, 'center');
+
+  chargeSlots.forEach((slot, index) => {
+    const x = chargeStartX + index * (slotSize + slotGap);
+    drawEmptyDiamondSlot(context, x, slotY, slotSize);
+    drawSlotIcon(context, resourceImages[`charge:${slot}`], x, slotY, slotSize, 'diamond');
+  });
+};
+
 const normalizeCardName = (value) => {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : DEFAULT_CARD_NAME;
@@ -657,13 +687,21 @@ const drawTraitBadge = (context, slot, label) => {
 
   context.shadowBlur = 0;
   traceBadgePath();
-  context.lineWidth = 7;
-  context.strokeStyle = 'rgba(255,255,255,0.055)';
+  context.save();
+  context.shadowColor = 'rgba(255, 255, 255, 0.48)';
+  context.shadowBlur = 24;
+  context.lineWidth = 4;
+  context.strokeStyle = 'rgba(255, 255, 255, 0.28)';
   context.stroke();
+  context.restore();
+
   traceBadgePath();
+  context.save();
+  context.shadowBlur = 0;
   context.lineWidth = 2.5;
-  context.strokeStyle = 'rgba(255,255,255,0.22)';
+  context.strokeStyle = 'rgba(255, 255, 255, 0.58)';
   context.stroke();
+  context.restore();
 
   if (text) {
     context.fillStyle = 'rgba(255,255,255,0.96)';
@@ -691,7 +729,7 @@ const getDynamicStartingLayout = (layout, text, isPrimary) => {
 const getDescriptionLayouts = (typeConfig, showTraits) => {
   if (typeConfig.id === 'action') return {};
 
-  const hasRails = typeConfig.id === 'weapon' || typeConfig.id === 'armor';
+  const hasRails = typeConfig.id === 'weapon' || typeConfig.id === 'armor' || typeConfig.id === 'trap' || typeConfig.id === 'skill';
 
   if (usesSplitDescription(typeConfig, showTraits)) {
     return {
@@ -710,7 +748,7 @@ const getDescriptionLayouts = (typeConfig, showTraits) => {
         x: 210,
         y: 1350,
         width: 1470,
-        height: hasRails ? 990 : 1090,
+        height: hasRails ? 930 : 1090,
         fontSize: 80,
         lineHeight: 98,
         italic: true,
@@ -725,7 +763,7 @@ const getDescriptionLayouts = (typeConfig, showTraits) => {
       x: 210,
       y: 1545,
       width: 1470,
-      height: hasRails ? 800 : 895,
+      height: hasRails ? 740 : 895,
       fontSize: 85,
       lineHeight: 104,
       italic: true,
@@ -965,7 +1003,7 @@ const drawPreviewText = (context, text, layout) => {
   let size = Math.min(layout.fontSize, 70);
 
   while (size > 36) {
-    context.font = `${style}600 ${size}px ${family}`;
+    context.font = `${style}400 ${size}px ${family}`;
     if (context.measureText(text).width <= layout.width * 0.86) break;
     size -= 3;
   }
@@ -979,6 +1017,66 @@ const drawPreviewText = (context, text, layout) => {
   context.textBaseline = 'middle';
   if ('letterSpacing' in context) context.letterSpacing = '0px';
   context.fillText(text, layout.x + layout.width / 2, layout.y + layout.height / 2);
+};
+
+const traceRoundedRect = (context, x, y, width, height, radius) => {
+  const safeRadius = Math.min(radius, width / 2, height / 2);
+  context.beginPath();
+  if (context.roundRect) {
+    context.roundRect(x, y, width, height, safeRadius);
+    return;
+  }
+
+  context.moveTo(x + safeRadius, y);
+  context.lineTo(x + width - safeRadius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+  context.lineTo(x + width, y + height - safeRadius);
+  context.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+  context.lineTo(x + safeRadius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+  context.lineTo(x, y + safeRadius);
+  context.quadraticCurveTo(x, y, x + safeRadius, y);
+  context.closePath();
+};
+
+const getTextPanelBounds = (layout) => ({
+  x: layout.x,
+  y: layout.y,
+  width: layout.width,
+  height: layout.height,
+});
+
+const drawTextPanel = (context, layout) => {
+  const { x, y, width, height } = getTextPanelBounds(layout);
+
+  context.save();
+  traceRoundedRect(context, x, y, width, height, 26);
+
+  const panelGradient = context.createLinearGradient(x, y, x, y + height);
+  panelGradient.addColorStop(0, 'rgba(0, 0, 0, 0.64)');
+  panelGradient.addColorStop(0.42, 'rgba(0, 0, 0, 0.74)');
+  panelGradient.addColorStop(1, 'rgba(0, 0, 0, 0.62)');
+  context.fillStyle = panelGradient;
+  context.shadowColor = 'rgba(0,0,0,0.50)';
+  context.shadowBlur = 10;
+  context.shadowOffsetY = 3;
+  context.fill();
+  context.restore();
+};
+
+const getTextContentLayout = (layout) => {
+  const panel = getTextPanelBounds(layout);
+  const paddingX = Math.min(68, panel.width * 0.055);
+  const paddingTop = Math.min(48, panel.height * 0.12);
+  const paddingBottom = Math.min(54, panel.height * 0.14);
+
+  return {
+    ...layout,
+    x: panel.x + paddingX,
+    y: panel.y + paddingTop,
+    width: Math.max(240, panel.width - paddingX * 2),
+    height: Math.max(160, panel.height - paddingTop - paddingBottom),
+  };
 };
 
 const shouldJustifyLine = (lines, index) => {
@@ -1011,8 +1109,10 @@ const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate =
   if (!text || !layout) return;
 
   context.save();
+  drawTextPanel(context, layout);
+  const textLayout = getTextContentLayout(layout);
   if (!hasUserText) {
-    drawPreviewText(context, text, layout);
+    drawPreviewText(context, text, textLayout);
     context.restore();
     return;
   }
@@ -1027,13 +1127,15 @@ const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate =
   if ('letterSpacing' in context) context.letterSpacing = '0px';
 
   const isPrimary = previewText === PRIMARY_DESCRIPTION_PREVIEW_TEXT;
-  const dynamicLayout = getDynamicStartingLayout(layout, text, isPrimary);
+  const dynamicLayout = getDynamicStartingLayout(textLayout, text, isPrimary);
   const fitted = fitDescriptionFont(context, text, dynamicLayout, hyphenate);
   const style = dynamicLayout.italic ? 'italic ' : '';
   const family = dynamicLayout.family || "Georgia, serif";
-  context.font = `${style}${dynamicLayout.weight} ${fitted.size}px ${family}`;
+  context.font = `${style}400 ${fitted.size}px ${family}`;
 
-  let y = dynamicLayout.y;
+  const textHeight = fitted.lines.length * fitted.lineHeight;
+  const verticalOffset = Math.max(0, (dynamicLayout.height - textHeight) / 2);
+  let y = dynamicLayout.y + verticalOffset;
   fitted.lines.forEach((line, index) => {
     if (y + fitted.lineHeight > dynamicLayout.y + dynamicLayout.height) return;
     if (line) {
@@ -1070,7 +1172,7 @@ const drawCardCanvas = (
   showTraits,
   description,
   flavorText,
-  weaponType = 'Daga',
+  weaponType = 'Cuerpo a cuerpo',
   alcance = 0,
   diceType = 'D6',
   diceQty = 1,
@@ -1078,6 +1180,7 @@ const drawCardCanvas = (
   diceIconImg = null,
   chargeSlots = DEFAULT_CHARGE_SLOTS,
   consumptionSlots = DEFAULT_CONSUMPTION_SLOTS,
+  resourceMode = RESOURCE_MODE_BOTH,
   resourceImages = {},
   hyphenate = true,
   elementIconImg = null,
@@ -1146,6 +1249,15 @@ const drawCardCanvas = (
   );
   context.restore();
 
+  const drawChargeResources = () => {
+    if (resourceMode === RESOURCE_MODE_CHARGE_ONLY) {
+      drawCenteredChargeRail(context, chargeSlots, resourceImages);
+      return;
+    }
+
+    drawWeaponResourceRails(context, chargeSlots, consumptionSlots, resourceImages);
+  };
+
   // Draw weapon interface if cardType is weapon or armor or action!
   if (cardType === 'weapon') {
     // 1. Draw Dice
@@ -1161,9 +1273,9 @@ const drawCardCanvas = (
       drawWeaponTypeIcon(context, 1598, 615, 200, weaponIconImg);
     }
 
-    drawWeaponResourceRails(context, chargeSlots, consumptionSlots, resourceImages);
-  } else if (cardType === 'armor') {
-    drawWeaponResourceRails(context, chargeSlots, consumptionSlots, resourceImages);
+    drawChargeResources();
+  } else if (cardType === 'armor' || cardType === 'trap' || cardType === 'skill') {
+    drawChargeResources();
   } else if (cardType === 'action') {
     if (diceIconImg) {
       const positions = getActionDicePositions(diceQty);
@@ -1218,22 +1330,23 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
   const [customColor, setCustomColor] = useState('#c8aa6e');
 
   // New states for Weapon properties
-  const [weaponType, setWeaponType] = useState('Daga');
+  const [weaponType, setWeaponType] = useState('Cuerpo a cuerpo');
   const [alcance, setAlcance] = useState(0); // 0: Toque, 1: Cercano, 2: Intermedio, 3: Lejano, 4: Extremo
   const [diceType, setDiceType] = useState('D6'); // D4, D6, D8, D10, D12
   const [diceQty, setDiceQty] = useState(1);
   const [chargeSlots, setChargeSlots] = useState(DEFAULT_CHARGE_SLOTS);
   const [consumptionSlots, setConsumptionSlots] = useState(DEFAULT_CONSUMPTION_SLOTS);
+  const [resourceMode, setResourceMode] = useState(RESOURCE_MODE_BOTH);
 
   // Automatically detect weapon type from cardName
   useEffect(() => {
     if (cardType !== 'weapon') return;
     const nameLower = cardName.toLowerCase();
-    const matchedType = WEAPON_TYPES.find(
-      (type) => nameLower.includes(type.toLowerCase())
-    );
+    const matchedType = WEAPON_TYPE_ALIASES.find(({ aliases }) => (
+      aliases.some((alias) => nameLower.includes(alias))
+    ));
     if (matchedType) {
-      setWeaponType(matchedType);
+      setWeaponType(matchedType.type);
     }
   }, [cardName, cardType]);
 
@@ -1291,7 +1404,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     let diceIconImg = null;
     const resourceImages = {};
     if (cardType === 'weapon') {
-      const iconSrc = `${process.env.PUBLIC_URL || ''}/tipo/${weaponType}.webp`;
+      const iconSrc = getWeaponTypeIconSrc(weaponType);
       weaponIconImg = imageCacheRef.current.get(iconSrc);
       if (!weaponIconImg) {
         try {
@@ -1329,15 +1442,20 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       }
     }
 
-    if (cardType === 'weapon' || cardType === 'armor' || cardType === 'action') {
+    const loadsChargeResources = RESOURCE_CARD_TYPES.has(cardType);
+    const loadsConsumptionResources = cardType === 'action' || (
+      RESOURCE_CARD_TYPES.has(cardType) && resourceMode !== RESOURCE_MODE_CHARGE_ONLY
+    );
+
+    if (loadsChargeResources || loadsConsumptionResources) {
       const resourceOptions = [
         ...CHARGE_TYPES.map((option) => ({ ...option, cacheKey: `charge:${option.id}` })),
         ...CONSUMPTION_TYPES.map((option) => ({ ...option, cacheKey: `consumption:${option.id}` })),
       ];
       const requiredResourceOptions = resourceOptions.filter((option) => (
-        chargeSlots.includes(option.id) && option.cacheKey.startsWith('charge:')
+        loadsChargeResources && chargeSlots.includes(option.id) && option.cacheKey.startsWith('charge:')
       ) || (
-        consumptionSlots.includes(option.id) && option.cacheKey.startsWith('consumption:')
+        loadsConsumptionResources && consumptionSlots.includes(option.id) && option.cacheKey.startsWith('consumption:')
       ));
 
       await Promise.all(requiredResourceOptions.map(async (option) => {
@@ -1403,6 +1521,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       diceIconImg,
       chargeSlots,
       consumptionSlots,
+      resourceMode,
       resourceImages,
       hyphenate,
       elementIconImg,
@@ -1412,7 +1531,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
 
     setImageStatus('ready');
     return undefined;
-  }, [activeBackground, cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, hyphenate, selectedElement, customColorActive, customColor]);
+  }, [activeBackground, cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor]);
 
   useEffect(() => {
     let cleanup;
@@ -1454,12 +1573,13 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     setShowTraits(true);
     setTraits(DEFAULT_TRAITS);
     setSelectedBackground('Gris.webp');
-    setWeaponType('Daga');
+    setWeaponType('Cuerpo a cuerpo');
     setAlcance(0);
     setDiceType('D6');
     setDiceQty(1);
     setChargeSlots(DEFAULT_CHARGE_SLOTS);
     setConsumptionSlots(DEFAULT_CONSUMPTION_SLOTS);
+    setResourceMode(RESOURCE_MODE_BOTH);
     setSelectedElement('Fuego');
     setCustomColorActive(false);
     setCustomColor('#c8aa6e');
@@ -1548,6 +1668,11 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     link.href = canvas.toDataURL('image/png');
     link.click();
   };
+
+  const usesChargeResources = RESOURCE_CARD_TYPES.has(cardType);
+  const usesConsumptionResources = cardType === 'action' || cardType === 'status' || (
+    usesChargeResources && resourceMode !== RESOURCE_MODE_CHARGE_ONLY
+  );
 
   return (
     <div className="h-screen max-h-screen overflow-y-auto bg-[#09090b] text-[#e2e8f0] font-['Lato'] selection:bg-[#c8aa6e]/30 selection:text-[#f0e6d2] custom-scrollbar">
@@ -1651,12 +1776,14 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
               </div>
             </div>
 
-            {(cardType === 'weapon' || cardType === 'armor' || cardType === 'action' || cardType === 'status') && (
+            {(cardType === 'weapon' || cardType === 'armor' || cardType === 'trap' || cardType === 'action' || cardType === 'skill' || cardType === 'status') && (
               <div className="space-y-4 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
                 <div className="font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
                   {cardType === 'weapon' ? 'Propiedades del Arma' : 
                    cardType === 'armor' ? 'Propiedades de la Armadura' : 
+                   cardType === 'trap' ? 'Propiedades de la Trampa' :
                    cardType === 'action' ? 'Propiedades de la Acción' : 
+                   cardType === 'skill' ? 'Propiedades de la Habilidad' :
                    'Propiedades del Estado'}
                 </div>
                 
@@ -1758,7 +1885,37 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                   </div>
                 )}
 
-                {(cardType === 'weapon' || cardType === 'armor') && (
+                {usesChargeResources && (
+                  <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-3">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      Recursos
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setResourceMode(RESOURCE_MODE_BOTH)}
+                        className={`border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition ${resourceMode === RESOURCE_MODE_BOTH
+                          ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                          : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                          }`}
+                      >
+                        Carga + consumo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setResourceMode(RESOURCE_MODE_CHARGE_ONLY)}
+                        className={`border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition ${resourceMode === RESOURCE_MODE_CHARGE_ONLY
+                          ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                          : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                          }`}
+                      >
+                        Solo carga
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {usesChargeResources && (
                   <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-3">
                     <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                       Carga
@@ -1791,6 +1948,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                   </div>
                 )}
 
+                {usesConsumptionResources && (
                 <div className="space-y-2">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                     {cardType === 'weapon' ? 'Consumo' : cardType === 'armor' ? 'Armadura' : 'Consumo'}
@@ -1821,6 +1979,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                     ))}
                   </div>
                 </div>
+                )}
                 {cardType === 'status' && (
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
