@@ -167,7 +167,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.76**
+> **Versión actual: 2.4.77**
+
+**Resumen de cambios v2.4.77:**
+
+- **Corrección de Relación de Aspecto en Previsualización**: Reubicada la clase restrictiva de altura máxima `lg:max-h-[calc(100vh-220px)]` desde la etiqueta `<canvas>` de la carta directamente hacia su contenedor `div` con relación de aspecto (`aspectRatio: '1888/2624'`). Esto soluciona por completo la distorsión o achatamiento vertical de la previsualización en pantallas de menor altura o portátiles, garantizando que el canvas y el contenedor escalen de forma proporcional y mantengan las dimensiones originales y correctas de la carta sin deformarse.
 
 **Resumen de cambios v2.4.76:**
 

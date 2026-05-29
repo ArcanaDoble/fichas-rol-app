@@ -2159,7 +2159,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
             <div className="pointer-events-none absolute inset-0 bg-[#05070d]/50" />
             <div className="relative flex h-full w-full max-w-full items-center justify-center lg:sticky lg:top-12 lg:self-start lg:h-fit lg:w-full lg:items-start">
               <div 
-                className="relative w-full max-w-[380px] sm:max-w-[460px] lg:max-w-[520px] shrink-0"
+                className="relative w-full max-w-[380px] sm:max-w-[460px] lg:max-w-[520px] lg:max-h-[calc(100vh-220px)] shrink-0"
                 style={{ aspectRatio: '1888/2624' }}
               >
                 {/* Glow radial centrado exactamente detrás de la previsualización de la carta */}
@@ -2169,7 +2169,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                   ref={canvasRef}
                   width={CANVAS_WIDTH}
                   height={CANVAS_HEIGHT}
-                  className="relative z-10 block w-full h-full border border-white/15 bg-black shadow-[0_28px_90px_rgba(0,0,0,0.7)] lg:max-h-[calc(100vh-220px)]"
+                  className="relative z-10 block w-full h-full border border-white/15 bg-black shadow-[0_28px_90px_rgba(0,0,0,0.7)]"
                 />
                 {imageStatus === 'loading' && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs font-bold uppercase tracking-[0.25em] text-[#c8aa6e]">
