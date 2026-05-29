@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { collection, doc, getDocs, setDoc, addDoc, deleteDoc } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadString } from 'firebase/storage';
 import {
   FiChevronDown,
   FiArrowLeft,
@@ -51,7 +50,8 @@ import Boton from './Boton';
 import Modal from './Modal';
 import { getGlossaryTooltipId, escapeGlossaryWord } from '../utils/glossary';
 import { convertNumericStringToIcons } from '../utils/iconConversions';
-import { db, storage } from '../firebase';
+import { db } from '../firebase';
+import { uploadDataUrl } from '../utils/storage';
 import Sidebar, { MobileNav } from './Sidebar';
 import ProgressionView from './ProgressionView';
 import LoadoutView from './LoadoutView';
@@ -2185,23 +2185,17 @@ const ClassList = ({
 
       // If image is a base64 string, upload it to Storage
       if (imageUrl && imageUrl.startsWith('data:')) {
-        const imageRef = ref(storage, `${storagePrefix}-images/${newClass.id}`);
-        await uploadString(imageRef, imageUrl, 'data_url');
-        imageUrl = await getDownloadURL(imageRef);
+        imageUrl = await uploadDataUrl(imageUrl, `${storagePrefix}-images/${newClass.id}`);
       }
 
       // If avatar is a base64 string, upload it to Storage
       if (avatarUrl && avatarUrl.startsWith('data:')) {
-        const avatarRef = ref(storage, `${storagePrefix}-avatars/${newClass.id}`);
-        await uploadString(avatarRef, avatarUrl, 'data_url');
-        avatarUrl = await getDownloadURL(avatarRef);
+        avatarUrl = await uploadDataUrl(avatarUrl, `${storagePrefix}-avatars/${newClass.id}`);
       }
 
       let portraitSourceUrl = newClass.portraitSource;
       if (portraitSourceUrl && portraitSourceUrl.startsWith('data:')) {
-        const sourceRef = ref(storage, `${storagePrefix}-sources/${newClass.id}`);
-        await uploadString(sourceRef, portraitSourceUrl, 'data_url');
-        portraitSourceUrl = await getDownloadURL(sourceRef);
+        portraitSourceUrl = await uploadDataUrl(portraitSourceUrl, `${storagePrefix}-sources/${newClass.id}`);
       }
 
       const classToSave = {
@@ -3547,9 +3541,7 @@ const ClassList = ({
       // 0. If it's a new upload, save the RAW source first
       if (cropperState.isNewUpload && cropperState.imageSrc.startsWith('data:')) {
         const sourcePath = `${storagePrefix}-sources/${classId}`;
-        const sourceRef = ref(storage, sourcePath);
-        await uploadString(sourceRef, cropperState.imageSrc, 'data_url');
-        const sourceUrl = await getDownloadURL(sourceRef);
+        const sourceUrl = await uploadDataUrl(cropperState.imageSrc, sourcePath);
         updates.portraitSource = sourceUrl;
         hasUpdates = true;
       }
@@ -3558,9 +3550,7 @@ const ClassList = ({
       const cardDataUrl = await generateCustomImage('CARD');
       if (cardDataUrl) {
         const filePath = `${storagePrefix}-images/${classId}`;
-        const storageRef = ref(storage, filePath);
-        await uploadString(storageRef, cardDataUrl, 'data_url');
-        const url = await getDownloadURL(storageRef);
+        const url = await uploadDataUrl(cardDataUrl, filePath);
         updates.image = normalizeImageValue(url);
         hasUpdates = true;
       }
@@ -3569,9 +3559,7 @@ const ClassList = ({
       const avatarDataUrl = await generateCustomImage('AVATAR');
       if (avatarDataUrl) {
         const filePath = `${storagePrefix}-avatars/${classId}`;
-        const storageRef = ref(storage, filePath);
-        await uploadString(storageRef, avatarDataUrl, 'data_url');
-        const url = await getDownloadURL(storageRef);
+        const url = await uploadDataUrl(avatarDataUrl, filePath);
         updates.avatar = normalizeImageValue(url);
         hasUpdates = true;
       }

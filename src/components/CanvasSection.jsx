@@ -3227,79 +3227,79 @@ const getObjectImage = (item, customImages) => {
     const category = (item.category || '').toLowerCase();
     const target = `${name} ${type} ${category}`;
     // Weapons
-    if (name.includes('llave inglesa')) return '/armas/llave_inglesa.png';
-    if (name.includes('gancho de alcantarilla')) return '/armas/gancho_de_alcantarilla.png';
-    if (target.includes('antorcha')) return '/armas/antorcha.png';
-    if (name.includes('porra de jade')) return '/armas/Porra de jade.png';
-    if (name.includes('sanguinaria')) return '/armas/la_sanguinaria.png';
-    if (name.includes('mazo glacial')) return '/armas/mazo_glacial.png';
-    if (name.includes('cuchillo')) return '/armas/cuchillo.png';
-    if (name.includes('tuberia') || name.includes('tubería')) return '/armas/tuberia.png';
-    if (name.includes('revolver') || name.includes('revólver')) return '/armas/revolver.png';
-    if (name.includes('pistola')) return '/armas/pistola.png';
-    if (name.includes('rifle')) return '/armas/rifle.png';
-    if (name.includes('escopeta')) return '/armas/escopeta.png';
-    if (name.includes('granarco')) return '/armas/arco_largo.png';
-    if (name.includes('arco')) return '/armas/arco_corto.png';
-    if (name.includes('gran clava') || name.includes('granclava')) return '/armas/gran_clava.png';
-    if (name.includes('clava')) return '/armas/clava.png';
-    if (name.includes('jabalina')) return '/armas/jabalina.png';
-    if (name.includes('lanza')) return '/armas/lanza.png';
-    if (name.includes('daga')) return '/armas/daga.png';
-    if (name.includes('hacha de mano')) return '/armas/hacha_de_mano.png';
-    if (name.includes('honda')) return '/armas/honda.png';
-    if (name.includes('tirachinas')) return '/armas/tirachinas.png';
-    if (name.includes('estoque')) return '/armas/estoque.png';
-    if (name.includes('ballesta pesada') || name.includes('granballesta')) return '/armas/ballesta_pesada.png';
-    if (name.includes('ultraballesta')) return '/armas/ultraballesta.jpg';
-    if (name.includes('ballesta de mano')) return '/armas/ballesta_de_mano.png';
-    if (name.includes('ballesta')) return '/armas/ballesta_ligera.png';
-    if (name.includes('martillo de mano')) return '/armas/martillo_de_mano.png';
-    if (name.includes('martillo de guerra')) return '/armas/martillo_de_guerra.png';
-    if (name.includes('gran martillo')) return '/armas/gran_martillo.png';
-    if (name.includes('ultramartillo')) return '/armas/ultramartillo.png';
-    if (name.includes('espada bastarda')) return '/armas/espada_bastarda.png';
-    if (name.includes('espada larga')) return '/armas/espada_larga.png';
-    if (name.includes('espada corta')) return '/armas/espada_corta.png';
-    if (name.includes('mandoble')) return '/armas/mandoble.png';
-    if (name.includes('cimitarra')) return '/armas/cimitarra.png';
-    if (name.includes('espada')) return '/armas/espada_de_acero.png';
-    if (name.includes('fauces')) return '/armas/fauces.png';
-    if (name.includes('garras')) return '/armas/garras.png';
+    if (name.includes('llave inglesa')) return '/armas/llave_inglesa.webp';
+    if (name.includes('gancho de alcantarilla')) return '/armas/gancho_de_alcantarilla.webp';
+    if (target.includes('antorcha')) return '/armas/antorcha.webp';
+    if (name.includes('porra de jade')) return '/armas/Porra de jade.webp';
+    if (name.includes('sanguinaria')) return '/armas/la_sanguinaria.webp';
+    if (name.includes('mazo glacial')) return '/armas/mazo_glacial.webp';
+    if (name.includes('cuchillo')) return '/armas/cuchillo.webp';
+    if (name.includes('tuberia') || name.includes('tubería')) return '/armas/tuberia.webp';
+    if (name.includes('revolver') || name.includes('revólver')) return '/armas/revolver.webp';
+    if (name.includes('pistola')) return '/armas/pistola.webp';
+    if (name.includes('rifle')) return '/armas/rifle.webp';
+    if (name.includes('escopeta')) return '/armas/escopeta.webp';
+    if (name.includes('granarco')) return '/armas/arco_largo.webp';
+    if (name.includes('arco')) return '/armas/arco_corto.webp';
+    if (name.includes('gran clava') || name.includes('granclava')) return '/armas/gran_clava.webp';
+    if (name.includes('clava')) return '/armas/clava.webp';
+    if (name.includes('jabalina')) return '/armas/jabalina.webp';
+    if (name.includes('lanza')) return '/armas/lanza.webp';
+    if (name.includes('daga')) return '/armas/daga.webp';
+    if (name.includes('hacha de mano')) return '/armas/hacha_de_mano.webp';
+    if (name.includes('honda')) return '/armas/honda.webp';
+    if (name.includes('tirachinas')) return '/armas/tirachinas.webp';
+    if (name.includes('estoque')) return '/armas/estoque.webp';
+    if (name.includes('ballesta pesada') || name.includes('granballesta')) return '/armas/ballesta_pesada.webp';
+    if (name.includes('ultraballesta')) return '/armas/ultraballesta.webp';
+    if (name.includes('ballesta de mano')) return '/armas/ballesta_de_mano.webp';
+    if (name.includes('ballesta')) return '/armas/ballesta_ligera.webp';
+    if (name.includes('martillo de mano')) return '/armas/martillo_de_mano.webp';
+    if (name.includes('martillo de guerra')) return '/armas/martillo_de_guerra.webp';
+    if (name.includes('gran martillo')) return '/armas/gran_martillo.webp';
+    if (name.includes('ultramartillo')) return '/armas/ultramartillo.webp';
+    if (name.includes('espada bastarda')) return '/armas/espada_bastarda.webp';
+    if (name.includes('espada larga')) return '/armas/espada_larga.webp';
+    if (name.includes('espada corta')) return '/armas/espada_corta.webp';
+    if (name.includes('mandoble')) return '/armas/mandoble.webp';
+    if (name.includes('cimitarra')) return '/armas/cimitarra.webp';
+    if (name.includes('espada')) return '/armas/espada_de_acero.webp';
+    if (name.includes('fauces')) return '/armas/fauces.webp';
+    if (name.includes('garras')) return '/armas/garras.webp';
     // Objects
-    if (target.includes('chatarra')) return '/objetos/chatarra.jpg';
-    if (target.includes('comida')) return '/objetos/comida.png';
-    if (target.includes('remedio') || target.includes('vendaje')) return '/objetos/vendaje.png';
-    if (target.includes('dinero') || target.includes('moneda')) return '/objetos/dinero.png';
-    if (target.includes('elixir') || target.includes('poción') || target.includes('pocion')) return '/objetos/elixir.png';
-    if (target.includes('libro')) return '/objetos/libro.png';
-    if (target.includes('llave')) return '/objetos/llave.png';
-    if (target.includes('municion') || target.includes('munición')) return '/objetos/municion.png';
-    if (target.includes('pergamino')) return '/objetos/pergamino.png';
-    if (target.includes('polvora') || target.includes('pólvora')) return '/objetos/polvora.png';
-    if (target.includes('coctel molotov') || target.includes('cóctel molotov')) return '/objetos/coctel_molotov.png';
-    if (target.includes('herramientas') || target.includes('herramienta')) return '/objetos/herramientas.png';
-    if (target.includes('recurso')) return '/objetos/recurso.jpg';
-    if (target.includes('accesorio')) return '/objetos/accesorio.png';
-    if (target.includes('arma') && !target.includes('armadura')) return '/objetos/arma.png';
+    if (target.includes('chatarra')) return '/objetos/chatarra.webp';
+    if (target.includes('comida')) return '/objetos/comida.webp';
+    if (target.includes('remedio') || target.includes('vendaje')) return '/objetos/vendaje.webp';
+    if (target.includes('dinero') || target.includes('moneda')) return '/objetos/dinero.webp';
+    if (target.includes('elixir') || target.includes('poción') || target.includes('pocion')) return '/objetos/elixir.webp';
+    if (target.includes('libro')) return '/objetos/libro.webp';
+    if (target.includes('llave')) return '/objetos/llave.webp';
+    if (target.includes('municion') || target.includes('munición')) return '/objetos/municion.webp';
+    if (target.includes('pergamino')) return '/objetos/pergamino.webp';
+    if (target.includes('polvora') || target.includes('pólvora')) return '/objetos/polvora.webp';
+    if (target.includes('coctel molotov') || target.includes('cóctel molotov')) return '/objetos/coctel_molotov.webp';
+    if (target.includes('herramientas') || target.includes('herramienta')) return '/objetos/herramientas.webp';
+    if (target.includes('recurso')) return '/objetos/recurso.webp';
+    if (target.includes('accesorio')) return '/objetos/accesorio.webp';
+    if (target.includes('arma') && !target.includes('armadura')) return '/objetos/arma.webp';
     // Armor
-    if (target.includes('ultraarmadura de hierro')) return '/armaduras/armadura_de_coloso.png';
-    if (target.includes('armadura de placas')) return '/armaduras/armadura_de_placas.png';
-    if (target.includes('armadura de hierro')) return '/armaduras/armadura_de_hierro.png';
-    if (target.includes('armadura de acero reforzado')) return '/armaduras/armadura_de_acero_reforzado.png';
-    if (target.includes('armadura de acero')) return '/armaduras/armadura_de_acero.png';
-    if (target.includes('armadura de coloso')) return '/armaduras/armadura_de_coloso.png';
-    if (target.includes('armadura de escamas')) return '/armaduras/armadura_de_escamas.png';
-    if (target.includes('armadura bandeada')) return '/armaduras/armadura bandeada.png';
-    if (target.includes('armadura acolchada')) return '/armaduras/armadura_acolchada.png';
-    if (target.includes('armadura de piel') || target.includes('armadura de pieles')) return '/armaduras/armadura_de_piel.png';
-    if (target.includes('armadura de cuero tachonado')) return '/armaduras/armadura_de_cuero_tachonado.png';
-    if (target.includes('armadura de cuero')) return '/armaduras/armadura_de_cuero.png';
-    if (target.includes('camisote de mallas')) return '/armaduras/cota_de_malla.png';
-    if (target.includes('armadura')) return '/objetos/armadura.png';
+    if (target.includes('ultraarmadura de hierro')) return '/armaduras/armadura_de_coloso.webp';
+    if (target.includes('armadura de placas')) return '/armaduras/armadura_de_placas.webp';
+    if (target.includes('armadura de hierro')) return '/armaduras/armadura_de_hierro.webp';
+    if (target.includes('armadura de acero reforzado')) return '/armaduras/armadura_de_acero_reforzado.webp';
+    if (target.includes('armadura de acero')) return '/armaduras/armadura_de_acero.webp';
+    if (target.includes('armadura de coloso')) return '/armaduras/armadura_de_coloso.webp';
+    if (target.includes('armadura de escamas')) return '/armaduras/armadura_de_escamas.webp';
+    if (target.includes('armadura bandeada')) return '/armaduras/armadura bandeada.webp';
+    if (target.includes('armadura acolchada')) return '/armaduras/armadura_acolchada.webp';
+    if (target.includes('armadura de piel') || target.includes('armadura de pieles')) return '/armaduras/armadura_de_piel.webp';
+    if (target.includes('armadura de cuero tachonado')) return '/armaduras/armadura_de_cuero_tachonado.webp';
+    if (target.includes('armadura de cuero')) return '/armaduras/armadura_de_cuero.webp';
+    if (target.includes('camisote de mallas')) return '/armaduras/cota_de_malla.webp';
+    if (target.includes('armadura')) return '/objetos/armadura.webp';
     // Accessories
-    if (name.includes('casco de minero')) return '/accesorios/casco_de_minero.png';
-    if (name.includes('guante blanco')) return '/accesorios/guante_blanco.png';
+    if (name.includes('casco de minero')) return '/accesorios/casco_de_minero.webp';
+    if (name.includes('guante blanco')) return '/accesorios/guante_blanco.webp';
     return null;
 };
 
@@ -4503,6 +4503,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     useEffect(() => {
         console.log("Monitoring global canvas visibility...");
         let activeScenarioUnsub = null;
+        let activeScenarioListenerId = null;
 
         const globalUnsub = onSnapshot(doc(db, 'gameSettings', visibilityDocName), (docSnap) => {
             const data = docSnap.exists() ? docSnap.data() : {};
@@ -4515,12 +4516,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 setActiveScenario(null);
                 setViewMode('LIBRARY');
                 if (activeScenarioUnsub) activeScenarioUnsub();
+                activeScenarioUnsub = null;
+                activeScenarioListenerId = null;
                 return;
             }
 
             // If activeId changed or we don't have a listener yet
             if (isPlayerView && activeId) {
+                if (activeScenarioListenerId === activeId && activeScenarioUnsub) return;
                 if (activeScenarioUnsub) activeScenarioUnsub();
+                activeScenarioListenerId = activeId;
 
                 console.log("Active scenario detected:", activeId);
                 const scenarioRef = doc(db, scenarioCollectionName, activeId);
@@ -5302,6 +5307,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             // Buscar el muro para ver si tiene snap individual
             const wall = currentScenario.items.find(i => i.id === draggingWallHandle.id);
             const snappedPos = snapToWallEndpoints(worldPos, wall?.snapToGrid);
+            if (
+                wall &&
+                ((draggingWallHandle.handleIndex === 1 && wall.x1 === snappedPos.x && wall.y1 === snappedPos.y) ||
+                    (draggingWallHandle.handleIndex !== 1 && wall.x2 === snappedPos.x && wall.y2 === snappedPos.y))
+            ) {
+                return;
+            }
 
             const updatedItems = currentScenario.items.map(item => {
                 if (item.id === draggingWallHandle.id) {
@@ -5362,6 +5374,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             }
 
             setLoadingRotation(angleDeg); // Update Rotation
+            if (token.rotation === angleDeg) return;
 
             const newItems = currentScenario.items.map(i => {
                 if (i.id === rotatingTokenId) {
@@ -5405,6 +5418,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const isLaunchingBoardDieDrag = isBoardMode && isBoardDieItem(draggedItemForMove) && draggedItemForMove.dieLaunchMode;
 
             let nextCombatOccupancyFeedback = null;
+            let hasDragPositionChange = false;
             const newItems = currentScenario.items.map(item => {
                 const movesWithSelectedContainer = isCardItem(item) && selectedContainerIds.has(item.containerId);
                 const markerMovesWithSelectedContainer = isBoardMarkerItem(item) && selectedContainers.some(container => (
@@ -5461,6 +5475,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             if (!nextCombatOccupancyFeedback || item.id === draggedTokenId) {
                                 nextCombatOccupancyFeedback = occupancyFeedback;
                             }
+                            if (item.x !== newX || item.y !== newY) hasDragPositionChange = true;
                             return { ...item, x: newX, y: newY };
                         }
                     }
@@ -5469,6 +5484,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     if (item.type === 'wall') {
                         const dx = newX - item.x;
                         const dy = newY - item.y;
+                        if (dx !== 0 || dy !== 0) hasDragPositionChange = true;
                         return {
                             ...item,
                             x: newX,
@@ -5480,6 +5496,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         };
                     }
 
+                    if (item.x !== newX || item.y !== newY) hasDragPositionChange = true;
                     return { ...item, x: newX, y: newY };
                 }
                 return item;
@@ -5555,7 +5572,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 resetDieLaunchFeedback();
             }
 
-            setActiveScenario(prev => ({ ...prev, items: newItems }));
+            if (hasDragPositionChange) {
+                setActiveScenario(prev => ({ ...prev, items: newItems }));
+            }
             return;
         }
 
@@ -5589,6 +5608,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 newWidth = Math.max(10, newWidth);
                 newHeight = Math.max(10, newHeight);
             }
+
+            if (item && item.width === newWidth && item.height === newHeight) return;
 
             setActiveScenario(prev => ({
                 ...prev,
@@ -8682,6 +8703,105 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             const feedbackCellRect = occupancyFeedbackForItem?.cell
                                 ? getGridCellWorldRect(occupancyFeedbackForItem.cell, gridConfig)
                                 : null;
+                            const startPlacement = dragOrigin || (
+                                Number.isFinite(Number(logicalStartX)) && Number.isFinite(Number(logicalStartY))
+                                    ? (
+                                        isToken && gridConfig.isCombatActive
+                                            ? getCombatRenderPlacementAtPosition(
+                                                item,
+                                                { x: logicalStartX, y: logicalStartY },
+                                                activeScenario?.items || [],
+                                                gridConfig
+                                            )
+                                            : { x: logicalStartX, y: logicalStartY }
+                                    )
+                                    : null
+                            );
+                            const targetPlacement = occupancyFeedbackForItem
+                                ? { x: occupancyFeedbackForItem.targetX, y: occupancyFeedbackForItem.targetY }
+                                : pendingStateForItem && !isDraggingThisToken
+                                    ? (
+                                        isToken && gridConfig.isCombatActive
+                                            ? getCombatRenderPlacementAtPosition(
+                                                item,
+                                                { x: pendingStateForItem.x, y: pendingStateForItem.y },
+                                                activeScenario?.items || [],
+                                                gridConfig
+                                            )
+                                            : { x: pendingStateForItem.x, y: pendingStateForItem.y }
+                                    )
+                                    : renderPlacement;
+                            const hasGhostPreview = !!(
+                                startPlacement &&
+                                targetPlacement &&
+                                (isToken || isGeometry) &&
+                                (
+                                    Math.abs((targetPlacement.x || 0) - (startPlacement.x || 0)) > 0.5 ||
+                                    Math.abs((targetPlacement.y || 0) - (startPlacement.y || 0)) > 0.5
+                                )
+                            );
+                            const ghostPreview = hasGhostPreview
+                                ? (() => {
+                                    const startCenterX = startPlacement.x + ((item.width || 0) / 2);
+                                    const startCenterY = startPlacement.y + ((item.height || 0) / 2);
+                                    const targetCenterX = targetPlacement.x + ((item.width || 0) / 2);
+                                    const targetCenterY = targetPlacement.y + ((item.height || 0) / 2);
+
+                                    return (
+                                        <>
+                                            <svg
+                                                className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible z-0"
+                                            >
+                                                <line
+                                                    x1={startCenterX}
+                                                    y1={startCenterY}
+                                                    x2={targetCenterX}
+                                                    y2={targetCenterY}
+                                                    stroke="#c8aa6e"
+                                                    strokeWidth="1.5"
+                                                    strokeDasharray="6 4"
+                                                    opacity="0.6"
+                                                />
+                                                <circle cx={startCenterX} cy={startCenterY} r="3" fill="#c8aa6e" opacity="0.5" />
+                                            </svg>
+                                            <div
+                                                className={`absolute top-0 left-0 z-10 pointer-events-none grayscale opacity-40 border-2 border-dashed border-[#c8aa6e]/50 ${item.isCircular ? 'rounded-full' : 'rounded-sm'} overflow-hidden`}
+                                                style={{
+                                                    transform: `translate(${startPlacement.x}px, ${startPlacement.y}px) rotate(${item.rotation}deg)`,
+                                                    width: `${item.width}px`,
+                                                    height: `${item.height}px`,
+                                                }}
+                                            >
+                                                {isToken && (
+                                                    <div
+                                                        className="w-full h-full"
+                                                        style={{
+                                                            backgroundImage: item.img ? `url("${item.img}")` : 'none',
+                                                            backgroundPosition: 'center',
+                                                            backgroundRepeat: 'no-repeat',
+                                                            backgroundSize: item.isCircular ? 'cover' : 'contain'
+                                                        }}
+                                                    />
+                                                )}
+                                                {isGeometry && (
+                                                    <div
+                                                        className={`w-full h-full flex items-center justify-center font-bold text-white shadow-inner uppercase text-[10px] tracking-widest break-words overflow-hidden p-2 text-center`}
+                                                        style={{
+                                                            backgroundColor: item.backgroundColor || '#22c55e',
+                                                            opacity: item.opacity || 0.4,
+                                                            borderRadius: item.isCircular ? '50%' : '4px',
+                                                            border: `2px solid ${item.backgroundColor || '#22c55e'}`,
+                                                            pointerEvents: 'none'
+                                                        }}
+                                                    >
+                                                        <span style={{ opacity: 1, textShadow: '0px 0px 4px black', pointerEvents: 'none' }}>{item.name}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </>
+                                    );
+                                })()
+                                : null;
                             const blockedPlacement = (occupancyFeedbackForItem && feedbackCellRect)
                                 ? (
                                     <>
@@ -8743,7 +8863,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 )
                                 : null;
 
-                            return blockedPlacement;
+                            return (
+                                <>
+                                    {ghostPreview}
+                                    {blockedPlacement}
+                                </>
+                            );
                         })()}
                     </>
                 )}
@@ -9230,7 +9355,17 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
     const updateItem = (itemId, updates, persist = false) => {
         setActiveScenario(prev => {
-            const newItems = prev.items.map(i => i.id === itemId ? { ...i, ...updates } : i);
+            if (!prev) return prev;
+            let didChange = false;
+            const newItems = prev.items.map(i => {
+                if (i.id !== itemId) return i;
+                const hasUpdateChange = Object.entries(updates || {}).some(([key, value]) => i[key] !== value);
+                if (!hasUpdateChange) return i;
+                didChange = true;
+                return { ...i, ...updates };
+            });
+
+            if (!didChange) return prev;
 
             if (persist && prev.id) {
                 updateDoc(doc(db, scenarioCollectionName, prev.id), {
@@ -11475,6 +11610,34 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             };
         });
     }, [activeScenario?.items, isBoardMode]);
+    const activeScenarioItems = useMemo(() => activeScenario?.items || [], [activeScenario?.items]);
+    const canvasRenderItemGroups = useMemo(() => {
+        const livePendingTurnState = isUsablePendingTurnState(pendingTurnState) ? pendingTurnState : null;
+        const lights = [];
+        const others = [];
+
+        for (const item of activeScenarioItems) {
+            if (!item) continue;
+            let renderItem = item;
+
+            if (
+                isPlayerView &&
+                livePendingTurnState &&
+                livePendingTurnState.tokenId === item.id &&
+                draggedTokenId !== item.id
+            ) {
+                renderItem = { ...item, x: livePendingTurnState.x, y: livePendingTurnState.y };
+            }
+
+            if (renderItem.type === 'light') {
+                lights.push(renderItem);
+            } else {
+                others.push(renderItem);
+            }
+        }
+
+        return { lights, others };
+    }, [activeScenarioItems, draggedTokenId, isPlayerView, pendingTurnState]);
 
     return (
         <div className={`h-screen w-screen overflow-hidden bg-[#09090b] relative font-['Lato'] select-none ${targetingState ? 'cursor-crosshair' : ''}`}>
@@ -14605,24 +14768,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 {/* --- CONTENIDO DEL CANVAS (Tokens, Dibujos, etc.) --- */}
                                 {/* Los items se renderizan aquí, entre el fondo y la niebla superior */}
                                 <div className="absolute inset-0 z-10 pointer-events-none" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
-                                    {(() => {
-                                        const livePendingTurnState = isUsablePendingTurnState(pendingTurnState) ? pendingTurnState : null;
-                                        const items = (activeScenario?.items || []).map(item => {
-                                            // Si hay estado pendiente y NO lo estamos arrastrando, mostramos el estado pendiente
-                                            if (isPlayerView && livePendingTurnState && livePendingTurnState.tokenId === item.id) {
-                                                if (draggedTokenId !== item.id) {
-                                                    return { ...item, x: livePendingTurnState.x, y: livePendingTurnState.y };
-                                                }
-                                            }
-                                            return item;
-                                        });
-                                        return (
-                                            <>
-                                                {items.filter(i => i && i.type === 'light').map(item => renderItemJSX(item))}
-                                                {items.filter(i => i && i.type !== 'light').map(item => renderItemJSX(item))}
-                                            </>
-                                        );
-                                    })()}
+                                    {canvasRenderItemGroups.lights.map(item => renderItemJSX(item))}
+                                    {canvasRenderItemGroups.others.map(item => renderItemJSX(item))}
                                 </div>
 
                                 {targetingState?.phase === 'sweep_selection' && (() => {
