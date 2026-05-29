@@ -1543,6 +1543,47 @@ const isHandCardItem = (item) => isCardItem(item) && item.zone === 'hand';
 const isStackedCardItem = (item) => isCardItem(item) && !!item.stackParentId;
 const isContainedCardItem = (item) => isCardItem(item) && !!item.containerId;
 const isCombatTokenItem = (item) => !!item && item.type !== 'light' && item.type !== 'wall' && item.type !== 'geometry' && !isCardItem(item) && !isCardContainerItem(item) && !isBoardMarkerItem(item) && !isBoardDieItem(item);
+const getCombatSpeedTokens = (items = []) => (
+    (items || []).filter(item => isCombatTokenItem(item) && (item.isCircular || item.stats))
+);
+const isMasterControlledCombatToken = (token) => {
+    const controlledBy = Array.isArray(token?.controlledBy)
+        ? token.controlledBy.filter(Boolean)
+        : [];
+    return controlledBy.length === 0 || controlledBy.includes('master') || controlledBy.includes('Master');
+};
+const getCombatTokenSpeed = (token) => Math.max(0, Number(token?.velocidad) || 0);
+const getActiveCombatTurnInfo = (items = []) => {
+    const combatTokens = getCombatSpeedTokens(items);
+    if (combatTokens.length === 0) {
+        return { activeSpeed: 0, hasMasterAtActiveSpeed: false };
+    }
+
+    const activeSpeed = Math.min(...combatTokens.map(getCombatTokenSpeed));
+    const hasMasterAtActiveSpeed = combatTokens.some(token => (
+        getCombatTokenSpeed(token) === activeSpeed && isMasterControlledCombatToken(token)
+    ));
+
+    return { activeSpeed, hasMasterAtActiveSpeed };
+};
+const canCombatTokenActNow = (token, items = []) => {
+    if (!token) return false;
+    const { activeSpeed, hasMasterAtActiveSpeed } = getActiveCombatTurnInfo(items);
+    if (getCombatTokenSpeed(token) !== activeSpeed) return false;
+    return !hasMasterAtActiveSpeed || isMasterControlledCombatToken(token);
+};
+const sanitizeForFirestore = (value) => {
+    if (value === undefined) return null;
+    if (value === null) return null;
+    if (value instanceof Date) return value;
+    if (Array.isArray(value)) return value.map(sanitizeForFirestore);
+    if (typeof value === 'object') {
+        return Object.fromEntries(
+            Object.entries(value).map(([key, entryValue]) => [key, sanitizeForFirestore(entryValue)])
+        );
+    }
+    return value;
+};
 const getItemOverlapRatio = (a = {}, b = {}) => {
     const left = Math.max(Number(a.x) || 0, Number(b.x) || 0);
     const top = Math.max(Number(a.y) || 0, Number(b.y) || 0);
@@ -2938,7 +2979,7 @@ const SpeedTimeline = ({ tokens, selectedId, onSelect, isPlayerView, onReset, mo
             : Math.max(0, Number(token.velocidad) || 0)
     );
     const getTimelineSideRank = (token) => (
-        isInitiativeMode && token.timelineSide === 'master' ? 0 : 1
+        token.timelineSide === 'master' ? 0 : 1
     );
     const sortedTokens = useMemo(() => {
         return [...tokens].sort((a, b) => {
@@ -3058,7 +3099,7 @@ const SpeedTimeline = ({ tokens, selectedId, onSelect, isPlayerView, onReset, mo
     if (sortedTokens.length === 0) return null;
 
     const activeValue = getTimelineValue(sortedTokens[0]);
-    const hasMasterAtActiveValue = isInitiativeMode && sortedTokens.some(token => getTimelineValue(token) === activeValue && token.timelineSide === 'master');
+    const hasMasterAtActiveValue = sortedTokens.some(token => getTimelineValue(token) === activeValue && token.timelineSide === 'master');
     const activeMasterId = hasMasterAtActiveValue
         ? sortedTokens.find(token => getTimelineValue(token) === activeValue && token.timelineSide === 'master')?.id
         : null;
@@ -3085,7 +3126,7 @@ const SpeedTimeline = ({ tokens, selectedId, onSelect, isPlayerView, onReset, mo
                             const value = getTimelineValue(token);
                             const isNext = isInitiativeMode
                                 ? (hasMasterAtActiveValue ? token.id === activeMasterId : value === activeValue)
-                                : (idx === 0 || value === activeValue);
+                                : (value === activeValue && (!hasMasterAtActiveValue || token.timelineSide === 'master'));
                             const isSelectedToken = selectedId === token.id;
                             return (
                                 <motion.div
@@ -3186,79 +3227,79 @@ const getObjectImage = (item, customImages) => {
     const category = (item.category || '').toLowerCase();
     const target = `${name} ${type} ${category}`;
     // Weapons
-    if (name.includes('llave inglesa')) return '/armas/llave_inglesa.png';
-    if (name.includes('gancho de alcantarilla')) return '/armas/gancho_de_alcantarilla.png';
-    if (target.includes('antorcha')) return '/armas/antorcha.png';
-    if (name.includes('porra de jade')) return '/armas/Porra de jade.png';
-    if (name.includes('sanguinaria')) return '/armas/la_sanguinaria.png';
-    if (name.includes('mazo glacial')) return '/armas/mazo_glacial.png';
-    if (name.includes('cuchillo')) return '/armas/cuchillo.png';
-    if (name.includes('tuberia') || name.includes('tubería')) return '/armas/tuberia.png';
-    if (name.includes('revolver') || name.includes('revólver')) return '/armas/revolver.png';
-    if (name.includes('pistola')) return '/armas/pistola.png';
-    if (name.includes('rifle')) return '/armas/rifle.png';
-    if (name.includes('escopeta')) return '/armas/escopeta.png';
-    if (name.includes('granarco')) return '/armas/arco_largo.png';
-    if (name.includes('arco')) return '/armas/arco_corto.png';
-    if (name.includes('gran clava') || name.includes('granclava')) return '/armas/gran_clava.png';
-    if (name.includes('clava')) return '/armas/clava.png';
-    if (name.includes('jabalina')) return '/armas/jabalina.png';
-    if (name.includes('lanza')) return '/armas/lanza.png';
-    if (name.includes('daga')) return '/armas/daga.png';
-    if (name.includes('hacha de mano')) return '/armas/hacha_de_mano.png';
-    if (name.includes('honda')) return '/armas/honda.png';
-    if (name.includes('tirachinas')) return '/armas/tirachinas.png';
-    if (name.includes('estoque')) return '/armas/estoque.png';
-    if (name.includes('ballesta pesada') || name.includes('granballesta')) return '/armas/ballesta_pesada.png';
-    if (name.includes('ultraballesta')) return '/armas/ultraballesta.jpg';
-    if (name.includes('ballesta de mano')) return '/armas/ballesta_de_mano.png';
-    if (name.includes('ballesta')) return '/armas/ballesta_ligera.png';
-    if (name.includes('martillo de mano')) return '/armas/martillo_de_mano.png';
-    if (name.includes('martillo de guerra')) return '/armas/martillo_de_guerra.png';
-    if (name.includes('gran martillo')) return '/armas/gran_martillo.png';
-    if (name.includes('ultramartillo')) return '/armas/ultramartillo.png';
-    if (name.includes('espada bastarda')) return '/armas/espada_bastarda.png';
-    if (name.includes('espada larga')) return '/armas/espada_larga.png';
-    if (name.includes('espada corta')) return '/armas/espada_corta.png';
-    if (name.includes('mandoble')) return '/armas/mandoble.png';
-    if (name.includes('cimitarra')) return '/armas/cimitarra.png';
-    if (name.includes('espada')) return '/armas/espada_de_acero.png';
-    if (name.includes('fauces')) return '/armas/fauces.png';
-    if (name.includes('garras')) return '/armas/garras.png';
+    if (name.includes('llave inglesa')) return '/armas/llave_inglesa.webp';
+    if (name.includes('gancho de alcantarilla')) return '/armas/gancho_de_alcantarilla.webp';
+    if (target.includes('antorcha')) return '/armas/antorcha.webp';
+    if (name.includes('porra de jade')) return '/armas/Porra de jade.webp';
+    if (name.includes('sanguinaria')) return '/armas/la_sanguinaria.webp';
+    if (name.includes('mazo glacial')) return '/armas/mazo_glacial.webp';
+    if (name.includes('cuchillo')) return '/armas/cuchillo.webp';
+    if (name.includes('tuberia') || name.includes('tubería')) return '/armas/tuberia.webp';
+    if (name.includes('revolver') || name.includes('revólver')) return '/armas/revolver.webp';
+    if (name.includes('pistola')) return '/armas/pistola.webp';
+    if (name.includes('rifle')) return '/armas/rifle.webp';
+    if (name.includes('escopeta')) return '/armas/escopeta.webp';
+    if (name.includes('granarco')) return '/armas/arco_largo.webp';
+    if (name.includes('arco')) return '/armas/arco_corto.webp';
+    if (name.includes('gran clava') || name.includes('granclava')) return '/armas/gran_clava.webp';
+    if (name.includes('clava')) return '/armas/clava.webp';
+    if (name.includes('jabalina')) return '/armas/jabalina.webp';
+    if (name.includes('lanza')) return '/armas/lanza.webp';
+    if (name.includes('daga')) return '/armas/daga.webp';
+    if (name.includes('hacha de mano')) return '/armas/hacha_de_mano.webp';
+    if (name.includes('honda')) return '/armas/honda.webp';
+    if (name.includes('tirachinas')) return '/armas/tirachinas.webp';
+    if (name.includes('estoque')) return '/armas/estoque.webp';
+    if (name.includes('ballesta pesada') || name.includes('granballesta')) return '/armas/ballesta_pesada.webp';
+    if (name.includes('ultraballesta')) return '/armas/ultraballesta.webp';
+    if (name.includes('ballesta de mano')) return '/armas/ballesta_de_mano.webp';
+    if (name.includes('ballesta')) return '/armas/ballesta_ligera.webp';
+    if (name.includes('martillo de mano')) return '/armas/martillo_de_mano.webp';
+    if (name.includes('martillo de guerra')) return '/armas/martillo_de_guerra.webp';
+    if (name.includes('gran martillo')) return '/armas/gran_martillo.webp';
+    if (name.includes('ultramartillo')) return '/armas/ultramartillo.webp';
+    if (name.includes('espada bastarda')) return '/armas/espada_bastarda.webp';
+    if (name.includes('espada larga')) return '/armas/espada_larga.webp';
+    if (name.includes('espada corta')) return '/armas/espada_corta.webp';
+    if (name.includes('mandoble')) return '/armas/mandoble.webp';
+    if (name.includes('cimitarra')) return '/armas/cimitarra.webp';
+    if (name.includes('espada')) return '/armas/espada_de_acero.webp';
+    if (name.includes('fauces')) return '/armas/fauces.webp';
+    if (name.includes('garras')) return '/armas/garras.webp';
     // Objects
-    if (target.includes('chatarra')) return '/objetos/chatarra.jpg';
-    if (target.includes('comida')) return '/objetos/comida.png';
-    if (target.includes('remedio') || target.includes('vendaje')) return '/objetos/vendaje.png';
-    if (target.includes('dinero') || target.includes('moneda')) return '/objetos/dinero.png';
-    if (target.includes('elixir') || target.includes('poción') || target.includes('pocion')) return '/objetos/elixir.png';
-    if (target.includes('libro')) return '/objetos/libro.png';
-    if (target.includes('llave')) return '/objetos/llave.png';
-    if (target.includes('municion') || target.includes('munición')) return '/objetos/municion.png';
-    if (target.includes('pergamino')) return '/objetos/pergamino.png';
-    if (target.includes('polvora') || target.includes('pólvora')) return '/objetos/polvora.png';
-    if (target.includes('coctel molotov') || target.includes('cóctel molotov')) return '/objetos/coctel_molotov.png';
-    if (target.includes('herramientas') || target.includes('herramienta')) return '/objetos/herramientas.png';
-    if (target.includes('recurso')) return '/objetos/recurso.jpg';
-    if (target.includes('accesorio')) return '/objetos/accesorio.png';
-    if (target.includes('arma') && !target.includes('armadura')) return '/objetos/arma.png';
+    if (target.includes('chatarra')) return '/objetos/chatarra.webp';
+    if (target.includes('comida')) return '/objetos/comida.webp';
+    if (target.includes('remedio') || target.includes('vendaje')) return '/objetos/vendaje.webp';
+    if (target.includes('dinero') || target.includes('moneda')) return '/objetos/dinero.webp';
+    if (target.includes('elixir') || target.includes('poción') || target.includes('pocion')) return '/objetos/elixir.webp';
+    if (target.includes('libro')) return '/objetos/libro.webp';
+    if (target.includes('llave')) return '/objetos/llave.webp';
+    if (target.includes('municion') || target.includes('munición')) return '/objetos/municion.webp';
+    if (target.includes('pergamino')) return '/objetos/pergamino.webp';
+    if (target.includes('polvora') || target.includes('pólvora')) return '/objetos/polvora.webp';
+    if (target.includes('coctel molotov') || target.includes('cóctel molotov')) return '/objetos/coctel_molotov.webp';
+    if (target.includes('herramientas') || target.includes('herramienta')) return '/objetos/herramientas.webp';
+    if (target.includes('recurso')) return '/objetos/recurso.webp';
+    if (target.includes('accesorio')) return '/objetos/accesorio.webp';
+    if (target.includes('arma') && !target.includes('armadura')) return '/objetos/arma.webp';
     // Armor
-    if (target.includes('ultraarmadura de hierro')) return '/armaduras/armadura_de_coloso.png';
-    if (target.includes('armadura de placas')) return '/armaduras/armadura_de_placas.png';
-    if (target.includes('armadura de hierro')) return '/armaduras/armadura_de_hierro.png';
-    if (target.includes('armadura de acero reforzado')) return '/armaduras/armadura_de_acero_reforzado.png';
-    if (target.includes('armadura de acero')) return '/armaduras/armadura_de_acero.png';
-    if (target.includes('armadura de coloso')) return '/armaduras/armadura_de_coloso.png';
-    if (target.includes('armadura de escamas')) return '/armaduras/armadura_de_escamas.png';
-    if (target.includes('armadura bandeada')) return '/armaduras/armadura bandeada.png';
-    if (target.includes('armadura acolchada')) return '/armaduras/armadura_acolchada.png';
-    if (target.includes('armadura de piel') || target.includes('armadura de pieles')) return '/armaduras/armadura_de_piel.png';
-    if (target.includes('armadura de cuero tachonado')) return '/armaduras/armadura_de_cuero_tachonado.png';
-    if (target.includes('armadura de cuero')) return '/armaduras/armadura_de_cuero.png';
-    if (target.includes('camisote de mallas')) return '/armaduras/cota_de_malla.png';
-    if (target.includes('armadura')) return '/objetos/armadura.png';
+    if (target.includes('ultraarmadura de hierro')) return '/armaduras/armadura_de_coloso.webp';
+    if (target.includes('armadura de placas')) return '/armaduras/armadura_de_placas.webp';
+    if (target.includes('armadura de hierro')) return '/armaduras/armadura_de_hierro.webp';
+    if (target.includes('armadura de acero reforzado')) return '/armaduras/armadura_de_acero_reforzado.webp';
+    if (target.includes('armadura de acero')) return '/armaduras/armadura_de_acero.webp';
+    if (target.includes('armadura de coloso')) return '/armaduras/armadura_de_coloso.webp';
+    if (target.includes('armadura de escamas')) return '/armaduras/armadura_de_escamas.webp';
+    if (target.includes('armadura bandeada')) return '/armaduras/armadura bandeada.webp';
+    if (target.includes('armadura acolchada')) return '/armaduras/armadura_acolchada.webp';
+    if (target.includes('armadura de piel') || target.includes('armadura de pieles')) return '/armaduras/armadura_de_piel.webp';
+    if (target.includes('armadura de cuero tachonado')) return '/armaduras/armadura_de_cuero_tachonado.webp';
+    if (target.includes('armadura de cuero')) return '/armaduras/armadura_de_cuero.webp';
+    if (target.includes('camisote de mallas')) return '/armaduras/cota_de_malla.webp';
+    if (target.includes('armadura')) return '/objetos/armadura.webp';
     // Accessories
-    if (name.includes('casco de minero')) return '/accesorios/casco_de_minero.png';
-    if (name.includes('guante blanco')) return '/accesorios/guante_blanco.png';
+    if (name.includes('casco de minero')) return '/accesorios/casco_de_minero.webp';
+    if (name.includes('guante blanco')) return '/accesorios/guante_blanco.webp';
     return null;
 };
 
@@ -4462,6 +4503,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     useEffect(() => {
         console.log("Monitoring global canvas visibility...");
         let activeScenarioUnsub = null;
+        let activeScenarioListenerId = null;
 
         const globalUnsub = onSnapshot(doc(db, 'gameSettings', visibilityDocName), (docSnap) => {
             const data = docSnap.exists() ? docSnap.data() : {};
@@ -4474,12 +4516,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 setActiveScenario(null);
                 setViewMode('LIBRARY');
                 if (activeScenarioUnsub) activeScenarioUnsub();
+                activeScenarioUnsub = null;
+                activeScenarioListenerId = null;
                 return;
             }
 
             // If activeId changed or we don't have a listener yet
             if (isPlayerView && activeId) {
+                if (activeScenarioListenerId === activeId && activeScenarioUnsub) return;
                 if (activeScenarioUnsub) activeScenarioUnsub();
+                activeScenarioListenerId = activeId;
 
                 console.log("Active scenario detected:", activeId);
                 const scenarioRef = doc(db, scenarioCollectionName, activeId);
@@ -5261,6 +5307,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             // Buscar el muro para ver si tiene snap individual
             const wall = currentScenario.items.find(i => i.id === draggingWallHandle.id);
             const snappedPos = snapToWallEndpoints(worldPos, wall?.snapToGrid);
+            if (
+                wall &&
+                ((draggingWallHandle.handleIndex === 1 && wall.x1 === snappedPos.x && wall.y1 === snappedPos.y) ||
+                    (draggingWallHandle.handleIndex !== 1 && wall.x2 === snappedPos.x && wall.y2 === snappedPos.y))
+            ) {
+                return;
+            }
 
             const updatedItems = currentScenario.items.map(item => {
                 if (item.id === draggingWallHandle.id) {
@@ -5321,6 +5374,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             }
 
             setLoadingRotation(angleDeg); // Update Rotation
+            if (token.rotation === angleDeg) return;
 
             const newItems = currentScenario.items.map(i => {
                 if (i.id === rotatingTokenId) {
@@ -5364,6 +5418,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const isLaunchingBoardDieDrag = isBoardMode && isBoardDieItem(draggedItemForMove) && draggedItemForMove.dieLaunchMode;
 
             let nextCombatOccupancyFeedback = null;
+            let hasDragPositionChange = false;
             const newItems = currentScenario.items.map(item => {
                 const movesWithSelectedContainer = isCardItem(item) && selectedContainerIds.has(item.containerId);
                 const markerMovesWithSelectedContainer = isBoardMarkerItem(item) && selectedContainers.some(container => (
@@ -5420,6 +5475,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             if (!nextCombatOccupancyFeedback || item.id === draggedTokenId) {
                                 nextCombatOccupancyFeedback = occupancyFeedback;
                             }
+                            if (item.x !== newX || item.y !== newY) hasDragPositionChange = true;
                             return { ...item, x: newX, y: newY };
                         }
                     }
@@ -5428,6 +5484,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     if (item.type === 'wall') {
                         const dx = newX - item.x;
                         const dy = newY - item.y;
+                        if (dx !== 0 || dy !== 0) hasDragPositionChange = true;
                         return {
                             ...item,
                             x: newX,
@@ -5439,6 +5496,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         };
                     }
 
+                    if (item.x !== newX || item.y !== newY) hasDragPositionChange = true;
                     return { ...item, x: newX, y: newY };
                 }
                 return item;
@@ -5514,7 +5572,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 resetDieLaunchFeedback();
             }
 
-            setActiveScenario(prev => ({ ...prev, items: newItems }));
+            if (hasDragPositionChange) {
+                setActiveScenario(prev => ({ ...prev, items: newItems }));
+            }
             return;
         }
 
@@ -5548,6 +5608,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 newWidth = Math.max(10, newWidth);
                 newHeight = Math.max(10, newHeight);
             }
+
+            if (item && item.width === newWidth && item.height === newHeight) return;
 
             setActiveScenario(prev => ({
                 ...prev,
@@ -7869,10 +7931,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             // RESTRICCIÓN DE MODO COMBATE: Solo mover si es tu turno (velocidad mínima)
             if (!isBoardMode && gridConfig.isCombatActive && activeLayer === 'TABLETOP' && isCombatTokenItem(token)) {
                 const currentItems = (activeScenarioRef.current || activeScenario)?.items || [];
-                const combatTokens = currentItems.filter(i => i.type !== 'wall' && i.type !== 'light' && (i.isCircular || i.stats));
-                const minVel = Math.min(...combatTokens.map(t => t.velocidad || 0));
 
-                if ((token.velocidad || 0) > minVel) {
+                if (!canCombatTokenActNow(token, currentItems)) {
                     // No es tu turno, pero el Master puede mover cualquier cosa
                     if (isPlayerView) {
                         triggerToast("No es tu turno", "Debes esperar a que tu velocidad sea la más baja", 'warning');
@@ -8643,46 +8703,172 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             const feedbackCellRect = occupancyFeedbackForItem?.cell
                                 ? getGridCellWorldRect(occupancyFeedbackForItem.cell, gridConfig)
                                 : null;
-                            const blockedPlacement = (occupancyFeedbackForItem && feedbackCellRect && item.width <= feedbackCellRect.width && item.height <= feedbackCellRect.height)
-                                ? (
-                                    <div
-                                        className={`absolute top-0 left-0 z-10 pointer-events-none grayscale opacity-40 border-2 border-dashed border-[#c8aa6e]/50 ${item.isCircular ? 'rounded-full' : 'rounded-sm'} overflow-hidden`}
-                                        style={{
-                                            transform: `translate(${feedbackCellRect.x}px, ${feedbackCellRect.y}px) rotate(${item.rotation}deg)`,
-                                            width: `${item.width}px`,
-                                            height: `${item.height}px`,
-                                        }}
-                                    >
-                                        {isToken && (
+                            const startPlacement = dragOrigin || (
+                                Number.isFinite(Number(logicalStartX)) && Number.isFinite(Number(logicalStartY))
+                                    ? (
+                                        isToken && gridConfig.isCombatActive
+                                            ? getCombatRenderPlacementAtPosition(
+                                                item,
+                                                { x: logicalStartX, y: logicalStartY },
+                                                activeScenario?.items || [],
+                                                gridConfig
+                                            )
+                                            : { x: logicalStartX, y: logicalStartY }
+                                    )
+                                    : null
+                            );
+                            const targetPlacement = occupancyFeedbackForItem
+                                ? { x: occupancyFeedbackForItem.targetX, y: occupancyFeedbackForItem.targetY }
+                                : pendingStateForItem && !isDraggingThisToken
+                                    ? (
+                                        isToken && gridConfig.isCombatActive
+                                            ? getCombatRenderPlacementAtPosition(
+                                                item,
+                                                { x: pendingStateForItem.x, y: pendingStateForItem.y },
+                                                activeScenario?.items || [],
+                                                gridConfig
+                                            )
+                                            : { x: pendingStateForItem.x, y: pendingStateForItem.y }
+                                    )
+                                    : renderPlacement;
+                            const hasGhostPreview = !!(
+                                startPlacement &&
+                                targetPlacement &&
+                                (isToken || isGeometry) &&
+                                (
+                                    Math.abs((targetPlacement.x || 0) - (startPlacement.x || 0)) > 0.5 ||
+                                    Math.abs((targetPlacement.y || 0) - (startPlacement.y || 0)) > 0.5
+                                )
+                            );
+                            const ghostPreview = hasGhostPreview
+                                ? (() => {
+                                    const startCenterX = startPlacement.x + ((item.width || 0) / 2);
+                                    const startCenterY = startPlacement.y + ((item.height || 0) / 2);
+                                    const targetCenterX = targetPlacement.x + ((item.width || 0) / 2);
+                                    const targetCenterY = targetPlacement.y + ((item.height || 0) / 2);
+
+                                    return (
+                                        <>
+                                            <svg
+                                                className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible z-0"
+                                            >
+                                                <line
+                                                    x1={startCenterX}
+                                                    y1={startCenterY}
+                                                    x2={targetCenterX}
+                                                    y2={targetCenterY}
+                                                    stroke="#c8aa6e"
+                                                    strokeWidth="1.5"
+                                                    strokeDasharray="6 4"
+                                                    opacity="0.6"
+                                                />
+                                                <circle cx={startCenterX} cy={startCenterY} r="3" fill="#c8aa6e" opacity="0.5" />
+                                            </svg>
                                             <div
-                                                className="w-full h-full"
+                                                className={`absolute top-0 left-0 z-10 pointer-events-none grayscale opacity-40 border-2 border-dashed border-[#c8aa6e]/50 ${item.isCircular ? 'rounded-full' : 'rounded-sm'} overflow-hidden`}
                                                 style={{
-                                                    backgroundImage: item.img ? `url("${item.img}")` : 'none',
-                                                    backgroundPosition: 'center',
-                                                    backgroundRepeat: 'no-repeat',
-                                                    backgroundSize: item.isCircular ? 'cover' : 'contain'
-                                                }}
-                                            />
-                                        )}
-                                        {isGeometry && (
-                                            <div
-                                                className={`w-full h-full flex items-center justify-center font-bold text-white shadow-inner uppercase text-[10px] tracking-widest break-words overflow-hidden p-2 text-center`}
-                                                style={{
-                                                    backgroundColor: item.backgroundColor || '#22c55e',
-                                                    opacity: item.opacity || 0.4,
-                                                    borderRadius: item.isCircular ? '50%' : '4px',
-                                                    border: `2px solid ${item.backgroundColor || '#22c55e'}`,
-                                                    pointerEvents: 'none'
+                                                    transform: `translate(${startPlacement.x}px, ${startPlacement.y}px) rotate(${item.rotation}deg)`,
+                                                    width: `${item.width}px`,
+                                                    height: `${item.height}px`,
                                                 }}
                                             >
-                                                <span style={{ opacity: 1, textShadow: '0px 0px 4px black', pointerEvents: 'none' }}>{item.name}</span>
+                                                {isToken && (
+                                                    <div
+                                                        className="w-full h-full"
+                                                        style={{
+                                                            backgroundImage: item.img ? `url("${item.img}")` : 'none',
+                                                            backgroundPosition: 'center',
+                                                            backgroundRepeat: 'no-repeat',
+                                                            backgroundSize: item.isCircular ? 'cover' : 'contain'
+                                                        }}
+                                                    />
+                                                )}
+                                                {isGeometry && (
+                                                    <div
+                                                        className={`w-full h-full flex items-center justify-center font-bold text-white shadow-inner uppercase text-[10px] tracking-widest break-words overflow-hidden p-2 text-center`}
+                                                        style={{
+                                                            backgroundColor: item.backgroundColor || '#22c55e',
+                                                            opacity: item.opacity || 0.4,
+                                                            borderRadius: item.isCircular ? '50%' : '4px',
+                                                            border: `2px solid ${item.backgroundColor || '#22c55e'}`,
+                                                            pointerEvents: 'none'
+                                                        }}
+                                                    >
+                                                        <span style={{ opacity: 1, textShadow: '0px 0px 4px black', pointerEvents: 'none' }}>{item.name}</span>
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
+                                        </>
+                                    );
+                                })()
+                                : null;
+                            const blockedPlacement = (occupancyFeedbackForItem && feedbackCellRect)
+                                ? (
+                                    <>
+                                        <div
+                                            className="absolute top-0 left-0 z-[58] pointer-events-none rounded-md border-2 border-red-400/90 bg-red-500/15 shadow-[0_0_24px_rgba(239,68,68,0.45)]"
+                                            style={{
+                                                transform: `translate(${feedbackCellRect.x}px, ${feedbackCellRect.y}px)`,
+                                                width: `${feedbackCellRect.width}px`,
+                                                height: `${feedbackCellRect.height}px`,
+                                            }}
+                                        >
+                                            <div
+                                                className="absolute left-1/2 top-1/2 h-1 w-[58%] -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-full bg-red-100 shadow-[0_0_8px_rgba(248,113,113,0.9)]"
+                                            />
+                                            <div
+                                                className="absolute left-1/2 top-1/2 h-1 w-[58%] -translate-x-1/2 -translate-y-1/2 -rotate-45 rounded-full bg-red-100 shadow-[0_0_8px_rgba(248,113,113,0.9)]"
+                                            />
+                                            {occupancyFeedbackForItem.reason && (
+                                                <div className="absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap rounded border border-red-400/50 bg-black/85 px-2 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-red-200 shadow-xl">
+                                                    {occupancyFeedbackForItem.reason}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div
+                                            className={`absolute top-0 left-0 z-[57] pointer-events-none grayscale opacity-40 border-2 border-dashed border-red-300/70 ${item.isCircular ? 'rounded-full' : 'rounded-sm'} overflow-hidden`}
+                                            style={{
+                                                transform: `translate(${occupancyFeedbackForItem.targetX}px, ${occupancyFeedbackForItem.targetY}px) rotate(${item.rotation}deg)`,
+                                                width: `${item.width}px`,
+                                                height: `${item.height}px`,
+                                            }}
+                                        >
+                                            {isToken && (
+                                                <div
+                                                    className="w-full h-full"
+                                                    style={{
+                                                        backgroundImage: item.img ? `url("${item.img}")` : 'none',
+                                                        backgroundPosition: 'center',
+                                                        backgroundRepeat: 'no-repeat',
+                                                        backgroundSize: item.isCircular ? 'cover' : 'contain'
+                                                    }}
+                                                />
+                                            )}
+                                            {isGeometry && (
+                                                <div
+                                                    className={`w-full h-full flex items-center justify-center font-bold text-white shadow-inner uppercase text-[10px] tracking-widest break-words overflow-hidden p-2 text-center`}
+                                                    style={{
+                                                        backgroundColor: item.backgroundColor || '#22c55e',
+                                                        opacity: item.opacity || 0.4,
+                                                        borderRadius: item.isCircular ? '50%' : '4px',
+                                                        border: `2px solid ${item.backgroundColor || '#22c55e'}`,
+                                                        pointerEvents: 'none'
+                                                    }}
+                                                >
+                                                    <span style={{ opacity: 1, textShadow: '0px 0px 4px black', pointerEvents: 'none' }}>{item.name}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </>
                                 )
                                 : null;
 
-                            return blockedPlacement;
+                            return (
+                                <>
+                                    {ghostPreview}
+                                    {blockedPlacement}
+                                </>
+                            );
                         })()}
                     </>
                 )}
@@ -9100,7 +9286,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                         {/* Controles de Acción */}
                         {(!isPlayerView || ((isCard || isCardContainer || isBoardMarker || isBoardDie) && canInteract) || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName))) && (
-                            <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${isSelected || 'group-hover:opacity-100 opacity-0'}`}>
+                            <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${isSelected ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none md:group-hover:opacity-100 md:group-hover:pointer-events-auto'}`}>
                                 <button
                                     onMouseDown={(e) => {
                                         e.stopPropagation();
@@ -9129,7 +9315,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     {isBoardDie ? (item.dieLaunchMode ? <HandGrab size={12} fill="currentColor" strokeWidth={2.2} /> : <Hand size={12} />) : <RotateCw size={12} />}
                                 </button>
                                 <div className="w-3 h-3 bg-[#c8aa6e] rounded-full mx-1 cursor-grab active:cursor-grabbing hover:scale-125 transition-transform border border-[#0b1120]" onMouseDown={(e) => handleRotationMouseDown(e, item)} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); handleRotationMouseDown(e, item); }} />
-                                <button onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); deleteItem(item.id); }} className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"><Trash2 size={12} /></button>
+                                <button
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onTouchStart={(e) => e.stopPropagation()}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        deleteItem(item.id);
+                                    }}
+                                    className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"
+                                    aria-label="Eliminar token"
+                                    title="Eliminar token"
+                                >
+                                    <Trash2 size={12} />
+                                </button>
                             </div>
                         )}
 
@@ -9157,7 +9355,17 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
     const updateItem = (itemId, updates, persist = false) => {
         setActiveScenario(prev => {
-            const newItems = prev.items.map(i => i.id === itemId ? { ...i, ...updates } : i);
+            if (!prev) return prev;
+            let didChange = false;
+            const newItems = prev.items.map(i => {
+                if (i.id !== itemId) return i;
+                const hasUpdateChange = Object.entries(updates || {}).some(([key, value]) => i[key] !== value);
+                if (!hasUpdateChange) return i;
+                didChange = true;
+                return { ...i, ...updates };
+            });
+
+            if (!didChange) return prev;
 
             if (persist && prev.id) {
                 updateDoc(doc(db, scenarioCollectionName, prev.id), {
@@ -9952,7 +10160,32 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         enqueue();
     };
 
+    const normalizeCombatResourceStat = (stats, resourceId) => {
+        const resource = stats?.[resourceId] || {};
+        const rawMax = resource.max ?? resource.total ?? resource.base ?? resource.current ?? resource.actual ?? 0;
+        const max = Math.max(0, Number(rawMax) || 0);
+        const rawCurrent = resource.current ?? resource.actual ?? max;
+        const current = Math.max(0, Math.min(max, Number(rawCurrent) || 0));
+
+        return {
+            ...resource,
+            current,
+            max,
+        };
+    };
+
+    const normalizeCombatStats = (tokenLike) => {
+        const stats = tokenLike?.stats || {};
+        return {
+            ...stats,
+            postura: normalizeCombatResourceStat(stats, 'postura'),
+            armadura: normalizeCombatResourceStat(stats, 'armadura'),
+            vida: normalizeCombatResourceStat(stats, 'vida'),
+        };
+    };
+
     const applyCombatCalculations = (token, damage, weapon, options = {}) => {
+        const combatStats = normalizeCombatStats(token);
         const attributeDice = {
             destreza: token.attributes?.destreza || 'd6',
             vigor: token.attributes?.vigor || 'd6',
@@ -10016,9 +10249,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const appliedStatusEffects = [];
         const appliedTraitEffects = [];
 
-        let currentPostura = token.stats?.postura?.current || 0;
-        let currentArmadura = token.stats?.armadura?.current || 0;
-        let currentVida = token.stats?.vida?.current || 0;
+        let currentPostura = combatStats.postura.current || 0;
+        let currentArmadura = combatStats.armadura.current || 0;
+        let currentVida = combatStats.vida.current || 0;
         const posturaInicial = currentPostura;
         const currentLayerBeforeDamage =
             currentPostura > 0 ? 'postura' :
@@ -10193,10 +10426,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         return {
             stats: {
-                ...token.stats,
-                postura: { ...token.stats.postura, current: currentPostura },
-                armadura: { ...token.stats.armadura, current: currentArmadura },
-                vida: { ...token.stats.vida, current: currentVida },
+                ...combatStats,
+                postura: { ...combatStats.postura, current: currentPostura },
+                armadura: { ...combatStats.armadura, current: currentArmadura },
+                vida: { ...combatStats.vida, current: currentVida },
             },
             status: newStatus,
             lost: { postura: lostPostura, armadura: lostArmadura, vida: lostVida },
@@ -10736,15 +10969,27 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         const updatedTarget = finalItems.find(i => i.id === targetTokenBase.id);
         const updatedAttacker = finalItems.find(i => i.id === attackerTokenBase.id);
+        const buildCombatTokenUpdate = (baseToken, updatedToken) => {
+            if (!updatedToken) return null;
+            return {
+                id: baseToken.id,
+                stats: normalizeCombatStats(updatedToken),
+                status: Array.isArray(updatedToken.status) ? normalizeTokenStatusIds(updatedToken.status) : [],
+                velocidad: getCombatTokenSpeed(updatedToken),
+                x: Number.isFinite(Number(updatedToken.x)) ? Number(updatedToken.x) : Number(baseToken.x) || 0,
+                y: Number.isFinite(Number(updatedToken.y)) ? Number(updatedToken.y) : Number(baseToken.y) || 0,
+                fluidaState: updatedToken.fluidaState ?? null
+            };
+        };
 
-            await updateDoc(doc(db, 'combat_events', event.id), {
+            await updateDoc(doc(db, 'combat_events', event.id), sanitizeForFirestore({
                 status: 'resuelto',
                 result: combatLogEntry,
                 tokenUpdates: {
-                    target: updatedTarget ? { id: targetToken.id, stats: updatedTarget.stats, status: updatedTarget.status, velocidad: updatedTarget.velocidad, x: updatedTarget.x, y: updatedTarget.y, fluidaState: updatedTarget.fluidaState ?? null } : null,
-                    attacker: updatedAttacker ? { id: attackerToken.id, stats: updatedAttacker.stats, status: updatedAttacker.status, velocidad: updatedAttacker.velocidad, x: updatedAttacker.x, y: updatedAttacker.y, fluidaState: updatedAttacker.fluidaState ?? null } : null
+                    target: buildCombatTokenUpdate(targetToken, updatedTarget),
+                    attacker: buildCombatTokenUpdate(attackerToken, updatedAttacker)
                 }
-            });
+            }));
         } catch (error) {
             console.error('Error resolviendo evento de combate:', error, event);
             try {
@@ -10853,10 +11098,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         ...ev.result,
                         postReactionSpeedLoss,
                         clientTimestamp: Date.now(),
-                        timestamp: serverTimestamp()
                     };
                     delete logEntryToWrite.logText; // no es necesario guardar esto permanente
-                    await addDoc(collection(db, 'combat_log'), logEntryToWrite);
+                    await addDoc(collection(db, 'combat_log'), {
+                        ...sanitizeForFirestore(logEntryToWrite),
+                        timestamp: serverTimestamp()
+                    });
 
                     // Limpieza opcional de logs
                     try {
@@ -11133,34 +11380,36 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         const reactionBudget = Math.max(0, Math.round(attackerFinalVelForAction - targetCurrentVel));
 
                         await addDoc(collection(db, 'combat_events'), {
-                            attackerId: token.id,
-                            attackerName: token.name,
-                            targetId: targetToken.id,
-                            targetName: targetToken.name,
-                            attackerRollResult,
-                            weapon: effectiveSweepWeapon || null,
-                            negatedTraits: armorProtection.negatedTraits || [],
-                            armorProtectionSource: armorProtection.armorProtectionSource || null,
-                            status: 'esperando_reaccion',
-                            scenarioId: scenario.id,
-                            clientTimestamp: Date.now(),
+                            ...sanitizeForFirestore({
+                                attackerId: token.id,
+                                attackerName: token.name,
+                                targetId: targetToken.id,
+                                targetName: targetToken.name,
+                                attackerRollResult,
+                                weapon: effectiveSweepWeapon || null,
+                                negatedTraits: armorProtection.negatedTraits || [],
+                                armorProtectionSource: armorProtection.armorProtectionSource || null,
+                                status: 'esperando_reaccion',
+                                scenarioId: scenario.id,
+                                clientTimestamp: Date.now(),
+                                attackerVel: token.velocidad || 0,
+                                targetVel: targetToken.velocidad || 0,
+                                attackerFinalVel: attackerFinalVelForAction,
+                                diffVelocidad: Math.abs(attackerFinalVelForAction - targetCurrentVel),
+                                reactionBudget,
+                                distanceBetweenTokens: actualDistance,
+                                attackMode: 'barrido',
+                                abilityName: 'Barrido',
+                                sweepMeta: {
+                                    sweepId,
+                                    side: action.sweepSide || null,
+                                    areaCells: Array.isArray(action.sweepCells) ? action.sweepCells : [],
+                                    sourceWeaponName: action.weapon?.nombre || action.weapon?.name || null,
+                                    targetIds: action.targetIds.slice(0, 3)
+                                },
+                                fluidaMeta: null
+                            }),
                             timestamp: serverTimestamp(),
-                            attackerVel: token.velocidad || 0,
-                            targetVel: targetToken.velocidad || 0,
-                            attackerFinalVel: attackerFinalVelForAction,
-                            diffVelocidad: Math.abs(attackerFinalVelForAction - targetCurrentVel),
-                            reactionBudget,
-                            distanceBetweenTokens: actualDistance,
-                            attackMode: 'barrido',
-                            abilityName: 'Barrido',
-                            sweepMeta: {
-                                sweepId,
-                                side: action.sweepSide || null,
-                                areaCells: Array.isArray(action.sweepCells) ? action.sweepCells : [],
-                                sourceWeaponName: action.weapon?.nombre || action.weapon?.name || null,
-                                targetIds: action.targetIds.slice(0, 3)
-                            },
-                            fluidaMeta: null
                         });
                     }
                 }
@@ -11177,32 +11426,34 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     .join(' · ') || null;
 
                 await addDoc(collection(db, 'combat_events'), {
-                    attackerId: groupedAttack.attackerId,
-                    attackerName: groupedAttack.attackerName,
-                    targetId: groupedAttack.targetId,
-                    targetName: groupedAttack.targetName,
-                    attackerRollResult,
-                    weapon: aggregateWeapon || null,
-                    negatedTraits,
-                    armorProtectionSource,
-                    status: 'esperando_reaccion',
-                    scenarioId: groupedAttack.scenarioId,
-                    clientTimestamp: Date.now(),
+                    ...sanitizeForFirestore({
+                        attackerId: groupedAttack.attackerId,
+                        attackerName: groupedAttack.attackerName,
+                        targetId: groupedAttack.targetId,
+                        targetName: groupedAttack.targetName,
+                        attackerRollResult,
+                        weapon: aggregateWeapon || null,
+                        negatedTraits,
+                        armorProtectionSource,
+                        status: 'esperando_reaccion',
+                        scenarioId: groupedAttack.scenarioId,
+                        clientTimestamp: Date.now(),
+                        attackerVel: groupedAttack.attackerVel,
+                        targetVel: groupedAttack.targetVel,
+                        attackerFinalVel: groupedAttack.attackerFinalVel,
+                        diffVelocidad: groupedAttack.diffVelocidad,
+                        reactionBudget: groupedAttack.reactionBudget,
+                        distanceBetweenTokens: groupedAttack.distanceBetweenTokens,
+                        attackSequence: attackSteps.map((step) => ({
+                            id: step.id,
+                            weaponName: step.weaponName,
+                            cost: step.cost,
+                            total: step.rollResult?.total || 0,
+                            traits: getItemTraits(step.weapon),
+                        })),
+                        fluidaMeta: groupedAttack.fluidaMeta,
+                    }),
                     timestamp: serverTimestamp(),
-                    attackerVel: groupedAttack.attackerVel,
-                    targetVel: groupedAttack.targetVel,
-                    attackerFinalVel: groupedAttack.attackerFinalVel,
-                    diffVelocidad: groupedAttack.diffVelocidad,
-                    reactionBudget: groupedAttack.reactionBudget,
-                    distanceBetweenTokens: groupedAttack.distanceBetweenTokens,
-                    attackSequence: attackSteps.map((step) => ({
-                        id: step.id,
-                        weaponName: step.weaponName,
-                        cost: step.cost,
-                        total: step.rollResult?.total || 0,
-                        traits: getItemTraits(step.weapon),
-                    })),
-                    fluidaMeta: groupedAttack.fluidaMeta,
                 });
             }
         }
@@ -11317,7 +11568,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const items = activeScenario?.items || [];
 
         if (!isBoardMode) {
-            return items.filter(i => i && i.type !== 'wall' && i.type !== 'light' && i.type !== 'geometry' && (i.isCircular || i.stats));
+            return getCombatSpeedTokens(items).map(token => ({
+                ...token,
+                timelineSide: isMasterControlledCombatToken(token) ? 'master' : 'players',
+            }));
         }
 
         const handCards = items.filter(isHandCardItem);
@@ -11356,6 +11610,34 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             };
         });
     }, [activeScenario?.items, isBoardMode]);
+    const activeScenarioItems = useMemo(() => activeScenario?.items || [], [activeScenario?.items]);
+    const canvasRenderItemGroups = useMemo(() => {
+        const livePendingTurnState = isUsablePendingTurnState(pendingTurnState) ? pendingTurnState : null;
+        const lights = [];
+        const others = [];
+
+        for (const item of activeScenarioItems) {
+            if (!item) continue;
+            let renderItem = item;
+
+            if (
+                isPlayerView &&
+                livePendingTurnState &&
+                livePendingTurnState.tokenId === item.id &&
+                draggedTokenId !== item.id
+            ) {
+                renderItem = { ...item, x: livePendingTurnState.x, y: livePendingTurnState.y };
+            }
+
+            if (renderItem.type === 'light') {
+                lights.push(renderItem);
+            } else {
+                others.push(renderItem);
+            }
+        }
+
+        return { lights, others };
+    }, [activeScenarioItems, draggedTokenId, isPlayerView, pendingTurnState]);
 
     return (
         <div className={`h-screen w-screen overflow-hidden bg-[#09090b] relative font-['Lato'] select-none ${targetingState ? 'cursor-crosshair' : ''}`}>
@@ -14486,24 +14768,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 {/* --- CONTENIDO DEL CANVAS (Tokens, Dibujos, etc.) --- */}
                                 {/* Los items se renderizan aquí, entre el fondo y la niebla superior */}
                                 <div className="absolute inset-0 z-10 pointer-events-none" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
-                                    {(() => {
-                                        const livePendingTurnState = isUsablePendingTurnState(pendingTurnState) ? pendingTurnState : null;
-                                        const items = (activeScenario?.items || []).map(item => {
-                                            // Si hay estado pendiente y NO lo estamos arrastrando, mostramos el estado pendiente
-                                            if (isPlayerView && livePendingTurnState && livePendingTurnState.tokenId === item.id) {
-                                                if (draggedTokenId !== item.id) {
-                                                    return { ...item, x: livePendingTurnState.x, y: livePendingTurnState.y };
-                                                }
-                                            }
-                                            return item;
-                                        });
-                                        return (
-                                            <>
-                                                {items.filter(i => i && i.type === 'light').map(item => renderItemJSX(item))}
-                                                {items.filter(i => i && i.type !== 'light').map(item => renderItemJSX(item))}
-                                            </>
-                                        );
-                                    })()}
+                                    {canvasRenderItemGroups.lights.map(item => renderItemJSX(item))}
+                                    {canvasRenderItemGroups.others.map(item => renderItemJSX(item))}
                                 </div>
 
                                 {targetingState?.phase === 'sweep_selection' && (() => {
@@ -15819,9 +16085,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             onCardPreviewStart={handleHandCardDragStart}
                             isActive={(() => {
                                 if (!gridConfig.isCombatActive) return true;
-                                const combatTokens = activeScenario.items.filter(i => isCombatTokenItem(i) && (i.isCircular || i.stats));
-                                const minVel = Math.min(...combatTokens.map(t => t.velocidad || 0));
-                                return (hudToken.velocidad || 0) === minVel;
+                                return canCombatTokenActNow(hudToken, activeScenario.items || []);
                             })()}
                         />
                     );
@@ -15995,9 +16259,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             onCardPreviewStart={handleHandCardDragStart}
                                             isActive={(() => {
                                                 if (!gridConfig.isCombatActive) return true;
-                                                const combatTokens = activeScenario.items.filter(i => isCombatTokenItem(i) && (i.isCircular || i.stats));
-                                                const minVel = Math.min(...combatTokens.map(t => t.velocidad || 0));
-                                                return (hudToken.velocidad || 0) === minVel;
+                                                return canCombatTokenActNow(hudToken, activeScenario.items || []);
                                             })()}
                                         />
                                     </motion.div>

@@ -11,6 +11,7 @@ import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firesto
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import useGlossary from '../hooks/useGlossary';
 import { normalizeGlossaryWord } from '../utils/glossary';
+import { optimizeImageFile } from '../utils/storage';
 
 // ────────────────────────────────────────────────────────────
 // Helpers
@@ -284,11 +285,17 @@ const EquipmentImageManager = ({ armas = [], armaduras = [], habilidades = [], a
         setUploadSuccess(null);
 
         try {
-            // Upload to Firebase Storage
-            const ext = file.name.split('.').pop() || 'png';
+            const { file: uploadableFile, optimized, originalSize } = await optimizeImageFile(file, {
+                maxWidth: 512,
+                maxHeight: 512,
+                quality: 0.86,
+            });
+            const ext = uploadableFile.name.split('.').pop() || 'webp';
             const storagePath = `equipment_images/${item._category}/${key}.${ext}`;
             const storageRef = ref(storage, storagePath);
-            await uploadBytes(storageRef, file);
+            await uploadBytes(storageRef, uploadableFile, {
+                contentType: uploadableFile.type || file.type || undefined,
+            });
             const downloadUrl = await getDownloadURL(storageRef);
 
             // Save URL to Firestore
@@ -297,6 +304,10 @@ const EquipmentImageManager = ({ armas = [], armaduras = [], habilidades = [], a
                 itemName: item._displayName,
                 category: item._category,
                 storagePath,
+                contentType: uploadableFile.type || file.type || null,
+                originalSize: originalSize || file.size || null,
+                storedSize: uploadableFile.size || null,
+                optimized,
                 updatedAt: Date.now(),
             });
 

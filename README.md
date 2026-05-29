@@ -84,6 +84,13 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Consumo de velocidad inteligente** - Cálculo automático basado en emojis 🟡 del equipamiento
 - **Coste automático por acciones** - Al resolver ataques y defensas se suma la velocidad consumida al participante
 - **Animación de daño sin duplicados** - Cada reacción de combate confirma una sola vez y el efecto flotante se deduplica por evento resuelto
+- **Combate del Canvas estabilizado** - Los tokens controlados por el máster desempatan primero cuando comparten velocidad mínima, y la resolución de ataques tolera tokens sin ficha vinculada evitando que Firestore deje el resultado en carga permanente.
+- **Indicador de ocupación bloqueada reforzado** - Al arrastrar sobre una formación completa o una ficha 1x1/grande, el Canvas muestra siempre una celda roja con X y motivo aunque el token arrastrado no quepa dentro de una sola casilla.
+- **Controles de token seguros en móvil** - La barra de acciones invisible ya no captura toques y el borrado del token se ejecuta solo con un click/tap confirmado, no al empezar un gesto táctil.
+- **Previsualización fantasma original restaurada para jugadores** - Los movimientos pendientes del Canvas vuelven a usar la silueta gris dorada y la línea discontinua clásica, incluso al arrastrar sobre formaciones, duelos o casillas ocupadas.
+- **Optimización invisible del Canvas** - Se reducen renders y suscripciones redundantes durante arrastres, rotaciones y cambios sin modificar estética, reglas ni controles visibles.
+- **Imágenes locales de equipamiento restauradas en Canvas** - Las armas, objetos, armaduras y accesorios antiguos vuelven a resolver sus assets locales WebP desde el inspector y HUD del Canvas.
+- **Subidas de imágenes optimizadas a WebP** - Tokens, mapas, cartas, iconos, retratos y equipamiento personalizado se redimensionan y guardan en WebP al subirlos a Firebase Storage cuando el navegador lo permite.
 - **Permisos granulares** - Jugadores pueden eliminar sus propios participantes
 - **Interfaz color-coded** - Identificación visual por jugador y tipo de equipamiento
 - **Sincronización en tiempo real** - Cambios instantáneos para todos los participantes

@@ -4,6 +4,7 @@ import { FiX, FiEdit2, FiPlus, FiCheckSquare, FiMinus } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { optimizeImageFile } from '../utils/storage';
 
 // --- HELPER COMPONENTS ---
 
@@ -591,8 +592,15 @@ export const EnemyDetailView = ({ enemy, enemies = [], onClose, onUpdate, onDele
 
         setIsUploading(true);
         try {
-            const storageRef = ref(storage, `enemies/${localEnemy.id}/${Date.now()}_${file.name}`);
-            await uploadBytes(storageRef, file);
+            const { file: uploadableFile } = await optimizeImageFile(file, {
+                maxWidth: 900,
+                maxHeight: 900,
+                quality: 0.86,
+            });
+            const storageRef = ref(storage, `enemies/${localEnemy.id}/${Date.now()}_${uploadableFile.name}`);
+            await uploadBytes(storageRef, uploadableFile, {
+                contentType: uploadableFile.type || file.type || undefined,
+            });
             const downloadURL = await getDownloadURL(storageRef);
 
             setLocalEnemy(prev => {

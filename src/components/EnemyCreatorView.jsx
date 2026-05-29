@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { ChevronLeft, Save, Upload, User, Shield, Zap, Activity, Brain, Ghost, Skull, RotateCcw, ZoomIn, ZoomOut, Move, Minus, Plus } from 'lucide-react';
 import { storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { optimizeImageFile } from '../utils/storage';
 
 const DEFAULT_STATS = {
     postura: { current: 3, max: 4 },
@@ -209,8 +210,16 @@ export const EnemyCreatorView = ({ onBack, onSave }) => {
                 try {
                     const response = await fetch(imageUrl);
                     const blob = await response.blob();
-                    const imageRef = ref(storage, `enemies/${enemyId}/portrait.png`);
-                    await uploadBytes(imageRef, blob);
+                    const sourceFile = new File([blob], 'portrait.png', { type: blob.type || 'image/png' });
+                    const { file: uploadableFile } = await optimizeImageFile(sourceFile, {
+                        maxWidth: 900,
+                        maxHeight: 900,
+                        quality: 0.86,
+                    });
+                    const imageRef = ref(storage, `enemies/${enemyId}/portrait.webp`);
+                    await uploadBytes(imageRef, uploadableFile, {
+                        contentType: uploadableFile.type || sourceFile.type || undefined,
+                    });
                     imageUrl = await getDownloadURL(imageRef);
                 } catch (uploadError) {
                     console.error("Error uploading image:", uploadError);
