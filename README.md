@@ -65,6 +65,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Panel de detalle interactivo** al pulsar una clase, con pestañas de Resumen, Inspiración (Hitos), Nivel de Campeón, Reglas y Equipación.
 - **Acceso directo** desde el menú Máster mediante la nueva opción «Lista de Clases».
 - **Constructor de cartas**: la antigua pestaña «Tienda» de la ficha pasa a ser «Cartas» y abre un canvas para previsualizar una carta con textos guía, escribir su nombre, descripción y texto narrativo cuando el formato lo requiere, cambiar entre los 15 fondos base WebP incluidos en `public/cards`, definir rasgos por tipo de carta con letreros generados en canvas y configurar cartas de arma con dados, alcance, tipo de arma, cargas y consumos con ranuras táctiles; sus fondos e iconos propios cargan en WebP optimizado y el Máster también dispone de acceso directo desde su menú principal.
+- **Tipos de arma simplificados en cartas**: el constructor de cartas usa solo tres iconos WebP para `Cuerpo a cuerpo`, `Distancia` y `Magia`, reemplazando el catálogo anterior de iconos de armas específicas.
+- **Recursos en trampas y habilidades**: las cartas de `Trampa` y `Habilidad` pueden usar cargas y consumos como armas y armaduras, con un modo de solo carga que centra el raíl de cargas en el canvas.
+- **Cuadros de texto en cartas**: las descripciones y textos narrativos del constructor se dibujan sobre paneles negros translúcidos sin marco, con padding interno y centrado vertical para textos cortos.
 - **Edición directa de todos los campos**: haz clic en título, subtítulo, descripción, etiquetas, reglas o listas para actualizar la clase y guarda los cambios con un solo botón.
 - **Hitos con seguimiento**: marca la inspiración completada mediante checks persistentes y resaltados que mantienen el estilo luminiscente del panel.
 - **Niveles de clase dinámicos**: controla el número de niveles con un deslizador configurable desde 0 en adelante y edita cada hito de progreso en línea.
@@ -164,7 +167,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.73**
+> **Versión actual: 2.4.74**
+
+**Resumen de cambios v2.4.74:**
+
+- **Previsualización de Carta Flotante en PC**: Modificado el contenedor interno de la previsualización en `CardBuilder.jsx` para añadir posicionamiento sticky y alineación de inicio en resoluciones de escritorio (`lg:sticky lg:top-8 lg:self-start lg:h-fit`). Esto permite que la carta se desplace suavemente con el scroll del usuario en PC mientras el fondo oscuro general (`bg-[#05070d]/30`) y el encuadre exterior de la sección `<main>` conservan su estructura, tamaño y centrado originales sin verse modificados.
 
 **Resumen de cambios v2.4.73:**
 
