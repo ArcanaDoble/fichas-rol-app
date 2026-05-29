@@ -1543,6 +1543,47 @@ const isHandCardItem = (item) => isCardItem(item) && item.zone === 'hand';
 const isStackedCardItem = (item) => isCardItem(item) && !!item.stackParentId;
 const isContainedCardItem = (item) => isCardItem(item) && !!item.containerId;
 const isCombatTokenItem = (item) => !!item && item.type !== 'light' && item.type !== 'wall' && item.type !== 'geometry' && !isCardItem(item) && !isCardContainerItem(item) && !isBoardMarkerItem(item) && !isBoardDieItem(item);
+const getCombatSpeedTokens = (items = []) => (
+    (items || []).filter(item => isCombatTokenItem(item) && (item.isCircular || item.stats))
+);
+const isMasterControlledCombatToken = (token) => {
+    const controlledBy = Array.isArray(token?.controlledBy)
+        ? token.controlledBy.filter(Boolean)
+        : [];
+    return controlledBy.length === 0 || controlledBy.includes('master') || controlledBy.includes('Master');
+};
+const getCombatTokenSpeed = (token) => Math.max(0, Number(token?.velocidad) || 0);
+const getActiveCombatTurnInfo = (items = []) => {
+    const combatTokens = getCombatSpeedTokens(items);
+    if (combatTokens.length === 0) {
+        return { activeSpeed: 0, hasMasterAtActiveSpeed: false };
+    }
+
+    const activeSpeed = Math.min(...combatTokens.map(getCombatTokenSpeed));
+    const hasMasterAtActiveSpeed = combatTokens.some(token => (
+        getCombatTokenSpeed(token) === activeSpeed && isMasterControlledCombatToken(token)
+    ));
+
+    return { activeSpeed, hasMasterAtActiveSpeed };
+};
+const canCombatTokenActNow = (token, items = []) => {
+    if (!token) return false;
+    const { activeSpeed, hasMasterAtActiveSpeed } = getActiveCombatTurnInfo(items);
+    if (getCombatTokenSpeed(token) !== activeSpeed) return false;
+    return !hasMasterAtActiveSpeed || isMasterControlledCombatToken(token);
+};
+const sanitizeForFirestore = (value) => {
+    if (value === undefined) return null;
+    if (value === null) return null;
+    if (value instanceof Date) return value;
+    if (Array.isArray(value)) return value.map(sanitizeForFirestore);
+    if (typeof value === 'object') {
+        return Object.fromEntries(
+            Object.entries(value).map(([key, entryValue]) => [key, sanitizeForFirestore(entryValue)])
+        );
+    }
+    return value;
+};
 const getItemOverlapRatio = (a = {}, b = {}) => {
     const left = Math.max(Number(a.x) || 0, Number(b.x) || 0);
     const top = Math.max(Number(a.y) || 0, Number(b.y) || 0);
@@ -2938,7 +2979,7 @@ const SpeedTimeline = ({ tokens, selectedId, onSelect, isPlayerView, onReset, mo
             : Math.max(0, Number(token.velocidad) || 0)
     );
     const getTimelineSideRank = (token) => (
-        isInitiativeMode && token.timelineSide === 'master' ? 0 : 1
+        token.timelineSide === 'master' ? 0 : 1
     );
     const sortedTokens = useMemo(() => {
         return [...tokens].sort((a, b) => {
@@ -3058,7 +3099,7 @@ const SpeedTimeline = ({ tokens, selectedId, onSelect, isPlayerView, onReset, mo
     if (sortedTokens.length === 0) return null;
 
     const activeValue = getTimelineValue(sortedTokens[0]);
-    const hasMasterAtActiveValue = isInitiativeMode && sortedTokens.some(token => getTimelineValue(token) === activeValue && token.timelineSide === 'master');
+    const hasMasterAtActiveValue = sortedTokens.some(token => getTimelineValue(token) === activeValue && token.timelineSide === 'master');
     const activeMasterId = hasMasterAtActiveValue
         ? sortedTokens.find(token => getTimelineValue(token) === activeValue && token.timelineSide === 'master')?.id
         : null;
@@ -3085,7 +3126,7 @@ const SpeedTimeline = ({ tokens, selectedId, onSelect, isPlayerView, onReset, mo
                             const value = getTimelineValue(token);
                             const isNext = isInitiativeMode
                                 ? (hasMasterAtActiveValue ? token.id === activeMasterId : value === activeValue)
-                                : (idx === 0 || value === activeValue);
+                                : (value === activeValue && (!hasMasterAtActiveValue || token.timelineSide === 'master'));
                             const isSelectedToken = selectedId === token.id;
                             return (
                                 <motion.div
@@ -7869,10 +7910,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             // RESTRICCIÓN DE MODO COMBATE: Solo mover si es tu turno (velocidad mínima)
             if (!isBoardMode && gridConfig.isCombatActive && activeLayer === 'TABLETOP' && isCombatTokenItem(token)) {
                 const currentItems = (activeScenarioRef.current || activeScenario)?.items || [];
-                const combatTokens = currentItems.filter(i => i.type !== 'wall' && i.type !== 'light' && (i.isCircular || i.stats));
-                const minVel = Math.min(...combatTokens.map(t => t.velocidad || 0));
 
-                if ((token.velocidad || 0) > minVel) {
+                if (!canCombatTokenActNow(token, currentItems)) {
                     // No es tu turno, pero el Master puede mover cualquier cosa
                     if (isPlayerView) {
                         triggerToast("No es tu turno", "Debes esperar a que tu velocidad sea la más baja", 'warning');
@@ -8643,42 +8682,64 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             const feedbackCellRect = occupancyFeedbackForItem?.cell
                                 ? getGridCellWorldRect(occupancyFeedbackForItem.cell, gridConfig)
                                 : null;
-                            const blockedPlacement = (occupancyFeedbackForItem && feedbackCellRect && item.width <= feedbackCellRect.width && item.height <= feedbackCellRect.height)
+                            const blockedPlacement = (occupancyFeedbackForItem && feedbackCellRect)
                                 ? (
-                                    <div
-                                        className={`absolute top-0 left-0 z-10 pointer-events-none grayscale opacity-40 border-2 border-dashed border-[#c8aa6e]/50 ${item.isCircular ? 'rounded-full' : 'rounded-sm'} overflow-hidden`}
-                                        style={{
-                                            transform: `translate(${feedbackCellRect.x}px, ${feedbackCellRect.y}px) rotate(${item.rotation}deg)`,
-                                            width: `${item.width}px`,
-                                            height: `${item.height}px`,
-                                        }}
-                                    >
-                                        {isToken && (
+                                    <>
+                                        <div
+                                            className="absolute top-0 left-0 z-[58] pointer-events-none rounded-md border-2 border-red-400/90 bg-red-500/15 shadow-[0_0_24px_rgba(239,68,68,0.45)]"
+                                            style={{
+                                                transform: `translate(${feedbackCellRect.x}px, ${feedbackCellRect.y}px)`,
+                                                width: `${feedbackCellRect.width}px`,
+                                                height: `${feedbackCellRect.height}px`,
+                                            }}
+                                        >
                                             <div
-                                                className="w-full h-full"
-                                                style={{
-                                                    backgroundImage: item.img ? `url("${item.img}")` : 'none',
-                                                    backgroundPosition: 'center',
-                                                    backgroundRepeat: 'no-repeat',
-                                                    backgroundSize: item.isCircular ? 'cover' : 'contain'
-                                                }}
+                                                className="absolute left-1/2 top-1/2 h-1 w-[58%] -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-full bg-red-100 shadow-[0_0_8px_rgba(248,113,113,0.9)]"
                                             />
-                                        )}
-                                        {isGeometry && (
                                             <div
-                                                className={`w-full h-full flex items-center justify-center font-bold text-white shadow-inner uppercase text-[10px] tracking-widest break-words overflow-hidden p-2 text-center`}
-                                                style={{
-                                                    backgroundColor: item.backgroundColor || '#22c55e',
-                                                    opacity: item.opacity || 0.4,
-                                                    borderRadius: item.isCircular ? '50%' : '4px',
-                                                    border: `2px solid ${item.backgroundColor || '#22c55e'}`,
-                                                    pointerEvents: 'none'
-                                                }}
-                                            >
-                                                <span style={{ opacity: 1, textShadow: '0px 0px 4px black', pointerEvents: 'none' }}>{item.name}</span>
-                                            </div>
-                                        )}
-                                    </div>
+                                                className="absolute left-1/2 top-1/2 h-1 w-[58%] -translate-x-1/2 -translate-y-1/2 -rotate-45 rounded-full bg-red-100 shadow-[0_0_8px_rgba(248,113,113,0.9)]"
+                                            />
+                                            {occupancyFeedbackForItem.reason && (
+                                                <div className="absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap rounded border border-red-400/50 bg-black/85 px-2 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-red-200 shadow-xl">
+                                                    {occupancyFeedbackForItem.reason}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div
+                                            className={`absolute top-0 left-0 z-[57] pointer-events-none grayscale opacity-40 border-2 border-dashed border-red-300/70 ${item.isCircular ? 'rounded-full' : 'rounded-sm'} overflow-hidden`}
+                                            style={{
+                                                transform: `translate(${occupancyFeedbackForItem.targetX}px, ${occupancyFeedbackForItem.targetY}px) rotate(${item.rotation}deg)`,
+                                                width: `${item.width}px`,
+                                                height: `${item.height}px`,
+                                            }}
+                                        >
+                                            {isToken && (
+                                                <div
+                                                    className="w-full h-full"
+                                                    style={{
+                                                        backgroundImage: item.img ? `url("${item.img}")` : 'none',
+                                                        backgroundPosition: 'center',
+                                                        backgroundRepeat: 'no-repeat',
+                                                        backgroundSize: item.isCircular ? 'cover' : 'contain'
+                                                    }}
+                                                />
+                                            )}
+                                            {isGeometry && (
+                                                <div
+                                                    className={`w-full h-full flex items-center justify-center font-bold text-white shadow-inner uppercase text-[10px] tracking-widest break-words overflow-hidden p-2 text-center`}
+                                                    style={{
+                                                        backgroundColor: item.backgroundColor || '#22c55e',
+                                                        opacity: item.opacity || 0.4,
+                                                        borderRadius: item.isCircular ? '50%' : '4px',
+                                                        border: `2px solid ${item.backgroundColor || '#22c55e'}`,
+                                                        pointerEvents: 'none'
+                                                    }}
+                                                >
+                                                    <span style={{ opacity: 1, textShadow: '0px 0px 4px black', pointerEvents: 'none' }}>{item.name}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </>
                                 )
                                 : null;
 
@@ -9100,7 +9161,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                         {/* Controles de Acción */}
                         {(!isPlayerView || ((isCard || isCardContainer || isBoardMarker || isBoardDie) && canInteract) || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName))) && (
-                            <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${isSelected || 'group-hover:opacity-100 opacity-0'}`}>
+                            <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${isSelected ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none md:group-hover:opacity-100 md:group-hover:pointer-events-auto'}`}>
                                 <button
                                     onMouseDown={(e) => {
                                         e.stopPropagation();
@@ -9129,7 +9190,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     {isBoardDie ? (item.dieLaunchMode ? <HandGrab size={12} fill="currentColor" strokeWidth={2.2} /> : <Hand size={12} />) : <RotateCw size={12} />}
                                 </button>
                                 <div className="w-3 h-3 bg-[#c8aa6e] rounded-full mx-1 cursor-grab active:cursor-grabbing hover:scale-125 transition-transform border border-[#0b1120]" onMouseDown={(e) => handleRotationMouseDown(e, item)} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); handleRotationMouseDown(e, item); }} />
-                                <button onMouseDown={(e) => { e.stopPropagation(); deleteItem(item.id); }} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); deleteItem(item.id); }} className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"><Trash2 size={12} /></button>
+                                <button
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onTouchStart={(e) => e.stopPropagation()}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        deleteItem(item.id);
+                                    }}
+                                    className="text-red-400 hover:text-red-200 p-1 hover:bg-red-900/30 rounded-full transition-colors"
+                                    aria-label="Eliminar token"
+                                    title="Eliminar token"
+                                >
+                                    <Trash2 size={12} />
+                                </button>
                             </div>
                         )}
 
@@ -9952,7 +10025,32 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         enqueue();
     };
 
+    const normalizeCombatResourceStat = (stats, resourceId) => {
+        const resource = stats?.[resourceId] || {};
+        const rawMax = resource.max ?? resource.total ?? resource.base ?? resource.current ?? resource.actual ?? 0;
+        const max = Math.max(0, Number(rawMax) || 0);
+        const rawCurrent = resource.current ?? resource.actual ?? max;
+        const current = Math.max(0, Math.min(max, Number(rawCurrent) || 0));
+
+        return {
+            ...resource,
+            current,
+            max,
+        };
+    };
+
+    const normalizeCombatStats = (tokenLike) => {
+        const stats = tokenLike?.stats || {};
+        return {
+            ...stats,
+            postura: normalizeCombatResourceStat(stats, 'postura'),
+            armadura: normalizeCombatResourceStat(stats, 'armadura'),
+            vida: normalizeCombatResourceStat(stats, 'vida'),
+        };
+    };
+
     const applyCombatCalculations = (token, damage, weapon, options = {}) => {
+        const combatStats = normalizeCombatStats(token);
         const attributeDice = {
             destreza: token.attributes?.destreza || 'd6',
             vigor: token.attributes?.vigor || 'd6',
@@ -10016,9 +10114,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const appliedStatusEffects = [];
         const appliedTraitEffects = [];
 
-        let currentPostura = token.stats?.postura?.current || 0;
-        let currentArmadura = token.stats?.armadura?.current || 0;
-        let currentVida = token.stats?.vida?.current || 0;
+        let currentPostura = combatStats.postura.current || 0;
+        let currentArmadura = combatStats.armadura.current || 0;
+        let currentVida = combatStats.vida.current || 0;
         const posturaInicial = currentPostura;
         const currentLayerBeforeDamage =
             currentPostura > 0 ? 'postura' :
@@ -10193,10 +10291,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         return {
             stats: {
-                ...token.stats,
-                postura: { ...token.stats.postura, current: currentPostura },
-                armadura: { ...token.stats.armadura, current: currentArmadura },
-                vida: { ...token.stats.vida, current: currentVida },
+                ...combatStats,
+                postura: { ...combatStats.postura, current: currentPostura },
+                armadura: { ...combatStats.armadura, current: currentArmadura },
+                vida: { ...combatStats.vida, current: currentVida },
             },
             status: newStatus,
             lost: { postura: lostPostura, armadura: lostArmadura, vida: lostVida },
@@ -10736,15 +10834,27 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         const updatedTarget = finalItems.find(i => i.id === targetTokenBase.id);
         const updatedAttacker = finalItems.find(i => i.id === attackerTokenBase.id);
+        const buildCombatTokenUpdate = (baseToken, updatedToken) => {
+            if (!updatedToken) return null;
+            return {
+                id: baseToken.id,
+                stats: normalizeCombatStats(updatedToken),
+                status: Array.isArray(updatedToken.status) ? normalizeTokenStatusIds(updatedToken.status) : [],
+                velocidad: getCombatTokenSpeed(updatedToken),
+                x: Number.isFinite(Number(updatedToken.x)) ? Number(updatedToken.x) : Number(baseToken.x) || 0,
+                y: Number.isFinite(Number(updatedToken.y)) ? Number(updatedToken.y) : Number(baseToken.y) || 0,
+                fluidaState: updatedToken.fluidaState ?? null
+            };
+        };
 
-            await updateDoc(doc(db, 'combat_events', event.id), {
+            await updateDoc(doc(db, 'combat_events', event.id), sanitizeForFirestore({
                 status: 'resuelto',
                 result: combatLogEntry,
                 tokenUpdates: {
-                    target: updatedTarget ? { id: targetToken.id, stats: updatedTarget.stats, status: updatedTarget.status, velocidad: updatedTarget.velocidad, x: updatedTarget.x, y: updatedTarget.y, fluidaState: updatedTarget.fluidaState ?? null } : null,
-                    attacker: updatedAttacker ? { id: attackerToken.id, stats: updatedAttacker.stats, status: updatedAttacker.status, velocidad: updatedAttacker.velocidad, x: updatedAttacker.x, y: updatedAttacker.y, fluidaState: updatedAttacker.fluidaState ?? null } : null
+                    target: buildCombatTokenUpdate(targetToken, updatedTarget),
+                    attacker: buildCombatTokenUpdate(attackerToken, updatedAttacker)
                 }
-            });
+            }));
         } catch (error) {
             console.error('Error resolviendo evento de combate:', error, event);
             try {
@@ -10853,10 +10963,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         ...ev.result,
                         postReactionSpeedLoss,
                         clientTimestamp: Date.now(),
-                        timestamp: serverTimestamp()
                     };
                     delete logEntryToWrite.logText; // no es necesario guardar esto permanente
-                    await addDoc(collection(db, 'combat_log'), logEntryToWrite);
+                    await addDoc(collection(db, 'combat_log'), {
+                        ...sanitizeForFirestore(logEntryToWrite),
+                        timestamp: serverTimestamp()
+                    });
 
                     // Limpieza opcional de logs
                     try {
@@ -11133,34 +11245,36 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         const reactionBudget = Math.max(0, Math.round(attackerFinalVelForAction - targetCurrentVel));
 
                         await addDoc(collection(db, 'combat_events'), {
-                            attackerId: token.id,
-                            attackerName: token.name,
-                            targetId: targetToken.id,
-                            targetName: targetToken.name,
-                            attackerRollResult,
-                            weapon: effectiveSweepWeapon || null,
-                            negatedTraits: armorProtection.negatedTraits || [],
-                            armorProtectionSource: armorProtection.armorProtectionSource || null,
-                            status: 'esperando_reaccion',
-                            scenarioId: scenario.id,
-                            clientTimestamp: Date.now(),
+                            ...sanitizeForFirestore({
+                                attackerId: token.id,
+                                attackerName: token.name,
+                                targetId: targetToken.id,
+                                targetName: targetToken.name,
+                                attackerRollResult,
+                                weapon: effectiveSweepWeapon || null,
+                                negatedTraits: armorProtection.negatedTraits || [],
+                                armorProtectionSource: armorProtection.armorProtectionSource || null,
+                                status: 'esperando_reaccion',
+                                scenarioId: scenario.id,
+                                clientTimestamp: Date.now(),
+                                attackerVel: token.velocidad || 0,
+                                targetVel: targetToken.velocidad || 0,
+                                attackerFinalVel: attackerFinalVelForAction,
+                                diffVelocidad: Math.abs(attackerFinalVelForAction - targetCurrentVel),
+                                reactionBudget,
+                                distanceBetweenTokens: actualDistance,
+                                attackMode: 'barrido',
+                                abilityName: 'Barrido',
+                                sweepMeta: {
+                                    sweepId,
+                                    side: action.sweepSide || null,
+                                    areaCells: Array.isArray(action.sweepCells) ? action.sweepCells : [],
+                                    sourceWeaponName: action.weapon?.nombre || action.weapon?.name || null,
+                                    targetIds: action.targetIds.slice(0, 3)
+                                },
+                                fluidaMeta: null
+                            }),
                             timestamp: serverTimestamp(),
-                            attackerVel: token.velocidad || 0,
-                            targetVel: targetToken.velocidad || 0,
-                            attackerFinalVel: attackerFinalVelForAction,
-                            diffVelocidad: Math.abs(attackerFinalVelForAction - targetCurrentVel),
-                            reactionBudget,
-                            distanceBetweenTokens: actualDistance,
-                            attackMode: 'barrido',
-                            abilityName: 'Barrido',
-                            sweepMeta: {
-                                sweepId,
-                                side: action.sweepSide || null,
-                                areaCells: Array.isArray(action.sweepCells) ? action.sweepCells : [],
-                                sourceWeaponName: action.weapon?.nombre || action.weapon?.name || null,
-                                targetIds: action.targetIds.slice(0, 3)
-                            },
-                            fluidaMeta: null
                         });
                     }
                 }
@@ -11177,32 +11291,34 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     .join(' · ') || null;
 
                 await addDoc(collection(db, 'combat_events'), {
-                    attackerId: groupedAttack.attackerId,
-                    attackerName: groupedAttack.attackerName,
-                    targetId: groupedAttack.targetId,
-                    targetName: groupedAttack.targetName,
-                    attackerRollResult,
-                    weapon: aggregateWeapon || null,
-                    negatedTraits,
-                    armorProtectionSource,
-                    status: 'esperando_reaccion',
-                    scenarioId: groupedAttack.scenarioId,
-                    clientTimestamp: Date.now(),
+                    ...sanitizeForFirestore({
+                        attackerId: groupedAttack.attackerId,
+                        attackerName: groupedAttack.attackerName,
+                        targetId: groupedAttack.targetId,
+                        targetName: groupedAttack.targetName,
+                        attackerRollResult,
+                        weapon: aggregateWeapon || null,
+                        negatedTraits,
+                        armorProtectionSource,
+                        status: 'esperando_reaccion',
+                        scenarioId: groupedAttack.scenarioId,
+                        clientTimestamp: Date.now(),
+                        attackerVel: groupedAttack.attackerVel,
+                        targetVel: groupedAttack.targetVel,
+                        attackerFinalVel: groupedAttack.attackerFinalVel,
+                        diffVelocidad: groupedAttack.diffVelocidad,
+                        reactionBudget: groupedAttack.reactionBudget,
+                        distanceBetweenTokens: groupedAttack.distanceBetweenTokens,
+                        attackSequence: attackSteps.map((step) => ({
+                            id: step.id,
+                            weaponName: step.weaponName,
+                            cost: step.cost,
+                            total: step.rollResult?.total || 0,
+                            traits: getItemTraits(step.weapon),
+                        })),
+                        fluidaMeta: groupedAttack.fluidaMeta,
+                    }),
                     timestamp: serverTimestamp(),
-                    attackerVel: groupedAttack.attackerVel,
-                    targetVel: groupedAttack.targetVel,
-                    attackerFinalVel: groupedAttack.attackerFinalVel,
-                    diffVelocidad: groupedAttack.diffVelocidad,
-                    reactionBudget: groupedAttack.reactionBudget,
-                    distanceBetweenTokens: groupedAttack.distanceBetweenTokens,
-                    attackSequence: attackSteps.map((step) => ({
-                        id: step.id,
-                        weaponName: step.weaponName,
-                        cost: step.cost,
-                        total: step.rollResult?.total || 0,
-                        traits: getItemTraits(step.weapon),
-                    })),
-                    fluidaMeta: groupedAttack.fluidaMeta,
                 });
             }
         }
@@ -11317,7 +11433,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const items = activeScenario?.items || [];
 
         if (!isBoardMode) {
-            return items.filter(i => i && i.type !== 'wall' && i.type !== 'light' && i.type !== 'geometry' && (i.isCircular || i.stats));
+            return getCombatSpeedTokens(items).map(token => ({
+                ...token,
+                timelineSide: isMasterControlledCombatToken(token) ? 'master' : 'players',
+            }));
         }
 
         const handCards = items.filter(isHandCardItem);
@@ -15819,9 +15938,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             onCardPreviewStart={handleHandCardDragStart}
                             isActive={(() => {
                                 if (!gridConfig.isCombatActive) return true;
-                                const combatTokens = activeScenario.items.filter(i => isCombatTokenItem(i) && (i.isCircular || i.stats));
-                                const minVel = Math.min(...combatTokens.map(t => t.velocidad || 0));
-                                return (hudToken.velocidad || 0) === minVel;
+                                return canCombatTokenActNow(hudToken, activeScenario.items || []);
                             })()}
                         />
                     );
@@ -15995,9 +16112,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             onCardPreviewStart={handleHandCardDragStart}
                                             isActive={(() => {
                                                 if (!gridConfig.isCombatActive) return true;
-                                                const combatTokens = activeScenario.items.filter(i => isCombatTokenItem(i) && (i.isCircular || i.stats));
-                                                const minVel = Math.min(...combatTokens.map(t => t.velocidad || 0));
-                                                return (hudToken.velocidad || 0) === minVel;
+                                                return canCombatTokenActNow(hudToken, activeScenario.items || []);
                                             })()}
                                         />
                                     </motion.div>
