@@ -167,7 +167,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.77**
+> **Versión actual: 2.4.78**
+
+**Resumen de cambios v2.4.78:**
+
+- **Restauración de Alineación Superior para Textos**: Eliminado el centrado vertical en los bloques de descripción de la carta en `CardBuilder.jsx`. El texto vuelve a su comportamiento estándar e inicial de alinearse directamente desde la parte superior del cuadro de texto (`y = dynamicLayout.y`), tanto para descripciones cortas como largas, garantizando una disposición clásica y uniforme.
 
 **Resumen de cambios v2.4.77:**
 

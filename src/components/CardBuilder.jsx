@@ -1133,9 +1133,7 @@ const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate =
   const family = dynamicLayout.family || "Georgia, serif";
   context.font = `${style}400 ${fitted.size}px ${family}`;
 
-  const textHeight = fitted.lines.length * fitted.lineHeight;
-  const verticalOffset = Math.max(0, (dynamicLayout.height - textHeight) / 2);
-  let y = dynamicLayout.y + verticalOffset;
+  let y = dynamicLayout.y;
   fitted.lines.forEach((line, index) => {
     if (y + fitted.lineHeight > dynamicLayout.y + dynamicLayout.height) return;
     if (line) {
