@@ -45,6 +45,7 @@ const CARD_TYPES = [
 ];
 
 export const ELEMENT_TYPES = [
+  { id: 'Ninguno', label: 'Ninguno' },
   { id: 'Agua', label: 'Agua' },
   { id: 'Fuego', label: 'Fuego' },
   { id: 'Hielo', label: 'Hielo' },
@@ -65,12 +66,13 @@ const CHARGE_TYPES = [
 ];
 
 const CONSUMPTION_TYPES = [
-  { id: 'Recurso', label: 'Recurso', src: '/interfaz/consumos/Recurso.webp' },
-  { id: 'Armadura_1', label: 'Armadura', src: '/interfaz/consumos/Armadura_1.webp' },
+  { id: 'Tiempo', label: 'Tiempo', src: '/interfaz/consumos/Tiempo.webp' },
+  { id: 'Mente', label: 'Mente', src: '/interfaz/consumos/Mente.webp' },
   { id: 'Cuerpo', label: 'Cuerpo', src: '/interfaz/consumos/Cuerpo.webp' },
   { id: 'Hambre', label: 'Hambre', src: '/interfaz/consumos/Hambre.webp' },
-  { id: 'Mente', label: 'Mente', src: '/interfaz/consumos/Mente.webp' },
-  { id: 'Tiempo', label: 'Tiempo', src: '/interfaz/consumos/Tiempo.webp' },
+  { id: 'Armadura_1', label: 'Armadura', src: '/interfaz/consumos/Armadura_1.webp' },
+  { id: 'Recurso', label: 'Recurso', src: '/interfaz/consumos/Recurso.webp' },
+  { id: 'Variable', label: 'Variable', src: '/interfaz/consumos/Variable.webp' },
 ];
 
 const DEFAULT_CHARGE_SLOTS = ['Hambre', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
@@ -104,24 +106,26 @@ const getWeaponTypeIconSrc = (weaponType) => (
   `${process.env.PUBLIC_URL || ''}/tipo/${encodeURIComponent(weaponType)}.webp`
 );
 
-const drawDiceIcon = (context, x, y, size, imgElement, qty) => {
+const drawDiceIcon = (context, x, y, size, imgElement, qty, showQty = true) => {
   if (!imgElement) return;
   context.save();
   
   // 1. Draw the preloaded dice image centered at x, y
   context.drawImage(imgElement, x - size/2, y - size/2, size, size);
   
-  // 2. Draw the quantity number to the right (e.g. "1")
-  const qtyX = x + size/2 + 24;
-  context.fillStyle = '#ffffff';
-  context.strokeStyle = '#000000';
-  context.lineWidth = 38; // Trazo negro más grueso para mayor contraste
-  context.lineJoin = 'round';
-  context.textAlign = 'left';
-  context.textBaseline = 'middle';
-  context.font = '900 130px Lato, Arial, sans-serif';
-  context.strokeText(qty.toString(), qtyX, y + 4);
-  context.fillText(qty.toString(), qtyX, y + 4);
+  if (showQty) {
+    // 2. Draw the quantity number to the right (e.g. "1")
+    const qtyX = x + size/2 + 24;
+    context.fillStyle = '#ffffff';
+    context.strokeStyle = '#000000';
+    context.lineWidth = 38; // Trazo negro más grueso para mayor contraste
+    context.lineJoin = 'round';
+    context.textAlign = 'left';
+    context.textBaseline = 'middle';
+    context.font = '900 130px Lato, Arial, sans-serif';
+    context.strokeText(qty.toString(), qtyX, y + 4);
+    context.fillText(qty.toString(), qtyX, y + 4);
+  }
   
   context.restore();
 };
@@ -912,14 +916,143 @@ const getSyllables = (word) => {
   return syllables;
 };
 
+const KEYWORD_ICONS = {
+  'Tiempo': '/interfaz/consumos/Tiempo.webp',
+  'Mente': '/interfaz/consumos/Mente.webp',
+  'Cuerpo': '/interfaz/consumos/Cuerpo.webp',
+  'Hambre': '/interfaz/consumos/Hambre.webp',
+  'Armadura': '/interfaz/consumos/Armadura_1.webp',
+  'Recurso': '/interfaz/consumos/Recurso.webp',
+  'Variable': '/interfaz/consumos/Variable.webp',
+  'Agua': '/elementos/Agua.webp',
+  'Fuego': '/elementos/Fuego.webp',
+  'Hielo': '/elementos/Hielo.webp',
+  'Luz': '/elementos/Luz.webp',
+  'Oscuridad': '/elementos/Oscuridad.webp',
+  'Rayo': '/elementos/Rayo.webp',
+  'Tierra': '/elementos/Tierra.webp',
+  'Veneno': '/elementos/Veneno.webp',
+  'Viento': '/elementos/Viento.webp',
+  'Cuerpo a cuerpo': '/tipo/Cuerpo a cuerpo.webp',
+  'Distancia': '/tipo/Distancia.webp',
+  'Magia': '/tipo/Magia.webp',
+  'D4': '/dados/cartas/D4.webp',
+  'D6': '/dados/cartas/D6.webp',
+  'D8': '/dados/cartas/D8.webp',
+  'D10': '/dados/cartas/D10.webp',
+  'D12': '/dados/cartas/D12.webp',
+  'DX': '/dados/cartas/DX.webp',
+  'Dado': '/dados/cartas/DX.webp',
+};
+
+const KEYWORD_REGEX = new RegExp(
+  '\\b(' + 
+  Object.keys(KEYWORD_ICONS)
+    .sort((a, b) => b.length - a.length)
+    .map(kw => kw.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'))
+    .join('|') + 
+  ')\\b',
+  'gi'
+);
+
+const getActiveFontSize = (context) => {
+  const fontStr = context.font;
+  const match = fontStr.match(/(\d+)px/);
+  return match ? parseInt(match[1], 10) : 60;
+};
+
+const measureTextWithIcons = (context, text) => {
+  const baseWidth = context.measureText(text).width;
+  if (!text) return baseWidth;
+  const matches = text.match(KEYWORD_REGEX);
+  if (!matches) return baseWidth;
+  
+  const fontSize = getActiveFontSize(context);
+  const spaceCharWidth = context.measureText(' ').width;
+  const extraWidthPerMatch = fontSize * 1.1 + spaceCharWidth; // 0.9 * size for icon + 0.2 * size for spacing + 1 keyboard space width
+  return baseWidth + matches.length * extraWidthPerMatch;
+};
+
+const measureTextWidth = (context, text) => {
+  return measureTextWithIcons(context, text);
+};
+
+const parseLineSegments = (line) => {
+  if (!line) return [];
+  const parts = line.split(KEYWORD_REGEX);
+  return parts.map((part) => {
+    const isKeyword = KEYWORD_REGEX.test(part);
+    return {
+      text: part,
+      isKeyword,
+    };
+  }).filter((segment) => segment.text !== '');
+};
+
+const tokenizeParagraph = (paragraph) => {
+  const preserved = paragraph.replace(/\bcuerpo\s+a\s+cuerpo\b/gi, 'cuerpo_a_cuerpo');
+  return preserved.split(/\s+/).map(w => w.replace(/cuerpo_a_cuerpo/gi, 'cuerpo a cuerpo'));
+};
+
+const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, resourceImages = {}) => {
+  const segments = parseLineSegments(line);
+  if (segments.length === 0) return;
+  
+  const fontSize = getActiveFontSize(context);
+  const iconSize = fontSize * 0.9;
+  const iconGap = fontSize * 0.2;
+  const spaceCharWidth = context.measureText(' ').width;
+  
+  if (!justify) {
+    let cursorX = x;
+    segments.forEach((seg) => {
+      context.fillText(seg.text, cursorX, y);
+      const textWidth = context.measureText(seg.text).width;
+      cursorX += textWidth;
+      
+      if (seg.isKeyword) {
+        const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
+        const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
+        
+        // Offset the icon by one keyboard space character width to prevent it from overlapping with the text
+        const shiftX = spaceCharWidth;
+        
+        if (iconImg) {
+          const iconY = y + (fontSize - iconSize) / 2;
+          context.drawImage(iconImg, cursorX + shiftX, iconY, iconSize, iconSize);
+        }
+        cursorX += iconSize + iconGap + shiftX;
+      }
+    });
+  } else {
+    const words = tokenizeParagraph(line.trim());
+    if (words.length < 2) {
+      drawTextLineWithIcons(context, line, x, y, maxWidth, false, resourceImages);
+      return;
+    }
+    
+    const wordsWidth = words.reduce((total, word) => {
+      return total + measureTextWithIcons(context, word);
+    }, 0);
+    
+    const spaceWidth = (maxWidth - wordsWidth) / (words.length - 1);
+    let cursorX = x;
+    
+    words.forEach((word, index) => {
+      drawTextLineWithIcons(context, word, cursorX, y, maxWidth, false, resourceImages);
+      cursorX += measureTextWithIcons(context, word) + (index < words.length - 1 ? spaceWidth : 0);
+    });
+  }
+};
+
 const splitLongWord = (context, word, maxWidth) => {
-  if (context.measureText(word).width <= maxWidth) return [word];
+  if (measureTextWidth(context, word) <= maxWidth) return [word];
 
   const chunks = [];
   let chunk = '';
   Array.from(word).forEach((character) => {
     const nextChunk = `${chunk}${character}`;
-    if (context.measureText(nextChunk).width <= maxWidth || !chunk) {
+    if (measureTextWidth(context, nextChunk) <= maxWidth || !chunk) {
       chunk = nextChunk;
       return;
     }
@@ -932,6 +1065,7 @@ const splitLongWord = (context, word, maxWidth) => {
   return chunks;
 };
 
+
 const wrapDescriptionText = (context, text, maxWidth, hyphenate = false) => {
   const paragraphs = text
     .trim()
@@ -941,14 +1075,14 @@ const wrapDescriptionText = (context, text, maxWidth, hyphenate = false) => {
   const lines = [];
 
   paragraphs.forEach((paragraph, paragraphIndex) => {
-    const words = paragraph.split(/\s+/).flatMap((word) => splitLongWord(context, word, maxWidth));
+    const words = tokenizeParagraph(paragraph).flatMap((word) => splitLongWord(context, word, maxWidth));
     let line = '';
 
     for (let i = 0; i < words.length; i++) {
       const word = words[i];
       const nextLine = line ? `${line} ${word}` : word;
 
-      if (context.measureText(nextLine).width <= maxWidth || !line) {
+      if (measureTextWidth(context, nextLine) <= maxWidth || !line) {
         line = nextLine;
         continue;
       }
@@ -972,7 +1106,7 @@ const wrapDescriptionText = (context, text, maxWidth, hyphenate = false) => {
               const suffix = syllables.slice(k).join('');
               const testLine = line ? `${line} ${prefix}` : prefix;
 
-              if (context.measureText(testLine).width <= maxWidth) {
+              if (measureTextWidth(context, testLine) <= maxWidth) {
                 lines.push(testLine);
                 line = suffix;
                 hyphenated = true;
@@ -1123,7 +1257,7 @@ const drawJustifiedLine = (context, line, x, y, maxWidth) => {
   });
 };
 
-const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate = false) => {
+const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate = false, resourceImages = {}) => {
   const hasUserText = textValue.trim().length > 0;
   const text = hasUserText ? textValue.trim() : previewText;
   if (!text || !layout) return;
@@ -1158,9 +1292,9 @@ const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate =
     if (y + fitted.lineHeight > dynamicLayout.y + dynamicLayout.height) return;
     if (line) {
       if (shouldJustifyLine(fitted.lines, index)) {
-        drawJustifiedLine(context, line, dynamicLayout.x, y, dynamicLayout.width);
+        drawTextLineWithIcons(context, line, dynamicLayout.x, y, dynamicLayout.width, true, resourceImages);
       } else {
-        context.fillText(line, dynamicLayout.x, y);
+        drawTextLineWithIcons(context, line, dynamicLayout.x, y, dynamicLayout.width, false, resourceImages);
       }
     }
     y += fitted.lineHeight;
@@ -1169,16 +1303,16 @@ const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate =
   context.restore();
 };
 
-const drawDescription = (context, description, flavorText, typeConfig, showTraits, hyphenate = false, singleTextStyle = 'narrative') => {
+const drawDescription = (context, description, flavorText, typeConfig, showTraits, hyphenate = false, singleTextStyle = 'narrative', resourceImages = {}) => {
   const layouts = getDescriptionLayouts(typeConfig, showTraits, singleTextStyle);
 
   if (layouts.primary) {
-    drawTextBlock(context, description, layouts.primary, PRIMARY_DESCRIPTION_PREVIEW_TEXT, hyphenate);
-    drawTextBlock(context, flavorText, layouts.flavor, FLAVOR_DESCRIPTION_PREVIEW_TEXT, hyphenate);
+    drawTextBlock(context, description, layouts.primary, PRIMARY_DESCRIPTION_PREVIEW_TEXT, hyphenate, resourceImages);
+    drawTextBlock(context, flavorText, layouts.flavor, FLAVOR_DESCRIPTION_PREVIEW_TEXT, hyphenate, resourceImages);
     return;
   }
 
-  drawTextBlock(context, description, layouts.flavor, DESCRIPTION_PREVIEW_TEXT, hyphenate);
+  drawTextBlock(context, description, layouts.flavor, DESCRIPTION_PREVIEW_TEXT, hyphenate, resourceImages);
 };
 
 const drawCardCanvas = (
@@ -1279,9 +1413,13 @@ const drawCardCanvas = (
 
   // Draw weapon interface if cardType is weapon or armor or action!
   if (cardType === 'weapon') {
-    // 1. Draw Dice
-    if (diceIconImg) {
-      drawDiceIcon(context, 290, 615, 200, diceIconImg, diceQty);
+    // 1. Draw Dice or Element Icon
+    if (elementIconImg) {
+      context.save();
+      context.drawImage(elementIconImg, 290 - 200/2, 615 - 200/2, 200, 200);
+      context.restore();
+    } else if (diceIconImg) {
+      drawDiceIcon(context, 290, 615, 200, diceIconImg, diceQty, diceType !== 'DX');
     }
 
     // 2. Draw Ruler (width increased to 720, label lowered to 635)
@@ -1325,7 +1463,7 @@ const drawCardCanvas = (
   }
 
   if (cardType !== 'action') {
-    drawDescription(context, description, flavorText, typeConfig, showTraits, hyphenate, singleTextStyle);
+    drawDescription(context, description, flavorText, typeConfig, showTraits, hyphenate, singleTextStyle, resourceImages);
   }
 };
 
@@ -1345,7 +1483,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
   const [traits, setTraits] = useState(DEFAULT_TRAITS);
   const [selectedBackground, setSelectedBackground] = useState('Gris.webp');
   const [imageStatus, setImageStatus] = useState('loading');
-  const [selectedElement, setSelectedElement] = useState('Fuego');
+  const [selectedElement, setSelectedElement] = useState('Ninguno');
   const [customColorActive, setCustomColorActive] = useState(false);
   const [customColor, setCustomColor] = useState('#c8aa6e');
 
@@ -1357,6 +1495,24 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
   const [chargeSlots, setChargeSlots] = useState(DEFAULT_CHARGE_SLOTS);
   const [consumptionSlots, setConsumptionSlots] = useState(DEFAULT_CONSUMPTION_SLOTS);
   const [resourceMode, setResourceMode] = useState(RESOURCE_MODE_BOTH);
+  const [consumptionSlotTypes, setConsumptionSlotTypes] = useState(['consumption', 'consumption', 'consumption', 'consumption', 'consumption']);
+
+  // Auto-detect if slot contains an element to sync UI dropdown toggle state
+  useEffect(() => {
+    setConsumptionSlotTypes((prev) => {
+      const next = [...prev];
+      let changed = false;
+      consumptionSlots.forEach((slot, index) => {
+        const isElement = ELEMENT_TYPES.some((el) => el.id !== 'Ninguno' && el.id === slot);
+        const expectedType = isElement ? 'element' : 'consumption';
+        if (next[index] !== expectedType && slot !== '') {
+          next[index] = expectedType;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [consumptionSlots]);
 
   // Automatically detect weapon type from cardName
   useEffect(() => {
@@ -1471,6 +1627,12 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       const resourceOptions = [
         ...CHARGE_TYPES.map((option) => ({ ...option, cacheKey: `charge:${option.id}` })),
         ...CONSUMPTION_TYPES.map((option) => ({ ...option, cacheKey: `consumption:${option.id}` })),
+        ...ELEMENT_TYPES.filter((option) => option.id !== 'Ninguno').map((option) => ({
+          id: option.id,
+          label: option.label,
+          src: `/elementos/${option.id}.webp`,
+          cacheKey: `consumption:${option.id}`,
+        })),
       ];
       const requiredResourceOptions = resourceOptions.filter((option) => (
         loadsChargeResources && chargeSlots.includes(option.id) && option.cacheKey.startsWith('charge:')
@@ -1502,8 +1664,9 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     }
 
     let elementIconImg = null;
-    if (cardType === 'status') {
-      const elementSrc = `${process.env.PUBLIC_URL || ''}/elementos/${selectedElement}.webp`;
+    if ((cardType === 'status' || cardType === 'weapon') && selectedElement !== 'Ninguno') {
+      const suffix = cardType === 'weapon' ? '_p' : '';
+      const elementSrc = `${process.env.PUBLIC_URL || ''}/elementos/${selectedElement}${suffix}.webp`;
       elementIconImg = imageCacheRef.current.get(elementSrc);
       if (!elementIconImg) {
         try {
@@ -1519,6 +1682,35 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
           console.error("Could not load element icon image:", e);
         }
       }
+    }
+
+    // 1.5 Load Keyword Icon Images if mentioned in text
+    const textToScan = `${description} ${flavorText}`;
+    const matchedKeywords = Array.from(new Set(textToScan.match(KEYWORD_REGEX) || []));
+    if (matchedKeywords.length > 0) {
+      await Promise.all(matchedKeywords.map(async (kwMatch) => {
+        const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === kwMatch.toLowerCase());
+        if (!matchedKw) return;
+        const src = `${process.env.PUBLIC_URL || ''}${KEYWORD_ICONS[matchedKw]}`;
+        let icon = imageCacheRef.current.get(src);
+        if (!icon) {
+          try {
+            icon = await new Promise((resolve, reject) => {
+              const img = new Image();
+              img.decoding = 'async';
+              img.src = src;
+              img.onload = () => resolve(img);
+              img.onerror = reject;
+            });
+            imageCacheRef.current.set(src, icon);
+          } catch (e) {
+            console.error(`Could not load keyword icon: ${matchedKw}`, e);
+          }
+        }
+        if (icon) {
+          resourceImages[`keyword:${matchedKw}`] = icon;
+        }
+      }));
     }
 
     if (drawId !== drawSequenceRef.current) return undefined;
@@ -1601,6 +1793,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     setChargeSlots(DEFAULT_CHARGE_SLOTS);
     setConsumptionSlots(DEFAULT_CONSUMPTION_SLOTS);
     setResourceMode(RESOURCE_MODE_BOTH);
+    setConsumptionSlotTypes(['consumption', 'consumption', 'consumption', 'consumption', 'consumption']);
     setSelectedElement('Fuego');
     setCustomColorActive(false);
     setCustomColor('#c8aa6e');
@@ -1850,10 +2043,27 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                         ))}
                       </div>
                     </div>
+                    {/* 3. Elemento / Estado */}
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        Elemento / Estado
+                      </label>
+                      <select
+                        value={selectedElement}
+                        onChange={(event) => setSelectedElement(event.target.value)}
+                        className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
+                      >
+                        {ELEMENT_TYPES.map((type) => (
+                          <option key={type.id} value={type.id}>
+                            {type.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </>
                 )}
 
-                {(cardType === 'weapon' || cardType === 'action') && (
+                {(cardType === 'weapon' || cardType === 'action') && (cardType !== 'weapon' || selectedElement === 'Ninguno') && (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -1864,7 +2074,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                         onChange={(event) => setDiceType(event.target.value)}
                         className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
                       >
-                        {['D4', 'D6', 'D8', 'D10', 'D12'].map((type) => (
+                        {['D4', 'D6', 'D8', 'D10', 'D12', 'DX'].map((type) => (
                           <option key={type} value={type}>
                             {type}
                           </option>
@@ -1876,32 +2086,38 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                       <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                         Cantidad de Dados
                       </label>
-                      <div className="grid grid-cols-[2.5rem_1fr_2.5rem] h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80">
-                        <button
-                          type="button"
-                          onClick={() => handleDiceQtyChange(diceQty - 1)}
-                          className="flex items-center justify-center border-r border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10 h-full cursor-pointer"
-                          aria-label="Reducir cantidad de dados"
-                        >
-                          -
-                        </button>
-                        <input
-                          type="number"
-                          min={1}
-                          max={cardType === 'action' ? 6 : 9}
-                          value={diceQty}
-                          onChange={(event) => handleDiceQtyChange(parseInt(event.target.value, 10) || 1)}
-                          className="w-full h-full bg-transparent px-2 text-center text-sm font-bold text-[#f0e6d2] outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleDiceQtyChange(diceQty + 1)}
-                          className="flex items-center justify-center border-l border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10 h-full cursor-pointer"
-                          aria-label="Aumentar cantidad de dados"
-                        >
-                          +
-                        </button>
-                      </div>
+                      {diceType === 'DX' ? (
+                        <div className="flex items-center justify-center h-[38px] border border-slate-800 bg-[#09090b]/60 px-2 text-[9px] sm:text-[10px] uppercase tracking-[0.12em] text-slate-500 text-center leading-tight">
+                          Dado variable. Depende de otros factores.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-[2.5rem_1fr_2.5rem] h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80">
+                          <button
+                            type="button"
+                            onClick={() => handleDiceQtyChange(diceQty - 1)}
+                            className="flex items-center justify-center border-r border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10 h-full cursor-pointer"
+                            aria-label="Reducir cantidad de dados"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            min={1}
+                            max={cardType === 'action' ? 6 : 9}
+                            value={diceQty}
+                            onChange={(event) => handleDiceQtyChange(parseInt(event.target.value, 10) || 1)}
+                            className="w-full h-full bg-transparent px-2 text-center text-sm font-bold text-[#f0e6d2] outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleDiceQtyChange(diceQty + 1)}
+                            className="flex items-center justify-center border-l border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10 h-full cursor-pointer"
+                            aria-label="Aumentar cantidad de dados"
+                          >
+                            +
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1976,9 +2192,9 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                   </label>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {consumptionSlots.map((slot, index) => (
-                      <label
+                      <div
                         key={`consumption-slot-${index}`}
-                        className="grid grid-cols-[1.75rem_1fr] items-center border border-[#c8aa6e]/20 bg-[#09090b]/80"
+                        className="grid grid-cols-[1.75rem_1fr_2rem] items-center border border-[#c8aa6e]/20 bg-[#09090b]/80"
                       >
                         <span className="border-r border-[#c8aa6e]/15 py-2 text-center text-[10px] font-black text-[#c8aa6e]">
                           {index + 1}
@@ -1986,17 +2202,41 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                         <select
                           value={slot}
                           onChange={(event) => handleConsumptionSlotChange(index, event.target.value)}
-                          className="min-w-0 bg-transparent px-2 py-2 text-xs font-bold uppercase text-[#f0e6d2] outline-none"
+                          className="min-w-0 bg-transparent px-2 py-2 text-xs font-bold uppercase text-[#f0e6d2] outline-none cursor-pointer h-full"
                           aria-label={cardType === 'weapon' ? `Consumo ${index + 1}` : cardType === 'armor' ? `Armadura ${index + 1}` : `Consumo ${index + 1}`}
                         >
                           <option value="">Vacío</option>
-                          {CONSUMPTION_TYPES.map((option) => (
-                            <option key={option.id} value={option.id}>
-                              {option.label}
-                            </option>
-                          ))}
+                          {(consumptionSlotTypes[index] || 'consumption') === 'consumption'
+                            ? CONSUMPTION_TYPES.map((option) => (
+                                <option key={option.id} value={option.id}>
+                                  {option.label}
+                                </option>
+                              ))
+                            : ELEMENT_TYPES.filter((type) => type.id !== 'Ninguno').map((type) => (
+                                <option key={type.id} value={type.id}>
+                                  {type.label}
+                                </option>
+                              ))}
                         </select>
-                      </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextTypes = [...consumptionSlotTypes];
+                            const currentType = nextTypes[index] || 'consumption';
+                            nextTypes[index] = currentType === 'consumption' ? 'element' : 'consumption';
+                            setConsumptionSlotTypes(nextTypes);
+                            handleConsumptionSlotChange(index, '');
+                          }}
+                          className={`h-full border-l border-[#c8aa6e]/15 text-[9px] sm:text-[10px] font-bold uppercase transition flex items-center justify-center cursor-pointer select-none ${
+                            (consumptionSlotTypes[index] || 'consumption') === 'consumption'
+                              ? 'text-[#c8aa6e] bg-[#c8aa6e]/5 hover:bg-[#c8aa6e]/15'
+                              : 'text-teal-400 bg-teal-500/10 hover:bg-teal-500/20'
+                          }`}
+                          title={(consumptionSlotTypes[index] || 'consumption') === 'consumption' ? "Cambiar a Elemento" : "Cambiar a Consumo"}
+                        >
+                          {(consumptionSlotTypes[index] || 'consumption') === 'consumption' ? 'CON' : 'ELE'}
+                        </button>
+                      </div>
                     ))}
                   </div>
                 </div>
