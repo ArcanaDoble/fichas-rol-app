@@ -45,6 +45,7 @@ const CARD_TYPES = [
 ];
 
 export const ELEMENT_TYPES = [
+  { id: 'Ninguno', label: 'Ninguno' },
   { id: 'Agua', label: 'Agua' },
   { id: 'Fuego', label: 'Fuego' },
   { id: 'Hielo', label: 'Hielo' },
@@ -65,12 +66,13 @@ const CHARGE_TYPES = [
 ];
 
 const CONSUMPTION_TYPES = [
-  { id: 'Recurso', label: 'Recurso', src: '/interfaz/consumos/Recurso.webp' },
-  { id: 'Armadura_1', label: 'Armadura', src: '/interfaz/consumos/Armadura_1.webp' },
+  { id: 'Tiempo', label: 'Tiempo', src: '/interfaz/consumos/Tiempo.webp' },
+  { id: 'Mente', label: 'Mente', src: '/interfaz/consumos/Mente.webp' },
   { id: 'Cuerpo', label: 'Cuerpo', src: '/interfaz/consumos/Cuerpo.webp' },
   { id: 'Hambre', label: 'Hambre', src: '/interfaz/consumos/Hambre.webp' },
-  { id: 'Mente', label: 'Mente', src: '/interfaz/consumos/Mente.webp' },
-  { id: 'Tiempo', label: 'Tiempo', src: '/interfaz/consumos/Tiempo.webp' },
+  { id: 'Armadura_1', label: 'Armadura', src: '/interfaz/consumos/Armadura_1.webp' },
+  { id: 'Recurso', label: 'Recurso', src: '/interfaz/consumos/Recurso.webp' },
+  { id: 'Variable', label: 'Variable', src: '/interfaz/consumos/Variable.webp' },
 ];
 
 const DEFAULT_CHARGE_SLOTS = ['Hambre', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
@@ -104,24 +106,26 @@ const getWeaponTypeIconSrc = (weaponType) => (
   `${process.env.PUBLIC_URL || ''}/tipo/${encodeURIComponent(weaponType)}.webp`
 );
 
-const drawDiceIcon = (context, x, y, size, imgElement, qty) => {
+const drawDiceIcon = (context, x, y, size, imgElement, qty, showQty = true) => {
   if (!imgElement) return;
   context.save();
   
   // 1. Draw the preloaded dice image centered at x, y
   context.drawImage(imgElement, x - size/2, y - size/2, size, size);
   
-  // 2. Draw the quantity number to the right (e.g. "1")
-  const qtyX = x + size/2 + 24;
-  context.fillStyle = '#ffffff';
-  context.strokeStyle = '#000000';
-  context.lineWidth = 38; // Trazo negro más grueso para mayor contraste
-  context.lineJoin = 'round';
-  context.textAlign = 'left';
-  context.textBaseline = 'middle';
-  context.font = '900 130px Lato, Arial, sans-serif';
-  context.strokeText(qty.toString(), qtyX, y + 4);
-  context.fillText(qty.toString(), qtyX, y + 4);
+  if (showQty) {
+    // 2. Draw the quantity number to the right (e.g. "1")
+    const qtyX = x + size/2 + 24;
+    context.fillStyle = '#ffffff';
+    context.strokeStyle = '#000000';
+    context.lineWidth = 38; // Trazo negro más grueso para mayor contraste
+    context.lineJoin = 'round';
+    context.textAlign = 'left';
+    context.textBaseline = 'middle';
+    context.font = '900 130px Lato, Arial, sans-serif';
+    context.strokeText(qty.toString(), qtyX, y + 4);
+    context.fillText(qty.toString(), qtyX, y + 4);
+  }
   
   context.restore();
 };
@@ -718,56 +722,72 @@ const drawTraitBadge = (context, slot, label) => {
   context.restore();
 };
 
-const usesSplitDescription = (typeConfig, showTraits) => (
-  typeConfig.id === 'trap' || (typeConfig.id === 'skill' && !showTraits)
-);
+const usesSplitDescription = (typeConfig, showTraits) => false;
 
 const getDynamicStartingLayout = (layout, text, isPrimary) => {
   return layout;
 };
 
-const getDescriptionLayouts = (typeConfig, showTraits) => {
+const getDescriptionLayouts = (typeConfig, showTraits, singleTextStyle = 'narrative', visibleTraitRows = 3) => {
   if (typeConfig.id === 'action') return {};
 
   const hasRails = typeConfig.id === 'weapon' || typeConfig.id === 'armor' || typeConfig.id === 'trap' || typeConfig.id === 'skill';
 
-  if (usesSplitDescription(typeConfig, showTraits)) {
-    return {
-      primary: {
-        x: 210,
-        y: 815,
-        width: 1470,
-        height: 480,
-        fontSize: 85,
-        lineHeight: 104,
-        italic: false,
-        weight: 600,
-        family: "Georgia, serif",
-      },
-      flavor: {
-        x: 210,
-        y: 1350,
-        width: 1470,
-        height: hasRails ? 930 : 1090,
-        fontSize: 80,
-        lineHeight: 98,
-        italic: true,
-        weight: 600,
-        family: "Georgia, serif",
-      },
-    };
+  // Base coordinates for single layout
+  let y = 1545;
+  let height = hasRails ? 740 : 895;
+
+  let yOffset = 0;
+  if (showTraits) {
+    if (typeConfig.id === 'weapon' || typeConfig.id === 'skill') {
+      const activeRows = Math.min(visibleTraitRows, 3);
+      const hiddenRows = 3 - activeRows;
+      yOffset = hiddenRows * 240;
+    } else if (typeConfig.id === 'armor') {
+      const activeRows = Math.min(visibleTraitRows, 4);
+      const hiddenRows = 4 - activeRows;
+      yOffset = hiddenRows * 230;
+    }
+  }
+
+  y -= yOffset;
+  height += yOffset;
+
+  // Apply combined layouts for cases that previously used split descriptions (when traits are hidden)
+  if (!showTraits) {
+    if (typeConfig.id === 'weapon') {
+      y = 815;
+      height = 1465;
+    } else if (typeConfig.id === 'armor') {
+      y = 508;
+      height = 1772;
+    } else if (typeConfig.id === 'skill') {
+      y = 508;
+      height = 1772;
+    }
+  }
+
+  // Trap cards can use the top badge area only when the badge is hidden.
+  if (typeConfig.id === 'trap') {
+    if (showTraits) {
+      y = 815;
+      height = 1465;
+    } else {
+      y = 508;
+      height = 1772;
+    }
   }
 
   return {
     flavor: {
       x: 210,
-      y: 1545,
+      y: y,
       width: 1470,
-      height: hasRails ? 740 : 895,
+      height: height,
       fontSize: 85,
       lineHeight: 104,
-      italic: true,
-      weight: 600,
+      italic: singleTextStyle === 'narrative',
+      weight: 400,
       family: "Georgia, serif",
     },
   };
@@ -892,14 +912,349 @@ const getSyllables = (word) => {
   return syllables;
 };
 
+const KEYWORD_ICONS = {
+  'Tiempo': '/interfaz/consumos/Tiempo.webp',
+  'Mente': '/interfaz/consumos/Mente.webp',
+  'Cuerpo': '/interfaz/consumos/Cuerpo.webp',
+  'Hambre': '/interfaz/consumos/Hambre.webp',
+  'Armadura': '/interfaz/consumos/Armadura_1.webp',
+  'Recurso': '/interfaz/consumos/Recurso.webp',
+  'Variable': '/interfaz/consumos/Variable.webp',
+  'Agua': '/elementos/Agua.webp',
+  'Fuego': '/elementos/Fuego.webp',
+  'Hielo': '/elementos/Hielo.webp',
+  'Luz': '/elementos/Luz.webp',
+  'Oscuridad': '/elementos/Oscuridad.webp',
+  'Rayo': '/elementos/Rayo.webp',
+  'Tierra': '/elementos/Tierra.webp',
+  'Veneno': '/elementos/Veneno.webp',
+  'Viento': '/elementos/Viento.webp',
+  'Cuerpo a cuerpo': '/tipo/Cuerpo a cuerpo.webp',
+  'Distancia': '/tipo/Distancia.webp',
+  'Magia': '/tipo/Magia.webp',
+  'D4': '/dados/cartas/D4.webp',
+  'D6': '/dados/cartas/D6.webp',
+  'D8': '/dados/cartas/D8.webp',
+  'D10': '/dados/cartas/D10.webp',
+  'D12': '/dados/cartas/D12.webp',
+  'DX': '/dados/cartas/DX.webp',
+  'Dado': '/dados/cartas/DX.webp',
+};
+
+const KEYWORD_REGEX = new RegExp(
+  '\\b(' + 
+  Object.keys(KEYWORD_ICONS)
+    .sort((a, b) => b.length - a.length)
+    .map(kw => kw.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'))
+    .join('|') + 
+  ')\\b',
+  'gi'
+);
+
+const getActiveFontSize = (context) => {
+  const fontStr = context.font;
+  const match = fontStr.match(/(\d+)px/);
+  return match ? parseInt(match[1], 10) : 60;
+};
+
+const measureTextWithIcons = (context, text) => {
+  const baseWidth = context.measureText(text).width;
+  if (!text) return baseWidth;
+  KEYWORD_REGEX.lastIndex = 0;
+  const matches = text.match(KEYWORD_REGEX);
+  if (!matches) return baseWidth;
+  
+  const fontSize = getActiveFontSize(context);
+  const spaceCharWidth = context.measureText(' ').width;
+  const extraWidthPerMatch = fontSize * 1.1 + spaceCharWidth; // 0.9 * size for icon + 0.2 * size for spacing + 1 keyboard space width
+  return baseWidth + matches.length * extraWidthPerMatch;
+};
+
+const parseStyles = (text) => {
+  const segments = [];
+  let currentText = '';
+  let bold = false;
+  let italic = false;
+  let color = null;
+
+  let i = 0;
+  while (i < text.length) {
+    if (text.startsWith('**', i)) {
+      if (currentText) {
+        segments.push({ text: currentText, bold, italic, color });
+        currentText = '';
+      }
+      bold = !bold;
+      i += 2;
+    } else if (text.startsWith('*', i)) {
+      if (currentText) {
+        segments.push({ text: currentText, bold, italic, color });
+        currentText = '';
+      }
+      italic = !italic;
+      i += 1;
+    } else if (text.startsWith('[color:', i)) {
+      const closeBracket = text.indexOf(']{', i);
+      if (closeBracket !== -1) {
+        const colorVal = text.slice(i + 7, closeBracket).trim();
+        const closeCurly = text.indexOf('}', closeBracket + 2);
+        if (closeCurly !== -1) {
+          if (currentText) {
+            segments.push({ text: currentText, bold, italic, color });
+            currentText = '';
+          }
+          const innerText = text.slice(closeBracket + 2, closeCurly);
+          const innerSegments = parseStyles(innerText);
+          innerSegments.forEach(seg => {
+            segments.push({
+              text: seg.text,
+              bold: seg.bold || bold,
+              italic: seg.italic || italic,
+              color: seg.color || colorVal
+            });
+          });
+          i = closeCurly + 1;
+          continue;
+        }
+      }
+      currentText += text[i];
+      i++;
+    } else {
+      currentText += text[i];
+      i++;
+    }
+  }
+
+  if (currentText) {
+    segments.push({ text: currentText, bold, italic, color });
+  }
+
+  return segments;
+};
+
+const getFontInfoFromContext = (context) => {
+  const fontStr = context.font;
+  const italic = fontStr.includes('italic');
+  const sizeMatch = fontStr.match(/(\d+)px/);
+  const size = sizeMatch ? parseInt(sizeMatch[1], 10) : 85;
+  const parts = fontStr.split('px');
+  const family = parts[1] ? parts[1].trim() : 'Georgia, serif';
+  
+  let weight = '400';
+  if (fontStr.includes('900') || fontStr.includes('bold')) {
+    weight = '900';
+  } else {
+    const weightMatch = fontStr.match(/\b([1-9]00)\b/);
+    if (weightMatch) {
+      weight = weightMatch[1];
+    }
+  }
+
+  return {
+    italic,
+    size,
+    family,
+    weight,
+    defaultColor: context.fillStyle,
+  };
+};
+
+const applySegmentStyle = (context, seg, layoutFontInfo) => {
+  const baseFamily = layoutFontInfo.family || "Georgia, serif";
+  const baseSize = layoutFontInfo.size || 85;
+  const finalItalic = seg.italic ? !layoutFontInfo.italic : layoutFontInfo.italic;
+  const styleStr = finalItalic ? 'italic ' : '';
+  const weightStr = seg.bold ? '900' : (layoutFontInfo.weight || '400');
+  
+  context.font = `${styleStr}${weightStr} ${baseSize}px ${baseFamily}`;
+  
+  if (seg.color) {
+    context.fillStyle = seg.color;
+  } else {
+    context.fillStyle = layoutFontInfo.defaultColor || 'rgba(255,255,255,0.96)';
+  }
+};
+
+const measureStyledText = (context, text, layoutFontInfo = {}) => {
+  const segments = parseStyles(text);
+  let totalWidth = 0;
+  
+  context.save();
+  segments.forEach((seg) => {
+    applySegmentStyle(context, seg, layoutFontInfo);
+    totalWidth += measureTextWithIcons(context, seg.text);
+  });
+  context.restore();
+  
+  return totalWidth;
+};
+
+const measureTextWidth = (context, text) => {
+  const fontInfo = getFontInfoFromContext(context);
+  return measureStyledText(context, text, fontInfo);
+};
+
+const getStyledWordsOfLine = (line) => {
+  const segments = parseStyles(line);
+  const words = [];
+  
+  segments.forEach((seg) => {
+    const parts = seg.text.split(/(\s+)/);
+    parts.forEach((part) => {
+      if (part === '') return;
+      if (part.trim() === '') {
+        words.push({ text: part, isSpace: true });
+      } else {
+        words.push({
+          text: part,
+          bold: seg.bold,
+          italic: seg.italic,
+          color: seg.color,
+          isSpace: false,
+        });
+      }
+    });
+  });
+  
+  return words;
+};
+
+const drawSingleStyledWord = (context, word, x, y, resourceImages = {}) => {
+  const fontInfo = getFontInfoFromContext(context);
+  
+  context.save();
+  applySegmentStyle(context, word, fontInfo);
+  
+  const fontSize = getActiveFontSize(context);
+  const iconSize = fontSize * 0.9;
+  const iconGap = fontSize * 0.2;
+  const spaceCharWidth = context.measureText(' ').width;
+  
+  const kwSegments = parseLineSegments(word.text);
+  let cursorX = x;
+  
+  kwSegments.forEach((seg) => {
+    context.fillText(seg.text, cursorX, y);
+    const textWidth = context.measureText(seg.text).width;
+    cursorX += textWidth;
+    
+    if (seg.isKeyword) {
+      const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
+      const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
+      const shiftX = spaceCharWidth;
+      
+      if (iconImg) {
+        const iconY = y + (fontSize - iconSize) / 2;
+        context.drawImage(iconImg, cursorX + shiftX, iconY, iconSize, iconSize);
+      }
+      cursorX += iconSize + iconGap + shiftX;
+    }
+  });
+  
+  context.restore();
+};
+
+const measureStyledWordWidth = (context, word) => {
+  const fontInfo = getFontInfoFromContext(context);
+  let wordWidth = 0;
+  
+  context.save();
+  applySegmentStyle(context, word, fontInfo);
+  wordWidth = measureTextWithIcons(context, word.text);
+  context.restore();
+  
+  return wordWidth;
+};
+
+const parseLineSegments = (line) => {
+  if (!line) return [];
+  KEYWORD_REGEX.lastIndex = 0;
+  const parts = line.split(KEYWORD_REGEX);
+  return parts.map((part) => {
+    const isKeyword = Object.keys(KEYWORD_ICONS).some(
+      (kw) => kw.toLowerCase() === part.toLowerCase() || (part.toLowerCase() === 'dado' && kw === 'Dado')
+    );
+    return {
+      text: part,
+      isKeyword,
+    };
+  }).filter((segment) => segment.text !== '');
+};
+
+const tokenizeParagraph = (paragraph) => {
+  const preserved = paragraph.replace(/\bcuerpo\s+a\s+cuerpo\b/gi, 'cuerpo_a_cuerpo');
+  return preserved.split(/\s+/).map(w => w.replace(/cuerpo_a_cuerpo/gi, 'cuerpo a cuerpo'));
+};
+
+const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, resourceImages = {}) => {
+  if (!justify) {
+    const fontInfo = getFontInfoFromContext(context);
+    const styleSegments = parseStyles(line);
+    
+    if (styleSegments.length === 0) return;
+    
+    const spaceCharWidth = context.measureText(' ').width;
+    let cursorX = x;
+    
+    context.save();
+    styleSegments.forEach((styleSeg) => {
+      applySegmentStyle(context, styleSeg, fontInfo);
+      
+      const fontSize = getActiveFontSize(context);
+      const iconSize = fontSize * 0.9;
+      const iconGap = fontSize * 0.2;
+      
+      const kwSegments = parseLineSegments(styleSeg.text);
+      kwSegments.forEach((seg) => {
+        context.fillText(seg.text, cursorX, y);
+        const textWidth = context.measureText(seg.text).width;
+        cursorX += textWidth;
+        
+        if (seg.isKeyword) {
+          const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
+          const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
+          const shiftX = spaceCharWidth;
+          
+          if (iconImg) {
+            const iconY = y + (fontSize - iconSize) / 2;
+            context.drawImage(iconImg, cursorX + shiftX, iconY, iconSize, iconSize);
+          }
+          cursorX += iconSize + iconGap + shiftX;
+        }
+      });
+    });
+    context.restore();
+  } else {
+    const styledWords = getStyledWordsOfLine(line);
+    const actualWords = styledWords.filter(w => !w.isSpace);
+    
+    if (actualWords.length < 2) {
+      drawTextLineWithIcons(context, line, x, y, maxWidth, false, resourceImages);
+      return;
+    }
+    
+    const wordsWidth = actualWords.reduce((total, word) => {
+      return total + measureStyledWordWidth(context, word);
+    }, 0);
+    
+    const spaceWidth = (maxWidth - wordsWidth) / (actualWords.length - 1);
+    let cursorX = x;
+    
+    actualWords.forEach((word, index) => {
+      drawSingleStyledWord(context, word, cursorX, y, resourceImages);
+      cursorX += measureStyledWordWidth(context, word) + (index < actualWords.length - 1 ? spaceWidth : 0);
+    });
+  }
+};
+
 const splitLongWord = (context, word, maxWidth) => {
-  if (context.measureText(word).width <= maxWidth) return [word];
+  if (measureTextWidth(context, word) <= maxWidth) return [word];
 
   const chunks = [];
   let chunk = '';
   Array.from(word).forEach((character) => {
     const nextChunk = `${chunk}${character}`;
-    if (context.measureText(nextChunk).width <= maxWidth || !chunk) {
+    if (measureTextWidth(context, nextChunk) <= maxWidth || !chunk) {
       chunk = nextChunk;
       return;
     }
@@ -912,6 +1267,42 @@ const splitLongWord = (context, word, maxWidth) => {
   return chunks;
 };
 
+
+const serializeTokens = (tokens) => {
+  let result = '';
+  let activeBold = false;
+  let activeItalic = false;
+  let activeColor = null;
+
+  tokens.forEach((token) => {
+    const tBold = token.bold || false;
+    const tItalic = token.italic || false;
+    const tColor = token.color || null;
+
+    if (tBold !== activeBold || tItalic !== activeItalic || tColor !== activeColor) {
+      if (activeColor) result += '}';
+      if (activeItalic) result += '*';
+      if (activeBold) result += '**';
+
+      if (tBold) result += '**';
+      if (tItalic) result += '*';
+      if (tColor) result += `[color:${tColor}]{`;
+
+      activeBold = tBold;
+      activeItalic = tItalic;
+      activeColor = tColor;
+    }
+
+    result += token.text;
+  });
+
+  if (activeColor) result += '}';
+  if (activeItalic) result += '*';
+  if (activeBold) result += '**';
+
+  return result;
+};
+
 const wrapDescriptionText = (context, text, maxWidth, hyphenate = false) => {
   const paragraphs = text
     .trim()
@@ -921,58 +1312,158 @@ const wrapDescriptionText = (context, text, maxWidth, hyphenate = false) => {
   const lines = [];
 
   paragraphs.forEach((paragraph, paragraphIndex) => {
-    const words = paragraph.split(/\s+/).flatMap((word) => splitLongWord(context, word, maxWidth));
-    let line = '';
+    const segments = parseStyles(paragraph);
+    const tokens = [];
 
-    for (let i = 0; i < words.length; i++) {
-      const word = words[i];
-      const nextLine = line ? `${line} ${word}` : word;
+    segments.forEach((seg) => {
+      const preserved = seg.text.replace(/\bcuerpo\s+a\s+cuerpo\b/gi, 'cuerpo_a_cuerpo');
+      const parts = preserved.split(/(\s+)/);
+      parts.forEach((part) => {
+        if (part === '') return;
+        const cleanPart = part.replace(/cuerpo_a_cuerpo/gi, 'cuerpo a cuerpo');
+        const isSpace = /^\s+$/.test(cleanPart);
 
-      if (context.measureText(nextLine).width <= maxWidth || !line) {
-        line = nextLine;
+        if (isSpace) {
+          tokens.push({
+            text: cleanPart,
+            bold: seg.bold,
+            italic: seg.italic,
+            color: seg.color,
+            isSpace: true,
+          });
+        } else {
+          const wordWidth = measureStyledText(context, cleanPart, {
+            bold: seg.bold,
+            italic: seg.italic,
+            color: seg.color,
+          });
+
+          if (wordWidth <= maxWidth) {
+            tokens.push({
+              text: cleanPart,
+              bold: seg.bold,
+              italic: seg.italic,
+              color: seg.color,
+              isSpace: false,
+            });
+          } else {
+            const chars = Array.from(cleanPart);
+            let chunk = '';
+            chars.forEach((char) => {
+              const nextChunk = chunk + char;
+              const nextWidth = measureStyledText(context, nextChunk, {
+                bold: seg.bold,
+                italic: seg.italic,
+                color: seg.color,
+              });
+              if (nextWidth <= maxWidth || !chunk) {
+                chunk = nextChunk;
+              } else {
+                tokens.push({
+                  text: chunk,
+                  bold: seg.bold,
+                  italic: seg.italic,
+                  color: seg.color,
+                  isSpace: false,
+                });
+                chunk = char;
+              }
+            });
+            if (chunk) {
+              tokens.push({
+                text: chunk,
+                bold: seg.bold,
+                italic: seg.italic,
+                color: seg.color,
+                isSpace: false,
+              });
+            }
+          }
+        }
+      });
+    });
+
+    let currentLineTokens = [];
+
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+
+      if (token.isSpace) {
+        if (currentLineTokens.length === 0) continue;
+        currentLineTokens.push(token);
+        continue;
+      }
+
+      const testTokens = [...currentLineTokens, token];
+      const testString = serializeTokens(testTokens);
+
+      if (measureTextWidth(context, testString) <= maxWidth || currentLineTokens.length === 0) {
+        currentLineTokens.push(token);
         continue;
       }
 
       if (hyphenate) {
-        const match = word.match(/^([^a-zA-ZáéíóúüÁÉÍÓÚÜñÑ]*)(.*?)([^a-zA-ZáéíóúüÁÉÍÓÚÜñÑ]*)$/);
-        const leadingPunct = match[1];
-        const cleanWord = match[2];
-        const trailingPunct = match[3];
+        const match = token.text.match(/^([^a-zA-ZáéíóúüÁÉÍÓÚÜñÑ]*)(.*?)([^a-zA-ZáéíóúüÁÉÍÓÚÜñÑ]*)$/);
+        if (match) {
+          const leadingPunct = match[1];
+          const cleanWord = match[2];
+          const trailingPunct = match[3];
 
-        if (cleanWord.length > 3) {
-          const rawSyllables = getSyllables(cleanWord);
-          if (rawSyllables.length > 1) {
-            const syllables = [...rawSyllables];
-            syllables[0] = leadingPunct + syllables[0];
-            syllables[syllables.length - 1] = syllables[syllables.length - 1] + trailingPunct;
+          if (cleanWord.length > 3) {
+            const rawSyllables = getSyllables(cleanWord);
+            if (rawSyllables.length > 1) {
+              const syllables = [...rawSyllables];
+              syllables[0] = leadingPunct + syllables[0];
+              syllables[syllables.length - 1] = syllables[syllables.length - 1] + trailingPunct;
 
-            let hyphenated = false;
-            for (let k = syllables.length - 1; k >= 1; k--) {
-              const prefix = syllables.slice(0, k).join('') + '-';
-              const suffix = syllables.slice(k).join('');
-              const testLine = line ? `${line} ${prefix}` : prefix;
+              let hyphenated = false;
+              for (let k = syllables.length - 1; k >= 1; k--) {
+                const prefixText = syllables.slice(0, k).join('') + '-';
+                const suffixText = syllables.slice(k).join('');
 
-              if (context.measureText(testLine).width <= maxWidth) {
-                lines.push(testLine);
-                line = suffix;
-                hyphenated = true;
-                break;
+                const prefixToken = { ...token, text: prefixText };
+                const suffixToken = { ...token, text: suffixText };
+
+                const testTokensWithHyphen = [...currentLineTokens, prefixToken];
+                const testStringWithHyphen = serializeTokens(testTokensWithHyphen);
+
+                if (measureTextWidth(context, testStringWithHyphen) <= maxWidth) {
+                  currentLineTokens.push(prefixToken);
+                  while (currentLineTokens.length > 0 && currentLineTokens[currentLineTokens.length - 1].isSpace) {
+                    currentLineTokens.pop();
+                  }
+                  lines.push(serializeTokens(currentLineTokens));
+                  currentLineTokens = [suffixToken];
+                  hyphenated = true;
+                  break;
+                }
               }
-            }
 
-            if (hyphenated) {
-              continue;
+              if (hyphenated) {
+                continue;
+              }
             }
           }
         }
       }
 
-      lines.push(line);
-      line = word;
+      while (currentLineTokens.length > 0 && currentLineTokens[currentLineTokens.length - 1].isSpace) {
+        currentLineTokens.pop();
+      }
+      lines.push(serializeTokens(currentLineTokens));
+      currentLineTokens = [token];
     }
 
-    if (line) lines.push(line);
-    if (paragraphIndex < paragraphs.length - 1) lines.push('');
+    if (currentLineTokens.length > 0) {
+      while (currentLineTokens.length > 0 && currentLineTokens[currentLineTokens.length - 1].isSpace) {
+        currentLineTokens.pop();
+      }
+      lines.push(serializeTokens(currentLineTokens));
+    }
+
+    if (paragraphIndex < paragraphs.length - 1) {
+      lines.push('');
+    }
   });
 
   return lines;
@@ -1103,7 +1594,7 @@ const drawJustifiedLine = (context, line, x, y, maxWidth) => {
   });
 };
 
-const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate = false) => {
+const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate = false, resourceImages = {}) => {
   const hasUserText = textValue.trim().length > 0;
   const text = hasUserText ? textValue.trim() : previewText;
   if (!text || !layout) return;
@@ -1131,18 +1622,16 @@ const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate =
   const fitted = fitDescriptionFont(context, text, dynamicLayout, hyphenate);
   const style = dynamicLayout.italic ? 'italic ' : '';
   const family = dynamicLayout.family || "Georgia, serif";
-  context.font = `${style}400 ${fitted.size}px ${family}`;
+  context.font = `${style}${dynamicLayout.weight || '400'} ${fitted.size}px ${family}`;
 
-  const textHeight = fitted.lines.length * fitted.lineHeight;
-  const verticalOffset = Math.max(0, (dynamicLayout.height - textHeight) / 2);
-  let y = dynamicLayout.y + verticalOffset;
+  let y = dynamicLayout.y;
   fitted.lines.forEach((line, index) => {
     if (y + fitted.lineHeight > dynamicLayout.y + dynamicLayout.height) return;
     if (line) {
       if (shouldJustifyLine(fitted.lines, index)) {
-        drawJustifiedLine(context, line, dynamicLayout.x, y, dynamicLayout.width);
+        drawTextLineWithIcons(context, line, dynamicLayout.x, y, dynamicLayout.width, true, resourceImages);
       } else {
-        context.fillText(line, dynamicLayout.x, y);
+        drawTextLineWithIcons(context, line, dynamicLayout.x, y, dynamicLayout.width, false, resourceImages);
       }
     }
     y += fitted.lineHeight;
@@ -1151,16 +1640,16 @@ const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate =
   context.restore();
 };
 
-const drawDescription = (context, description, flavorText, typeConfig, showTraits, hyphenate = false) => {
-  const layouts = getDescriptionLayouts(typeConfig, showTraits);
+const drawDescription = (context, description, flavorText, typeConfig, showTraits, hyphenate = false, singleTextStyle = 'narrative', resourceImages = {}, visibleTraitRows = 3) => {
+  const layouts = getDescriptionLayouts(typeConfig, showTraits, singleTextStyle, visibleTraitRows);
 
   if (layouts.primary) {
-    drawTextBlock(context, description, layouts.primary, PRIMARY_DESCRIPTION_PREVIEW_TEXT, hyphenate);
-    drawTextBlock(context, flavorText, layouts.flavor, FLAVOR_DESCRIPTION_PREVIEW_TEXT, hyphenate);
+    drawTextBlock(context, description, layouts.primary, PRIMARY_DESCRIPTION_PREVIEW_TEXT, hyphenate, resourceImages);
+    drawTextBlock(context, flavorText, layouts.flavor, FLAVOR_DESCRIPTION_PREVIEW_TEXT, hyphenate, resourceImages);
     return;
   }
 
-  drawTextBlock(context, description, layouts.flavor, DESCRIPTION_PREVIEW_TEXT, hyphenate);
+  drawTextBlock(context, description, layouts.flavor, DESCRIPTION_PREVIEW_TEXT, hyphenate, resourceImages);
 };
 
 const drawCardCanvas = (
@@ -1186,6 +1675,8 @@ const drawCardCanvas = (
   elementIconImg = null,
   customColorActive = false,
   customColor = '#c8aa6e',
+  singleTextStyle = 'narrative',
+  visibleTraitRows = 3,
 ) => {
   const context = canvas.getContext('2d');
 
@@ -1260,9 +1751,13 @@ const drawCardCanvas = (
 
   // Draw weapon interface if cardType is weapon or armor or action!
   if (cardType === 'weapon') {
-    // 1. Draw Dice
-    if (diceIconImg) {
-      drawDiceIcon(context, 290, 615, 200, diceIconImg, diceQty);
+    // 1. Draw Dice or Element Icon
+    if (elementIconImg) {
+      context.save();
+      context.drawImage(elementIconImg, 290 - 200/2, 615 - 200/2, 200, 200);
+      context.restore();
+    } else if (diceIconImg) {
+      drawDiceIcon(context, 290, 615, 200, diceIconImg, diceQty, diceType !== 'DX');
     }
 
     // 2. Draw Ruler (width increased to 720, label lowered to 635)
@@ -1299,19 +1794,23 @@ const drawCardCanvas = (
 
   const typeConfig = CARD_TYPES.find((type) => type.id === cardType) || CARD_TYPES[0];
   if (showTraits && typeConfig.maxTraits > 0) {
-    const slotLabels = traits.slice(0, typeConfig.maxTraits);
-    getTraitSlots(typeConfig.layout).slice(0, typeConfig.maxTraits).forEach((slot, index) => {
+    const activeRows = typeConfig.maxTraits > 2 ? Math.min(visibleTraitRows, typeConfig.maxTraits / 2) : 1;
+    const activeTraitsCount = typeConfig.maxTraits > 2 ? activeRows * 2 : typeConfig.maxTraits;
+    const slotLabels = traits.slice(0, activeTraitsCount);
+    getTraitSlots(typeConfig.layout).slice(0, activeTraitsCount).forEach((slot, index) => {
       drawTraitBadge(context, slot, slotLabels[index] || '');
     });
   }
 
   if (cardType !== 'action') {
-    drawDescription(context, description, flavorText, typeConfig, showTraits, hyphenate);
+    drawDescription(context, description, flavorText, typeConfig, showTraits, hyphenate, singleTextStyle, resourceImages, visibleTraitRows);
   }
 };
 
 const CardBuilder = ({ onBack, mode = 'player' }) => {
   const canvasRef = useRef(null);
+  const descriptionRef = useRef(null);
+  const flavorTextRef = useRef(null);
   const imageCacheRef = useRef(new Map());
   const activeImageRef = useRef(null);
   const fontLoadPromiseRef = useRef(null);
@@ -1319,13 +1818,16 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
   const [cardName, setCardName] = useState('Gris');
   const [description, setDescription] = useState(DEFAULT_DESCRIPTION);
   const [flavorText, setFlavorText] = useState(DEFAULT_FLAVOR_TEXT);
+  const [focusedField, setFocusedField] = useState(null);
   const [hyphenate, setHyphenate] = useState(true);
+  const [singleTextStyle, setSingleTextStyle] = useState('narrative'); // 'narrative' or 'principal'
   const [cardType, setCardType] = useState('weapon');
   const [showTraits, setShowTraits] = useState(true);
+  const [visibleTraitRows, setVisibleTraitRows] = useState(3);
   const [traits, setTraits] = useState(DEFAULT_TRAITS);
   const [selectedBackground, setSelectedBackground] = useState('Gris.webp');
   const [imageStatus, setImageStatus] = useState('loading');
-  const [selectedElement, setSelectedElement] = useState('Fuego');
+  const [selectedElement, setSelectedElement] = useState('Ninguno');
   const [customColorActive, setCustomColorActive] = useState(false);
   const [customColor, setCustomColor] = useState('#c8aa6e');
 
@@ -1337,6 +1839,82 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
   const [chargeSlots, setChargeSlots] = useState(DEFAULT_CHARGE_SLOTS);
   const [consumptionSlots, setConsumptionSlots] = useState(DEFAULT_CONSUMPTION_SLOTS);
   const [resourceMode, setResourceMode] = useState(RESOURCE_MODE_BOTH);
+  const [consumptionSlotTypes, setConsumptionSlotTypes] = useState(['consumption', 'consumption', 'consumption', 'consumption', 'consumption']);
+
+  // History system for undo/redo
+  const descriptionHistoryRef = useRef({ past: [], future: [] });
+  const flavorTextHistoryRef = useRef({ past: [], future: [] });
+  const lastHistoryPushRef = useRef(0);
+
+  const saveToHistory = (historyRef, currentValue) => {
+    const hist = historyRef.current;
+    const lastPast = hist.past[hist.past.length - 1];
+    if (lastPast === currentValue) return;
+
+    const now = Date.now();
+    const isSingleCharDiff = lastPast && Math.abs(lastPast.length - currentValue.length) === 1;
+    if (isSingleCharDiff && now - lastHistoryPushRef.current < 1500 && hist.past.length > 0) {
+      lastHistoryPushRef.current = now;
+      return;
+    }
+
+    hist.past.push(currentValue);
+    if (hist.past.length > 100) {
+      hist.past.shift();
+    }
+    hist.future = [];
+    lastHistoryPushRef.current = now;
+  };
+
+  const handleDescriptionChange = (newVal) => {
+    saveToHistory(descriptionHistoryRef, description);
+    setDescription(newVal);
+  };
+
+  const handleFlavorTextChange = (newVal) => {
+    saveToHistory(flavorTextHistoryRef, flavorText);
+    setFlavorText(newVal);
+  };
+
+  const handleTextareaKeyDown = (event, ref, stateSetter, historyRef, currentValue) => {
+    const isUndo = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z';
+    const isRedo = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y';
+
+    if (isUndo) {
+      event.preventDefault();
+      const hist = historyRef.current;
+      if (hist.past.length > 0) {
+        const previousValue = hist.past.pop();
+        hist.future.push(currentValue);
+        stateSetter(previousValue);
+      }
+    } else if (isRedo) {
+      event.preventDefault();
+      const hist = historyRef.current;
+      if (hist.future.length > 0) {
+        const nextValue = hist.future.pop();
+        hist.past.push(currentValue);
+        stateSetter(nextValue);
+      }
+    }
+  };
+
+  // Auto-detect if slot contains an element to sync UI dropdown toggle state
+  useEffect(() => {
+    setConsumptionSlotTypes((prev) => {
+      const next = [...prev];
+      let changed = false;
+      consumptionSlots.forEach((slot, index) => {
+        const isElement = ELEMENT_TYPES.some((el) => el.id !== 'Ninguno' && el.id === slot);
+        const expectedType = isElement ? 'element' : 'consumption';
+        if (next[index] !== expectedType && slot !== '') {
+          next[index] = expectedType;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [consumptionSlots]);
 
   // Automatically detect weapon type from cardName
   useEffect(() => {
@@ -1451,6 +2029,12 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       const resourceOptions = [
         ...CHARGE_TYPES.map((option) => ({ ...option, cacheKey: `charge:${option.id}` })),
         ...CONSUMPTION_TYPES.map((option) => ({ ...option, cacheKey: `consumption:${option.id}` })),
+        ...ELEMENT_TYPES.filter((option) => option.id !== 'Ninguno').map((option) => ({
+          id: option.id,
+          label: option.label,
+          src: `/elementos/${option.id}.webp`,
+          cacheKey: `consumption:${option.id}`,
+        })),
       ];
       const requiredResourceOptions = resourceOptions.filter((option) => (
         loadsChargeResources && chargeSlots.includes(option.id) && option.cacheKey.startsWith('charge:')
@@ -1482,8 +2066,9 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     }
 
     let elementIconImg = null;
-    if (cardType === 'status') {
-      const elementSrc = `${process.env.PUBLIC_URL || ''}/elementos/${selectedElement}.webp`;
+    if ((cardType === 'status' || cardType === 'weapon') && selectedElement !== 'Ninguno') {
+      const suffix = cardType === 'weapon' ? '_p' : '';
+      const elementSrc = `${process.env.PUBLIC_URL || ''}/elementos/${selectedElement}${suffix}.webp`;
       elementIconImg = imageCacheRef.current.get(elementSrc);
       if (!elementIconImg) {
         try {
@@ -1499,6 +2084,35 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
           console.error("Could not load element icon image:", e);
         }
       }
+    }
+
+    // 1.5 Load Keyword Icon Images if mentioned in text
+    const textToScan = `${description} ${flavorText}`;
+    const matchedKeywords = Array.from(new Set(textToScan.match(KEYWORD_REGEX) || []));
+    if (matchedKeywords.length > 0) {
+      await Promise.all(matchedKeywords.map(async (kwMatch) => {
+        const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === kwMatch.toLowerCase());
+        if (!matchedKw) return;
+        const src = `${process.env.PUBLIC_URL || ''}${KEYWORD_ICONS[matchedKw]}`;
+        let icon = imageCacheRef.current.get(src);
+        if (!icon) {
+          try {
+            icon = await new Promise((resolve, reject) => {
+              const img = new Image();
+              img.decoding = 'async';
+              img.src = src;
+              img.onload = () => resolve(img);
+              img.onerror = reject;
+            });
+            imageCacheRef.current.set(src, icon);
+          } catch (e) {
+            console.error(`Could not load keyword icon: ${matchedKw}`, e);
+          }
+        }
+        if (icon) {
+          resourceImages[`keyword:${matchedKw}`] = icon;
+        }
+      }));
     }
 
     if (drawId !== drawSequenceRef.current) return undefined;
@@ -1527,11 +2141,13 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       elementIconImg,
       customColorActive,
       customColor,
+      singleTextStyle,
+      visibleTraitRows,
     );
 
     setImageStatus('ready');
     return undefined;
-  }, [activeBackground, cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor]);
+  }, [activeBackground, cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle, visibleTraitRows]);
 
   useEffect(() => {
     let cleanup;
@@ -1571,6 +2187,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     setHyphenate(true);
     setCardType('weapon');
     setShowTraits(true);
+    setVisibleTraitRows(3);
     setTraits(DEFAULT_TRAITS);
     setSelectedBackground('Gris.webp');
     setWeaponType('Cuerpo a cuerpo');
@@ -1580,7 +2197,8 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     setChargeSlots(DEFAULT_CHARGE_SLOTS);
     setConsumptionSlots(DEFAULT_CONSUMPTION_SLOTS);
     setResourceMode(RESOURCE_MODE_BOTH);
-    setSelectedElement('Fuego');
+    setConsumptionSlotTypes(['consumption', 'consumption', 'consumption', 'consumption', 'consumption']);
+    setSelectedElement('Ninguno');
     setCustomColorActive(false);
     setCustomColor('#c8aa6e');
   };
@@ -1617,6 +2235,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
   const handleTypeChange = (typeId) => {
     setCardType(typeId);
     if (typeId === 'trap') {
+      setVisibleTraitRows(1);
       setShowTraits(true);
       setTraits((currentTraits) => {
         const nextTraits = [...currentTraits];
@@ -1624,6 +2243,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
         return nextTraits;
       });
     } else if (typeId === 'status') {
+      setVisibleTraitRows(1);
       setShowTraits(true);
       setTraits((currentTraits) => {
         const nextTraits = [...currentTraits];
@@ -1631,13 +2251,16 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
         return nextTraits;
       });
       setCardName((name) => name === 'Gris' ? 'ARDIENDO' : name);
+      setSelectedElement('Fuego');
     } else if (typeId === 'armor') {
+      setVisibleTraitRows(4);
       setConsumptionSlots((currentSlots) => {
-        const nextSlots = [...currentSlots];
-        nextSlots[0] = 'Armadura_1';
-        return nextSlots;
+        return currentSlots.map((slot, index) => (
+          index === 0 ? 'Armadura_1' : slot === 'Armadura_1' ? slot : EMPTY_SLOT
+        ));
       });
     } else if (typeId === 'action') {
+      setVisibleTraitRows(0);
       setDiceQty((qty) => Math.min(6, qty));
       setConsumptionSlots((currentSlots) => {
         const nextSlots = [...currentSlots];
@@ -1645,12 +2268,178 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
         return nextSlots;
       });
     } else if (typeId === 'weapon') {
+      setVisibleTraitRows(3);
       setConsumptionSlots((currentSlots) => {
         const nextSlots = [...currentSlots];
         nextSlots[0] = 'Tiempo';
         return nextSlots;
       });
+    } else {
+      setVisibleTraitRows(3);
     }
+  };
+
+  const findAnyEnclosingColorTag = (text, start, end) => {
+    let tempStart = start;
+    while (tempStart >= 16) {
+      const sub = text.substring(tempStart - 16, tempStart);
+      const match = sub.match(/\[color:(#[0-9a-fA-F]{6})\]\{$/);
+      if (match) {
+        const prefixColor = match[1];
+        const prefixLength = match[0].length;
+
+        let tempEnd = end;
+        while (tempEnd < text.length) {
+          if (text[tempEnd] === '}') {
+            const insideText = text.substring(tempStart, tempEnd);
+            let openBraces = 0;
+            let hasMismatch = false;
+            for (let char of insideText) {
+              if (char === '{') openBraces++;
+              if (char === '}') {
+                if (openBraces === 0) {
+                  hasMismatch = true;
+                  break;
+                }
+                openBraces--;
+              }
+            }
+            if (!hasMismatch && openBraces === 0) {
+              return {
+                found: true,
+                startIdx: tempStart - prefixLength,
+                endIdx: tempEnd + 1,
+                innerText: insideText,
+                color: prefixColor
+              };
+            }
+          }
+          tempEnd++;
+        }
+      }
+      tempStart--;
+    }
+    return { found: false };
+  };
+
+  const applyFormat = (ref, formatType, colorVal = '') => {
+    const textarea = ref.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    const selectedText = text.substring(start, end);
+
+    let formatted = selectedText;
+    let newStart = start;
+    let newEnd = end;
+
+    if (formatType === 'bold') {
+      if (selectedText.startsWith('**') && selectedText.endsWith('**')) {
+        formatted = selectedText.slice(2, -2);
+      } else {
+        formatted = `**${selectedText}**`;
+      }
+    } else if (formatType === 'italic') {
+      if (selectedText.startsWith('*') && !selectedText.startsWith('**') && selectedText.endsWith('*') && !selectedText.endsWith('**')) {
+        formatted = selectedText.slice(1, -1);
+      } else {
+        formatted = `*${selectedText}*`;
+      }
+    } else if (formatType === 'color') {
+      const anyColorMatch = selectedText.match(/^\[color:(#[0-9a-fA-F]{6})\]\{(.*)\}$/);
+      if (anyColorMatch) {
+        const existingColor = anyColorMatch[1];
+        const innerText = anyColorMatch[2];
+        if (existingColor === colorVal) {
+          formatted = innerText;
+        } else {
+          formatted = `[color:${colorVal}]{${innerText}}`;
+        }
+      } else {
+        const enclosing = findAnyEnclosingColorTag(text, start, end);
+        if (enclosing.found) {
+          if (enclosing.color === colorVal) {
+            formatted = enclosing.innerText;
+            newStart = enclosing.startIdx;
+            newEnd = enclosing.endIdx;
+          } else {
+            formatted = `[color:${colorVal}]{${enclosing.innerText}}`;
+            newStart = enclosing.startIdx;
+            newEnd = enclosing.endIdx;
+          }
+        } else {
+          formatted = `[color:${colorVal}]{${selectedText}}`;
+        }
+      }
+    }
+
+    const newText = text.substring(0, newStart) + formatted + text.substring(newEnd);
+    
+    if (ref === descriptionRef) {
+      saveToHistory(descriptionHistoryRef, description);
+      setDescription(newText);
+    } else if (ref === flavorTextRef) {
+      saveToHistory(flavorTextHistoryRef, flavorText);
+      setFlavorText(newText);
+    }
+
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(newStart, newStart + formatted.length);
+    }, 0);
+  };
+
+  const renderToolbar = (ref, fieldId) => {
+    const presetColors = [
+      { name: 'Dorado', value: '#c8aa6e' },
+      { name: 'Rojo', value: '#ff4d4d' },
+      { name: 'Verde', value: '#5cd65c' },
+      { name: 'Azul', value: '#33adff' },
+      { name: 'Morado', value: '#b366ff' },
+      { name: 'Blanco', value: '#ffffff' },
+    ];
+
+    const isFocused = focusedField === fieldId;
+    const borderClass = isFocused
+      ? 'border-[#c8aa6e]/70 shadow-[0_-4px_12px_rgba(200,170,110,0.06),_4px_0_12px_rgba(200,170,110,0.06),_-4px_0_12px_rgba(200,170,110,0.06)]'
+      : 'border-[#c8aa6e]/25';
+
+    return (
+      <div className={`flex flex-wrap items-center justify-between gap-2 border border-b-0 bg-[#09090b]/90 px-3 py-1.5 rounded-t-md transition-all duration-200 ${borderClass}`}>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => applyFormat(ref, 'bold')}
+            className="h-6 px-2.5 text-[10px] font-extrabold uppercase tracking-wider border border-slate-800 bg-[#09090b]/40 text-slate-300 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e] cursor-pointer flex items-center justify-center transition"
+            title="Negrita"
+          >
+            B
+          </button>
+          <button
+            type="button"
+            onClick={() => applyFormat(ref, 'italic')}
+            className="h-6 px-2.5 text-[10px] font-extrabold italic uppercase tracking-wider border border-slate-800 bg-[#09090b]/40 text-slate-300 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e] cursor-pointer flex items-center justify-center transition"
+            title="Cursiva"
+          >
+            I
+          </button>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {presetColors.map((color) => (
+            <button
+              key={color.value}
+              type="button"
+              onClick={() => applyFormat(ref, 'color', color.value)}
+              className="h-4 w-4 rounded-full border border-black/40 cursor-pointer hover:scale-125 hover:shadow-[0_0_8px_rgba(200,170,110,0.5)] transition"
+              style={{ backgroundColor: color.value }}
+              title={color.name}
+            />
+          ))}
+        </div>
+      </div>
+    );
   };
 
   const handleDownload = () => {
@@ -1797,7 +2586,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                       <select
                         value={weaponType}
                         onChange={(event) => setWeaponType(event.target.value)}
-                        className="w-full border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 py-2 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70"
+                        className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
                       >
                         {WEAPON_TYPES.map((type) => (
                           <option key={type} value={type}>
@@ -1829,10 +2618,27 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                         ))}
                       </div>
                     </div>
+                    {/* 3. Elemento / Estado */}
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        Elemento / Estado
+                      </label>
+                      <select
+                        value={selectedElement}
+                        onChange={(event) => setSelectedElement(event.target.value)}
+                        className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
+                      >
+                        {ELEMENT_TYPES.map((type) => (
+                          <option key={type.id} value={type.id}>
+                            {type.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </>
                 )}
 
-                {(cardType === 'weapon' || cardType === 'action') && (
+                {(cardType === 'weapon' || cardType === 'action') && (cardType !== 'weapon' || selectedElement === 'Ninguno') && (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -1841,9 +2647,9 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                       <select
                         value={diceType}
                         onChange={(event) => setDiceType(event.target.value)}
-                        className="w-full border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 py-2 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70"
+                        className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
                       >
-                        {['D4', 'D6', 'D8', 'D10', 'D12'].map((type) => (
+                        {['D4', 'D6', 'D8', 'D10', 'D12', 'DX'].map((type) => (
                           <option key={type} value={type}>
                             {type}
                           </option>
@@ -1855,32 +2661,38 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                       <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                         Cantidad de Dados
                       </label>
-                      <div className="grid grid-cols-[2.5rem_1fr_2.5rem] border border-[#c8aa6e]/20 bg-[#09090b]/80">
-                        <button
-                          type="button"
-                          onClick={() => handleDiceQtyChange(diceQty - 1)}
-                          className="flex items-center justify-center border-r border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10"
-                          aria-label="Reducir cantidad de dados"
-                        >
-                          -
-                        </button>
-                        <input
-                          type="number"
-                          min={1}
-                          max={cardType === 'action' ? 6 : 9}
-                          value={diceQty}
-                          onChange={(event) => handleDiceQtyChange(parseInt(event.target.value, 10) || 1)}
-                          className="w-full bg-transparent px-2 py-2 text-center text-sm font-bold text-[#f0e6d2] outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleDiceQtyChange(diceQty + 1)}
-                          className="flex items-center justify-center border-l border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10"
-                          aria-label="Aumentar cantidad de dados"
-                        >
-                          +
-                        </button>
-                      </div>
+                      {diceType === 'DX' ? (
+                        <div className="flex items-center justify-center h-[38px] border border-slate-800 bg-[#09090b]/60 px-2 text-[9px] sm:text-[10px] uppercase tracking-[0.12em] text-slate-500 text-center leading-tight">
+                          Dado variable. Depende de otros factores.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-[2.5rem_1fr_2.5rem] h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80">
+                          <button
+                            type="button"
+                            onClick={() => handleDiceQtyChange(diceQty - 1)}
+                            className="flex items-center justify-center border-r border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10 h-full cursor-pointer"
+                            aria-label="Reducir cantidad de dados"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            min={1}
+                            max={cardType === 'action' ? 6 : 9}
+                            value={diceQty}
+                            onChange={(event) => handleDiceQtyChange(parseInt(event.target.value, 10) || 1)}
+                            className="w-full h-full bg-transparent px-2 text-center text-sm font-bold text-[#f0e6d2] outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleDiceQtyChange(diceQty + 1)}
+                            className="flex items-center justify-center border-l border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10 h-full cursor-pointer"
+                            aria-label="Aumentar cantidad de dados"
+                          >
+                            +
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1955,9 +2767,11 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                   </label>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {consumptionSlots.map((slot, index) => (
-                      <label
+                      <div
                         key={`consumption-slot-${index}`}
-                        className="grid grid-cols-[1.75rem_1fr] items-center border border-[#c8aa6e]/20 bg-[#09090b]/80"
+                        className={`grid items-center border border-[#c8aa6e]/20 bg-[#09090b]/80 ${
+                          cardType === 'armor' ? 'grid-cols-[1.75rem_minmax(0,1fr)]' : 'grid-cols-[1.5rem_minmax(0,1fr)_2.25rem]'
+                        }`}
                       >
                         <span className="border-r border-[#c8aa6e]/15 py-2 text-center text-[10px] font-black text-[#c8aa6e]">
                           {index + 1}
@@ -1965,17 +2779,53 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                         <select
                           value={slot}
                           onChange={(event) => handleConsumptionSlotChange(index, event.target.value)}
-                          className="min-w-0 bg-transparent px-2 py-2 text-xs font-bold uppercase text-[#f0e6d2] outline-none"
+                          className={`min-w-0 bg-transparent py-2 font-bold uppercase text-[#f0e6d2] outline-none cursor-pointer h-full ${
+                            cardType !== 'armor' && slot === 'Armadura_1'
+                              ? 'px-1 text-[10px] tracking-normal'
+                              : 'px-2 text-xs'
+                          }`}
                           aria-label={cardType === 'weapon' ? `Consumo ${index + 1}` : cardType === 'armor' ? `Armadura ${index + 1}` : `Consumo ${index + 1}`}
                         >
                           <option value="">Vacío</option>
-                          {CONSUMPTION_TYPES.map((option) => (
-                            <option key={option.id} value={option.id}>
-                              {option.label}
-                            </option>
-                          ))}
+                          {cardType === 'armor'
+                            ? CONSUMPTION_TYPES.filter((option) => option.id === 'Armadura_1').map((option) => (
+                                <option key={option.id} value={option.id}>
+                                  {option.label}
+                                </option>
+                              ))
+                            : (consumptionSlotTypes[index] || 'consumption') === 'consumption'
+                            ? CONSUMPTION_TYPES.map((option) => (
+                                <option key={option.id} value={option.id}>
+                                  {option.label}
+                                </option>
+                              ))
+                            : ELEMENT_TYPES.filter((type) => type.id !== 'Ninguno').map((type) => (
+                                <option key={type.id} value={type.id}>
+                                  {type.label}
+                                </option>
+                              ))}
                         </select>
-                      </label>
+                        {cardType !== 'armor' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextTypes = [...consumptionSlotTypes];
+                              const currentType = nextTypes[index] || 'consumption';
+                              nextTypes[index] = currentType === 'consumption' ? 'element' : 'consumption';
+                              setConsumptionSlotTypes(nextTypes);
+                              handleConsumptionSlotChange(index, '');
+                            }}
+                            className={`h-full border-l border-[#c8aa6e]/15 text-[9px] sm:text-[10px] font-bold uppercase transition flex items-center justify-center cursor-pointer select-none ${
+                              (consumptionSlotTypes[index] || 'consumption') === 'consumption'
+                                ? 'text-[#c8aa6e] bg-[#c8aa6e]/5 hover:bg-[#c8aa6e]/15'
+                                : 'text-teal-400 bg-teal-500/10 hover:bg-teal-500/20'
+                            }`}
+                            title={(consumptionSlotTypes[index] || 'consumption') === 'consumption' ? "Cambiar a Elemento" : "Cambiar a Consumo"}
+                          >
+                            {(consumptionSlotTypes[index] || 'consumption') === 'consumption' ? 'CON' : 'ELE'}
+                          </button>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -1988,7 +2838,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                     <select
                       value={selectedElement}
                       onChange={(event) => setSelectedElement(event.target.value)}
-                      className="w-full border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 py-2 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70"
+                      className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
                     >
                       {ELEMENT_TYPES.map((type) => (
                         <option key={type.id} value={type.id}>
@@ -2003,41 +2853,69 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
 
             {activeType.id !== 'action' && (
               <div className="space-y-2">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center justify-between gap-3 pb-1">
                   <label className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
                     <Type className="h-4 w-4" />
                     {hasSplitDescription ? 'Texto principal' : 'Descripción'}
                   </label>
-                  <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                  <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={hyphenate}
                       onChange={(event) => setHyphenate(event.target.checked)}
-                      className="h-4 w-4 accent-[#c8aa6e]"
+                      className="h-4 w-4 accent-[#c8aa6e] cursor-pointer"
                     />
                     Guionizar
                   </label>
                 </div>
+                {renderToolbar(descriptionRef, 'description')}
                 <textarea
+                  ref={descriptionRef}
                   value={description}
-                  onChange={(event) => setDescription(event.target.value)}
+                  onChange={(event) => handleDescriptionChange(event.target.value)}
+                  onKeyDown={(event) => handleTextareaKeyDown(event, descriptionRef, setDescription, descriptionHistoryRef, description)}
+                  onFocus={() => setFocusedField('description')}
+                  onBlur={() => setFocusedField(null)}
                   rows={hasSplitDescription ? 4 : 5}
                   maxLength={hasSplitDescription ? 360 : 520}
-                  className="min-h-[112px] w-full resize-y border border-[#c8aa6e]/25 bg-[#09090b]/80 px-4 py-3 text-base font-semibold leading-relaxed text-[#f0e6d2] outline-none transition placeholder:text-slate-600 focus:border-[#c8aa6e]/70"
+                  className="min-h-[112px] w-full resize-y border border-t-0 border-[#c8aa6e]/25 bg-[#09090b]/80 px-4 py-3 text-base font-semibold leading-relaxed text-[#f0e6d2] outline-none transition placeholder:text-slate-600 focus:border-[#c8aa6e]/70 focus:shadow-[0_4px_12px_rgba(200,170,110,0.06),_4px_0_12px_rgba(200,170,110,0.06),_-4px_0_12px_rgba(200,170,110,0.06)] rounded-b-md"
                   placeholder={hasSplitDescription ? 'Descripción de la carta' : 'Texto descriptivo de la carta'}
                 />
+                {!hasSplitDescription && (
+                  <div className="flex justify-center gap-1.5 pt-1.5">
+                    {['narrative', 'principal'].map((styleOpt) => (
+                      <button
+                        key={styleOpt}
+                        type="button"
+                        onClick={() => setSingleTextStyle(styleOpt)}
+                        className={`border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] transition cursor-pointer ${
+                          singleTextStyle === styleOpt
+                            ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                            : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                        }`}
+                      >
+                        {styleOpt === 'narrative' ? 'Narrativo' : 'Principal'}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {hasSplitDescription && (
                   <div className="space-y-2 pt-2">
-                    <label className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
+                    <label className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e] pb-1">
                       <Type className="h-4 w-4" />
                       Texto narrativo
                     </label>
+                    {renderToolbar(flavorTextRef, 'flavorText')}
                     <textarea
+                      ref={flavorTextRef}
                       value={flavorText}
-                      onChange={(event) => setFlavorText(event.target.value)}
+                      onChange={(event) => handleFlavorTextChange(event.target.value)}
+                      onKeyDown={(event) => handleTextareaKeyDown(event, flavorTextRef, setFlavorText, flavorTextHistoryRef, flavorText)}
+                      onFocus={() => setFocusedField('flavorText')}
+                      onBlur={() => setFocusedField(null)}
                       rows={5}
                       maxLength={560}
-                      className="min-h-[132px] w-full resize-y border border-[#c8aa6e]/25 bg-[#09090b]/80 px-4 py-3 text-base font-semibold italic leading-relaxed text-[#f0e6d2] outline-none transition placeholder:text-slate-600 focus:border-[#c8aa6e]/70"
+                      className="min-h-[132px] w-full resize-y border border-t-0 border-[#c8aa6e]/25 bg-[#09090b]/80 px-4 py-3 text-base font-semibold italic leading-relaxed text-[#f0e6d2] outline-none transition placeholder:text-slate-600 focus:border-[#c8aa6e]/70 focus:shadow-[0_4px_12px_rgba(200,170,110,0.06),_4px_0_12px_rgba(200,170,110,0.06),_-4px_0_12px_rgba(200,170,110,0.06)] rounded-b-md"
                       placeholder="Texto descriptivo de la carta"
                     />
                   </div>
@@ -2069,17 +2947,46 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                   Este tipo no usa rasgos.
                 </div>
               ) : showTraits ? (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1">
-                  {Array.from({ length: activeType.maxTraits }).map((_, index) => (
-                    <input
-                      key={`${cardType}-trait-${index}`}
-                      value={traits[index] || ''}
-                      onChange={(event) => handleTraitChange(index, event.target.value)}
-                      maxLength={22}
-                      className="w-full border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 py-2 text-sm font-bold uppercase tracking-[0.08em] text-[#f0e6d2] outline-none transition placeholder:text-slate-700 focus:border-[#c8aa6e]/70"
-                      placeholder={cardType === 'trap' ? 'TRAMPA' : `Rasgo ${index + 1}`}
-                    />
-                  ))}
+                <div className="space-y-3">
+                  {activeType.maxTraits > 2 && (
+                    <div className="flex items-center justify-between gap-2 border-b border-[#c8aa6e]/10 pb-3">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                        Filas / Pares visibles
+                      </div>
+                      <div className="flex gap-1">
+                        {Array.from({ length: activeType.maxTraits / 2 }).map((_, i) => {
+                          const rowVal = i + 1;
+                          const isSelected = visibleTraitRows === rowVal;
+                          return (
+                            <button
+                              key={`visible-rows-${rowVal}`}
+                              type="button"
+                              onClick={() => setVisibleTraitRows(rowVal)}
+                              className={`h-7 w-10 border text-[10px] font-bold transition cursor-pointer flex items-center justify-center ${
+                                isSelected
+                                  ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                                  : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                              }`}
+                            >
+                              {rowVal}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1">
+                    {Array.from({ length: activeType.maxTraits > 2 ? Math.min(visibleTraitRows, activeType.maxTraits / 2) * 2 : activeType.maxTraits }).map((_, index) => (
+                      <input
+                        key={`${cardType}-trait-${index}`}
+                        value={traits[index] || ''}
+                        onChange={(event) => handleTraitChange(index, event.target.value)}
+                        maxLength={22}
+                        className="w-full border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 py-2 text-sm font-bold uppercase tracking-[0.08em] text-[#f0e6d2] outline-none transition placeholder:text-slate-700 focus:border-[#c8aa6e]/70"
+                        placeholder={cardType === 'trap' ? 'TRAMPA' : `Rasgo ${index + 1}`}
+                      />
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <div className="border border-slate-800 bg-[#09090b]/60 px-3 py-3 text-xs uppercase tracking-[0.16em] text-slate-500">
@@ -2155,11 +3062,19 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
             </div>
           </aside>
 
-          <main className="sticky top-0 z-10 order-1 flex min-h-[520px] items-center justify-center overflow-x-hidden border border-[#c8aa6e]/15 bg-[#05070d]/30 p-4 md:p-8 lg:static lg:order-2 lg:min-h-[620px] lg:items-start lg:justify-center lg:overflow-hidden">
+          <main 
+            onClick={() => {
+              if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                document.activeElement.blur();
+              }
+              window.getSelection()?.removeAllRanges();
+            }}
+            className="sticky top-0 z-10 order-1 flex min-h-[520px] items-center justify-center overflow-hidden border border-[#c8aa6e]/15 bg-[#05070d]/30 p-3 md:p-8 lg:relative lg:order-2 lg:min-h-[620px] lg:items-start lg:justify-center lg:overflow-visible"
+          >
             <div className="pointer-events-none absolute inset-0 bg-[#05070d]/50" />
-            <div className="relative flex h-full w-full max-w-full items-center justify-center lg:sticky lg:top-8 lg:self-start lg:h-fit lg:w-full lg:items-start">
+            <div className="relative flex h-full w-full max-w-full items-center justify-center lg:sticky lg:top-12 lg:self-start lg:h-fit lg:w-full lg:items-start">
               <div 
-                className="relative w-full max-w-[335px] sm:max-w-[440px] lg:max-w-[520px] shrink-0"
+                className="relative w-full max-w-[380px] sm:max-w-[460px] lg:max-w-[520px] lg:max-h-[calc(100vh-220px)] shrink-0 select-none"
                 style={{ aspectRatio: '1888/2624' }}
               >
                 {/* Glow radial centrado exactamente detrás de la previsualización de la carta */}
@@ -2169,7 +3084,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                   ref={canvasRef}
                   width={CANVAS_WIDTH}
                   height={CANVAS_HEIGHT}
-                  className="relative z-10 block w-full h-full border border-white/15 bg-black shadow-[0_28px_90px_rgba(0,0,0,0.7)] lg:max-h-[calc(100vh-220px)]"
+                  className="relative z-10 block w-full h-full border border-white/15 bg-black shadow-[0_28px_90px_rgba(0,0,0,0.7)] select-none outline-none"
                 />
                 {imageStatus === 'loading' && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs font-bold uppercase tracking-[0.25em] text-[#c8aa6e]">

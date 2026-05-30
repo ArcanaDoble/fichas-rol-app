@@ -67,7 +67,12 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Constructor de cartas**: la antigua pestaña «Tienda» de la ficha pasa a ser «Cartas» y abre un canvas para previsualizar una carta con textos guía, escribir su nombre, descripción y texto narrativo cuando el formato lo requiere, cambiar entre los 15 fondos base WebP incluidos en `public/cards`, definir rasgos por tipo de carta con letreros generados en canvas y configurar cartas de arma con dados, alcance, tipo de arma, cargas y consumos con ranuras táctiles; sus fondos e iconos propios cargan en WebP optimizado y el Máster también dispone de acceso directo desde su menú principal.
 - **Tipos de arma simplificados en cartas**: el constructor de cartas usa solo tres iconos WebP para `Cuerpo a cuerpo`, `Distancia` y `Magia`, reemplazando el catálogo anterior de iconos de armas específicas.
 - **Recursos en trampas y habilidades**: las cartas de `Trampa` y `Habilidad` pueden usar cargas y consumos como armas y armaduras, con un modo de solo carga que centra el raíl de cargas en el canvas.
+- **Dado Variable y Elementos en Armas**:
+  - Se añade el dado **DX** (dado variable) al final de la selección de dados de daño para armas. Al activarse, se oculta la cantidad numérica en la carta y se sustituye la celda de cantidad en el editor por el aviso: *"Dado variable. Depende de otros factores."*
+  - Se agrega el icono **Variable** al final de la pool de consumos para su selección y asignación en ranuras.
+  - Se integra un selector de **Elemento / Estado** para armas. Si un arma tiene un elemento asignado (distinto de "Ninguno"), se ocultan los campos de dados y cantidad en el editor y se dibuja el icono del elemento en lugar del dado en el canvas con las mismas propiedades.
 - **Cuadros de texto en cartas**: las descripciones y textos narrativos del constructor se dibujan sobre paneles negros translúcidos sin marco, con padding interno y centrado vertical para textos cortos.
+- **Ajustes de trampa y armadura en cartas**: las trampas y armaduras amplían el cuadro de texto al ocultar sus rasgos, y las armaduras usan ranuras específicas sin selector de consumo/elemento.
 - **Edición directa de todos los campos**: haz clic en título, subtítulo, descripción, etiquetas, reglas o listas para actualizar la clase y guarda los cambios con un solo botón.
 - **Hitos con seguimiento**: marca la inspiración completada mediante checks persistentes y resaltados que mantienen el estilo luminiscente del panel.
 - **Niveles de clase dinámicos**: controla el número de niveles con un deslizador configurable desde 0 en adelante y edita cada hito de progreso en línea.
@@ -167,7 +172,58 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.74**
+> **Versión actual: 2.4.86**
+
+**Resumen de cambios v2.4.86:**
+
+- **Unificación de Caja de Descripción**: Eliminados los cuadros de texto divididos ("Texto principal" y "Texto narrativo") para todas las cartas (armas, habilidades y trampas), unificándolos en un único cuadro de texto de descripción ("Descripción") que abarca todo el espacio disponible. Se conservan los botones de estilo inferior ("Narrativo" y "Principal") para permitir seleccionar el formato de tipografía del bloque único.
+
+**Resumen de cambios v2.4.85:**
+
+- **Unificación de Altura en Selectores**: Ajustados los selectores del formulario (tipo de arma, dado de daño, y selector de elemento) para establecer una altura unificada de `38` píxeles (`h-[38px]`). Esto alinea de forma exacta sus dimensiones con los botones y el input del selector de cantidad de dados, ofreciendo un acabado visual perfectamente equilibrado y libre de asimetrías.
+
+**Resumen de cambios v2.4.84:**
+
+- **Descripción Dividida Dinámica para Armas sin Rasgos**: Habilitado el modo de descripción dividida (Texto Principal y Texto Narrativo) automáticamente en cartas de Arma (`weapon`) cuando no se muestran rasgos (`showTraits` desactivado). Ambos cuadros se dibujan de forma simétrica con alturas idénticas de `705` píxeles, maximizando el espacio de la carta de forma equilibrada.
+
+**Resumen de cambios v2.4.83:**
+
+- **Distribución Equitativa de Cuadros de Texto**: Rediseñado el espacio de la descripción dividida en cartas de trampa y habilidad. Se ajustaron las coordenadas y alturas para que tanto el cuadro de texto **Principal** como el cuadro **Narrativo** tengan exactamente la misma altura física (de `705` píxeles cada uno con rasgos activos, y de `858`/`859` píxeles sin rasgos activos), garantizando una presentación perfectamente equilibrada en el canvas.
+
+**Resumen de cambios v2.4.82:**
+
+- **Diseño Centrado y Simplificado para el Selector de Estilo**: Eliminada la etiqueta del selector de estilo y centrados los botones "Narrativo" y "Principal" de forma horizontal debajo del cuadro de texto de descripción. Esto asegura una presentación limpia y minimalista alineada con la caja de texto, funcionando perfectamente en PC y móviles.
+
+**Resumen de cambios v2.4.81:**
+
+- **Refinamiento Estético del Selector de Estilo**: Reubicado el selector de estilo de descripción debajo del área de texto (`textarea`) y rediseñado utilizando un grupo de botones estilizados de alternancia en color dorado y gris oscuro. Esto restaura el encabezado clásico original con "Descripción" y "Guionizar" en sus posiciones iniciales, evitando desbordamientos de columna en PC y móvil, integrándose armoniosamente en la maquetación.
+
+**Resumen de cambios v2.4.80:**
+
+- **Estilo de Texto Personalizable para Cartas de una Única Descripción**: Añadida una propiedad y selector visual en el editor (`CardBuilder.jsx`) para cartas que solo tienen un bloque de descripción (como Armas, Armaduras y Estados). Permite seleccionar dinámicamente el estilo entre **Narrativo** (cursiva, por defecto) y **Principal** (normal), adaptando el renderizado en el canvas a la preferencia del diseñador.
+
+**Resumen de cambios v2.4.79:**
+
+- **Expansión Dinámica del Cuadro de Texto de Habilidad y Trampa**: En `CardBuilder.jsx`, cuando no se muestran rasgos (`showTraits` desactivado), el cuadro de texto principal (`primary`) se expande dinámicamente hacia arriba para cubrir el espacio vacío debajo del título. Se inicia en `y = 508` y aumenta su altura a `787` (en lugar de `y = 815` y altura `480`), permitiendo aprovechar al máximo el espacio de la carta cuando no hay letreros ni rasgos definidos.
+
+**Resumen de cambios v2.4.78:**
+
+- **Restauración de Alineación Superior para Textos**: Eliminado el centrado vertical en los bloques de descripción de la carta en `CardBuilder.jsx`. El texto vuelve a su comportamiento estándar e inicial de alinearse directamente desde la parte superior del cuadro de texto (`y = dynamicLayout.y`), tanto para descripciones cortas como largas, garantizando una disposición clásica y uniforme.
+
+**Resumen de cambios v2.4.77:**
+
+- **Corrección de Relación de Aspecto en Previsualización**: Reubicada la clase restrictiva de altura máxima `lg:max-h-[calc(100vh-220px)]` desde la etiqueta `<canvas>` de la carta directamente hacia su contenedor `div` con relación de aspecto (`aspectRatio: '1888/2624'`). Esto soluciona por completo la distorsión o achatamiento vertical de la previsualización en pantallas de menor altura o portátiles, garantizando que el canvas y el contenedor escalen de forma proporcional y mantengan las dimensiones originales y correctas de la carta sin deformarse.
+
+**Resumen de cambios v2.4.76:**
+
+- **Previsualización Optimizada y sin Scroll en Móvil**:
+  - Reemplazado `overflow-x-hidden` por `overflow-hidden` en el contenedor `<main>` en móvil/tablet para ocultar la barra de scroll vertical interna no deseada, manteniendo `lg:overflow-visible` en PC para el preview flotante.
+  - Reducido el padding horizontal base de la previsualización de `p-4` a `p-3` en móvil para ganar mayor espacio horizontal útil.
+  - Aumentado el ancho máximo de la previsualización de la carta de `335px` a `380px` en móvil y de `440px` a `460px` en tabletas (`sm:`). Esto permite que el canvas de la carta aproveche de forma óptima el área del contenedor y se visualice significativamente más grande.
+
+**Resumen de cambios v2.4.75:**
+
+- **Desbloqueo de Scroll Táctico en PC (Ajuste Estético)**: Sustituidas las clases restrictivas del contenedor principal `<main>` en `CardBuilder.jsx` de `lg:static lg:overflow-hidden` a `lg:relative lg:overflow-visible` en escritorio. Esto corrige la limitación técnica del navegador que bloqueaba la posición sticky del canvas, permitiendo que la carta flote suavemente a lo largo del viewport con un elegante margen de 48px (`lg:top-12`) mientras el fondo oscuro y el encuadre de la tarjeta conservan su tamaño completo.
 
 **Resumen de cambios v2.4.74:**
 
@@ -1626,6 +1682,34 @@ src/
 
 - Aplicar un estilo de texto guardado ya no reemplaza el contenido del cuadro y puede aplicarse a múltiples textos, manteniendo la opción de restablecer los cambios.
 
+**Resumen de cambios v2.4.85:**
+
+- ✅ Unificación de altura (h-[38px]) en todos los selectores principales del editor de cartas para alineación perfecta.
+
+**Resumen de cambios v2.4.84:**
+
+- ✅ Habilitado el modo de descripción dividida (Texto Principal + Narrativo) en cartas de arma cuando no se muestran rasgos, con cajas simétricas del mismo tamaño.
+
+**Resumen de cambios v2.4.83:**
+
+- ✅ Rediseño de las cajas divididas en trampas y habilidades para que el bloque Principal y el Narrativo tengan idéntico tamaño.
+
+**Resumen de cambios v2.4.82:**
+
+- ✅ Centrado y simplificación de los botones "Narrativo" y "Principal" eliminando la etiqueta de estilo para una estética minimalista.
+
+**Resumen de cambios v2.4.81:**
+
+- ✅ Rediseño estético del selector de estilo como grupo de botones bajo el área de texto para evitar roturas del encabezado.
+
+**Resumen de cambios v2.4.80:**
+
+- ✅ Selector de estilo Narrativo/Principal para descripciones únicas de cartas de arma, armadura y estado.
+
+**Resumen de cambios v2.4.79:**
+
+- ✅ El cuadro de texto principal de habilidad y trampa se expande hacia arriba ocupando el espacio del letrero cuando no se muestran rasgos.
+
 **Resumen de cambios v2.4.78:**
 
 - El constructor de minimapa permite seleccionar múltiples celdas y aplicar cambios de forma simultánea.
@@ -2078,3 +2162,28 @@ Guía rápida: ver `docs/Minimapa.md`.
 - Se añadió `layout="position"` en badges de estado y en el botón "+ Añadir" (ahora un `<motion.button>`), permitiendo que todos los elementos hermanos se deslicen de forma continua a sus nuevas coordenadas y fila durante el reflow.
 - Se calibró la curva de animación de los badges a `0.25s` con aceleración `easeInOut` para un tacto sedoso, lineal y de calidad cinematográfica.
 - Se corrigió un error visual en el creador de cartas (`CardBuilder.jsx`) donde el filtro de color personalizado (`customColorActive`) pintaba parcialmente el borde superior de la carta (bajo la cabecera); se reajustó la coordenada Y inicial (`ry = 410`) y la altura del rectángulo (`rh = 2100`) para que el filtro cubra con precisión milimétrica únicamente la textura interior de la carta sin solaparse con el marco dorado del borde superior.
+
+## Novedades: Ocultar Filas de Rasgos y Ampliar Texto en Cartas (v2.4.44)
+
+- **Caja de texto autoadaptable**: Ocultar filas de rasgos libera de forma inmediata espacio vertical, desplazando y agrandando proporcionalmente la caja de descripción (`+240px` por fila en armas/habilidades y `+230px` por fila en armaduras).
+- **Selector de pares de rasgos**: Se añadió un control horizontal de botones (`1`, `2`, `3` o `4`) bajo "Filas / Pares visibles" en el panel lateral de rasgos de la carta para configurar la cantidad exacta de filas a mostrar.
+- **Entradas laterales dinámicas**: La lista de entradas de texto de rasgos de la barra lateral se reduce y ajusta automáticamente para mostrar únicamente los campos correspondientes a los pares de rasgos configurados como visibles.
+- **Mantener interruptor maestro**: El checkbox de visualización "Mostrar" continúa permitiendo ocultar o mostrar todas las filas de rasgos de golpe.
+- **Reinicio y ajuste automático**: El estado de filas visibles se restablece y configura de manera inteligente al cambiar de tipo de carta o restablecer el editor.
+
+## Novedades: Formato Enriquecido de Texto (v2.4.45)
+
+- **Marcas de estilo personalizadas**: Soporte completo para renderizado de negrita (`**texto**`), cursiva (`*texto*`) y color personalizado (`[color:#HEX]{texto}`) directamente sobre el canvas de la carta.
+- **Medición de ancho precisa**: El empaquetador de líneas y el espaciado de texto justificado miden de forma independiente los anchos reales de cada segmento estilizado más los iconos de palabras clave asociados, garantizando que el texto se adapte sin cortes ni desbordamientos.
+- **Anidamiento recursivo de estilos**: Soporte técnico para etiquetas compuestas (como cursivas o negritas anidadas dentro de bloques de colores).
+- **Barra de herramientas de formato**: Adición de una botonera de formato sobre las cajas de descripción y texto narrativo en el editor lateral. Permite alternar rápidamente negrita (`B`), cursiva (`I`) y seleccionar colores de una paleta temática de 6 colores listos para usar (`Dorado`, `Rojo`, `Verde`, `Azul`, `Morado`, `Blanco`).
+- **Refs táctiles**: Implementación de atajos visuales que conservan la selección de texto y restauran el foco de escritura en la caja del cursor en PC y móviles.
+
+## Novedades: Mejoras de Salto de Línea Estilizado, Alternado de Color e Historial (v2.4.46)
+
+- **Salto de Línea Estilizado y Tokens**: Refactorización de `wrapDescriptionText` mediante tokens de palabras con estilos heredados. Esto garantiza que las líneas resultantes mantengan su formato de negrita, cursiva o color intacto al saltar de línea o al incluir palabras clave con iconos.
+- **Guionizado Enriquecido**: Las palabras largas con formato se separan correctamente de forma silábica sobre el texto limpio del token, manteniendo sus marcas estilizadas de apertura y cierre en ambos extremos del corte.
+- **Alternado de Color Inteligente**: La pulsación repetida de un color sobre texto ya coloreado retira el formato de color de forma inmediata, facilitando la edición rápida de descripciones.
+- **Historial de Deshacer/Rehacer**: Implementación nativa de la pila de historial en textareas para `Ctrl + Z` y `Ctrl + Y`, con agrupación inteligente por tiempo para fusionar pulsaciones rápidas consecutivas en acciones por palabras/frases en lugar de letra a letra.
+- **Reinicio con Dado Limpio**: El botón "Restablecer" inicializa la carta de Arma con el elemento `Ninguno` por defecto, permitiendo previsualizar de inmediato un dado limpio de `1d6` en el canvas en lugar del elemento Fuego.
+
