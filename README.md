@@ -167,7 +167,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.78**
+> **Versión actual: 2.4.79**
+
+**Resumen de cambios v2.4.79:**
+
+- **Expansión Dinámica del Cuadro de Texto de Habilidad y Trampa**: En `CardBuilder.jsx`, cuando no se muestran rasgos (`showTraits` desactivado), el cuadro de texto principal (`primary`) se expande dinámicamente hacia arriba para cubrir el espacio vacío debajo del título. Se inicia en `y = 508` y aumenta su altura a `787` (en lugar de `y = 815` y altura `480`), permitiendo aprovechar al máximo el espacio de la carta cuando no hay letreros ni rasgos definidos.
 
 **Resumen de cambios v2.4.78:**
 
@@ -1644,6 +1648,10 @@ src/
 **Resumen de cambios v2.4.77:**
 
 - Aplicar un estilo de texto guardado ya no reemplaza el contenido del cuadro y puede aplicarse a múltiples textos, manteniendo la opción de restablecer los cambios.
+
+**Resumen de cambios v2.4.79:**
+
+- ✅ El cuadro de texto principal de habilidad y trampa se expande hacia arriba ocupando el espacio del letrero cuando no se muestran rasgos.
 
 **Resumen de cambios v2.4.78:**
 

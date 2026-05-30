@@ -730,14 +730,15 @@ const getDescriptionLayouts = (typeConfig, showTraits) => {
   if (typeConfig.id === 'action') return {};
 
   const hasRails = typeConfig.id === 'weapon' || typeConfig.id === 'armor' || typeConfig.id === 'trap' || typeConfig.id === 'skill';
+  const isSkillOrTrapWithoutTraits = (typeConfig.id === 'skill' || typeConfig.id === 'trap') && !showTraits;
 
   if (usesSplitDescription(typeConfig, showTraits)) {
     return {
       primary: {
         x: 210,
-        y: 815,
+        y: isSkillOrTrapWithoutTraits ? 508 : 815,
         width: 1470,
-        height: 480,
+        height: isSkillOrTrapWithoutTraits ? 787 : 480,
         fontSize: 85,
         lineHeight: 104,
         italic: false,
