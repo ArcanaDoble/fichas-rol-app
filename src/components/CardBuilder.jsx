@@ -2010,30 +2010,15 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                     <Type className="h-4 w-4" />
                     {hasSplitDescription ? 'Texto principal' : 'Descripción'}
                   </label>
-                  <div className="flex items-center gap-4">
-                    {!hasSplitDescription && (
-                      <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                        Estilo:
-                        <select
-                          value={singleTextStyle}
-                          onChange={(event) => setSingleTextStyle(event.target.value)}
-                          className="border border-[#c8aa6e]/20 bg-[#09090b]/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
-                        >
-                          <option value="narrative">Narrativo</option>
-                          <option value="principal">Principal</option>
-                        </select>
-                      </label>
-                    )}
-                    <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={hyphenate}
-                        onChange={(event) => setHyphenate(event.target.checked)}
-                        className="h-4 w-4 accent-[#c8aa6e] cursor-pointer"
-                      />
-                      Guionizar
-                    </label>
-                  </div>
+                  <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={hyphenate}
+                      onChange={(event) => setHyphenate(event.target.checked)}
+                      className="h-4 w-4 accent-[#c8aa6e] cursor-pointer"
+                    />
+                    Guionizar
+                  </label>
                 </div>
                 <textarea
                   value={description}
@@ -2043,6 +2028,29 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                   className="min-h-[112px] w-full resize-y border border-[#c8aa6e]/25 bg-[#09090b]/80 px-4 py-3 text-base font-semibold leading-relaxed text-[#f0e6d2] outline-none transition placeholder:text-slate-600 focus:border-[#c8aa6e]/70"
                   placeholder={hasSplitDescription ? 'Descripción de la carta' : 'Texto descriptivo de la carta'}
                 />
+                {!hasSplitDescription && (
+                  <div className="flex items-center justify-between gap-2 pt-0.5">
+                    <span className="font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.15em] text-[#c8aa6e]">
+                      Estilo de descripción
+                    </span>
+                    <div className="flex gap-1">
+                      {['narrative', 'principal'].map((styleOpt) => (
+                        <button
+                          key={styleOpt}
+                          type="button"
+                          onClick={() => setSingleTextStyle(styleOpt)}
+                          className={`border px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition cursor-pointer ${
+                            singleTextStyle === styleOpt
+                              ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                              : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                          }`}
+                        >
+                          {styleOpt === 'narrative' ? 'Narrativo' : 'Principal'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {hasSplitDescription && (
                   <div className="space-y-2 pt-2">
                     <label className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">

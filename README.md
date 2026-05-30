@@ -167,7 +167,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.80**
+> **Versión actual: 2.4.81**
+
+**Resumen de cambios v2.4.81:**
+
+- **Refinamiento Estético del Selector de Estilo**: Reubicado el selector de estilo de descripción debajo del área de texto (`textarea`) y rediseñado utilizando un grupo de botones estilizados de alternancia en color dorado y gris oscuro. Esto restaura el encabezado clásico original con "Descripción" y "Guionizar" en sus posiciones iniciales, evitando desbordamientos de columna en PC y móvil, integrándose armoniosamente en la maquetación.
 
 **Resumen de cambios v2.4.80:**
 
@@ -1652,6 +1656,10 @@ src/
 **Resumen de cambios v2.4.77:**
 
 - Aplicar un estilo de texto guardado ya no reemplaza el contenido del cuadro y puede aplicarse a múltiples textos, manteniendo la opción de restablecer los cambios.
+
+**Resumen de cambios v2.4.81:**
+
+- ✅ Rediseño estético del selector de estilo como grupo de botones bajo el área de texto para evitar roturas del encabezado.
 
 **Resumen de cambios v2.4.80:**
 
