@@ -719,7 +719,9 @@ const drawTraitBadge = (context, slot, label) => {
 };
 
 const usesSplitDescription = (typeConfig, showTraits) => (
-  typeConfig.id === 'trap' || (typeConfig.id === 'skill' && !showTraits)
+  typeConfig.id === 'trap' || 
+  (typeConfig.id === 'skill' && !showTraits) ||
+  (typeConfig.id === 'weapon' && !showTraits)
 );
 
 const getDynamicStartingLayout = (layout, text, isPrimary) => {
@@ -733,7 +735,7 @@ const getDescriptionLayouts = (typeConfig, showTraits, singleTextStyle = 'narrat
   const isSkillOrTrapWithoutTraits = (typeConfig.id === 'skill' || typeConfig.id === 'trap') && !showTraits;
 
   if (usesSplitDescription(typeConfig, showTraits)) {
-    const isTrap = typeConfig.id === 'trap';
+    const isTrapOrWeaponWithoutTraits = typeConfig.id === 'trap' || (typeConfig.id === 'weapon' && !showTraits);
     let primaryY = 815;
     let primaryHeight = 480;
     let flavorY = 1350;
@@ -744,7 +746,7 @@ const getDescriptionLayouts = (typeConfig, showTraits, singleTextStyle = 'narrat
       primaryHeight = 858;
       flavorY = 1421;
       flavorHeight = 859;
-    } else if (isTrap) {
+    } else if (isTrapOrWeaponWithoutTraits) {
       primaryHeight = 705;
       flavorY = 1575;
       flavorHeight = 705;

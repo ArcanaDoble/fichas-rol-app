@@ -167,7 +167,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.83**
+> **Versión actual: 2.4.84**
+
+**Resumen de cambios v2.4.84:**
+
+- **Descripción Dividida Dinámica para Armas sin Rasgos**: Habilitado el modo de descripción dividida (Texto Principal y Texto Narrativo) automáticamente en cartas de Arma (`weapon`) cuando no se muestran rasgos (`showTraits` desactivado). Ambos cuadros se dibujan de forma simétrica con alturas idénticas de `705` píxeles, maximizando el espacio de la carta de forma equilibrada.
 
 **Resumen de cambios v2.4.83:**
 
@@ -1664,6 +1668,10 @@ src/
 **Resumen de cambios v2.4.77:**
 
 - Aplicar un estilo de texto guardado ya no reemplaza el contenido del cuadro y puede aplicarse a múltiples textos, manteniendo la opción de restablecer los cambios.
+
+**Resumen de cambios v2.4.84:**
+
+- ✅ Habilitado el modo de descripción dividida (Texto Principal + Narrativo) en cartas de arma cuando no se muestran rasgos, con cajas simétricas del mismo tamaño.
 
 **Resumen de cambios v2.4.83:**
 
