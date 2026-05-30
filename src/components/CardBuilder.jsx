@@ -1818,7 +1818,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                       <select
                         value={weaponType}
                         onChange={(event) => setWeaponType(event.target.value)}
-                        className="w-full border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 py-2 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70"
+                        className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
                       >
                         {WEAPON_TYPES.map((type) => (
                           <option key={type} value={type}>
@@ -1862,7 +1862,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                       <select
                         value={diceType}
                         onChange={(event) => setDiceType(event.target.value)}
-                        className="w-full border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 py-2 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70"
+                        className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
                       >
                         {['D4', 'D6', 'D8', 'D10', 'D12'].map((type) => (
                           <option key={type} value={type}>
@@ -1876,11 +1876,11 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                       <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                         Cantidad de Dados
                       </label>
-                      <div className="grid grid-cols-[2.5rem_1fr_2.5rem] border border-[#c8aa6e]/20 bg-[#09090b]/80">
+                      <div className="grid grid-cols-[2.5rem_1fr_2.5rem] h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80">
                         <button
                           type="button"
                           onClick={() => handleDiceQtyChange(diceQty - 1)}
-                          className="flex items-center justify-center border-r border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10"
+                          className="flex items-center justify-center border-r border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10 h-full cursor-pointer"
                           aria-label="Reducir cantidad de dados"
                         >
                           -
@@ -1891,12 +1891,12 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                           max={cardType === 'action' ? 6 : 9}
                           value={diceQty}
                           onChange={(event) => handleDiceQtyChange(parseInt(event.target.value, 10) || 1)}
-                          className="w-full bg-transparent px-2 py-2 text-center text-sm font-bold text-[#f0e6d2] outline-none"
+                          className="w-full h-full bg-transparent px-2 text-center text-sm font-bold text-[#f0e6d2] outline-none"
                         />
                         <button
                           type="button"
                           onClick={() => handleDiceQtyChange(diceQty + 1)}
-                          className="flex items-center justify-center border-l border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10"
+                          className="flex items-center justify-center border-l border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10 h-full cursor-pointer"
                           aria-label="Aumentar cantidad de dados"
                         >
                           +
@@ -2009,7 +2009,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                     <select
                       value={selectedElement}
                       onChange={(event) => setSelectedElement(event.target.value)}
-                      className="w-full border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 py-2 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70"
+                      className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
                     >
                       {ELEMENT_TYPES.map((type) => (
                         <option key={type.id} value={type.id}>

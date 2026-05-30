@@ -167,7 +167,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.84**
+> **Versión actual: 2.4.85**
+
+**Resumen de cambios v2.4.85:**
+
+- **Unificación de Altura en Selectores**: Ajustados los selectores del formulario (tipo de arma, dado de daño, y selector de elemento) para establecer una altura unificada de `38` píxeles (`h-[38px]`). Esto alinea de forma exacta sus dimensiones con los botones y el input del selector de cantidad de dados, ofreciendo un acabado visual perfectamente equilibrado y libre de asimetrías.
 
 **Resumen de cambios v2.4.84:**
 
@@ -1668,6 +1672,10 @@ src/
 **Resumen de cambios v2.4.77:**
 
 - Aplicar un estilo de texto guardado ya no reemplaza el contenido del cuadro y puede aplicarse a múltiples textos, manteniendo la opción de restablecer los cambios.
+
+**Resumen de cambios v2.4.85:**
+
+- ✅ Unificación de altura (h-[38px]) en todos los selectores principales del editor de cartas para alineación perfecta.
 
 **Resumen de cambios v2.4.84:**
 
