@@ -733,12 +733,29 @@ const getDescriptionLayouts = (typeConfig, showTraits, singleTextStyle = 'narrat
   const isSkillOrTrapWithoutTraits = (typeConfig.id === 'skill' || typeConfig.id === 'trap') && !showTraits;
 
   if (usesSplitDescription(typeConfig, showTraits)) {
+    const isTrap = typeConfig.id === 'trap';
+    let primaryY = 815;
+    let primaryHeight = 480;
+    let flavorY = 1350;
+    let flavorHeight = hasRails ? 930 : 1090;
+
+    if (isSkillOrTrapWithoutTraits) {
+      primaryY = 508;
+      primaryHeight = 858;
+      flavorY = 1421;
+      flavorHeight = 859;
+    } else if (isTrap) {
+      primaryHeight = 705;
+      flavorY = 1575;
+      flavorHeight = 705;
+    }
+
     return {
       primary: {
         x: 210,
-        y: isSkillOrTrapWithoutTraits ? 508 : 815,
+        y: primaryY,
         width: 1470,
-        height: isSkillOrTrapWithoutTraits ? 787 : 480,
+        height: primaryHeight,
         fontSize: 85,
         lineHeight: 104,
         italic: false,
@@ -747,9 +764,9 @@ const getDescriptionLayouts = (typeConfig, showTraits, singleTextStyle = 'narrat
       },
       flavor: {
         x: 210,
-        y: 1350,
+        y: flavorY,
         width: 1470,
-        height: hasRails ? 930 : 1090,
+        height: flavorHeight,
         fontSize: 80,
         lineHeight: 98,
         italic: true,
