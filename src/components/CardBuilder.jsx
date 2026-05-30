@@ -2029,26 +2029,21 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                   placeholder={hasSplitDescription ? 'Descripción de la carta' : 'Texto descriptivo de la carta'}
                 />
                 {!hasSplitDescription && (
-                  <div className="flex items-center justify-between gap-2 pt-0.5">
-                    <span className="font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.15em] text-[#c8aa6e]">
-                      Estilo de descripción
-                    </span>
-                    <div className="flex gap-1">
-                      {['narrative', 'principal'].map((styleOpt) => (
-                        <button
-                          key={styleOpt}
-                          type="button"
-                          onClick={() => setSingleTextStyle(styleOpt)}
-                          className={`border px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition cursor-pointer ${
-                            singleTextStyle === styleOpt
-                              ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
-                              : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
-                          }`}
-                        >
-                          {styleOpt === 'narrative' ? 'Narrativo' : 'Principal'}
-                        </button>
-                      ))}
-                    </div>
+                  <div className="flex justify-center gap-1.5 pt-1.5">
+                    {['narrative', 'principal'].map((styleOpt) => (
+                      <button
+                        key={styleOpt}
+                        type="button"
+                        onClick={() => setSingleTextStyle(styleOpt)}
+                        className={`border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] transition cursor-pointer ${
+                          singleTextStyle === styleOpt
+                            ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                            : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                        }`}
+                      >
+                        {styleOpt === 'narrative' ? 'Narrativo' : 'Principal'}
+                      </button>
+                    ))}
                   </div>
                 )}
                 {hasSplitDescription && (
