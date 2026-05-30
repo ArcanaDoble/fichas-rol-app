@@ -40,7 +40,7 @@ const CARD_TYPES = [
   { id: 'armor', label: 'Armadura', maxTraits: 8, layout: 'armor' },
   { id: 'trap', label: 'Trampa', maxTraits: 1, layout: 'trap' },
   { id: 'action', label: 'Acción', maxTraits: 0, layout: 'none' },
-  { id: 'skill', label: 'Habilidad', maxTraits: 6, layout: 'weapon' },
+  { id: 'skill', label: 'Minion', maxTraits: 4, layout: 'weapon' },
   { id: 'status', label: 'Estado', maxTraits: 1, layout: 'trap' },
 ];
 
@@ -58,6 +58,12 @@ export const ELEMENT_TYPES = [
 ];
 
 const DEFAULT_TRAITS = ['-', '-', '-', '-', '-', '-', '-', '-'];
+const MINION_ATTRIBUTE_TYPES = ['Hambre', 'Cuerpo', 'Mente'];
+const DEFAULT_MINION_ATTRIBUTES = {
+  Hambre: 1,
+  Cuerpo: 1,
+  Mente: 1,
+};
 
 const CHARGE_TYPES = [
   { id: 'Hambre', label: 'Hambre', src: '/interfaz/cargas/Hambre.webp' },
@@ -739,9 +745,13 @@ const getDescriptionLayouts = (typeConfig, showTraits, singleTextStyle = 'narrat
 
   let yOffset = 0;
   if (showTraits) {
-    if (typeConfig.id === 'weapon' || typeConfig.id === 'skill') {
+    if (typeConfig.id === 'weapon') {
       const activeRows = Math.min(visibleTraitRows, 3);
       const hiddenRows = 3 - activeRows;
+      yOffset = hiddenRows * 240;
+    } else if (typeConfig.id === 'skill') {
+      const activeRows = Math.min(visibleTraitRows, 2);
+      const hiddenRows = 2 - activeRows;
       yOffset = hiddenRows * 240;
     } else if (typeConfig.id === 'armor') {
       const activeRows = Math.min(visibleTraitRows, 4);
@@ -762,8 +772,8 @@ const getDescriptionLayouts = (typeConfig, showTraits, singleTextStyle = 'narrat
       y = 508;
       height = 1772;
     } else if (typeConfig.id === 'skill') {
-      y = 508;
-      height = 1772;
+      y = 1047;
+      height = 1233;
     }
   }
 
@@ -970,6 +980,10 @@ const measureTextWithIcons = (context, text) => {
   return baseWidth + matches.length * extraWidthPerMatch;
 };
 
+const DESCRIPTION_SEPARATOR_REGEX = /^\s*-{3,}\s*$/;
+const LORE_OPEN_TAG = '[lore]';
+const LORE_CLOSE_TAG = '[/lore]';
+
 const parseStyles = (text) => {
   const segments = [];
   let currentText = '';
@@ -1030,6 +1044,43 @@ const parseStyles = (text) => {
   }
 
   return segments;
+};
+
+const splitLoreSegments = (text, initialIsLore = false) => {
+  const segments = [];
+  let cursor = 0;
+  let isLore = initialIsLore;
+
+  while (cursor < text.length) {
+    const nextOpen = text.indexOf(LORE_OPEN_TAG, cursor);
+    const nextClose = text.indexOf(LORE_CLOSE_TAG, cursor);
+    let nextTag = -1;
+    let nextIsOpen = false;
+
+    if (nextOpen !== -1 && (nextClose === -1 || nextOpen < nextClose)) {
+      nextTag = nextOpen;
+      nextIsOpen = true;
+    } else if (nextClose !== -1) {
+      nextTag = nextClose;
+    }
+
+    if (nextTag === -1) {
+      segments.push({ text: text.slice(cursor), isLore });
+      break;
+    }
+
+    if (nextTag > cursor) {
+      segments.push({ text: text.slice(cursor, nextTag), isLore });
+    }
+
+    cursor = nextTag + (nextIsOpen ? LORE_OPEN_TAG.length : LORE_CLOSE_TAG.length);
+    isLore = nextIsOpen;
+  }
+
+  return {
+    segments: segments.filter((segment) => segment.text.length > 0),
+    isLore,
+  };
 };
 
 const getFontInfoFromContext = (context) => {
@@ -1469,23 +1520,84 @@ const wrapDescriptionText = (context, text, maxWidth, hyphenate = false) => {
   return lines;
 };
 
+const getDescriptionFlowItems = (context, text, maxWidth, lineHeight, hyphenate = false) => {
+  const lines = text.trim().split(/\n/);
+  const items = [];
+  let paragraph = '';
+  let paragraphIsLore = false;
+  let activeLore = false;
+
+  const flushParagraph = () => {
+    const cleanParagraph = paragraph.trim();
+    if (!cleanParagraph) {
+      paragraph = '';
+      return;
+    }
+
+    const wrappedLines = wrapDescriptionText(context, cleanParagraph, maxWidth, hyphenate);
+    wrappedLines.forEach((line) => {
+      items.push({
+        type: 'text',
+        line,
+        isLore: paragraphIsLore,
+        height: paragraphIsLore ? Math.round(lineHeight * 1.02) : lineHeight,
+      });
+    });
+    paragraph = '';
+  };
+
+  lines.forEach((rawLine) => {
+    if (DESCRIPTION_SEPARATOR_REGEX.test(rawLine)) {
+      flushParagraph();
+      items.push({ type: 'separator', height: Math.round(lineHeight * 0.74) });
+      return;
+    }
+
+    const loreResult = splitLoreSegments(rawLine, activeLore);
+    activeLore = loreResult.isLore;
+    const { segments } = loreResult;
+    if (segments.length === 0) {
+      flushParagraph();
+      items.push({ type: 'gap', height: Math.round(lineHeight * 0.55) });
+      return;
+    }
+
+    segments.forEach((segment) => {
+      const cleanText = segment.text.trim();
+      if (!cleanText) return;
+
+      if (paragraph && paragraphIsLore !== segment.isLore) {
+        flushParagraph();
+      }
+
+      paragraphIsLore = segment.isLore;
+      paragraph = paragraph ? `${paragraph} ${cleanText}` : cleanText;
+    });
+  });
+
+  flushParagraph();
+  while (items.length > 0 && (items[0].type === 'gap' || items[0].type === 'separator')) items.shift();
+  while (items.length > 0 && (items[items.length - 1].type === 'gap' || items[items.length - 1].type === 'separator')) items.pop();
+  return items;
+};
+
 const fitDescriptionFont = (context, text, layout, hyphenate = false) => {
   let size = layout.fontSize;
   let lineHeight = layout.lineHeight;
-  let lines = [];
+  let items = [];
   const style = layout.italic ? 'italic ' : '';
   const family = layout.family || "Georgia, serif";
 
   while (size > 48) {
     context.font = `${style}${layout.weight} ${size}px ${family}`;
-    lines = wrapDescriptionText(context, text, layout.width, hyphenate);
-    const textHeight = lines.length * lineHeight;
+    items = getDescriptionFlowItems(context, text, layout.width, lineHeight, hyphenate);
+    const textHeight = items.reduce((total, item) => total + item.height, 0);
     if (textHeight <= layout.height) break;
     size -= 1;
     lineHeight = Math.round(size * 1.22);
   }
 
-  return { size, lineHeight, lines };
+  return { size, lineHeight, items };
 };
 
 const drawPreviewText = (context, text, layout) => {
@@ -1594,6 +1706,118 @@ const drawJustifiedLine = (context, line, x, y, maxWidth) => {
   });
 };
 
+const drawDescriptionSeparator = (context, layout, y, lineHeight) => {
+  const centerY = y + lineHeight * 0.36;
+  const inset = Math.min(150, layout.width * 0.18);
+  const gradient = context.createLinearGradient(layout.x + inset, centerY, layout.x + layout.width - inset, centerY);
+  gradient.addColorStop(0, 'rgba(255,255,255,0)');
+  gradient.addColorStop(0.2, 'rgba(255,255,255,0.28)');
+  gradient.addColorStop(0.5, 'rgba(200,170,110,0.34)');
+  gradient.addColorStop(0.8, 'rgba(255,255,255,0.28)');
+  gradient.addColorStop(1, 'rgba(255,255,255,0)');
+
+  context.save();
+  context.shadowColor = 'rgba(255,255,255,0.24)';
+  context.shadowBlur = 8;
+  context.lineWidth = 2;
+  context.strokeStyle = gradient;
+  context.beginPath();
+  context.moveTo(layout.x + inset, centerY);
+  context.lineTo(layout.x + layout.width - inset, centerY);
+  context.stroke();
+
+  context.shadowBlur = 0;
+  context.fillStyle = 'rgba(255,255,255,0.42)';
+  const dotRadius = Math.max(3, lineHeight * 0.045);
+  [-1, 0, 1].forEach((offset) => {
+    context.beginPath();
+    context.arc(layout.x + layout.width / 2 + offset * dotRadius * 4.2, centerY, dotRadius, 0, Math.PI * 2);
+    context.fill();
+  });
+  context.restore();
+};
+
+const drawMinionAttributes = (context, attributes, resourceImages = {}) => {
+  const slots = [
+    { x: 225, y: 807, width: 430, height: 175 },
+    { x: 729, y: 807, width: 430, height: 175 },
+    { x: 1233, y: 807, width: 430, height: 175 },
+  ];
+
+  MINION_ATTRIBUTE_TYPES.forEach((attribute, index) => {
+    const slot = slots[index];
+    const { x, y, width, height } = slot;
+    const bevel = 58;
+    const icon = resourceImages[`attribute:${attribute}`] || resourceImages[`keyword:${attribute}`];
+    const iconSize = 70;
+    const value = Number.isFinite(Number(attributes?.[attribute])) ? Number(attributes[attribute]) : 0;
+
+    context.save();
+    const traceAttributePath = (grow = 0) => {
+      const gx = x - grow;
+      const gy = y - grow * 0.65;
+      const gw = width + grow * 2;
+      const gh = height + grow * 1.3;
+      const gb = bevel + grow * 0.4;
+      context.beginPath();
+      context.moveTo(gx + gb, gy);
+      context.lineTo(gx + gw - gb, gy);
+      context.lineTo(gx + gw, gy + gh / 2);
+      context.lineTo(gx + gw - gb, gy + gh);
+      context.lineTo(gx + gb, gy + gh);
+      context.lineTo(gx, gy + gh / 2);
+      context.closePath();
+    };
+
+    traceAttributePath();
+    const fill = context.createLinearGradient(x, y, x, y + height);
+    fill.addColorStop(0, 'rgba(0,0,0,0.88)');
+    fill.addColorStop(0.52, 'rgba(0,0,0,0.98)');
+    fill.addColorStop(1, 'rgba(0,0,0,0.84)');
+    context.fillStyle = fill;
+    context.shadowColor = 'rgba(0,0,0,0.85)';
+    context.shadowBlur = 16;
+    context.fill();
+
+    traceAttributePath(2);
+    context.shadowColor = 'rgba(255,255,255,0.46)';
+    context.shadowBlur = 24;
+    context.lineWidth = 4;
+    context.strokeStyle = 'rgba(255,255,255,0.28)';
+    context.stroke();
+
+    traceAttributePath();
+    context.shadowBlur = 0;
+    context.lineWidth = 2.5;
+    context.strokeStyle = 'rgba(255,255,255,0.58)';
+    context.stroke();
+
+    if (icon) {
+      context.save();
+      context.shadowColor = 'rgba(255,255,255,0.24)';
+      context.shadowBlur = 10;
+      context.drawImage(icon, x + 82, y + height / 2 - iconSize / 2, iconSize, iconSize);
+      context.restore();
+    }
+
+    context.fillStyle = 'rgba(255,255,255,0.96)';
+    context.shadowColor = 'rgba(0,0,0,0.88)';
+    context.shadowBlur = 8;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    if ('letterSpacing' in context) context.letterSpacing = '0px';
+    context.font = '900 76px Cinzel, Georgia, serif';
+    context.fillText(String(value), x + width / 2 + 15, y + height / 2 - 10);
+
+    context.fillStyle = 'rgba(200,170,110,0.92)';
+    context.font = '900 24px Lato, Arial, sans-serif';
+    if ('letterSpacing' in context) context.letterSpacing = '2px';
+    context.fillText(attribute.toUpperCase(), x + width / 2 + 16, y + height / 2 + 48);
+
+    context.restore();
+  });
+};
+
 const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate = false, resourceImages = {}) => {
   const hasUserText = textValue.trim().length > 0;
   const text = hasUserText ? textValue.trim() : previewText;
@@ -1625,16 +1849,36 @@ const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate =
   context.font = `${style}${dynamicLayout.weight || '400'} ${fitted.size}px ${family}`;
 
   let y = dynamicLayout.y;
-  fitted.lines.forEach((line, index) => {
-    if (y + fitted.lineHeight > dynamicLayout.y + dynamicLayout.height) return;
-    if (line) {
-      if (shouldJustifyLine(fitted.lines, index)) {
-        drawTextLineWithIcons(context, line, dynamicLayout.x, y, dynamicLayout.width, true, resourceImages);
+  fitted.items.forEach((item, index) => {
+    if (y + item.height > dynamicLayout.y + dynamicLayout.height) return;
+
+    if (item.type === 'separator') {
+      drawDescriptionSeparator(context, dynamicLayout, y, fitted.lineHeight);
+    } else if (item.type === 'text' && item.line) {
+      const nextTextItem = fitted.items.slice(index + 1).find((candidate) => candidate.type === 'text' || candidate.type === 'separator');
+      const shouldJustify = Boolean(
+        nextTextItem &&
+        nextTextItem.type === 'text' &&
+        !item.isLore &&
+        !nextTextItem.isLore &&
+        item.line.includes(' ')
+      );
+
+      if (item.isLore) {
+        context.fillStyle = 'rgba(255,255,255,0.84)';
+        context.font = `italic ${dynamicLayout.weight || '400'} ${Math.max(48, Math.round(fitted.size * 0.94))}px ${family}`;
       } else {
-        drawTextLineWithIcons(context, line, dynamicLayout.x, y, dynamicLayout.width, false, resourceImages);
+        context.fillStyle = 'rgba(255,255,255,0.96)';
+        context.font = `${style}${dynamicLayout.weight || '400'} ${fitted.size}px ${family}`;
+      }
+
+      if (shouldJustify) {
+        drawTextLineWithIcons(context, item.line, dynamicLayout.x, y, dynamicLayout.width, true, resourceImages);
+      } else {
+        drawTextLineWithIcons(context, item.line, dynamicLayout.x, y, dynamicLayout.width, false, resourceImages);
       }
     }
-    y += fitted.lineHeight;
+    y += item.height;
   });
 
   context.restore();
@@ -1677,6 +1921,7 @@ const drawCardCanvas = (
   customColor = '#c8aa6e',
   singleTextStyle = 'narrative',
   visibleTraitRows = 3,
+  minionAttributes = DEFAULT_MINION_ATTRIBUTES,
 ) => {
   const context = canvas.getContext('2d');
 
@@ -1750,9 +1995,9 @@ const drawCardCanvas = (
   };
 
   // Draw weapon interface if cardType is weapon or armor or action!
-  if (cardType === 'weapon') {
+  if (cardType === 'weapon' || cardType === 'skill') {
     // 1. Draw Dice or Element Icon
-    if (elementIconImg) {
+    if (cardType === 'weapon' && elementIconImg) {
       context.save();
       context.drawImage(elementIconImg, 290 - 200/2, 615 - 200/2, 200, 200);
       context.restore();
@@ -1769,7 +2014,10 @@ const drawCardCanvas = (
     }
 
     drawChargeResources();
-  } else if (cardType === 'armor' || cardType === 'trap' || cardType === 'skill') {
+    if (cardType === 'skill') {
+      drawMinionAttributes(context, minionAttributes, resourceImages);
+    }
+  } else if (cardType === 'armor' || cardType === 'trap') {
     drawChargeResources();
   } else if (cardType === 'action') {
     if (diceIconImg) {
@@ -1797,7 +2045,10 @@ const drawCardCanvas = (
     const activeRows = typeConfig.maxTraits > 2 ? Math.min(visibleTraitRows, typeConfig.maxTraits / 2) : 1;
     const activeTraitsCount = typeConfig.maxTraits > 2 ? activeRows * 2 : typeConfig.maxTraits;
     const slotLabels = traits.slice(0, activeTraitsCount);
-    getTraitSlots(typeConfig.layout).slice(0, activeTraitsCount).forEach((slot, index) => {
+    const traitSlots = cardType === 'skill'
+      ? getTraitSlots(typeConfig.layout).slice(2, 2 + activeTraitsCount)
+      : getTraitSlots(typeConfig.layout).slice(0, activeTraitsCount);
+    traitSlots.forEach((slot, index) => {
       drawTraitBadge(context, slot, slotLabels[index] || '');
     });
   }
@@ -1840,6 +2091,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
   const [consumptionSlots, setConsumptionSlots] = useState(DEFAULT_CONSUMPTION_SLOTS);
   const [resourceMode, setResourceMode] = useState(RESOURCE_MODE_BOTH);
   const [consumptionSlotTypes, setConsumptionSlotTypes] = useState(['consumption', 'consumption', 'consumption', 'consumption', 'consumption']);
+  const [minionAttributes, setMinionAttributes] = useState(DEFAULT_MINION_ATTRIBUTES);
 
   // History system for undo/redo
   const descriptionHistoryRef = useRef({ past: [], future: [] });
@@ -1977,11 +2229,11 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
 
     if (drawId !== drawSequenceRef.current) return undefined;
 
-    // Load Weapon Type Image if cardType is weapon
+    // Load Weapon Type Image if cardType is weapon-like
     let weaponIconImg = null;
     let diceIconImg = null;
     const resourceImages = {};
-    if (cardType === 'weapon') {
+    if (cardType === 'weapon' || cardType === 'skill') {
       const iconSrc = getWeaponTypeIconSrc(weaponType);
       weaponIconImg = imageCacheRef.current.get(iconSrc);
       if (!weaponIconImg) {
@@ -2000,7 +2252,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       }
     }
 
-    if (cardType === 'weapon' || cardType === 'action') {
+    if (cardType === 'weapon' || cardType === 'action' || cardType === 'skill') {
       // Load Dice Icon Image
       const diceSrc = `${process.env.PUBLIC_URL || ''}/dados/cartas/${diceType}.webp`;
       diceIconImg = imageCacheRef.current.get(diceSrc);
@@ -2024,10 +2276,12 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     const loadsConsumptionResources = cardType === 'action' || (
       RESOURCE_CARD_TYPES.has(cardType) && resourceMode !== RESOURCE_MODE_CHARGE_ONLY
     );
+    const loadsMinionAttributes = cardType === 'skill';
 
-    if (loadsChargeResources || loadsConsumptionResources) {
+    if (loadsChargeResources || loadsConsumptionResources || loadsMinionAttributes) {
       const resourceOptions = [
         ...CHARGE_TYPES.map((option) => ({ ...option, cacheKey: `charge:${option.id}` })),
+        ...CHARGE_TYPES.map((option) => ({ ...option, cacheKey: `attribute:${option.id}` })),
         ...CONSUMPTION_TYPES.map((option) => ({ ...option, cacheKey: `consumption:${option.id}` })),
         ...ELEMENT_TYPES.filter((option) => option.id !== 'Ninguno').map((option) => ({
           id: option.id,
@@ -2040,6 +2294,8 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
         loadsChargeResources && chargeSlots.includes(option.id) && option.cacheKey.startsWith('charge:')
       ) || (
         loadsConsumptionResources && consumptionSlots.includes(option.id) && option.cacheKey.startsWith('consumption:')
+      ) || (
+        loadsMinionAttributes && MINION_ATTRIBUTE_TYPES.includes(option.id) && option.cacheKey.startsWith('attribute:')
       ));
 
       await Promise.all(requiredResourceOptions.map(async (option) => {
@@ -2143,11 +2399,12 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       customColor,
       singleTextStyle,
       visibleTraitRows,
+      minionAttributes,
     );
 
     setImageStatus('ready');
     return undefined;
-  }, [activeBackground, cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle, visibleTraitRows]);
+  }, [activeBackground, cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle, visibleTraitRows, minionAttributes]);
 
   useEffect(() => {
     let cleanup;
@@ -2198,6 +2455,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     setConsumptionSlots(DEFAULT_CONSUMPTION_SLOTS);
     setResourceMode(RESOURCE_MODE_BOTH);
     setConsumptionSlotTypes(['consumption', 'consumption', 'consumption', 'consumption', 'consumption']);
+    setMinionAttributes(DEFAULT_MINION_ATTRIBUTES);
     setSelectedElement('Ninguno');
     setCustomColorActive(false);
     setCustomColor('#c8aa6e');
@@ -2225,6 +2483,15 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       nextSlots[index] = value;
       return nextSlots;
     });
+  };
+
+  const handleMinionAttributeChange = (attribute, value) => {
+    const parsed = parseInt(value, 10);
+    const nextValue = Number.isFinite(parsed) ? Math.min(99, Math.max(0, parsed)) : 0;
+    setMinionAttributes((currentAttributes) => ({
+      ...currentAttributes,
+      [attribute]: nextValue,
+    }));
   };
 
   const handleDiceQtyChange = (value) => {
@@ -2274,6 +2541,8 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
         nextSlots[0] = 'Tiempo';
         return nextSlots;
       });
+    } else if (typeId === 'skill') {
+      setVisibleTraitRows(2);
     } else {
       setVisibleTraitRows(3);
     }
@@ -2346,6 +2615,22 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
         formatted = selectedText.slice(1, -1);
       } else {
         formatted = `*${selectedText}*`;
+      }
+    } else if (formatType === 'separator') {
+      const before = text.slice(0, start);
+      const after = text.slice(end);
+      const prefix = before.endsWith('\n') || before.length === 0 ? '' : '\n';
+      const suffix = after.startsWith('\n') || after.length === 0 ? '' : '\n';
+      formatted = `${prefix}---${suffix}`;
+      newStart = start;
+      newEnd = end;
+    } else if (formatType === 'lore') {
+      const fallback = 'Texto de lore';
+      const loreText = selectedText || fallback;
+      if (selectedText.startsWith(LORE_OPEN_TAG) && selectedText.endsWith(LORE_CLOSE_TAG)) {
+        formatted = selectedText.slice(LORE_OPEN_TAG.length, -LORE_CLOSE_TAG.length);
+      } else {
+        formatted = `${LORE_OPEN_TAG}${loreText}${LORE_CLOSE_TAG}`;
       }
     } else if (formatType === 'color') {
       const anyColorMatch = selectedText.match(/^\[color:(#[0-9a-fA-F]{6})\]\{(.*)\}$/);
@@ -2424,6 +2709,22 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
             title="Cursiva"
           >
             I
+          </button>
+          <button
+            type="button"
+            onClick={() => applyFormat(ref, 'separator')}
+            className="h-6 px-2.5 text-[10px] font-extrabold uppercase tracking-wider border border-slate-800 bg-[#09090b]/40 text-slate-300 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e] cursor-pointer flex items-center justify-center transition"
+            title="Insertar separador"
+          >
+            ---
+          </button>
+          <button
+            type="button"
+            onClick={() => applyFormat(ref, 'lore')}
+            className="h-6 px-2.5 text-[10px] font-extrabold uppercase tracking-wider border border-slate-800 bg-[#09090b]/40 text-slate-300 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e] cursor-pointer flex items-center justify-center transition"
+            title="Marcar como lore"
+          >
+            Lore
           </button>
         </div>
         <div className="flex items-center gap-1.5">
@@ -2572,11 +2873,11 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                    cardType === 'armor' ? 'Propiedades de la Armadura' : 
                    cardType === 'trap' ? 'Propiedades de la Trampa' :
                    cardType === 'action' ? 'Propiedades de la Acción' : 
-                   cardType === 'skill' ? 'Propiedades de la Habilidad' :
+                   cardType === 'skill' ? 'Propiedades del Minion' :
                    'Propiedades del Estado'}
                 </div>
                 
-                {cardType === 'weapon' && (
+                {(cardType === 'weapon' || cardType === 'skill') && (
                   <>
                     {/* 1. Tipo de Arma */}
                     <div className="space-y-1.5">
@@ -2618,31 +2919,32 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                         ))}
                       </div>
                     </div>
-                    {/* 3. Elemento / Estado */}
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        Elemento / Estado
-                      </label>
-                      <select
-                        value={selectedElement}
-                        onChange={(event) => setSelectedElement(event.target.value)}
-                        className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
-                      >
-                        {ELEMENT_TYPES.map((type) => (
-                          <option key={type.id} value={type.id}>
-                            {type.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    {cardType === 'weapon' && (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          Elemento / Estado
+                        </label>
+                        <select
+                          value={selectedElement}
+                          onChange={(event) => setSelectedElement(event.target.value)}
+                          className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
+                        >
+                          {ELEMENT_TYPES.map((type) => (
+                            <option key={type.id} value={type.id}>
+                              {type.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </>
                 )}
 
-                {(cardType === 'weapon' || cardType === 'action') && (cardType !== 'weapon' || selectedElement === 'Ninguno') && (
+                {(cardType === 'weapon' || cardType === 'action' || cardType === 'skill') && (cardType !== 'weapon' || selectedElement === 'Ninguno') && (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        {cardType === 'weapon' ? 'Dado de Daño' : 'Dado de Acción'}
+                        {cardType === 'weapon' ? 'Dado de Daño' : cardType === 'skill' ? 'Dado del Minion' : 'Dado de Acción'}
                       </label>
                       <select
                         value={diceType}
@@ -2693,6 +2995,39 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                           </button>
                         </div>
                       )}
+                    </div>
+                  </div>
+                )}
+
+                {cardType === 'skill' && (
+                  <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-3">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      Atributos del Minion
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {MINION_ATTRIBUTE_TYPES.map((attribute) => {
+                        const iconSrc = `${process.env.PUBLIC_URL || ''}/interfaz/cargas/${attribute}.webp`;
+                        return (
+                          <label
+                            key={`minion-attribute-${attribute}`}
+                            className="grid grid-cols-[2rem_1fr] items-center border border-[#c8aa6e]/20 bg-[#09090b]/80"
+                            title={attribute}
+                          >
+                            <span className="flex h-full items-center justify-center border-r border-[#c8aa6e]/15">
+                              <img src={iconSrc} alt="" className="h-5 w-5 object-contain" />
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={99}
+                              value={minionAttributes[attribute]}
+                              onChange={(event) => handleMinionAttributeChange(attribute, event.target.value)}
+                              className="h-[34px] min-w-0 bg-transparent px-1 text-center text-sm font-black text-[#f0e6d2] outline-none"
+                              aria-label={`Atributo ${attribute}`}
+                            />
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
