@@ -72,6 +72,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
   - Se agrega el icono **Variable** al final de la pool de consumos para su selección y asignación en ranuras.
   - Se integra un selector de **Elemento / Estado** para armas. Si un arma tiene un elemento asignado (distinto de "Ninguno"), se ocultan los campos de dados y cantidad en el editor y se dibuja el icono del elemento en lugar del dado en el canvas con las mismas propiedades.
 - **Cuadros de texto en cartas**: las descripciones y textos narrativos del constructor se dibujan sobre paneles negros translúcidos sin marco, con padding interno y centrado vertical para textos cortos.
+- **Ajustes de trampa y armadura en cartas**: las trampas y armaduras amplían el cuadro de texto al ocultar sus rasgos, y las armaduras usan ranuras específicas sin selector de consumo/elemento.
 - **Edición directa de todos los campos**: haz clic en título, subtítulo, descripción, etiquetas, reglas o listas para actualizar la clase y guarda los cambios con un solo botón.
 - **Hitos con seguimiento**: marca la inspiración completada mediante checks persistentes y resaltados que mantienen el estilo luminiscente del panel.
 - **Niveles de clase dinámicos**: controla el número de niveles con un deslizador configurable desde 0 en adelante y edita cada hito de progreso en línea.
@@ -171,7 +172,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.85**
+> **Versión actual: 2.4.86**
+
+**Resumen de cambios v2.4.86:**
+
+- **Unificación de Caja de Descripción**: Eliminados los cuadros de texto divididos ("Texto principal" y "Texto narrativo") para todas las cartas (armas, habilidades y trampas), unificándolos en un único cuadro de texto de descripción ("Descripción") que abarca todo el espacio disponible. Se conservan los botones de estilo inferior ("Narrativo" y "Principal") para permitir seleccionar el formato de tipografía del bloque único.
 
 **Resumen de cambios v2.4.85:**
 
@@ -2157,3 +2162,28 @@ Guía rápida: ver `docs/Minimapa.md`.
 - Se añadió `layout="position"` en badges de estado y en el botón "+ Añadir" (ahora un `<motion.button>`), permitiendo que todos los elementos hermanos se deslicen de forma continua a sus nuevas coordenadas y fila durante el reflow.
 - Se calibró la curva de animación de los badges a `0.25s` con aceleración `easeInOut` para un tacto sedoso, lineal y de calidad cinematográfica.
 - Se corrigió un error visual en el creador de cartas (`CardBuilder.jsx`) donde el filtro de color personalizado (`customColorActive`) pintaba parcialmente el borde superior de la carta (bajo la cabecera); se reajustó la coordenada Y inicial (`ry = 410`) y la altura del rectángulo (`rh = 2100`) para que el filtro cubra con precisión milimétrica únicamente la textura interior de la carta sin solaparse con el marco dorado del borde superior.
+
+## Novedades: Ocultar Filas de Rasgos y Ampliar Texto en Cartas (v2.4.44)
+
+- **Caja de texto autoadaptable**: Ocultar filas de rasgos libera de forma inmediata espacio vertical, desplazando y agrandando proporcionalmente la caja de descripción (`+240px` por fila en armas/habilidades y `+230px` por fila en armaduras).
+- **Selector de pares de rasgos**: Se añadió un control horizontal de botones (`1`, `2`, `3` o `4`) bajo "Filas / Pares visibles" en el panel lateral de rasgos de la carta para configurar la cantidad exacta de filas a mostrar.
+- **Entradas laterales dinámicas**: La lista de entradas de texto de rasgos de la barra lateral se reduce y ajusta automáticamente para mostrar únicamente los campos correspondientes a los pares de rasgos configurados como visibles.
+- **Mantener interruptor maestro**: El checkbox de visualización "Mostrar" continúa permitiendo ocultar o mostrar todas las filas de rasgos de golpe.
+- **Reinicio y ajuste automático**: El estado de filas visibles se restablece y configura de manera inteligente al cambiar de tipo de carta o restablecer el editor.
+
+## Novedades: Formato Enriquecido de Texto (v2.4.45)
+
+- **Marcas de estilo personalizadas**: Soporte completo para renderizado de negrita (`**texto**`), cursiva (`*texto*`) y color personalizado (`[color:#HEX]{texto}`) directamente sobre el canvas de la carta.
+- **Medición de ancho precisa**: El empaquetador de líneas y el espaciado de texto justificado miden de forma independiente los anchos reales de cada segmento estilizado más los iconos de palabras clave asociados, garantizando que el texto se adapte sin cortes ni desbordamientos.
+- **Anidamiento recursivo de estilos**: Soporte técnico para etiquetas compuestas (como cursivas o negritas anidadas dentro de bloques de colores).
+- **Barra de herramientas de formato**: Adición de una botonera de formato sobre las cajas de descripción y texto narrativo en el editor lateral. Permite alternar rápidamente negrita (`B`), cursiva (`I`) y seleccionar colores de una paleta temática de 6 colores listos para usar (`Dorado`, `Rojo`, `Verde`, `Azul`, `Morado`, `Blanco`).
+- **Refs táctiles**: Implementación de atajos visuales que conservan la selección de texto y restauran el foco de escritura en la caja del cursor en PC y móviles.
+
+## Novedades: Mejoras de Salto de Línea Estilizado, Alternado de Color e Historial (v2.4.46)
+
+- **Salto de Línea Estilizado y Tokens**: Refactorización de `wrapDescriptionText` mediante tokens de palabras con estilos heredados. Esto garantiza que las líneas resultantes mantengan su formato de negrita, cursiva o color intacto al saltar de línea o al incluir palabras clave con iconos.
+- **Guionizado Enriquecido**: Las palabras largas con formato se separan correctamente de forma silábica sobre el texto limpio del token, manteniendo sus marcas estilizadas de apertura y cierre en ambos extremos del corte.
+- **Alternado de Color Inteligente**: La pulsación repetida de un color sobre texto ya coloreado retira el formato de color de forma inmediata, facilitando la edición rápida de descripciones.
+- **Historial de Deshacer/Rehacer**: Implementación nativa de la pila de historial en textareas para `Ctrl + Z` y `Ctrl + Y`, con agrupación inteligente por tiempo para fusionar pulsaciones rápidas consecutivas en acciones por palabras/frases en lugar de letra a letra.
+- **Reinicio con Dado Limpio**: El botón "Restablecer" inicializa la carta de Arma con el elemento `Ninguno` por defecto, permitiendo previsualizar de inmediato un dado limpio de `1d6` en el canvas en lugar del elemento Fuego.
+
