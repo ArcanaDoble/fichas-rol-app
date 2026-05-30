@@ -726,7 +726,7 @@ const getDynamicStartingLayout = (layout, text, isPrimary) => {
   return layout;
 };
 
-const getDescriptionLayouts = (typeConfig, showTraits) => {
+const getDescriptionLayouts = (typeConfig, showTraits, singleTextStyle = 'narrative') => {
   if (typeConfig.id === 'action') return {};
 
   const hasRails = typeConfig.id === 'weapon' || typeConfig.id === 'armor' || typeConfig.id === 'trap' || typeConfig.id === 'skill';
@@ -767,7 +767,7 @@ const getDescriptionLayouts = (typeConfig, showTraits) => {
       height: hasRails ? 740 : 895,
       fontSize: 85,
       lineHeight: 104,
-      italic: true,
+      italic: singleTextStyle === 'narrative',
       weight: 600,
       family: "Georgia, serif",
     },
@@ -1150,8 +1150,8 @@ const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate =
   context.restore();
 };
 
-const drawDescription = (context, description, flavorText, typeConfig, showTraits, hyphenate = false) => {
-  const layouts = getDescriptionLayouts(typeConfig, showTraits);
+const drawDescription = (context, description, flavorText, typeConfig, showTraits, hyphenate = false, singleTextStyle = 'narrative') => {
+  const layouts = getDescriptionLayouts(typeConfig, showTraits, singleTextStyle);
 
   if (layouts.primary) {
     drawTextBlock(context, description, layouts.primary, PRIMARY_DESCRIPTION_PREVIEW_TEXT, hyphenate);
@@ -1185,6 +1185,7 @@ const drawCardCanvas = (
   elementIconImg = null,
   customColorActive = false,
   customColor = '#c8aa6e',
+  singleTextStyle = 'narrative',
 ) => {
   const context = canvas.getContext('2d');
 
@@ -1305,7 +1306,7 @@ const drawCardCanvas = (
   }
 
   if (cardType !== 'action') {
-    drawDescription(context, description, flavorText, typeConfig, showTraits, hyphenate);
+    drawDescription(context, description, flavorText, typeConfig, showTraits, hyphenate, singleTextStyle);
   }
 };
 
@@ -1319,6 +1320,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
   const [description, setDescription] = useState(DEFAULT_DESCRIPTION);
   const [flavorText, setFlavorText] = useState(DEFAULT_FLAVOR_TEXT);
   const [hyphenate, setHyphenate] = useState(true);
+  const [singleTextStyle, setSingleTextStyle] = useState('narrative'); // 'narrative' or 'principal'
   const [cardType, setCardType] = useState('weapon');
   const [showTraits, setShowTraits] = useState(true);
   const [traits, setTraits] = useState(DEFAULT_TRAITS);
@@ -1526,11 +1528,12 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       elementIconImg,
       customColorActive,
       customColor,
+      singleTextStyle,
     );
 
     setImageStatus('ready');
     return undefined;
-  }, [activeBackground, cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor]);
+  }, [activeBackground, cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle]);
 
   useEffect(() => {
     let cleanup;
@@ -2007,15 +2010,30 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                     <Type className="h-4 w-4" />
                     {hasSplitDescription ? 'Texto principal' : 'Descripción'}
                   </label>
-                  <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                    <input
-                      type="checkbox"
-                      checked={hyphenate}
-                      onChange={(event) => setHyphenate(event.target.checked)}
-                      className="h-4 w-4 accent-[#c8aa6e]"
-                    />
-                    Guionizar
-                  </label>
+                  <div className="flex items-center gap-4">
+                    {!hasSplitDescription && (
+                      <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                        Estilo:
+                        <select
+                          value={singleTextStyle}
+                          onChange={(event) => setSingleTextStyle(event.target.value)}
+                          className="border border-[#c8aa6e]/20 bg-[#09090b]/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
+                        >
+                          <option value="narrative">Narrativo</option>
+                          <option value="principal">Principal</option>
+                        </select>
+                      </label>
+                    )}
+                    <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={hyphenate}
+                        onChange={(event) => setHyphenate(event.target.checked)}
+                        className="h-4 w-4 accent-[#c8aa6e] cursor-pointer"
+                      />
+                      Guionizar
+                    </label>
+                  </div>
                 </div>
                 <textarea
                   value={description}

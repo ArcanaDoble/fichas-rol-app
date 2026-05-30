@@ -167,7 +167,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.79**
+> **Versión actual: 2.4.80**
+
+**Resumen de cambios v2.4.80:**
+
+- **Estilo de Texto Personalizable para Cartas de una Única Descripción**: Añadida una propiedad y selector visual en el editor (`CardBuilder.jsx`) para cartas que solo tienen un bloque de descripción (como Armas, Armaduras y Estados). Permite seleccionar dinámicamente el estilo entre **Narrativo** (cursiva, por defecto) y **Principal** (normal), adaptando el renderizado en el canvas a la preferencia del diseñador.
 
 **Resumen de cambios v2.4.79:**
 
@@ -1648,6 +1652,10 @@ src/
 **Resumen de cambios v2.4.77:**
 
 - Aplicar un estilo de texto guardado ya no reemplaza el contenido del cuadro y puede aplicarse a múltiples textos, manteniendo la opción de restablecer los cambios.
+
+**Resumen de cambios v2.4.80:**
+
+- ✅ Selector de estilo Narrativo/Principal para descripciones únicas de cartas de arma, armadura y estado.
 
 **Resumen de cambios v2.4.79:**
 
