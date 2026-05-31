@@ -75,6 +75,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Ajustes de trampa y armadura en cartas**: las trampas y armaduras amplían el cuadro de texto al ocultar sus rasgos, y las armaduras usan ranuras específicas sin selector de consumo/elemento.
 - **Separación de reglas y lore en cartas**: el cuadro de texto permite insertar separadores con `---` y marcar bloques narrativos con `[lore]...[/lore]`, con botones directos en la barra de formato del editor.
 - **Cartas de Minion**: el antiguo tipo `Habilidad` del constructor pasa a `Minion`, con dado, cantidad, alcance/regla, tipo de arma, una fila superior de atributos `Hambre`, `Cuerpo` y `Mente` con iconos y valores editables, y hasta 4 rasgos en las dos filas inferiores.
+- **Rendimiento del constructor de cartas**: el canvas agrupa redibujos rápidos, reutiliza cargas de imágenes en curso, precarga recursos comunes en segundo plano y usa una previsualización interna más ligera en móvil sin perder resolución al exportar.
 - **Edición directa de todos los campos**: haz clic en título, subtítulo, descripción, etiquetas, reglas o listas para actualizar la clase y guarda los cambios con un solo botón.
 - **Hitos con seguimiento**: marca la inspiración completada mediante checks persistentes y resaltados que mantienen el estilo luminiscente del panel.
 - **Niveles de clase dinámicos**: controla el número de niveles con un deslizador configurable desde 0 en adelante y edita cada hito de progreso en línea.
@@ -2188,4 +2189,14 @@ Guía rápida: ver `docs/Minimapa.md`.
 - **Alternado de Color Inteligente**: La pulsación repetida de un color sobre texto ya coloreado retira el formato de color de forma inmediata, facilitando la edición rápida de descripciones.
 - **Historial de Deshacer/Rehacer**: Implementación nativa de la pila de historial en textareas para `Ctrl + Z` y `Ctrl + Y`, con agrupación inteligente por tiempo para fusionar pulsaciones rápidas consecutivas en acciones por palabras/frases en lugar de letra a letra.
 - **Reinicio con Dado Limpio**: El botón "Restablecer" inicializa la carta de Arma con el elemento `Ninguno` por defecto, permitiendo previsualizar de inmediato un dado limpio de `1d6` en el canvas en lugar del elemento Fuego.
+
+## Novedades: Reordenación de Biblioteca por Arrastrar y Soltar (v2.4.47)
+
+- **Arrastrar para ordenar**: Habilitado el soporte de arrastrar y soltar (Drag and Drop) para ordenar cómodamente las cartas en la "Biblioteca de Cartas" y los tokens en la "Biblioteca de Tokens" dentro de la barra lateral.
+- **Interpolación de tiempo inteligente**: El orden se guarda de forma persistente en Firebase recalculando dinámicamente marcas de tiempo equilibradas entre elementos adyacentes, sin necesidad de alterar la base de datos ni añadir colecciones complejas.
+- **UX Premium con Animaciones**: 
+  - Al arrastrar un elemento, este reduce su opacidad al 35% y muestra un contorno punteado (estilo "hueco vacío").
+  - Al pasar sobre un posible destino, la tarjeta destino escala un 105% con un marco dorado brillante y una sombra difusa que indica de forma espectacular que la ranura está lista para recibir el elemento.
+- **Seguridad Máster**: Los controles de arrastre se activan únicamente para el Master de la partida (`!isPlayerView`), asegurando que solo el director de juego pueda manipular y organizar los catálogos en tiempo real.
+
 

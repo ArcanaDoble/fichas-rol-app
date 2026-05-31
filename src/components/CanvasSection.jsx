@@ -4225,6 +4225,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [cards, setCards] = useState([]);
     const [uploadingCard, setUploadingCard] = useState(false);
 
+    // Estado para arrastrar y ordenar en la biblioteca (Sidebar)
+    const [draggedLibraryItemId, setDraggedLibraryItemId] = useState(null);
+    const [draggedLibraryItemType, setDraggedLibraryItemType] = useState(null); // 'token' | 'card'
+    const [dragOverLibraryItemId, setDragOverLibraryItemId] = useState(null);
+
     // Estado para Drag & Drop de Tokens en el Canvas
     const [draggedTokenId, setDraggedTokenId] = useState(null); // ID del token principal being dragged (para referencia visual inmediata)
     const [tokenDragStart, setTokenDragStart] = useState({ x: 0, y: 0, identifier: null }); // Posición inicial del mouse/touch
@@ -6890,6 +6895,42 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             await deleteDoc(doc(db, 'canvas_tokens', token.id));
         } catch (error) {
             console.error("Error deleting token:", error);
+        }
+    };
+
+    const handleReorderLibraryItem = async (collectionName, itemsList, draggedId, targetId) => {
+        const draggedIndex = itemsList.findIndex(item => item.id === draggedId);
+        const targetIndex = itemsList.findIndex(item => item.id === targetId);
+        if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) return;
+
+        const newItems = [...itemsList];
+        const [removed] = newItems.splice(draggedIndex, 1);
+        newItems.splice(targetIndex, 0, removed);
+
+        let newCreatedAt;
+        if (targetIndex === 0) {
+            // Colocado al inicio, debe ser mayor (más nuevo) que el primer elemento actual
+            const firstItemTime = Number(newItems[1]?.createdAt || Date.now());
+            newCreatedAt = firstItemTime + 1000;
+        } else if (targetIndex === newItems.length - 1) {
+            // Colocado al final, debe ser menor (más viejo) que el último elemento actual
+            const lastItemTime = Number(newItems[newItems.length - 2]?.createdAt || Date.now());
+            newCreatedAt = lastItemTime - 1000;
+        } else {
+            // Colocado en medio
+            const prevItemTime = Number(newItems[targetIndex - 1]?.createdAt || Date.now());
+            const nextItemTime = Number(newItems[targetIndex + 1]?.createdAt || Date.now());
+            newCreatedAt = Math.round((prevItemTime + nextItemTime) / 2);
+        }
+
+        try {
+            await updateDoc(doc(db, collectionName, draggedId), {
+                createdAt: newCreatedAt
+            });
+            triggerToast("Orden actualizado", "Se ha reordenado el elemento", "success");
+        } catch (error) {
+            console.error("Error reordering library item:", error);
+            triggerToast("Error al ordenar", "No se pudo actualizar el orden", "error");
         }
     };
 
@@ -12924,9 +12965,45 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             {tokens.map(token => (
                                                 <div
                                                     key={token.id}
-                                                    className="aspect-square bg-[#0b1120] rounded-lg border border-slate-800 relative group overflow-hidden hover:border-[#c8aa6e]/50 transition-colors cursor-pointer"
+                                                    draggable={!isPlayerView}
+                                                    onDragStart={(e) => {
+                                                        if (isPlayerView) return;
+                                                        setDraggedLibraryItemId(token.id);
+                                                        setDraggedLibraryItemType('token');
+                                                        e.dataTransfer.effectAllowed = 'move';
+                                                    }}
+                                                    onDragOver={(e) => {
+                                                        if (draggedLibraryItemType === 'token' && draggedLibraryItemId !== token.id) {
+                                                            e.preventDefault();
+                                                            setDragOverLibraryItemId(token.id);
+                                                        }
+                                                    }}
+                                                    onDragLeave={() => {
+                                                        if (dragOverLibraryItemId === token.id) {
+                                                            setDragOverLibraryItemId(null);
+                                                        }
+                                                    }}
+                                                    onDrop={async (e) => {
+                                                        e.preventDefault();
+                                                        if (draggedLibraryItemType === 'token' && draggedLibraryItemId && draggedLibraryItemId !== token.id) {
+                                                            await handleReorderLibraryItem('canvas_tokens', tokens, draggedLibraryItemId, token.id);
+                                                        }
+                                                        setDraggedLibraryItemId(null);
+                                                        setDraggedLibraryItemType(null);
+                                                        setDragOverLibraryItemId(null);
+                                                    }}
+                                                    onDragEnd={() => {
+                                                        setDraggedLibraryItemId(null);
+                                                        setDraggedLibraryItemType(null);
+                                                        setDragOverLibraryItemId(null);
+                                                    }}
+                                                    className={`aspect-square bg-[#0b1120] rounded-lg border relative group overflow-hidden transition-all duration-200 cursor-grab active:cursor-grabbing ${
+                                                        draggedLibraryItemId === token.id ? 'opacity-35 border-dashed border-slate-700 scale-95' :
+                                                        dragOverLibraryItemId === token.id ? 'border-[#c8aa6e] ring-2 ring-[#c8aa6e]/30 scale-105 shadow-[0_0_15px_rgba(200,170,110,0.4)]' :
+                                                        'border-slate-800 hover:border-[#c8aa6e]/50'
+                                                    }`}
                                                     onClick={() => addTokenToCanvas(token.url)} // Click to Add
-                                                    title="Click para añadir al mapa"
+                                                    title={isPlayerView ? "Click para añadir al mapa" : "Arrastra para reordenar, click para añadir al mapa"}
                                                 >
                                                     <TokenImageWithLoader
                                                         src={token.url}
@@ -12991,8 +13068,44 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     {cards.map(card => (
                                                         <div
                                                             key={card.id}
-                                                            className="aspect-[5/7] bg-[#0b1120] rounded-md border border-slate-800 relative group overflow-hidden hover:border-[#c8aa6e]/50 transition-colors"
-                                                            title="Carta"
+                                                            draggable={!isPlayerView}
+                                                            onDragStart={(e) => {
+                                                                if (isPlayerView) return;
+                                                                setDraggedLibraryItemId(card.id);
+                                                                setDraggedLibraryItemType('card');
+                                                                e.dataTransfer.effectAllowed = 'move';
+                                                            }}
+                                                            onDragOver={(e) => {
+                                                                if (draggedLibraryItemType === 'card' && draggedLibraryItemId !== card.id) {
+                                                                    e.preventDefault();
+                                                                    setDragOverLibraryItemId(card.id);
+                                                                }
+                                                            }}
+                                                            onDragLeave={() => {
+                                                                if (dragOverLibraryItemId === card.id) {
+                                                                    setDragOverLibraryItemId(null);
+                                                                }
+                                                            }}
+                                                            onDrop={async (e) => {
+                                                                e.preventDefault();
+                                                                if (draggedLibraryItemType === 'card' && draggedLibraryItemId && draggedLibraryItemId !== card.id) {
+                                                                    await handleReorderLibraryItem('canvas_cards', cards, draggedLibraryItemId, card.id);
+                                                                }
+                                                                setDraggedLibraryItemId(null);
+                                                                setDraggedLibraryItemType(null);
+                                                                setDragOverLibraryItemId(null);
+                                                            }}
+                                                            onDragEnd={() => {
+                                                                setDraggedLibraryItemId(null);
+                                                                setDraggedLibraryItemType(null);
+                                                                setDragOverLibraryItemId(null);
+                                                            }}
+                                                            className={`aspect-[5/7] bg-[#0b1120] rounded-md border relative group overflow-hidden transition-all duration-200 cursor-grab active:cursor-grabbing ${
+                                                                draggedLibraryItemId === card.id ? 'opacity-35 border-dashed border-slate-700 scale-95' :
+                                                                dragOverLibraryItemId === card.id ? 'border-[#c8aa6e] ring-2 ring-[#c8aa6e]/30 scale-105 shadow-[0_0_15px_rgba(200,170,110,0.4)]' :
+                                                                'border-slate-800 hover:border-[#c8aa6e]/50'
+                                                            }`}
+                                                            title={isPlayerView ? "Carta" : "Arrastra para reordenar"}
                                                         >
                                                             <TokenImageWithLoader
                                                                 src={card.frontUrl}
@@ -13296,8 +13409,44 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         {cards.map(card => (
                                                             <div
                                                                 key={card.id}
-                                                                className="aspect-[5/7] bg-[#0b1120] rounded-md border border-slate-800 relative group overflow-hidden hover:border-[#c8aa6e]/50 transition-colors"
-                                                                title="Carta"
+                                                                draggable={!isPlayerView}
+                                                                onDragStart={(e) => {
+                                                                    if (isPlayerView) return;
+                                                                    setDraggedLibraryItemId(card.id);
+                                                                    setDraggedLibraryItemType('card');
+                                                                    e.dataTransfer.effectAllowed = 'move';
+                                                                }}
+                                                                onDragOver={(e) => {
+                                                                    if (draggedLibraryItemType === 'card' && draggedLibraryItemId !== card.id) {
+                                                                        e.preventDefault();
+                                                                        setDragOverLibraryItemId(card.id);
+                                                                    }
+                                                                }}
+                                                                onDragLeave={() => {
+                                                                    if (dragOverLibraryItemId === card.id) {
+                                                                        setDragOverLibraryItemId(null);
+                                                                    }
+                                                                }}
+                                                                onDrop={async (e) => {
+                                                                    e.preventDefault();
+                                                                    if (draggedLibraryItemType === 'card' && draggedLibraryItemId && draggedLibraryItemId !== card.id) {
+                                                                        await handleReorderLibraryItem('canvas_cards', cards, draggedLibraryItemId, card.id);
+                                                                    }
+                                                                    setDraggedLibraryItemId(null);
+                                                                    setDraggedLibraryItemType(null);
+                                                                    setDragOverLibraryItemId(null);
+                                                                }}
+                                                                onDragEnd={() => {
+                                                                    setDraggedLibraryItemId(null);
+                                                                    setDraggedLibraryItemType(null);
+                                                                    setDragOverLibraryItemId(null);
+                                                                }}
+                                                                className={`aspect-[5/7] bg-[#0b1120] rounded-md border relative group overflow-hidden transition-all duration-200 cursor-grab active:cursor-grabbing ${
+                                                                    draggedLibraryItemId === card.id ? 'opacity-35 border-dashed border-slate-700 scale-95' :
+                                                                    dragOverLibraryItemId === card.id ? 'border-[#c8aa6e] ring-2 ring-[#c8aa6e]/30 scale-105 shadow-[0_0_15px_rgba(200,170,110,0.4)]' :
+                                                                    'border-slate-800 hover:border-[#c8aa6e]/50'
+                                                                }`}
+                                                                title={isPlayerView ? "Carta" : "Arrastra para reordenar"}
                                                             >
                                                                 <TokenImageWithLoader
                                                                     src={card.frontUrl}

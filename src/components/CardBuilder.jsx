@@ -27,6 +27,7 @@ export const CARD_BACKGROUNDS = [
 
 const CANVAS_WIDTH = 1888;
 const CANVAS_HEIGHT = 2624;
+const MOBILE_PREVIEW_RENDER_SCALE = 0.25;
 const DEFAULT_CARD_NAME = 'NOMBRE DE CARTA';
 const DEFAULT_DESCRIPTION = '';
 const DEFAULT_FLAVOR_TEXT = '';
@@ -111,6 +112,15 @@ const WEAPON_TYPE_ALIASES = [
 const getWeaponTypeIconSrc = (weaponType) => (
   `${process.env.PUBLIC_URL || ''}/tipo/${encodeURIComponent(weaponType)}.webp`
 );
+
+const getPreviewRenderScale = () => {
+  if (typeof window === 'undefined') return 1;
+  const isCoarsePointer = window.matchMedia?.('(pointer: coarse)').matches;
+  const isNarrowViewport = window.matchMedia?.('(max-width: 820px)').matches;
+  const deviceMemory = Number(window.navigator?.deviceMemory || 0);
+  const isLowMemoryDevice = deviceMemory > 0 && deviceMemory <= 4;
+  return isCoarsePointer || isNarrowViewport || isLowMemoryDevice ? MOBILE_PREVIEW_RENDER_SCALE : 1;
+};
 
 const drawDiceIcon = (context, x, y, size, imgElement, qty, showQty = true) => {
   if (!imgElement) return;
@@ -1922,8 +1932,17 @@ const drawCardCanvas = (
   singleTextStyle = 'narrative',
   visibleTraitRows = 3,
   minionAttributes = DEFAULT_MINION_ATTRIBUTES,
+  renderScale = 1,
 ) => {
+  const targetWidth = Math.max(1, Math.round(CANVAS_WIDTH * renderScale));
+  const targetHeight = Math.max(1, Math.round(CANVAS_HEIGHT * renderScale));
+  if (canvas.width !== targetWidth) canvas.width = targetWidth;
+  if (canvas.height !== targetHeight) canvas.height = targetHeight;
+
   const context = canvas.getContext('2d');
+  context.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = renderScale < 1 ? 'medium' : 'high';
 
   context.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   context.drawImage(image, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -2063,9 +2082,12 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
   const descriptionRef = useRef(null);
   const flavorTextRef = useRef(null);
   const imageCacheRef = useRef(new Map());
+  const imageLoadCacheRef = useRef(new Map());
   const activeImageRef = useRef(null);
   const fontLoadPromiseRef = useRef(null);
   const drawSequenceRef = useRef(0);
+  const drawTimerRef = useRef(null);
+  const drawFrameRef = useRef(null);
   const [cardName, setCardName] = useState('Gris');
   const [description, setDescription] = useState(DEFAULT_DESCRIPTION);
   const [flavorText, setFlavorText] = useState(DEFAULT_FLAVOR_TEXT);
@@ -2190,11 +2212,39 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
   );
   const hasSplitDescription = usesSplitDescription(activeType, showTraits);
 
-  const drawCard = useCallback(async () => {
-    const canvas = canvasRef.current;
+  const loadCachedImage = useCallback(async (src) => {
+    const cachedImage = imageCacheRef.current.get(src);
+    if (cachedImage) return cachedImage;
+
+    const pendingLoad = imageLoadCacheRef.current.get(src);
+    if (pendingLoad) return pendingLoad;
+
+    const loadPromise = new Promise((resolve, reject) => {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = src;
+      img.onload = () => {
+        imageCacheRef.current.set(src, img);
+        imageLoadCacheRef.current.delete(src);
+        resolve(img);
+      };
+      img.onerror = (error) => {
+        imageLoadCacheRef.current.delete(src);
+        reject(error);
+      };
+    });
+
+    imageLoadCacheRef.current.set(src, loadPromise);
+    return loadPromise;
+  }, []);
+
+  const drawCard = useCallback(async (targetCanvas = canvasRef.current, renderScale = getPreviewRenderScale(), updateStatus = true) => {
+    const canvas = targetCanvas;
     if (!canvas || !activeBackground) return undefined;
     const drawId = drawSequenceRef.current + 1;
-    drawSequenceRef.current = drawId;
+    if (updateStatus) {
+      drawSequenceRef.current = drawId;
+    }
 
     if (document.fonts?.load) {
       try {
@@ -2206,28 +2256,19 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
         // If font loading is unavailable, the canvas still renders with the fallback serif.
       }
     }
-    if (drawId !== drawSequenceRef.current) return undefined;
+    if (updateStatus && drawId !== drawSequenceRef.current) return undefined;
 
     // 1. Load Background Image
-    let backgroundImage = imageCacheRef.current.get(activeBackground.src);
-    if (!backgroundImage) {
-      try {
-        backgroundImage = await new Promise((resolve, reject) => {
-          const img = new Image();
-          img.decoding = 'async';
-          img.src = activeBackground.src;
-          img.onload = () => resolve(img);
-          img.onerror = reject;
-        });
-        imageCacheRef.current.set(activeBackground.src, backgroundImage);
-      } catch (e) {
-        console.error("Could not load background image:", e);
-        setImageStatus('error');
-        return undefined;
-      }
+    let backgroundImage = null;
+    try {
+      backgroundImage = await loadCachedImage(activeBackground.src);
+    } catch (e) {
+      console.error("Could not load background image:", e);
+        if (updateStatus) setImageStatus('error');
+      return undefined;
     }
 
-    if (drawId !== drawSequenceRef.current) return undefined;
+    if (updateStatus && drawId !== drawSequenceRef.current) return undefined;
 
     // Load Weapon Type Image if cardType is weapon-like
     let weaponIconImg = null;
@@ -2235,40 +2276,20 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     const resourceImages = {};
     if (cardType === 'weapon' || cardType === 'skill') {
       const iconSrc = getWeaponTypeIconSrc(weaponType);
-      weaponIconImg = imageCacheRef.current.get(iconSrc);
-      if (!weaponIconImg) {
-        try {
-          weaponIconImg = await new Promise((resolve, reject) => {
-            const img = new Image();
-            img.decoding = 'async';
-            img.src = iconSrc;
-            img.onload = () => resolve(img);
-            img.onerror = reject;
-          });
-          imageCacheRef.current.set(iconSrc, weaponIconImg);
-        } catch (e) {
-          console.error("Could not load weapon type icon:", e);
-        }
+      try {
+        weaponIconImg = await loadCachedImage(iconSrc);
+      } catch (e) {
+        console.error("Could not load weapon type icon:", e);
       }
     }
 
     if (cardType === 'weapon' || cardType === 'action' || cardType === 'skill') {
       // Load Dice Icon Image
       const diceSrc = `${process.env.PUBLIC_URL || ''}/dados/cartas/${diceType}.webp`;
-      diceIconImg = imageCacheRef.current.get(diceSrc);
-      if (!diceIconImg) {
-        try {
-          diceIconImg = await new Promise((resolve, reject) => {
-            const img = new Image();
-            img.decoding = 'async';
-            img.src = diceSrc;
-            img.onload = () => resolve(img);
-            img.onerror = reject;
-          });
-          imageCacheRef.current.set(diceSrc, diceIconImg);
-        } catch (e) {
-          console.error("Could not load dice icon image:", e);
-        }
+      try {
+        diceIconImg = await loadCachedImage(diceSrc);
+      } catch (e) {
+        console.error("Could not load dice icon image:", e);
       }
     }
 
@@ -2300,20 +2321,11 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
 
       await Promise.all(requiredResourceOptions.map(async (option) => {
         const src = `${process.env.PUBLIC_URL || ''}${option.src}`;
-        let icon = imageCacheRef.current.get(src);
-        if (!icon) {
-          try {
-            icon = await new Promise((resolve, reject) => {
-              const img = new Image();
-              img.decoding = 'async';
-              img.src = src;
-              img.onload = () => resolve(img);
-              img.onerror = reject;
-            });
-            imageCacheRef.current.set(src, icon);
-          } catch (e) {
-            console.error(`Could not load resource icon: ${option.cacheKey}`, e);
-          }
+        let icon = null;
+        try {
+          icon = await loadCachedImage(src);
+        } catch (e) {
+          console.error(`Could not load resource icon: ${option.cacheKey}`, e);
         }
         if (icon) {
           resourceImages[option.cacheKey] = icon;
@@ -2325,20 +2337,10 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     if ((cardType === 'status' || cardType === 'weapon') && selectedElement !== 'Ninguno') {
       const suffix = cardType === 'weapon' ? '_p' : '';
       const elementSrc = `${process.env.PUBLIC_URL || ''}/elementos/${selectedElement}${suffix}.webp`;
-      elementIconImg = imageCacheRef.current.get(elementSrc);
-      if (!elementIconImg) {
-        try {
-          elementIconImg = await new Promise((resolve, reject) => {
-            const img = new Image();
-            img.decoding = 'async';
-            img.src = elementSrc;
-            img.onload = () => resolve(img);
-            img.onerror = reject;
-          });
-          imageCacheRef.current.set(elementSrc, elementIconImg);
-        } catch (e) {
-          console.error("Could not load element icon image:", e);
-        }
+      try {
+        elementIconImg = await loadCachedImage(elementSrc);
+      } catch (e) {
+        console.error("Could not load element icon image:", e);
       }
     }
 
@@ -2350,20 +2352,11 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
         const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === kwMatch.toLowerCase());
         if (!matchedKw) return;
         const src = `${process.env.PUBLIC_URL || ''}${KEYWORD_ICONS[matchedKw]}`;
-        let icon = imageCacheRef.current.get(src);
-        if (!icon) {
-          try {
-            icon = await new Promise((resolve, reject) => {
-              const img = new Image();
-              img.decoding = 'async';
-              img.src = src;
-              img.onload = () => resolve(img);
-              img.onerror = reject;
-            });
-            imageCacheRef.current.set(src, icon);
-          } catch (e) {
-            console.error(`Could not load keyword icon: ${matchedKw}`, e);
-          }
+        let icon = null;
+        try {
+          icon = await loadCachedImage(src);
+        } catch (e) {
+          console.error(`Could not load keyword icon: ${matchedKw}`, e);
         }
         if (icon) {
           resourceImages[`keyword:${matchedKw}`] = icon;
@@ -2371,7 +2364,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       }));
     }
 
-    if (drawId !== drawSequenceRef.current) return undefined;
+    if (updateStatus && drawId !== drawSequenceRef.current) return undefined;
 
     // 2. Draw the card canvas.
     drawCardCanvas(
@@ -2400,42 +2393,83 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       singleTextStyle,
       visibleTraitRows,
       minionAttributes,
+      renderScale,
     );
 
-    setImageStatus('ready');
+    if (updateStatus) setImageStatus('ready');
     return undefined;
-  }, [activeBackground, cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle, visibleTraitRows, minionAttributes]);
+  }, [activeBackground, cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage]);
 
   useEffect(() => {
-    let cleanup;
     let disposed = false;
 
-    Promise.resolve(drawCard()).then((drawCleanup) => {
-      if (disposed) {
-        if (typeof drawCleanup === 'function') drawCleanup();
-        return;
-      }
-      cleanup = drawCleanup;
-    });
+    drawTimerRef.current = window.setTimeout(() => {
+      drawFrameRef.current = window.requestAnimationFrame(() => {
+        Promise.resolve(drawCard()).then(() => {
+          if (disposed) return;
+        });
+      });
+    }, 35);
 
     return () => {
       disposed = true;
-      if (typeof cleanup === 'function') cleanup();
+      if (drawTimerRef.current) {
+        window.clearTimeout(drawTimerRef.current);
+        drawTimerRef.current = null;
+      }
+      if (drawFrameRef.current) {
+        window.cancelAnimationFrame(drawFrameRef.current);
+        drawFrameRef.current = null;
+      }
     };
   }, [drawCard]);
 
   useEffect(() => {
+    const preload = () => {
+      const commonSources = [
+        ...WEAPON_TYPES.map((type) => getWeaponTypeIconSrc(type)),
+        ...['D4', 'D6', 'D8', 'D10', 'D12', 'DX'].map((type) => `${process.env.PUBLIC_URL || ''}/dados/cartas/${type}.webp`),
+        ...CHARGE_TYPES.map((option) => `${process.env.PUBLIC_URL || ''}${option.src}`),
+        ...CONSUMPTION_TYPES.map((option) => `${process.env.PUBLIC_URL || ''}${option.src}`),
+      ];
+
+      commonSources.forEach((src) => {
+        loadCachedImage(src).catch(() => {});
+      });
+    };
+
+    if ('requestIdleCallback' in window) {
+      const idleId = window.requestIdleCallback(preload, { timeout: 1500 });
+      return () => window.cancelIdleCallback?.(idleId);
+    }
+
+    const timeoutId = window.setTimeout(preload, 750);
+    return () => window.clearTimeout(timeoutId);
+  }, [loadCachedImage]);
+
+  useEffect(() => {
+    let disposed = false;
+
+    Promise.resolve(loadCachedImage(activeBackground.src)).then((image) => {
+      if (disposed) {
+        return;
+      }
+      imageCacheRef.current.set(activeBackground.src, image);
+    }).catch(() => {
+      if (!disposed) setImageStatus('error');
+    });
+
+    return () => {
+      disposed = true;
+    };
+  }, [activeBackground.src, loadCachedImage]);
+
+  useEffect(() => {
     CARD_BACKGROUNDS.forEach((background) => {
       if (imageCacheRef.current.has(background.src)) return;
-
-      const image = new Image();
-      image.decoding = 'async';
-      image.src = background.src;
-      image.onload = () => {
-        imageCacheRef.current.set(background.src, image);
-      };
+      loadCachedImage(background.src).catch(() => {});
     });
-  }, []);
+  }, [loadCachedImage]);
 
   const handleReset = () => {
     setCardName('Gris');
@@ -2743,10 +2777,9 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     );
   };
 
-  const handleDownload = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
+  const handleDownload = async () => {
+    const exportCanvas = document.createElement('canvas');
+    await drawCard(exportCanvas, 1, false);
     const link = document.createElement('a');
     const safeName = normalizeCardName(cardName)
       .toLowerCase()
@@ -2755,7 +2788,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '') || 'carta';
     link.download = `${safeName}.png`;
-    link.href = canvas.toDataURL('image/png');
+    link.href = exportCanvas.toDataURL('image/png');
     link.click();
   };
 
