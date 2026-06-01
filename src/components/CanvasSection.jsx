@@ -21,7 +21,7 @@ import {
     getItemTraits,
 } from '../utils/armorSystem';
 import { db, storage } from '../firebase';
-import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, query, where, orderBy, getDoc, getDocs, serverTimestamp, addDoc, limit } from 'firebase/firestore';
+import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, query, where, orderBy, getDoc, getDocs, serverTimestamp, addDoc, limit, runTransaction } from 'firebase/firestore';
 import { nanoid } from 'nanoid';
 import { getCustomImage, useCustomEquipmentImages } from '../hooks/useCustomEquipmentImages';
 import { parseDieValue } from '../utils/damage';
@@ -4096,6 +4096,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [availableCharacters, setAvailableCharacters] = useState([]);
     const activeScenarioRef = useRef(null);
     useEffect(() => { activeScenarioRef.current = activeScenario; }, [activeScenario]);
+    const localUnsavedEditsRef = useRef({}); // { [itemId]: { [key]: value } }
+    const recentLocalWritesRef = useRef({}); // { [itemId]: { x, y, rotation, time } }
     const instantBoardDieMoveIdsRef = useRef(new Set());
 
     const [viewMode, setViewMode] = useState('LIBRARY'); // 'LIBRARY' | 'EDIT'
@@ -4668,19 +4670,51 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     if (!current || current.id !== docSnap.id) return current;
 
                     const remoteItems = remoteData.items || [];
+                    const localItems = Array.isArray(current.items) ? current.items : [];
                     const livePendingTurnState = isUsablePendingTurnState(pendingTurnStateRef.current) ? pendingTurnStateRef.current : null;
 
-                    // Si somos jugadores, protegemos los tokens que estamos manipulando localmente
-                    // para que los snapshots remotos no nos "borren" el movimiento de un turno pendiente
-                    // o de un arrastre en curso.
-                    const mergedItems = isPlayerView ? remoteItems.map(remote => {
-                        const localItem = current.items.find(i => i.id === remote.id);
+                    // Protegemos las fichas que estamos manipulando localmente (tanto Master como jugadores)
+                    // para evitar que los snapshots remotos borren arrastres activos, escrituras recientes (snapback),
+                    // ediciones sin guardar del inspector o turnos pendientes.
+                    const mergedItems = remoteItems.map(remote => {
+                        const localItem = localItems.find(i => i.id === remote.id);
                         if (!localItem) return remote;
 
-                        // Caso 1: Mi ficha en un Turno Pendiente (Preservamos posición/velocidad local)
-                        if (livePendingTurnState && remote.id === livePendingTurnState.tokenId) {
+                        // Caso A: Preservar ediciones no guardadas del inspector (Drafts)
+                        const localEdits = localUnsavedEditsRef.current[remote.id];
+                        let itemWithEdits = localEdits ? { ...remote, ...localEdits } : remote;
+
+                        // Caso B: Preservar posición de fichas arrastradas activamente
+                        if (draggedTokenIdRef.current && selectedTokenIdsRef.current.includes(remote.id)) {
                             return {
-                                ...remote,
+                                ...itemWithEdits,
+                                x: localItem.x,
+                                y: localItem.y,
+                                rotation: localItem.rotation
+                            };
+                        }
+
+                        // Caso C: Prevenir snapback/rubber-banding de escrituras recientes (dentro de los últimos 1500ms)
+                        const recentWrite = recentLocalWritesRef.current[remote.id];
+                        if (recentWrite) {
+                            if (remote.x === recentWrite.x && remote.y === recentWrite.y && (recentWrite.rotation === undefined || remote.rotation === recentWrite.rotation)) {
+                                delete recentLocalWritesRef.current[remote.id];
+                            } else if (Date.now() - recentWrite.time < 1500) {
+                                return {
+                                    ...itemWithEdits,
+                                    x: recentWrite.x,
+                                    y: recentWrite.y,
+                                    rotation: recentWrite.rotation !== undefined ? recentWrite.rotation : remote.rotation
+                                };
+                            } else {
+                                delete recentLocalWritesRef.current[remote.id];
+                            }
+                        }
+
+                        // Caso D: Preservar posición en Turnos Pendientes (Combat Mode, solo Jugadores)
+                        if (isPlayerView && livePendingTurnState && remote.id === livePendingTurnState.tokenId) {
+                            return {
+                                ...itemWithEdits,
                                 x: localItem.x,
                                 y: localItem.y,
                                 rotation: localItem.rotation,
@@ -4688,20 +4722,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             };
                         }
 
-                        // Caso 2: Fichas que estoy arrastrando activamente (Preservamos posición local)
-                        if (draggedTokenIdRef.current && selectedTokenIdsRef.current.includes(remote.id)) {
-                            return {
-                                ...remote,
-                                x: localItem.x,
-                                y: localItem.y,
-                                rotation: localItem.rotation
-                            };
-                        }
+                        return itemWithEdits;
+                    });
 
-                        return remote;
-                    }) : remoteItems;
-
-                    const itemsChanged = JSON.stringify(mergedItems) !== JSON.stringify(current.items);
+                    const itemsChanged = JSON.stringify(mergedItems) !== JSON.stringify(localItems);
                     const lastModifiedChanged = remoteData.lastModified !== current.lastModified;
 
                     if (itemsChanged || lastModifiedChanged) {
@@ -6195,14 +6219,28 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
             // Guardar el estado final en Firebase (Solo si no es movimiento pendiente de combate y si de verdad se movió algo)
             if (shouldSaveToFirebase) {
-                try {
-                    updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-                        items: finalItems,
-                        lastModified: Date.now()
-                    });
-                } catch (error) {
-                    console.error("Error saving moved items:", error);
-                }
+                // Registrar los cambios en recentLocalWritesRef antes de escribir para prevenir snapbacks
+                finalItems.forEach(item => {
+                    const original = tokenOriginalPos[item.id];
+                    if (original && (item.x !== original.x || item.y !== original.y || item.rotation !== original.rotation)) {
+                        recentLocalWritesRef.current[item.id] = {
+                            x: item.x,
+                            y: item.y,
+                            rotation: item.rotation,
+                            time: Date.now()
+                        };
+                    }
+                });
+
+                const draggedItemIds = Array.from(new globalThis.Set([
+                    draggedTokenId,
+                    rotatingTokenId,
+                    resizingTokenId,
+                    ...(selectedTokenIdsRef.current || []),
+                    ...Object.keys(tokenOriginalPos || {})
+                ].filter(Boolean)));
+
+                safePersistItems(currentScenario.id, finalItems, currentScenario.items, draggedItemIds);
             }
 
             setDraggedTokenId(null);
@@ -6776,6 +6814,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 savePayload.camera = { zoom, offset };
                 savePayload.allowedPlayers = activeScenario.allowedPlayers || [];
             }
+
+            // Registrar posiciones escritas en recentLocalWritesRef para evitar snapback
+            (activeScenario.items || []).forEach(item => {
+                recentLocalWritesRef.current[item.id] = {
+                    x: item.x,
+                    y: item.y,
+                    rotation: item.rotation,
+                    time: Date.now()
+                };
+            });
+            // Limpiar localUnsavedEditsRef (borradores de inspector) puesto que ya se guardan
+            localUnsavedEditsRef.current = {};
 
             await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), savePayload);
 
@@ -7451,10 +7501,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setSelectedTokenIds([cardId]);
         lastSelectedIdRef.current = cardId;
         cardStackQuickActionBlockUntilRef.current = Date.now() + 220;
-        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-            items: finalItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error removing card from container:", err));
+        safePersistItems(currentScenario.id, finalItems, currentScenario.items);
     };
 
     const moveBoardCardToHand = (cardId) => {
@@ -7500,10 +7547,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
         setSelectedTokenIds(prev => prev.filter(id => !movingIds.has(id)));
-        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error moving card to hand:", err));
+        safePersistItems(currentScenario.id, nextItems, currentScenario.items);
     };
 
     const playHandCardToBoard = (card, clientPoint = null) => {
@@ -7562,10 +7606,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }));
 
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
-        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error playing hand card:", err));
+        safePersistItems(currentScenario.id, nextItems, currentScenario.items);
     };
 
     const getBoardCardPreviewImage = (card) => (
@@ -9456,7 +9497,106 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         );
     };
 
+    const safePersistItems = async (scenarioId, finalItems, originalItems, explicitModifiedIds = null) => {
+        if (!scenarioId || !finalItems) return;
+        const docRef = doc(db, scenarioCollectionName, scenarioId);
+
+        // Identificar qué items han cambiado localmente respecto a lo que teníamos
+        const originalMap = new Map((originalItems || []).map(i => [i.id, i]));
+        const finalMap = new Map((finalItems || []).map(i => [i.id, i]));
+
+        const modifiedOrAdded = [];
+        finalItems.forEach(item => {
+            const isExplicit = Array.isArray(explicitModifiedIds) && explicitModifiedIds.includes(item.id);
+            const orig = originalMap.get(item.id);
+            if (isExplicit || !orig || JSON.stringify(orig) !== JSON.stringify(item)) {
+                modifiedOrAdded.push(item);
+            }
+        });
+
+        const deletedIds = [];
+        (originalItems || []).forEach(item => {
+            if (!finalMap.has(item.id)) {
+                deletedIds.push(item.id);
+            }
+        });
+
+        // Si no hay cambios reales, no hacemos nada
+        if (modifiedOrAdded.length === 0 && deletedIds.length === 0) return;
+
+        try {
+            await runTransaction(db, async (transaction) => {
+                const sfDoc = await transaction.get(docRef);
+                if (!sfDoc.exists()) return;
+
+                const currentData = sfDoc.data();
+                const currentItems = currentData.items || [];
+
+                // Reconciliar los cambios con la versión más reciente en el servidor
+                let nextItems = currentItems.map(item => {
+                    if (deletedIds.includes(item.id)) return null;
+                    const localMod = modifiedOrAdded.find(m => m.id === item.id);
+                    if (localMod) return localMod;
+                    return item;
+                }).filter(Boolean);
+
+                // Añadir items completamente nuevos
+                const currentIds = new Set(currentItems.map(i => i.id));
+                modifiedOrAdded.forEach(newItem => {
+                    if (!currentIds.has(newItem.id)) {
+                        nextItems.push(newItem);
+                    }
+                });
+
+                transaction.update(docRef, {
+                    items: nextItems,
+                    lastModified: Date.now()
+                });
+            });
+            console.log("Sincronización multiusuario segura completada.");
+        } catch (error) {
+            console.error("Error in safePersistItems transaction:", error);
+            // Caída controlada si falla la transacción
+            await updateDoc(docRef, {
+                items: finalItems,
+                lastModified: Date.now()
+            }).catch(err => console.error("Error in fallback safePersistItems updateDoc:", err));
+        }
+    };
+
     const updateItem = (itemId, updates, persist = false) => {
+        if (!persist) {
+            // Guardar localmente en el ref de ediciones no guardadas
+            if (!localUnsavedEditsRef.current[itemId]) {
+                localUnsavedEditsRef.current[itemId] = {};
+            }
+            localUnsavedEditsRef.current[itemId] = {
+                ...localUnsavedEditsRef.current[itemId],
+                ...updates
+            };
+        } else {
+            // Si se persiste directamente, limpiamos ese borrador local
+            if (localUnsavedEditsRef.current[itemId]) {
+                Object.keys(updates || {}).forEach(key => {
+                    delete localUnsavedEditsRef.current[itemId][key];
+                });
+                if (Object.keys(localUnsavedEditsRef.current[itemId]).length === 0) {
+                    delete localUnsavedEditsRef.current[itemId];
+                }
+            }
+
+            // Si contiene propiedades de posición, registramos en recentLocalWritesRef
+            if (updates.x !== undefined || updates.y !== undefined || updates.rotation !== undefined) {
+                const currentItem = activeScenario?.items?.find(i => i.id === itemId);
+                recentLocalWritesRef.current[itemId] = {
+                    x: updates.x !== undefined ? updates.x : currentItem?.x,
+                    y: updates.y !== undefined ? updates.y : currentItem?.y,
+                    rotation: updates.rotation !== undefined ? updates.rotation : currentItem?.rotation,
+                    time: Date.now()
+                };
+            }
+        }
+
         setActiveScenario(prev => {
             if (!prev) return prev;
             let didChange = false;
@@ -9471,10 +9611,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             if (!didChange) return prev;
 
             if (persist && prev.id) {
-                updateDoc(doc(db, scenarioCollectionName, prev.id), {
-                    items: newItems,
-                    lastModified: Date.now()
-                }).catch(err => console.error("Error persisting item update:", err));
+                safePersistItems(prev.id, newItems, prev.items, [itemId]);
             }
 
             return { ...prev, items: newItems };

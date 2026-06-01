@@ -175,7 +175,12 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.87**
+> **Versión actual: 2.4.88**
+
+**Resumen de cambios v2.4.88:**
+
+- **Previsualización de Cartas con Botón Central (PC/Escritorio)**: Implementación del acceso rápido mediante el clic del botón central/rueda del ratón (`e.button === 1`) sobre cartas en el tablero (`isBoardMode && isCardItem`), abriendo la previsualización ampliada idéntica a la pulsación larga de móvil. Se bloquea el autoscroll del navegador.
+- **Sincronización Multiusuario Segura y Conflict-Free en VTT**: Solucionado el problema crítico de sincronización de Firebase donde múltiples jugadores editando o arrastrando fichas a la vez sobrescribían los cambios de otros. Se implementaron bloqueos transaccionales con reconciliación de cambios de servidor en vivo, prevención de rebotes (snapbacks) de posiciones durante arrastres activos mediante marcas de tiempo, y resguardo local de borradores de edición de inspector para Master y jugadores.
 
 **Resumen de cambios v2.4.87:**
 
