@@ -4098,6 +4098,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     useEffect(() => { activeScenarioRef.current = activeScenario; }, [activeScenario]);
     const localUnsavedEditsRef = useRef({}); // { [itemId]: { [key]: value } }
     const recentLocalWritesRef = useRef({}); // { [itemId]: { x, y, rotation, time } }
+    const lastFlipTimesRef = useRef({}); // { [cardId]: timestamp }
     const instantBoardDieMoveIdsRef = useRef(new Set());
 
     const [viewMode, setViewMode] = useState('LIBRARY'); // 'LIBRARY' | 'EDIT'
@@ -9043,6 +9044,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         if (isCard && canInteract) {
                             e.preventDefault();
                             e.stopPropagation();
+                            const now = Date.now();
+                            const lastFlip = lastFlipTimesRef.current[item.id] || 0;
+                            if (now - lastFlip < 350) return;
+                            lastFlipTimesRef.current[item.id] = now;
                             updateItem(item.id, { faceDown: !item.faceDown }, true);
                         }
                     }}
@@ -9463,6 +9468,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         if (isBoardDie) {
                                             updateItem(item.id, { dieLaunchMode: !item.dieLaunchMode }, true);
                                         } else if (isCard) {
+                                            const now = Date.now();
+                                            const lastFlip = lastFlipTimesRef.current[item.id] || 0;
+                                            if (now - lastFlip < 350) return;
+                                            lastFlipTimesRef.current[item.id] = now;
                                             updateItem(item.id, { faceDown: !item.faceDown }, true);
                                         } else {
                                             rotateItem(item.id, 45);
@@ -9474,6 +9483,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         if (isBoardDie) {
                                             updateItem(item.id, { dieLaunchMode: !item.dieLaunchMode }, true);
                                         } else if (isCard) {
+                                            const now = Date.now();
+                                            const lastFlip = lastFlipTimesRef.current[item.id] || 0;
+                                            if (now - lastFlip < 350) return;
+                                            lastFlipTimesRef.current[item.id] = now;
                                             updateItem(item.id, { faceDown: !item.faceDown }, true);
                                         } else {
                                             rotateItem(item.id, 45);
@@ -13921,7 +13934,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     <div className="bg-[#0b1120] border border-[#c8aa6e]/20 rounded-lg p-3 space-y-3">
                                                         <div className="flex items-center gap-2">
                                                             <button
-                                                                onClick={() => updateItem(token.id, { faceDown: !token.faceDown }, true)}
+                                                                onClick={() => {
+                                                                    const now = Date.now();
+                                                                    const lastFlip = lastFlipTimesRef.current[token.id] || 0;
+                                                                    if (now - lastFlip < 350) return;
+                                                                    lastFlipTimesRef.current[token.id] = now;
+                                                                    updateItem(token.id, { faceDown: !token.faceDown }, true);
+                                                                }}
                                                                 className="shrink-0 px-3 py-2 rounded border border-[#c8aa6e]/40 bg-[#c8aa6e]/10 text-[#f8e7b9] hover:bg-[#c8aa6e]/20 text-[10px] font-bold uppercase tracking-widest transition-colors"
                                                             >
                                                                 Voltear
