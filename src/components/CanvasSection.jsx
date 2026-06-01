@@ -5787,7 +5787,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                     // Restricción de Jugador: No permitir seleccionar tokens ajenos
                     if (isPlayerView && !isLight && !isWall && !isGeometry) {
-                        const hasPermission = item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName);
+                        const isSandboxItem = item.type === 'card' || item.type === 'card_container' || item.type === 'board_marker' || item.type === 'board_die';
+                        const hasPermission = isSandboxItem || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName));
                         if (!hasPermission) return false;
                     } else if (isPlayerView && (isLight || isWall || isGeometry)) {
                         return false;
