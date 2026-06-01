@@ -4099,6 +4099,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const localUnsavedEditsRef = useRef({}); // { [itemId]: { [key]: value } }
     const recentLocalWritesRef = useRef({}); // { [itemId]: { x, y, rotation, time } }
     const lastFlipTimesRef = useRef({}); // { [cardId]: timestamp }
+    const activePersistPromiseRef = useRef(null);
+    const nextPersistRequestRef = useRef(null); // { scenarioId, finalItems, originalItems, explicitModifiedIds }
     const instantBoardDieMoveIdsRef = useRef(new Set());
 
     const [viewMode, setViewMode] = useState('LIBRARY'); // 'LIBRARY' | 'EDIT'
@@ -4698,7 +4700,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         // Caso C: Prevenir snapback/rubber-banding de campos de escritura persistente recientes (últimos 1500ms)
                         const recentWrite = recentLocalWritesRef.current[remote.id];
                         if (recentWrite) {
-                            if (Date.now() - recentWrite.time < 1500) {
+                            if (Date.now() - recentWrite.time < 3000) {
                                 // Limpiamos campos confirmados por el servidor
                                 const fieldsToProtect = {};
                                 let hasProtectedFields = false;
@@ -9538,69 +9540,86 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
     const safePersistItems = async (scenarioId, finalItems, originalItems, explicitModifiedIds = null) => {
         if (!scenarioId || !finalItems) return;
-        const docRef = doc(db, scenarioCollectionName, scenarioId);
 
-        // Identificar qué items han cambiado localmente respecto a lo que teníamos
-        const originalMap = new Map((originalItems || []).map(i => [i.id, i]));
-        const finalMap = new Map((finalItems || []).map(i => [i.id, i]));
-
-        const modifiedOrAdded = [];
-        finalItems.forEach(item => {
-            const isExplicit = Array.isArray(explicitModifiedIds) && explicitModifiedIds.includes(item.id);
-            const orig = originalMap.get(item.id);
-            if (isExplicit || !orig || JSON.stringify(orig) !== JSON.stringify(item)) {
-                modifiedOrAdded.push(item);
-            }
-        });
-
-        const deletedIds = [];
-        (originalItems || []).forEach(item => {
-            if (!finalMap.has(item.id)) {
-                deletedIds.push(item.id);
-            }
-        });
-
-        // Si no hay cambios reales, no hacemos nada
-        if (modifiedOrAdded.length === 0 && deletedIds.length === 0) return;
-
-        try {
-            await runTransaction(db, async (transaction) => {
-                const sfDoc = await transaction.get(docRef);
-                if (!sfDoc.exists()) return;
-
-                const currentData = sfDoc.data();
-                const currentItems = currentData.items || [];
-
-                // Reconciliar los cambios con la versión más reciente en el servidor
-                let nextItems = currentItems.map(item => {
-                    if (deletedIds.includes(item.id)) return null;
-                    const localMod = modifiedOrAdded.find(m => m.id === item.id);
-                    if (localMod) return localMod;
-                    return item;
-                }).filter(Boolean);
-
-                // Añadir items completamente nuevos
-                const currentIds = new Set(currentItems.map(i => i.id));
-                modifiedOrAdded.forEach(newItem => {
-                    if (!currentIds.has(newItem.id)) {
-                        nextItems.push(newItem);
-                    }
-                });
-
-                transaction.update(docRef, {
-                    items: nextItems,
-                    lastModified: Date.now()
-                });
-            });
-            console.log("Sincronización multiusuario segura completada.");
-        } catch (error) {
-            console.error("Error in safePersistItems transaction:", error);
-            // Caída controlada si falla la transacción
-            await updateDoc(docRef, {
-                items: finalItems,
-                lastModified: Date.now()
-            }).catch(err => console.error("Error in fallback safePersistItems updateDoc:", err));
+        // Si ya hay una persistencia en curso, encolamos esta petición (que sobrescribirá cualquier petición previa en espera)
+        if (activePersistPromiseRef.current) {
+            nextPersistRequestRef.current = { scenarioId, finalItems, originalItems, explicitModifiedIds };
+            return;
         }
+
+        // Definimos la función interna que ejecuta el guardado
+        const executePersist = async (reqId, itemsToPersist, origItems, explicitIds) => {
+            const docRef = doc(db, scenarioCollectionName, reqId);
+            const originalMap = new Map((origItems || []).map(i => [i.id, i]));
+            const finalMap = new Map((itemsToPersist || []).map(i => [i.id, i]));
+
+            const modifiedOrAdded = [];
+            itemsToPersist.forEach(item => {
+                const isExplicit = Array.isArray(explicitIds) && explicitIds.includes(item.id);
+                const orig = originalMap.get(item.id);
+                if (isExplicit || !orig || JSON.stringify(orig) !== JSON.stringify(item)) {
+                    modifiedOrAdded.push(item);
+                }
+            });
+
+            const deletedIds = [];
+            (origItems || []).forEach(item => {
+                if (!finalMap.has(item.id)) {
+                    deletedIds.push(item.id);
+                }
+            });
+
+            if (modifiedOrAdded.length === 0 && deletedIds.length === 0) return;
+
+            try {
+                await runTransaction(db, async (transaction) => {
+                    const sfDoc = await transaction.get(docRef);
+                    if (!sfDoc.exists()) return;
+
+                    const currentData = sfDoc.data();
+                    const currentItems = currentData.items || [];
+
+                    let nextItems = currentItems.map(item => {
+                        if (deletedIds.includes(item.id)) return null;
+                        const localMod = modifiedOrAdded.find(m => m.id === item.id);
+                        if (localMod) return localMod;
+                        return item;
+                    }).filter(Boolean);
+
+                    const currentIds = new Set(currentItems.map(i => i.id));
+                    modifiedOrAdded.forEach(newItem => {
+                        if (!currentIds.has(newItem.id)) {
+                            nextItems.push(newItem);
+                        }
+                    });
+
+                    transaction.update(docRef, {
+                        items: nextItems,
+                        lastModified: Date.now()
+                    });
+                });
+            } catch (error) {
+                console.error("Error in safePersistItems transaction:", error);
+                await updateDoc(docRef, {
+                    items: itemsToPersist,
+                    lastModified: Date.now()
+                }).catch(err => console.error("Error in fallback safePersistItems updateDoc:", err));
+            }
+        };
+
+        // Creamos la promesa de ejecución secuencial
+        activePersistPromiseRef.current = (async () => {
+            try {
+                await executePersist(scenarioId, finalItems, originalItems, explicitModifiedIds);
+            } finally {
+                activePersistPromiseRef.current = null;
+                const nextReq = nextPersistRequestRef.current;
+                if (nextReq) {
+                    nextPersistRequestRef.current = null;
+                    safePersistItems(nextReq.scenarioId, nextReq.finalItems, nextReq.originalItems, nextReq.explicitModifiedIds);
+                }
+            }
+        })();
     };
 
     const updateItem = (itemId, updates, persist = false) => {
