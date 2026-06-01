@@ -76,6 +76,8 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Separación de reglas y lore en cartas**: el cuadro de texto permite insertar separadores con `---` y marcar bloques narrativos con `[lore]...[/lore]`, con botones directos en la barra de formato del editor.
 - **Cartas de Minion**: el antiguo tipo `Habilidad` del constructor pasa a `Minion`, con dado, cantidad, alcance/regla, tipo de arma, una fila superior de atributos `Hambre`, `Cuerpo` y `Mente` con iconos y valores editables, y hasta 4 rasgos en las dos filas inferiores.
 - **Rendimiento del constructor de cartas**: el canvas agrupa redibujos rápidos, reutiliza cargas de imágenes en curso, precarga recursos comunes en segundo plano y usa una previsualización interna más ligera en móvil sin perder resolución al exportar.
+- **Previsualización ampliada en tablero de cartas**: en PC, el clic de rueda sobre una carta del tablero abre la misma ventana ampliada que el long press táctil en móvil.
+- **Movimiento estable en canvas y tablero**: los tokens, cartas y dados recién movidos conservan su posición local hasta que Firestore devuelve la misma escritura marcada por este cliente, y las escrituras locales antiguas ya no pueden pisar una interacción más reciente del mismo objeto.
 - **Edición directa de todos los campos**: haz clic en título, subtítulo, descripción, etiquetas, reglas o listas para actualizar la clase y guarda los cambios con un solo botón.
 - **Hitos con seguimiento**: marca la inspiración completada mediante checks persistentes y resaltados que mantienen el estilo luminiscente del panel.
 - **Niveles de clase dinámicos**: controla el número de niveles con un deslizador configurable desde 0 en adelante y edita cada hito de progreso en línea.
@@ -136,8 +138,8 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Luces ambientales configurables** - Añade focos persistentes con radios brillante y tenue, color, opacidad y activación sincronizados para todos los clientes
 - **Cuadrícula personalizable** - Alterna visibilidad y define color y opacidad con controles sincronizados entre sesiones
 - **Mapa adaptable** - La imagen se ajusta al viewport manteniendo su proporción
-- **Zoom interactivo** - Acerca y aleja el mapa con la rueda del ratón
-- **Paneo con botón central** - Desplaza el mapa arrastrando con la rueda
+- **Zoom interactivo enfocado** - Acerca y aleja el mapa con la rueda del ratón de forma centrada y matemática en la posición actual del cursor (evita desplazamientos del mapa). Incluye detección de trackpad/pellizco de laptop para transiciones ultra precisas.
+- **Paneo alternativo de cámara** - Desplaza la cámara de forma fluida manteniendo pulsada la rueda del ratón (`Middle Click`) o mediante la tradicional combinación `Alt + Click Izquierdo`.
 - **Sombra de arrastre** - Mientras arrastras un token queda una copia semitransparente en su casilla original
 - **Control de capas** - Desde Ajustes puedes subir o bajar un token para colocarlo encima o debajo de otros
 - **Capa de tiles** - Inserta losetas independientes para escenografía, muévelas y redimensiónalas desde su propia capa

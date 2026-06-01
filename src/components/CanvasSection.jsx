@@ -21,7 +21,7 @@ import {
     getItemTraits,
 } from '../utils/armorSystem';
 import { db, storage } from '../firebase';
-import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, query, where, orderBy, getDoc, getDocs, serverTimestamp, addDoc, limit } from 'firebase/firestore';
+import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, query, where, orderBy, getDoc, getDocs, serverTimestamp, addDoc, limit, runTransaction } from 'firebase/firestore';
 import { nanoid } from 'nanoid';
 import { getCustomImage, useCustomEquipmentImages } from '../hooks/useCustomEquipmentImages';
 import { parseDieValue } from '../utils/damage';
@@ -1622,6 +1622,14 @@ const isDiscardContainer = (item = {}) => {
 const getCardContainerItems = (containerId, items = []) => items
     .filter(item => isCardItem(item) && item.containerId === containerId)
     .sort((a, b) => (Number(a.containerOrder) || 0) - (Number(b.containerOrder) || 0));
+
+const BulletIcon = ({ className = "w-3.5 h-3.5" }) => (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M12 2C10.5 5 9.5 8 9.5 11v7h5v-7c0-3-1-6-2.5-9z" />
+        <path d="M9.5 19h5v1.5h-5z" opacity="0.85" />
+        <path d="M10 21h4v1h-4z" opacity="0.7" />
+    </svg>
+);
 
 const MASTER_HAND_SEAT_ID = '__master__';
 const normalizeHandSeatId = (value) => (value || '').toString().trim();
@@ -4050,7 +4058,6 @@ const EquipmentSection = ({ equippedItems = [], categories = [], rarityColorMap 
                                     );
                                 })
                             )}
-
                             {/* Spoiler prevention hint for players */}
                             {isPlayerView && !searchTerm && (currentCat?.items?.length || 0) > 4 && (
                                 <div className="py-2.5 px-4 flex flex-col items-center bg-slate-900/40 border-t border-slate-800/30">
@@ -4097,6 +4104,257 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const activeScenarioRef = useRef(null);
     useEffect(() => { activeScenarioRef.current = activeScenario; }, [activeScenario]);
     const instantBoardDieMoveIdsRef = useRef(new Set());
+    const [inspectorDraft, setInspectorDraft] = useState(null);
+    const inspectorDraftRef = useRef(null);
+    useEffect(() => { inspectorDraftRef.current = inspectorDraft; }, [inspectorDraft]);
+    const pendingLocalItemPatchesRef = useRef(new Map());
+    const localWriteClientIdRef = useRef(`canvas-client-${nanoid(10)}`);
+    const localWriteSeqRef = useRef(0);
+
+    const clearRememberedLocalItemPatches = useCallback((scenarioId, patchesById = {}) => {
+        Object.keys(patchesById || {}).forEach(itemId => {
+            const current = pendingLocalItemPatchesRef.current.get(itemId);
+            if (current?.scenarioId === scenarioId) {
+                pendingLocalItemPatchesRef.current.delete(itemId);
+            }
+        });
+    }, []);
+
+    const rememberLocalItemPatches = useCallback((scenarioId, patchesById = {}) => {
+        if (!scenarioId || !patchesById) return;
+        const expiresAt = Date.now() + 15000;
+
+        Object.entries(patchesById).forEach(([itemId, patch]) => {
+            if (!itemId || !patch || Object.keys(patch).length === 0) return;
+            pendingLocalItemPatchesRef.current.set(itemId, {
+                scenarioId,
+                patch,
+                expiresAt,
+            });
+        });
+
+        window.setTimeout(() => {
+            const now = Date.now();
+            pendingLocalItemPatchesRef.current.forEach((entry, itemId) => {
+                if (entry.expiresAt <= now) {
+                    pendingLocalItemPatchesRef.current.delete(itemId);
+                }
+            });
+        }, 16000);
+    }, []);
+
+    const applyPendingLocalItemPatches = useCallback((scenarioId, items = []) => {
+        const now = Date.now();
+        let didApplyPatch = false;
+
+        const mergedItems = (items || []).map(item => {
+            const entry = pendingLocalItemPatchesRef.current.get(item.id);
+            if (!entry) return item;
+
+            if (entry.scenarioId !== scenarioId || entry.expiresAt <= now) {
+                pendingLocalItemPatchesRef.current.delete(item.id);
+                return item;
+            }
+
+            const remoteAlreadyConfirmed = item._localWriteClientId === entry.patch._localWriteClientId &&
+                item._localWriteId === entry.patch._localWriteId;
+
+            if (remoteAlreadyConfirmed) {
+                pendingLocalItemPatchesRef.current.delete(item.id);
+                return item;
+            }
+
+            didApplyPatch = true;
+            return { ...item, ...entry.patch };
+        });
+
+        return didApplyPatch ? mergedItems : items;
+    }, []);
+
+    const isItemInActiveLocalInteraction = useCallback((itemId) => {
+        if (!itemId) return false;
+
+        const draggedId = draggedTokenIdRef.current;
+        if (draggedId) {
+            const selectedIds = selectedTokenIdsRef.current.length > 0
+                ? selectedTokenIdsRef.current
+                : [draggedId];
+            if (selectedIds.includes(itemId)) return true;
+        }
+
+        return rotatingTokenIdRef.current === itemId || resizingTokenIdRef.current === itemId;
+    }, []);
+
+    const persistItemPatches = useCallback(async (scenarioId, patchesById, extraUpdates = {}) => {
+        if (!scenarioId || !patchesById || Object.keys(patchesById).length === 0) return null;
+
+        const localWriteId = `${localWriteClientIdRef.current}-${++localWriteSeqRef.current}`;
+        const protectedPatchesById = Object.fromEntries(
+            Object.entries(patchesById).map(([itemId, patch]) => [
+                itemId,
+                {
+                    ...(patch || {}),
+                    _localWriteClientId: localWriteClientIdRef.current,
+                    _localWriteId: localWriteId,
+                }
+            ])
+        );
+        const scenarioRef = doc(db, scenarioCollectionName, scenarioId);
+        const nextLastModified = Date.now();
+        let mergedItems = null;
+
+        rememberLocalItemPatches(scenarioId, protectedPatchesById);
+
+        try {
+            await runTransaction(db, async (transaction) => {
+                const snap = await transaction.get(scenarioRef);
+                if (!snap.exists()) return;
+
+                const data = snap.data();
+                const freshItems = Array.isArray(data.items) ? data.items : [];
+                const pendingIds = new globalThis.Set(Object.keys(protectedPatchesById));
+                let didChange = false;
+
+                mergedItems = freshItems.map(item => {
+                    const patch = protectedPatchesById[item.id];
+                    if (!patch) return item;
+                    pendingIds.delete(item.id);
+
+                    const nextItem = { ...item, ...patch };
+                    if (JSON.stringify(nextItem) !== JSON.stringify(item)) {
+                        didChange = true;
+                        return nextItem;
+                    }
+                    return item;
+                });
+
+                pendingIds.forEach(id => {
+                    const patch = protectedPatchesById[id];
+                    if (patch && patch.id) {
+                        mergedItems.push(patch);
+                        didChange = true;
+                    }
+                });
+
+                const payload = {
+                    ...extraUpdates,
+                    lastModified: nextLastModified,
+                };
+
+                if (didChange) {
+                    payload.items = mergedItems;
+                }
+
+                transaction.update(scenarioRef, payload);
+            });
+        } catch (error) {
+            clearRememberedLocalItemPatches(scenarioId, protectedPatchesById);
+            throw error;
+        }
+
+        if (mergedItems) {
+            setActiveScenario(prev => {
+                if (!prev || prev.id !== scenarioId) return prev;
+
+                const committedById = new Map(mergedItems.map(item => [item.id, item]));
+                let didChange = false;
+                const nextItems = (prev.items || []).map(currentItem => {
+                    const patch = protectedPatchesById[currentItem.id];
+                    if (!patch) return currentItem;
+
+                    const committedItem = committedById.get(currentItem.id);
+                    if (!committedItem) return currentItem;
+
+                    const pendingEntry = pendingLocalItemPatchesRef.current.get(currentItem.id);
+                    const hasNewerLocalWrite = pendingEntry?.scenarioId === scenarioId &&
+                        pendingEntry.patch?._localWriteId &&
+                        pendingEntry.patch._localWriteId !== patch._localWriteId;
+
+                    if (hasNewerLocalWrite || isItemInActiveLocalInteraction(currentItem.id)) {
+                        return currentItem;
+                    }
+
+                    const nextItem = { ...currentItem, ...patch };
+                    if (JSON.stringify(nextItem) !== JSON.stringify(currentItem)) {
+                        didChange = true;
+                        return nextItem;
+                    }
+                    return currentItem;
+                });
+
+                Object.entries(protectedPatchesById).forEach(([itemId, patch]) => {
+                    if ((prev.items || []).some(item => item.id === itemId)) return;
+                    const committedItem = committedById.get(itemId);
+                    if (!committedItem) return;
+                    nextItems.push({ ...committedItem, ...patch });
+                    didChange = true;
+                });
+
+                const metadataChanged = prev.lastModified !== nextLastModified ||
+                    Object.entries(extraUpdates || {}).some(([key, value]) => prev[key] !== value);
+
+                if (!didChange && !metadataChanged) return prev;
+
+                return {
+                    ...prev,
+                    ...extraUpdates,
+                    items: didChange ? nextItems : prev.items,
+                    lastModified: nextLastModified
+                };
+            });
+        }
+
+        return mergedItems;
+    }, [clearRememberedLocalItemPatches, isItemInActiveLocalInteraction, rememberLocalItemPatches, scenarioCollectionName]);
+
+    const buildChangedItemPatches = useCallback((beforeItems = [], afterItems = [], itemIds = []) => {
+        const ids = new globalThis.Set(itemIds);
+        const beforeById = new Map((beforeItems || []).map(item => [item.id, item]));
+        const patches = {};
+
+        (afterItems || []).forEach(item => {
+            if (!item?.id || !ids.has(item.id)) return;
+
+            const before = beforeById.get(item.id);
+            if (!before) {
+                patches[item.id] = item;
+                return;
+            }
+
+            const patch = {};
+            Object.keys(item).forEach(key => {
+                if (JSON.stringify(item[key]) !== JSON.stringify(before[key])) {
+                    patch[key] = item[key];
+                }
+            });
+
+            if (Object.keys(patch).length > 0) {
+                patches[item.id] = patch;
+            }
+        });
+
+        return patches;
+    }, []);
+
+    const buildItemFieldPatches = useCallback((items = [], itemIds = [], fields = []) => {
+        const ids = new globalThis.Set(itemIds);
+        const patches = {};
+
+        (items || []).forEach(item => {
+            if (!item?.id || !ids.has(item.id)) return;
+            const patch = {};
+            fields.forEach(field => {
+                if (Object.prototype.hasOwnProperty.call(item, field)) {
+                    patch[field] = item[field];
+                }
+            });
+            if (Object.keys(patch).length > 0) {
+                patches[item.id] = patch;
+            }
+        });
+
+        return patches;
+    }, []);
 
     const [viewMode, setViewMode] = useState('LIBRARY'); // 'LIBRARY' | 'EDIT'
     const lastActionTimeRef = useRef(0);
@@ -4152,16 +4410,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 }, 500);
             }
 
-            import('firebase/firestore').then(({ doc, updateDoc }) => {
-                 updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-                     items: nextItems,
-                     lastModified: Date.now()
-                 }).catch(err => console.error("Error saving die roll", err));
-            });
+            const patches = buildChangedItemPatches(currentScenario.items || [], nextItems, [id]);
+            persistItemPatches(currentScenario.id, patches).catch(err => console.error("Error saving die roll", err));
         };
         window.addEventListener('save-die-roll', handleSaveDieRoll);
         return () => window.removeEventListener('save-die-roll', handleSaveDieRoll);
-    }, [scenarioCollectionName]);
+    }, [buildChangedItemPatches, persistItemPatches]);
     const [showToast, setShowToast] = useState(false);
     const [toastType, setToastType] = useState('success');
     const [toastMessage, setToastMessage] = useState('');
@@ -4237,6 +4491,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [dragVisualOrigin, setDragVisualOrigin] = useState({}); // Ancla visual fija del ghost/linea durante el drag
     const [combatOccupancyFeedback, setCombatOccupancyFeedback] = useState(null);
     const [selectedTokenIds, setSelectedTokenIds] = useState([]); // Array de IDs seleccionados
+    const selectedInspectorId = selectedTokenIds.length === 1 ? selectedTokenIds[0] : null;
+    useEffect(() => {
+        setInspectorDraft(prev => (
+            prev && prev.itemId === selectedInspectorId
+                ? prev
+                : null
+        ));
+    }, [selectedInspectorId]);
     const [activeBoardHandTokenId, setActiveBoardHandTokenId] = useState(null);
     const [rotatingTokenId, setRotatingTokenId] = useState(null);
     const [resizingTokenId, setResizingTokenId] = useState(null); // Nuevo estado para resize
@@ -4317,6 +4579,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [combatLog, setCombatLog] = useState([]);
     const [boardDicePool, setBoardDicePool] = useState(() => (
         BOARD_DICE_ROLL_SIDES.reduce((acc, sides) => ({ ...acc, [sides]: sides === 20 ? 1 : 0 }), {})
+    ));
+    const [boardDiceBallisticPool, setBoardDiceBallisticPool] = useState(() => (
+        BOARD_DICE_ROLL_SIDES.reduce((acc, sides) => ({ ...acc, [sides]: 0 }), {})
     ));
     const [boardDiceExplosive, setBoardDiceExplosive] = useState(() => (
         BOARD_DICE_ROLL_SIDES.reduce((acc, sides) => ({ ...acc, [sides]: false }), {})
@@ -4603,7 +4868,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         const movedExternally = idsToCheck.some(id => {
                             const remoteItem = remoteItems.find(i => i.id === id);
                             const original = tokenOriginalPosRef.current[id];
-                            const localCurrent = activeScenarioRef.current?.items.find(i => i.id === id);
+                            const localCurrent = (activeScenarioRef.current?.items || []).find(i => i.id === id);
 
                             // Si la posición remota es distinta a la original Y distinta a la que tenemos nosotros ahora mismo,
                             // es que alguien externo (el Master) ha cambiado la ficha de sitio.
@@ -4633,7 +4898,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         const remoteItem = remoteItems.find(i => i.id === id);
                         const startX = livePendingTurnState.startX;
                         const startY = livePendingTurnState.startY;
-                        const localCurrent = activeScenarioRef.current?.items.find(i => i.id === id);
+                        const localCurrent = (activeScenarioRef.current?.items || []).find(i => i.id === id);
 
                         if (remoteItem && localCurrent && (remoteItem.x !== startX || remoteItem.y !== startY)) {
                             // Validar si el cambio remoto coincide con nuestra posición "provisional" local.
@@ -4652,7 +4917,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     if (!hasConflict && (rotatingTokenIdRef.current || resizingTokenIdRef.current)) {
                         const id = rotatingTokenIdRef.current || resizingTokenIdRef.current;
                         const remoteItem = remoteItems.find(i => i.id === id);
-                        const localBaseline = activeScenarioRef.current.items.find(i => i.id === id);
+                        const localBaseline = (activeScenarioRef.current?.items || []).find(i => i.id === id);
 
                         // Solo hay conflicto si la posición remota ha cambiado respecto a lo que tenemos localmente
                         if (remoteItem && localBaseline && (remoteItem.x !== localBaseline.x || remoteItem.y !== localBaseline.y)) {
@@ -4668,13 +4933,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     if (!current || current.id !== docSnap.id) return current;
 
                     const remoteItems = remoteData.items || [];
+                    const currentItems = Array.isArray(current.items) ? current.items : [];
                     const livePendingTurnState = isUsablePendingTurnState(pendingTurnStateRef.current) ? pendingTurnStateRef.current : null;
 
                     // Si somos jugadores, protegemos los tokens que estamos manipulando localmente
                     // para que los snapshots remotos no nos "borren" el movimiento de un turno pendiente
                     // o de un arrastre en curso.
-                    const mergedItems = isPlayerView ? remoteItems.map(remote => {
-                        const localItem = current.items.find(i => i.id === remote.id);
+                    const localInspectorDraft = inspectorDraftRef.current;
+                    const activeDragIds = draggedTokenIdRef.current
+                        ? (selectedTokenIdsRef.current.length > 0 ? selectedTokenIdsRef.current : [draggedTokenIdRef.current])
+                        : [];
+
+                    const movementMergedItems = remoteItems.map(remote => {
+                        const localItem = currentItems.find(i => i.id === remote.id);
                         if (!localItem) return remote;
 
                         // Caso 1: Mi ficha en un Turno Pendiente (Preservamos posición/velocidad local)
@@ -4689,7 +4960,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         }
 
                         // Caso 2: Fichas que estoy arrastrando activamente (Preservamos posición local)
-                        if (draggedTokenIdRef.current && selectedTokenIdsRef.current.includes(remote.id)) {
+                        if (activeDragIds.includes(remote.id)) {
                             return {
                                 ...remote,
                                 x: localItem.x,
@@ -4699,9 +4970,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         }
 
                         return remote;
-                    }) : remoteItems;
+                    });
 
-                    const itemsChanged = JSON.stringify(mergedItems) !== JSON.stringify(current.items);
+                    const localProtectedItems = applyPendingLocalItemPatches(docSnap.id, movementMergedItems);
+
+                    const mergedItems = localInspectorDraft?.itemId
+                        ? localProtectedItems.map(remote => (
+                            remote.id === localInspectorDraft.itemId
+                                ? { ...remote, ...localInspectorDraft.updates }
+                                : remote
+                        ))
+                        : localProtectedItems;
+
+                    const itemsChanged = JSON.stringify(mergedItems) !== JSON.stringify(currentItems);
                     const lastModifiedChanged = remoteData.lastModified !== current.lastModified;
 
                     if (itemsChanged || lastModifiedChanged) {
@@ -4975,7 +5256,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         container.addEventListener('wheel', onWheel, { passive: false });
         return () => container.removeEventListener('wheel', onWheel);
-    }, [activeScenario?.id]); // Solo re-vincular si cambia de ID de escenario, no en cada movimiento
+    }, [activeScenario?.id]);
 
     // Handlers de Touch para Zoom (Pinch) y Pan (Igual que MinimapV2)
     const lastPinchDist = useRef(null);
@@ -5690,10 +5971,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             if (Math.hypot(newWall.x2 - newWall.x1, newWall.y2 - newWall.y1) > 5) {
                 const updatedItems = [...(activeScenario.items || []), newWall];
                 setActiveScenario(prev => ({ ...prev, items: updatedItems }));
-                updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-                    items: updatedItems,
-                    lastModified: Date.now()
-                });
+                persistItemPatches(activeScenario.id, { [newWall.id]: newWall })
+                    .catch(err => console.error("Error saving wall:", err));
             }
 
             setWallDrawingStart(null);
@@ -5766,10 +6045,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }
 
         if (draggingWallHandle && activeScenario) {
-            updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-                items: activeScenario.items,
-                lastModified: Date.now()
-            });
+            const wall = (activeScenario.items || []).find(item => item.id === draggingWallHandle.id);
+            if (wall) {
+                persistItemPatches(activeScenario.id, {
+                    [wall.id]: {
+                        x: wall.x,
+                        y: wall.y,
+                        width: wall.width,
+                        height: wall.height,
+                        x1: wall.x1,
+                        y1: wall.y1,
+                        x2: wall.x2,
+                        y2: wall.y2,
+                    }
+                }).catch(err => console.error("Error saving wall handle:", err));
+            }
             setDraggingWallHandle(null);
             return;
         }
@@ -5906,10 +6196,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         lastSelectedIdRef.current = draggedTokenId;
 
                         try {
-                            updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-                                items: finalItems,
-                                lastModified: Date.now()
-                            });
+                            const patches = buildChangedItemPatches(
+                                currentScenario.items || [],
+                                finalItems,
+                                finalItems.map(item => item.id)
+                            );
+                            persistItemPatches(currentScenario.id, patches)
+                                .catch(err => console.error("Error saving card stack:", err));
                         } catch (error) {
                             console.error("Error saving card stack:", error);
                         }
@@ -5933,10 +6226,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         lastSelectedIdRef.current = containerTarget.id;
 
                         try {
-                            updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-                                items: finalItems,
-                                lastModified: Date.now()
-                            });
+                            const patches = buildChangedItemPatches(
+                                currentScenario.items || [],
+                                finalItems,
+                                finalItems.map(item => item.id)
+                            );
+                            persistItemPatches(currentScenario.id, patches)
+                                .catch(err => console.error("Error saving card container:", err));
                         } catch (error) {
                             console.error("Error saving card container:", error);
                         }
@@ -6189,10 +6485,41 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             // Guardar el estado final en Firebase (Solo si no es movimiento pendiente de combate y si de verdad se movió algo)
             if (shouldSaveToFirebase) {
                 try {
-                    updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-                        items: finalItems,
-                        lastModified: Date.now()
-                    });
+                    const changedItemIds = new globalThis.Set();
+                    if (rotatingTokenId) changedItemIds.add(rotatingTokenId);
+                    if (resizingTokenId) changedItemIds.add(resizingTokenId);
+                    if (draggedTokenId) {
+                        changedItemIds.add(draggedTokenId);
+                        Object.keys(tokenOriginalPos || {}).forEach(id => changedItemIds.add(id));
+                    }
+
+                    const patches = buildItemFieldPatches(
+                        finalItems || [],
+                        Array.from(changedItemIds),
+                        [
+                            'x',
+                            'y',
+                            'width',
+                            'height',
+                            'rotation',
+                            'x1',
+                            'y1',
+                            'x2',
+                            'y2',
+                            'velocidad',
+                            'zone',
+                            'containerId',
+                            'containerOrder',
+                            'stackIds',
+                            'dieValue',
+                            'dieRotation3d',
+                        ]
+                    );
+
+                    if (Object.keys(patches).length > 0) {
+                        persistItemPatches(currentScenario.id, patches)
+                            .catch(err => console.error("Error saving moved items:", err));
+                    }
                 } catch (error) {
                     console.error("Error saving moved items:", error);
                 }
@@ -6254,8 +6581,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         };
     }, [isDragging, draggedTokenId, rotatingTokenId, selectionBox, draggingWallHandle, resizingTokenId, activeLayer]);
 
-    // Dummy state just to make linter happy if needed or unused var
-    const [, setLoadingRotation] = useState(0);
 
     // Estado de configuración del Grid
     const [gridConfig, setGridConfig] = useState(DEFAULT_GRID_CONFIG);
@@ -6453,10 +6778,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     const updatedItems = [...(activeScenario.items || []), ...newTokens];
                     setActiveScenario(prev => ({ ...prev, items: updatedItems }));
                     try {
-                        await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-                            items: updatedItems,
-                            lastModified: Date.now()
-                        });
+                        const patches = Object.fromEntries(newTokens.map(token => [token.id, token]));
+                        await persistItemPatches(activeScenario.id, patches);
                         setSelectedTokenIds(newTokens.map(t => t.id));
                         setToastType('success');
                         setShowToast(true);
@@ -6725,10 +7048,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         triggerToast("PROGRESO\nGUARDADO", "Encuentro Sincronizado", 'success');
 
         try {
-            const savePayload = {
-                items: activeScenario.items || [],
-                lastModified: Date.now()
-            };
+            const savePayload = {};
+            const activeDraft = inspectorDraftRef.current;
 
             // Si no es vista de jugador (es Master), guardamos toda la configuración y metadatos
             if (!isPlayerView) {
@@ -6770,7 +7091,22 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 savePayload.allowedPlayers = activeScenario.allowedPlayers || [];
             }
 
-            await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), savePayload);
+            if (activeDraft?.itemId && Object.keys(activeDraft.updates || {}).length > 0) {
+                await persistItemPatches(activeScenario.id, {
+                    [activeDraft.itemId]: activeDraft.updates
+                }, savePayload);
+                setInspectorDraft(prev => (
+                    prev?.itemId === activeDraft.itemId
+                        ? null
+                        : prev
+                ));
+            } else {
+                await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
+                    ...savePayload,
+                    items: activeScenario.items || [],
+                    lastModified: Date.now()
+                });
+            }
 
             //  SINCRONIZACIÓN BIDIRECCIONAL: Actualizar fichas de personajes vinculados
             if (activeScenario.items && activeScenario.items.length > 0) {
@@ -7010,10 +7346,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             items: nextItems
         }));
         if (activeScenario.id) {
-            updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-                items: nextItems,
-                lastModified: Date.now()
-            }).catch(err => console.error("Error saving board card:", err));
+            persistItemPatches(activeScenario.id, { [newCard.id]: newCard })
+                .catch(err => console.error("Error saving board card:", err));
         }
     };
 
@@ -7116,10 +7450,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             items: nextItems
         }));
         if (activeScenario.id) {
-            updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-                items: nextItems,
-                lastModified: Date.now()
-            }).catch(err => console.error("Error saving hand card:", err));
+            persistItemPatches(activeScenario.id, { [newCard.id]: newCard })
+                .catch(err => console.error("Error saving hand card:", err));
         }
     };
 
@@ -7152,10 +7484,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
         setSelectedTokenIds([newContainer.id]);
         lastSelectedIdRef.current = newContainer.id;
-        updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error saving card container:", err));
+        persistItemPatches(activeScenario.id, { [newContainer.id]: newContainer })
+            .catch(err => console.error("Error saving card container:", err));
     };
 
     const addBoardMarkerToBoard = () => {
@@ -7186,10 +7516,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
         setSelectedTokenIds([marker.id]);
         lastSelectedIdRef.current = marker.id;
-        updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error saving board marker:", err));
+        persistItemPatches(activeScenario.id, { [marker.id]: marker })
+            .catch(err => console.error("Error saving board marker:", err));
     };
 
     const addBoardDieToBoard = () => {
@@ -7222,14 +7550,23 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
         setSelectedTokenIds([die.id]);
         lastSelectedIdRef.current = die.id;
-        updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error saving board die:", err));
+        persistItemPatches(activeScenario.id, { [die.id]: die })
+            .catch(err => console.error("Error saving board die:", err));
     };
 
     const adjustBoardDiceCount = (sides, delta) => {
         setBoardDicePool(prev => {
+            const safeSides = Number(sides);
+            const current = Math.max(0, Number(prev[safeSides]) || 0);
+            return {
+                ...prev,
+                [safeSides]: Math.max(0, Math.min(MAX_BOARD_DICE_ROLL, current + delta))
+            };
+        });
+    };
+
+    const adjustBoardDiceBallisticCount = (sides, delta) => {
+        setBoardDiceBallisticPool(prev => {
             const safeSides = Number(sides);
             const current = Math.max(0, Number(prev[safeSides]) || 0);
             return {
@@ -7246,6 +7583,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
     const clearBoardDicePool = () => {
         setBoardDicePool(BOARD_DICE_ROLL_SIDES.reduce((acc, sides) => ({ ...acc, [sides]: 0 }), {}));
+        setBoardDiceBallisticPool(BOARD_DICE_ROLL_SIDES.reduce((acc, sides) => ({ ...acc, [sides]: 0 }), {}));
     };
 
     const rollBoardDiceValue = (sides) => {
@@ -7271,13 +7609,25 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const currentScenario = activeScenarioRef.current || activeScenario;
         if (!isBoardMode || !currentScenario?.id || isRollingBoardDice) return;
 
-        const poolEntries = BOARD_DICE_ROLL_SIDES
+        const normalEntries = BOARD_DICE_ROLL_SIDES
             .map(sides => ({
                 sides,
                 count: Math.max(0, Math.floor(Number(boardDicePool[sides]) || 0)),
                 explosive: !!boardDiceExplosive[sides],
+                ballistic: false
             }))
             .filter(entry => entry.count > 0);
+
+        const ballisticEntries = BOARD_DICE_ROLL_SIDES
+            .map(sides => ({
+                sides,
+                count: Math.max(0, Math.floor(Number(boardDiceBallisticPool[sides]) || 0)),
+                explosive: !!boardDiceExplosive[sides],
+                ballistic: true
+            }))
+            .filter(entry => entry.count > 0);
+
+        const poolEntries = [...normalEntries, ...ballisticEntries];
         const totalDice = poolEntries.reduce((sum, entry) => sum + entry.count, 0);
 
         if (totalDice <= 0) {
@@ -7292,7 +7642,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         const rolls = [];
         let explosionCount = 0;
-        poolEntries.forEach(({ sides, count, explosive }) => {
+        poolEntries.forEach(({ sides, count, explosive, ballistic }) => {
             Array.from({ length: count }).forEach((_, baseIndex) => {
                 const chainId = `${sides}-${baseIndex}-${nanoid(5)}`;
                 let rollData = rollBoardDiceValue(sides);
@@ -7302,6 +7652,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     value: rollData.value,
                     displayValue: rollData.displayValue,
                     explosive,
+                    ballistic: !!ballistic,
                     chainId,
                     chainIndex,
                 });
@@ -7315,6 +7666,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         value: rollData.value,
                         displayValue: rollData.displayValue,
                         explosive,
+                        ballistic: !!ballistic,
                         exploded: true,
                         chainId,
                         chainIndex,
@@ -7392,149 +7744,185 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }
     };
 
-    const removeCardFromContainer = (containerId, cardId) => {
+    const removeCardFromContainer = async (containerId, cardId) => {
         const currentScenario = activeScenarioRef.current || activeScenario;
         if (!currentScenario || !containerId || !cardId) return;
 
-        const container = (currentScenario.items || []).find(item => item.id === containerId);
-        const card = (currentScenario.items || []).find(item => item.id === cardId);
-        if (!isCardContainerItem(container) || !isCardItem(card)) return;
+        try {
+            const freshSnap = await getDoc(doc(db, scenarioCollectionName, currentScenario.id));
+            if (!freshSnap.exists()) return;
+            const freshData = freshSnap.data();
+            const freshItems = freshData.items || [];
 
-        const nextItems = (currentScenario.items || []).map(item => (
-            item.id === cardId
-                ? {
-                    ...item,
-                    zone: 'board',
-                    containerId: null,
-                    containerOrder: null,
-                    stackParentId: null,
-                    stackIds: [],
-                    x: container.x + container.width + 18,
-                    y: container.y + Math.max(0, (container.height - (item.height || container.height)) / 2),
-                    rotation: 0,
-                }
-                : item
-        ));
+            const container = freshItems.find(item => item.id === containerId);
+            const card = freshItems.find(item => item.id === cardId);
+            if (!isCardContainerItem(container) || !isCardItem(card)) return;
 
-        setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
-        setSelectedTokenIds([cardId]);
-        lastSelectedIdRef.current = cardId;
-        cardStackQuickActionBlockUntilRef.current = Date.now() + 220;
-        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error removing card from container:", err));
+            const nextItems = freshItems.map(item => (
+                item.id === cardId
+                    ? {
+                        ...item,
+                        zone: 'board',
+                        containerId: null,
+                        containerOrder: null,
+                        stackParentId: null,
+                        stackIds: [],
+                        x: container.x + container.width + 18,
+                        y: container.y + Math.max(0, (container.height - (item.height || container.height)) / 2),
+                        rotation: 0,
+                    }
+                    : item
+            ));
+
+            setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
+            setSelectedTokenIds([cardId]);
+            lastSelectedIdRef.current = cardId;
+            cardStackQuickActionBlockUntilRef.current = Date.now() + 220;
+
+            const patches = buildChangedItemPatches(
+                freshItems,
+                nextItems,
+                nextItems.map(item => item.id)
+            );
+            await persistItemPatches(currentScenario.id, patches);
+        } catch (err) {
+            console.error("Error removing card from container:", err);
+        }
     };
 
-    const moveBoardCardToHand = (cardId) => {
+    const moveBoardCardToHand = async (cardId) => {
         const currentScenario = activeScenarioRef.current || activeScenario;
         if (!currentScenario || !cardId) return;
 
-        const handOwner = getBoardHandOwner();
-        const handOwnerId = handOwner?.id || currentUserId;
-        const handOwnerName = handOwner?.name || playerName || 'Master';
-        const handSeatId = getHandSeatForToken(handOwner) || (isPlayerView ? normalizeHandSeatId(playerName) : MASTER_HAND_SEAT_ID);
-        const handSeatName = handSeatId === MASTER_HAND_SEAT_ID ? 'Master' : handSeatId;
-        const handOrder = Date.now();
-        const card = (currentScenario.items || []).find(item => item.id === cardId);
-        const movingIds = new globalThis.Set(
-            isCardItem(card)
-                ? [card.id, ...getCardStackIds(card)].filter(Boolean)
-                : [cardId]
-        );
+        try {
+            const freshSnap = await getDoc(doc(db, scenarioCollectionName, currentScenario.id));
+            if (!freshSnap.exists()) return;
+            const freshData = freshSnap.data();
+            const freshItems = freshData.items || [];
 
-        const nextItems = sanitizeCardStacks((currentScenario.items || []).map(item => (
-            movingIds.has(item.id) && isCardItem(item)
-                ? {
-                    ...item,
-                    x: 0,
-                    y: 0,
-                    zone: 'hand',
-                    containerId: null,
-                    containerOrder: null,
-                    stackParentId: null,
-                    stackIds: [],
-                    ownerId: handOwnerId,
-                    ownerName: handOwnerName,
-                    handTokenId: handOwnerId,
-                    handTokenName: handOwnerName,
-                    handSeatId,
-                    handSeatName,
-                    handOrder: handOrder + Array.from(movingIds).indexOf(item.id),
-                }
-                : Array.isArray(item.stackIds)
-                    ? { ...item, stackIds: item.stackIds.filter(id => !movingIds.has(id)) }
-                    : item
-        )));
+            const handOwner = getBoardHandOwner();
+            const handOwnerId = handOwner?.id || currentUserId;
+            const handOwnerName = handOwner?.name || playerName || 'Master';
+            const handSeatId = getHandSeatForToken(handOwner) || (isPlayerView ? normalizeHandSeatId(playerName) : MASTER_HAND_SEAT_ID);
+            const handSeatName = handSeatId === MASTER_HAND_SEAT_ID ? 'Master' : handSeatId;
+            const handOrder = Date.now();
+            const card = freshItems.find(item => item.id === cardId);
+            const movingIds = new globalThis.Set(
+                isCardItem(card)
+                    ? [card.id, ...getCardStackIds(card)].filter(Boolean)
+                    : [cardId]
+            );
 
-        setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
-        setSelectedTokenIds(prev => prev.filter(id => !movingIds.has(id)));
-        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error moving card to hand:", err));
+            const nextItems = sanitizeCardStacks(freshItems.map(item => (
+                movingIds.has(item.id) && isCardItem(item)
+                    ? {
+                        ...item,
+                        x: 0,
+                        y: 0,
+                        zone: 'hand',
+                        containerId: null,
+                        containerOrder: null,
+                        stackParentId: null,
+                        stackIds: [],
+                        ownerId: handOwnerId,
+                        ownerName: handOwnerName,
+                        handTokenId: handOwnerId,
+                        handTokenName: handOwnerName,
+                        handSeatId,
+                        handSeatName,
+                        handOrder: handOrder + Array.from(movingIds).indexOf(item.id),
+                    }
+                    : Array.isArray(item.stackIds)
+                        ? { ...item, stackIds: item.stackIds.filter(id => !movingIds.has(id)) }
+                        : item
+            )));
+
+            setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
+            setSelectedTokenIds(prev => prev.filter(id => !movingIds.has(id)));
+
+            const patches = buildChangedItemPatches(
+                freshItems,
+                nextItems,
+                nextItems.map(item => item.id)
+            );
+            await persistItemPatches(currentScenario.id, patches);
+        } catch (err) {
+            console.error("Error moving card to hand:", err);
+        }
     };
 
-    const playHandCardToBoard = (card, clientPoint = null) => {
+    const playHandCardToBoard = async (card, clientPoint = null) => {
         const currentScenario = activeScenarioRef.current || activeScenario;
         if (!currentScenario || !card?.id) return;
 
-        const cardWidth = card.width || Math.max(90, (gridConfig.cellWidth || 120) * 0.72);
-        const cardHeight = card.height || Math.round(cardWidth * 1.4);
-        const worldPoint = clientPoint
-            ? divToWorld(clientPoint.x, clientPoint.y)
-            : {
-                x: (WORLD_SIZE / 2) - (offset.x / zoom),
-                y: (WORLD_SIZE / 2) - (offset.y / zoom)
-            };
+        try {
+            const freshSnap = await getDoc(doc(db, scenarioCollectionName, currentScenario.id));
+            if (!freshSnap.exists()) return;
+            const freshData = freshSnap.data();
+            const freshItems = freshData.items || [];
 
-        const stackIds = getCardStackIds(card);
-        const promotedId = stackIds[0] || null;
-        const remainingStackIds = stackIds.slice(1);
-
-        const nextItems = sanitizeCardStacks((currentScenario.items || []).map(item => {
-            if (item.id === card.id) {
-                return {
-                    ...item,
-                    zone: 'board',
-                    containerId: null,
-                    containerOrder: null,
-                    stackParentId: null,
-                    stackIds: [],
-                    x: worldPoint.x - (cardWidth / 2),
-                    y: worldPoint.y - (cardHeight / 2),
-                    width: cardWidth,
-                    height: cardHeight,
+            const cardWidth = card.width || Math.max(90, (gridConfig.cellWidth || 120) * 0.72);
+            const cardHeight = card.height || Math.round(cardWidth * 1.4);
+            const worldPoint = clientPoint
+                ? divToWorld(clientPoint.x, clientPoint.y)
+                : {
+                    x: (WORLD_SIZE / 2) - (offset.x / zoom),
+                    y: (WORLD_SIZE / 2) - (offset.y / zoom)
                 };
-            }
 
-            if (promotedId && item.id === promotedId) {
-                return {
-                    ...item,
-                    zone: 'hand',
-                    stackParentId: null,
-                    stackIds: remainingStackIds,
-                    handOrder: card.handOrder || item.handOrder || Date.now(),
-                };
-            }
+            const stackIds = getCardStackIds(card);
+            const promotedId = stackIds[0] || null;
+            const remainingStackIds = stackIds.slice(1);
 
-            if (remainingStackIds.includes(item.id)) {
-                return {
-                    ...item,
-                    zone: 'hand',
-                    stackParentId: promotedId,
-                    stackIds: [],
-                };
-            }
+            const nextItems = sanitizeCardStacks(freshItems.map(item => {
+                if (item.id === card.id) {
+                    return {
+                        ...item,
+                        zone: 'board',
+                        containerId: null,
+                        containerOrder: null,
+                        stackParentId: null,
+                        stackIds: [],
+                        x: worldPoint.x - (cardWidth / 2),
+                        y: worldPoint.y - (cardHeight / 2),
+                        width: cardWidth,
+                        height: cardHeight,
+                    };
+                }
 
-            return item;
-        }));
+                if (promotedId && item.id === promotedId) {
+                    return {
+                        ...item,
+                        zone: 'hand',
+                        stackParentId: null,
+                        stackIds: remainingStackIds,
+                        handOrder: card.handOrder || item.handOrder || Date.now(),
+                    };
+                }
 
-        setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
-        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error playing hand card:", err));
+                if (remainingStackIds.includes(item.id)) {
+                    return {
+                        ...item,
+                        zone: 'hand',
+                        stackParentId: promotedId,
+                        stackIds: [],
+                    };
+                }
+
+                return item;
+            }));
+
+            setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
+
+            const patches = buildChangedItemPatches(
+                freshItems,
+                nextItems,
+                nextItems.map(item => item.id)
+            );
+            await persistItemPatches(currentScenario.id, patches);
+        } catch (err) {
+            console.error("Error playing hand card:", err);
+        }
     };
 
     const getBoardCardPreviewImage = (card) => (
@@ -7753,10 +8141,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
         setSelectedTokenIds([topCardId]);
         lastSelectedIdRef.current = topCardId;
-        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error unstacking card:", err));
+        const patches = buildChangedItemPatches(
+            currentScenario.items || [],
+            nextItems,
+            nextItems.map(item => item.id)
+        );
+        persistItemPatches(currentScenario.id, patches)
+            .catch(err => console.error("Error unstacking card:", err));
     };
 
     const unstackAllCards = (stackParentId) => {
@@ -7792,10 +8183,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }));
 
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
-        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error unstacking cards:", err));
+        const patches = buildChangedItemPatches(
+            currentScenario.items || [],
+            nextItems,
+            nextItems.map(item => item.id)
+        );
+        persistItemPatches(currentScenario.id, patches)
+            .catch(err => console.error("Error unstacking cards:", err));
     };
 
     const consumeCardStackQuickActionEvent = (event) => {
@@ -7847,10 +8241,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
         setSelectedTokenIds([cardId]);
         lastSelectedIdRef.current = cardId;
-        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error unstacking selected card:", err));
+        const patches = buildChangedItemPatches(
+            currentScenario.items || [],
+            nextItems,
+            nextItems.map(item => item.id)
+        );
+        persistItemPatches(currentScenario.id, patches)
+            .catch(err => console.error("Error unstacking selected card:", err));
     };
 
     const addTokenToCanvas = (tokenUrl) => {
@@ -7901,6 +8298,20 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         e.stopPropagation(); // Evitar que el canvas inicie pan
         if (isTouch) e.preventDefault(); // Evitar double-firing y emulación de mouse
+
+        if (!isTouch && e.button === 1 && isBoardMode && isCardItem(token)) {
+            e.preventDefault();
+            openBoardCardPreview(token);
+            return;
+        }
+
+        if (!isTouch && e.button === 1) {
+            e.preventDefault();
+            setIsDragging(true);
+            dragStartRef.current = { x: curX, y: curY };
+            document.body.style.cursor = 'grabbing';
+            return;
+        }
 
         if (isCardItem(token) && cardStackQuickActionBlockUntilRef.current > Date.now()) {
             e.nativeEvent?.stopImmediatePropagation?.();
@@ -8122,7 +8533,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         const updatedItems = activeScenario.items.map(i => i.id === tokenId ? finalToken : i);
         setActiveScenario(prev => ({ ...prev, items: updatedItems }));
-        updateDoc(doc(db, scenarioCollectionName, activeScenario.id), { items: updatedItems })
+        persistItemPatches(activeScenario.id, { [tokenId]: finalToken })
             .then(() => {
                 triggerToast(
                     "Vínculo establecido",
@@ -8144,7 +8555,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         const updatedItems = activeScenario.items.map(i => i.id === tokenId ? finalToken : i);
         setActiveScenario(prev => ({ ...prev, items: updatedItems }));
-        updateDoc(doc(db, scenarioCollectionName, activeScenario.id), { items: updatedItems })
+        persistItemPatches(activeScenario.id, { [tokenId]: finalToken })
             .then(() => {
                 triggerToast(
                     "Vínculo eliminado",
@@ -8253,22 +8664,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 return i;
             });
 
-            // Actualizar Firebase (Sincronizamos la puerta, pero limpiamos posiciones provisionales de tokens)
-            const firebaseItems = newItems.map(item => {
-                if (isPlayerView && pendingTurnStateRef.current && item.id === pendingTurnStateRef.current.tokenId) {
-                    return {
-                        ...item,
-                        x: pendingTurnStateRef.current.startX,
-                        y: pendingTurnStateRef.current.startY
-                    };
-                }
-                return item;
-            });
-
-            updateDoc(doc(db, scenarioCollectionName, prev.id), {
-                items: firebaseItems,
-                lastModified: Date.now()
-            });
+            const door = newItems.find(item => item.id === doorId);
+            if (door) {
+                persistItemPatches(prev.id, {
+                    [doorId]: {
+                        isOpen: door.isOpen,
+                    }
+                }).catch(err => console.error("Error toggling door:", err));
+            }
 
             return { ...prev, items: newItems };
         });
@@ -8916,6 +9319,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                 <motion.div
                     onMouseDown={(e) => canInteract && handleTokenMouseDown(e, item)}
+                    onContextMenu={(e) => {
+                        if (isCard && canInteract) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            updateItem(item.id, { faceDown: !item.faceDown }, true);
+                        }
+                    }}
                     onTouchStart={(e) => canInteract && handleTokenMouseDown(e, item)}
                     onDoubleClick={(e) => {
                         if (!canInteract) return;
@@ -9334,7 +9744,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         if (isBoardDie) {
                                             updateItem(item.id, { dieLaunchMode: !item.dieLaunchMode }, true);
                                         } else if (isCard) {
-                                            updateItem(item.id, { faceDown: !item.faceDown });
+                                            updateItem(item.id, { faceDown: !item.faceDown }, true);
                                         } else {
                                             rotateItem(item.id, 45);
                                         }
@@ -9345,7 +9755,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         if (isBoardDie) {
                                             updateItem(item.id, { dieLaunchMode: !item.dieLaunchMode }, true);
                                         } else if (isCard) {
-                                            updateItem(item.id, { faceDown: !item.faceDown });
+                                            updateItem(item.id, { faceDown: !item.faceDown }, true);
                                         } else {
                                             rotateItem(item.id, 45);
                                         }
@@ -9395,6 +9805,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     };
 
     const updateItem = (itemId, updates, persist = false) => {
+        if (selectedTokenIdsRef.current.length === 1 && selectedTokenIdsRef.current[0] === itemId) {
+            setInspectorDraft(prev => ({
+                itemId,
+                updates: {
+                    ...(prev?.itemId === itemId ? prev.updates : {}),
+                    ...(updates || {}),
+                },
+            }));
+        }
+
         setActiveScenario(prev => {
             if (!prev) return prev;
             let didChange = false;
@@ -9409,10 +9829,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             if (!didChange) return prev;
 
             if (persist && prev.id) {
-                updateDoc(doc(db, scenarioCollectionName, prev.id), {
-                    items: newItems,
-                    lastModified: Date.now()
-                }).catch(err => console.error("Error persisting item update:", err));
+                persistItemPatches(prev.id, { [itemId]: updates || {} })
+                    .catch(err => console.error("Error persisting item update:", err));
             }
 
             return { ...prev, items: newItems };
@@ -12036,7 +12454,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     <div className="relative p-4 space-y-5 bg-gradient-to-b from-transparent to-black/40">
                                                         <div className="grid grid-cols-2 gap-3">
                                                             {BOARD_DICE_ROLL_SIDES.map((sides) => {
-                                                                const count = Math.max(0, Number(boardDicePool[sides]) || 0);
+                                                                const normalCount = Math.max(0, Number(boardDicePool[sides]) || 0);
+                                                                const ballisticCount = Math.max(0, Number(boardDiceBallisticPool[sides]) || 0);
+                                                                const count = normalCount + ballisticCount;
                                                                 const isActive = count > 0;
                                                                 const isExplosive = !!boardDiceExplosive[sides];
                                                                 return (
@@ -12066,29 +12486,66 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                             </button>
                                                                             <div className="text-center">
                                                                                 <div className={`text-[9px] uppercase font-black tracking-[0.2em] mb-0.5 transition-colors ${isExplosive ? 'text-red-300' : isActive ? 'text-[#c8aa6e]' : 'text-slate-500'}`}>D{sides}</div>
-                                                                                <div className={`font-fantasy text-xl leading-none transition-colors ${isExplosive ? 'text-[#f0e6d2] drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]' : isActive ? 'text-[#f0e6d2] drop-shadow-[0_0_8px_rgba(200,170,110,0.8)]' : 'text-slate-600'}`}>{count}</div>
+                                                                                <div className="font-fantasy text-xl leading-none flex items-center justify-center gap-1.5 select-none">
+                                                                                    {normalCount > 0 && <span className="text-[#f0e6d2] drop-shadow-[0_0_8px_rgba(200,170,110,0.8)]">{normalCount}</span>}
+                                                                                    {normalCount > 0 && ballisticCount > 0 && <span className="text-slate-500 text-sm font-sans">+</span>}
+                                                                                    {ballisticCount > 0 && (
+                                                                                        <span className="text-slate-300 drop-shadow-[0_0_8px_rgba(148,163,184,0.8)] flex items-center gap-0.5">
+                                                                                            <BulletIcon className="w-3 h-3 text-[#c8aa6e]" />
+                                                                                            {ballisticCount}
+                                                                                        </span>
+                                                                                    )}
+                                                                                    {normalCount === 0 && ballisticCount === 0 && <span className="text-slate-600">0</span>}
+                                                                                </div>
                                                                             </div>
                                                                         </div>
-                                                                        <div className="relative z-10 flex items-center overflow-hidden rounded-lg border border-slate-800/80 bg-black/40 backdrop-blur-sm shadow-inner w-full max-w-[100px]">
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => adjustBoardDiceCount(sides, -1)}
-                                                                                className="h-8 w-8 flex-shrink-0 bg-slate-900/50 text-slate-400 hover:text-red-400 hover:bg-red-500/20 active:bg-red-900/60 active:scale-95 transition-all flex items-center justify-center group-hover/die:bg-slate-800/80"
-                                                                                aria-label={`Quitar D${sides}`}
-                                                                            >
-                                                                                <FiMinus className="w-3.5 h-3.5" />
-                                                                            </button>
-                                                                            <div className={`h-8 flex-1 flex items-center justify-center border-x border-slate-800/80 bg-slate-950/80 font-fantasy text-base leading-none transition-colors ${isActive ? 'text-[#c8aa6e]' : 'text-slate-400'}`}>
-                                                                                {count}
+                                                                        <div className="relative z-10 flex flex-col gap-1.5 w-full items-center">
+                                                                            {/* Normal Adjuster */}
+                                                                            <div className="flex items-center overflow-hidden rounded-lg border border-slate-800/80 bg-black/40 backdrop-blur-sm shadow-inner w-full max-w-[100px]" title="Dados Normales">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => adjustBoardDiceCount(sides, -1)}
+                                                                                    className="h-7 w-7 flex-shrink-0 bg-slate-900/50 text-slate-400 hover:text-red-400 hover:bg-red-500/20 active:bg-red-900/60 active:scale-95 transition-all flex items-center justify-center group-hover/die:bg-slate-800/80"
+                                                                                    aria-label={`Quitar D${sides} Normal`}
+                                                                                >
+                                                                                    <FiMinus className="w-3 h-3" />
+                                                                                </button>
+                                                                                <div className={`h-7 flex-1 flex items-center justify-center border-x border-slate-800/80 bg-slate-950/80 font-fantasy text-sm leading-none transition-colors ${normalCount > 0 ? 'text-[#c8aa6e]' : 'text-slate-500'}`}>
+                                                                                    {normalCount}
+                                                                                </div>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => adjustBoardDiceCount(sides, 1)}
+                                                                                    className="h-7 w-7 flex-shrink-0 bg-slate-900/50 text-slate-400 hover:text-[#c8aa6e] hover:bg-[#c8aa6e]/20 active:bg-[#c8aa6e]/40 active:scale-95 transition-all flex items-center justify-center group-hover/die:bg-slate-800/80"
+                                                                                    aria-label={`Añadir D${sides} Normal`}
+                                                                                >
+                                                                                    <FiPlus className="w-3 h-3" />
+                                                                                </button>
                                                                             </div>
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => adjustBoardDiceCount(sides, 1)}
-                                                                                className="h-8 w-8 flex-shrink-0 bg-slate-900/50 text-slate-400 hover:text-[#c8aa6e] hover:bg-[#c8aa6e]/20 active:bg-[#c8aa6e]/40 active:scale-95 transition-all flex items-center justify-center group-hover/die:bg-slate-800/80"
-                                                                                aria-label={`Añadir D${sides}`}
-                                                                            >
-                                                                                <FiPlus className="w-3.5 h-3.5" />
-                                                                            </button>
+
+                                                                            {/* Ballistic Adjuster */}
+                                                                            <div className="flex items-center overflow-hidden rounded-lg border border-slate-800/80 bg-black/40 backdrop-blur-sm shadow-inner w-full max-w-[100px]" title="Dados Balísticos">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => adjustBoardDiceBallisticCount(sides, -1)}
+                                                                                    className="h-7 w-7 flex-shrink-0 bg-slate-900/50 text-slate-400 hover:text-red-400 hover:bg-red-500/20 active:bg-red-900/60 active:scale-95 transition-all flex items-center justify-center group-hover/die:bg-slate-800/80"
+                                                                                    aria-label={`Quitar D${sides} Balístico`}
+                                                                                >
+                                                                                    <FiMinus className="w-3 h-3" />
+                                                                                </button>
+                                                                                <div className={`h-7 flex-1 flex items-center justify-center border-x border-slate-800/80 bg-slate-950/80 font-fantasy text-sm leading-none transition-colors ${ballisticCount > 0 ? 'text-slate-300' : 'text-slate-500'} flex items-center gap-0.5`}>
+                                                                                    <BulletIcon className="w-2.5 h-2.5 text-[#c8aa6e]/70" />
+                                                                                    {ballisticCount}
+                                                                                </div>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => adjustBoardDiceBallisticCount(sides, 1)}
+                                                                                    className="h-7 w-7 flex-shrink-0 bg-slate-900/50 text-slate-400 hover:text-slate-300 hover:bg-slate-700/20 active:bg-slate-700/40 active:scale-95 transition-all flex items-center justify-center group-hover/die:bg-slate-800/80"
+                                                                                    aria-label={`Añadir D${sides} Balístico`}
+                                                                                >
+                                                                                    <FiPlus className="w-3 h-3" />
+                                                                                </button>
+                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 );
@@ -12152,7 +12609,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                         ? new Date(roll.timestamp.seconds * 1000)
                                                                         : new Date(roll.clientTimestamp || Date.now());
                                                                     const poolLabel = Array.isArray(roll.pool)
-                                                                        ? roll.pool.map(entry => `${entry.count}D${entry.sides}${entry.explosive ? ' crítico' : ''}`).join(' · ')
+                                                                        ? roll.pool.map(entry => `${entry.count}D${entry.sides}${entry.ballistic ? ' balístico' : ''}${entry.explosive ? ' crítico' : ''}`).join(' · ')
                                                                         : '';
                                                                     const safeRolls = Array.isArray(roll.rolls) ? roll.rolls : [];
                                                                     const excludedRollIndexes = Array.isArray(roll.excludedRollIndexes)
@@ -12213,6 +12670,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                                     const isExcluded = excludedRollIndexSet.has(index);
                                                                                     const isExplosiveDie = !!die.explosive;
                                                                                     const isExplodedDie = !!die.exploded;
+                                                                                    const isBallisticDie = !!die.ballistic;
                                                                                     const displayValue = die.displayValue ?? die.value;
                                                                                     return (
                                                                                         <button
@@ -12228,23 +12686,28 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                                                 boxShadow: 'none',
                                                                                                 touchAction: 'manipulation',
                                                                                             }}
-                                                                                            title={isExcluded ? 'Reactivar dado' : 'Anular dado'}
+                                                                                            title={`${isExcluded ? 'Reactivar' : 'Anular'} dado${isExplosiveDie ? ' crítico' : isBallisticDie ? ' balístico' : ''}`}
                                                                                         >
-                                                                                            <div className={`absolute -inset-1 rounded-full blur-md transition-opacity ${isExcluded ? 'bg-red-500/25 opacity-60' : isExplosiveDie ? 'bg-gradient-to-r from-[#c8aa6e]/25 to-red-500/30 opacity-60 group-hover/die-result:opacity-100' : 'bg-[#c8aa6e]/20 opacity-0 group-hover/die-result:opacity-100'}`} />
+                                                                                            <div className={`absolute -inset-1 rounded-full blur-md transition-opacity ${isExcluded ? 'bg-red-500/25 opacity-60' : isExplosiveDie ? 'bg-gradient-to-r from-[#c8aa6e]/25 to-red-500/30 opacity-60 group-hover/die-result:opacity-100' : isBallisticDie ? 'bg-slate-400/25 opacity-60 group-hover/die-result:opacity-100' : 'bg-[#c8aa6e]/20 opacity-0 group-hover/die-result:opacity-100'}`} />
                                                                                             <DiceSvg
                                                                                                 faces={die.sides}
                                                                                                 value={displayValue}
                                                                                                 className={`relative w-10 h-10 sm:w-11 sm:h-11 drop-shadow-lg transform transition-transform ${isExcluded ? '' : 'group-hover/die-result:scale-110 group-hover/die-result:-translate-y-1'}`}
                                                                                                 style={{
-                                                                                                    borderColor: isExcluded ? 'rgba(239,68,68,0.65)' : isExplosiveDie ? 'rgba(248,113,113,0.72)' : 'rgba(200,170,110,0.7)',
-                                                                                                    color: isExcluded ? 'rgba(239,68,68,0.82)' : isExplosiveDie ? 'rgba(254,226,226,1)' : 'rgba(240,230,210,1)',
-                                                                                                    backgroundColor: isExcluded ? 'rgba(127,29,29,0.1)' : isExplosiveDie ? 'rgba(239,68,68,0.09)' : 'rgba(200,170,110,0.1)'
+                                                                                                    borderColor: isExcluded ? 'rgba(239,68,68,0.65)' : isExplosiveDie ? 'rgba(248,113,113,0.72)' : isBallisticDie ? 'rgba(148,163,184,0.85)' : 'rgba(200,170,110,0.7)',
+                                                                                                    color: isExcluded ? 'rgba(239,68,68,0.82)' : isExplosiveDie ? 'rgba(254,226,226,1)' : isBallisticDie ? 'rgba(250,204,21,1)' : 'rgba(240,230,210,1)',
+                                                                                                    backgroundColor: isExcluded ? 'rgba(127,29,29,0.1)' : isExplosiveDie ? 'rgba(239,68,68,0.09)' : isBallisticDie ? 'rgba(51,65,85,0.3)' : 'rgba(200,170,110,0.1)'
                                                                                                 }}
                                                                                             />
                                                                                             {isExplodedDie && !isExcluded && (
                                                                                                 <span className="absolute -right-0.5 -top-1.5 z-20 text-[14px] font-black text-red-400 drop-shadow-[0_0_5px_rgba(239,68,68,0.9)]">
                                                                                                     +
                                                                                                 </span>
+                                                                                            )}
+                                                                                            {isBallisticDie && !isExcluded && (
+                                                                                                <div className="absolute -right-1.5 -top-1.5 z-20 bg-slate-950/90 border border-[#c8aa6e]/60 rounded-full p-0.5 shadow-md flex items-center justify-center">
+                                                                                                    <BulletIcon className="w-2.5 h-2.5 text-[#c8aa6e]" />
+                                                                                                </div>
                                                                                             )}
                                                                                             {isExcluded && (
                                                                                                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -13697,7 +14160,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     <div className="bg-[#0b1120] border border-[#c8aa6e]/20 rounded-lg p-3 space-y-3">
                                                         <div className="flex items-center gap-2">
                                                             <button
-                                                                onClick={() => updateItem(token.id, { faceDown: !token.faceDown })}
+                                                                onClick={() => updateItem(token.id, { faceDown: !token.faceDown }, true)}
                                                                 className="shrink-0 px-3 py-2 rounded border border-[#c8aa6e]/40 bg-[#c8aa6e]/10 text-[#f8e7b9] hover:bg-[#c8aa6e]/20 text-[10px] font-bold uppercase tracking-widest transition-colors"
                                                             >
                                                                 Voltear
@@ -14741,6 +15204,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 const handleRulerTouch = (e) => {
                                     const touch = e.touches?.[0] || e.changedTouches?.[0];
                                     if (!touch) return;
+                                    e.stopPropagation();
                                     const ruler = e.currentTarget;
                                     const rect = ruler.getBoundingClientRect();
                                     const relY = Math.max(0, Math.min(1, (touch.clientY - rect.top) / rect.height));
@@ -14811,7 +15275,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         <div className="absolute bottom-8 left-8 z-50 hidden pointer-events-none opacity-50 md:block">
                             <div className="flex items-center gap-2 text-xs text-slate-500 font-mono">
                                 <FiMove />
-                                <span>Click Central + Arrastrar para Mover</span>
+                                <span>{isBoardMode ? 'Click Central en carta para ampliar · Click Central + Arrastrar para Mover' : 'Click Central + Arrastrar para Mover'}</span>
                             </div>
                         </div>
 

@@ -576,7 +576,11 @@ const CombatHUD = ({
                                             onCardPreviewStart || onHandCardDragStart
                                         ) && (onCardPreviewStart || onHandCardDragStart)(card, event)}
                                         onClick={(event) => event.preventDefault()}
-                                        onContextMenu={(event) => event.preventDefault()}
+                                        onContextMenu={(event) => {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            onFlipHandCard && onFlipHandCard(card);
+                                        }}
                                         className="board-hand-card relative w-full h-full rounded-md overflow-hidden bg-[#111827] border border-[#c8aa6e]/35 hover:border-[#f0e6d2] shadow-xl hover:shadow-[0_0_28px_rgba(200,170,110,0.36)]"
                                         style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
                                         title="Arrastrar al tablero"
@@ -698,6 +702,11 @@ const CombatHUD = ({
                                             <button
                                                 type="button"
                                                 onClick={() => onPlayCard && onPlayCard(card)}
+                                                onContextMenu={(event) => {
+                                                    event.preventDefault();
+                                                    event.stopPropagation();
+                                                    onFlipHandCard && onFlipHandCard(card);
+                                                }}
                                                 className="relative w-12 h-[68px] md:w-16 md:h-[92px] rounded-md overflow-hidden bg-slate-500 border border-[#c8aa6e]/35 hover:border-[#f0e6d2] shadow-lg hover:shadow-[0_0_16px_rgba(200,170,110,0.28)] active:scale-95 transition-all"
                                                 title="Jugar carta en mesa"
                                             >
