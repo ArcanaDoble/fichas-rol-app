@@ -4694,18 +4694,32 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             };
                         }
 
-                        // Caso C: Prevenir snapback/rubber-banding de escrituras recientes (dentro de los últimos 1500ms)
+                        // Caso C: Prevenir snapback/rubber-banding de campos de escritura persistente recientes (últimos 1500ms)
                         const recentWrite = recentLocalWritesRef.current[remote.id];
                         if (recentWrite) {
-                            if (remote.x === recentWrite.x && remote.y === recentWrite.y && (recentWrite.rotation === undefined || remote.rotation === recentWrite.rotation)) {
-                                delete recentLocalWritesRef.current[remote.id];
-                            } else if (Date.now() - recentWrite.time < 1500) {
-                                return {
-                                    ...itemWithEdits,
-                                    x: recentWrite.x,
-                                    y: recentWrite.y,
-                                    rotation: recentWrite.rotation !== undefined ? recentWrite.rotation : remote.rotation
-                                };
+                            if (Date.now() - recentWrite.time < 1500) {
+                                // Limpiamos campos confirmados por el servidor
+                                const fieldsToProtect = {};
+                                let hasProtectedFields = false;
+
+                                Object.entries(recentWrite.fields || {}).forEach(([key, val]) => {
+                                    if (remote[key] === val) {
+                                        // Confirmado por el servidor, ya no es necesario protegerlo
+                                    } else {
+                                        fieldsToProtect[key] = val;
+                                        hasProtectedFields = true;
+                                    }
+                                });
+
+                                if (hasProtectedFields) {
+                                    recentLocalWritesRef.current[remote.id].fields = fieldsToProtect;
+                                    itemWithEdits = {
+                                        ...itemWithEdits,
+                                        ...fieldsToProtect
+                                    };
+                                } else {
+                                    delete recentLocalWritesRef.current[remote.id];
+                                }
                             } else {
                                 delete recentLocalWritesRef.current[remote.id];
                             }
@@ -6224,10 +6238,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     const original = tokenOriginalPos[item.id];
                     if (original && (item.x !== original.x || item.y !== original.y || item.rotation !== original.rotation)) {
                         recentLocalWritesRef.current[item.id] = {
-                            x: item.x,
-                            y: item.y,
-                            rotation: item.rotation,
-                            time: Date.now()
+                            time: Date.now(),
+                            fields: {
+                                x: item.x,
+                                y: item.y,
+                                rotation: item.rotation
+                            }
                         };
                     }
                 });
@@ -9595,16 +9611,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 }
             }
 
-            // Si contiene propiedades de posición, registramos en recentLocalWritesRef
-            if (updates.x !== undefined || updates.y !== undefined || updates.rotation !== undefined) {
-                const currentItem = activeScenario?.items?.find(i => i.id === itemId);
-                recentLocalWritesRef.current[itemId] = {
-                    x: updates.x !== undefined ? updates.x : currentItem?.x,
-                    y: updates.y !== undefined ? updates.y : currentItem?.y,
-                    rotation: updates.rotation !== undefined ? updates.rotation : currentItem?.rotation,
-                    time: Date.now()
-                };
-            }
+            // Registrar los campos persistentes en recentLocalWritesRef para evitar snapback
+            const existingWrite = recentLocalWritesRef.current[itemId] || { fields: {} };
+            recentLocalWritesRef.current[itemId] = {
+                time: Date.now(),
+                fields: {
+                    ...existingWrite.fields,
+                    ...updates
+                }
+            };
         }
 
         setActiveScenario(prev => {
