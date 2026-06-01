@@ -76,8 +76,6 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Separación de reglas y lore en cartas**: el cuadro de texto permite insertar separadores con `---` y marcar bloques narrativos con `[lore]...[/lore]`, con botones directos en la barra de formato del editor.
 - **Cartas de Minion**: el antiguo tipo `Habilidad` del constructor pasa a `Minion`, con dado, cantidad, alcance/regla, tipo de arma, una fila superior de atributos `Hambre`, `Cuerpo` y `Mente` con iconos y valores editables, y hasta 4 rasgos en las dos filas inferiores.
 - **Rendimiento del constructor de cartas**: el canvas agrupa redibujos rápidos, reutiliza cargas de imágenes en curso, precarga recursos comunes en segundo plano y usa una previsualización interna más ligera en móvil sin perder resolución al exportar.
-- **Previsualización ampliada en tablero de cartas**: en PC, el clic de rueda sobre una carta del tablero abre la misma ventana ampliada que el long press táctil en móvil.
-- **Movimiento estable en canvas y tablero**: los tokens, cartas y dados recién movidos conservan su posición local hasta que Firestore devuelve la misma escritura marcada por este cliente, y las escrituras locales antiguas ya no pueden pisar una interacción más reciente del mismo objeto.
 - **Edición directa de todos los campos**: haz clic en título, subtítulo, descripción, etiquetas, reglas o listas para actualizar la clase y guarda los cambios con un solo botón.
 - **Hitos con seguimiento**: marca la inspiración completada mediante checks persistentes y resaltados que mantienen el estilo luminiscente del panel.
 - **Niveles de clase dinámicos**: controla el número de niveles con un deslizador configurable desde 0 en adelante y edita cada hito de progreso en línea.
@@ -138,8 +136,8 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Luces ambientales configurables** - Añade focos persistentes con radios brillante y tenue, color, opacidad y activación sincronizados para todos los clientes
 - **Cuadrícula personalizable** - Alterna visibilidad y define color y opacidad con controles sincronizados entre sesiones
 - **Mapa adaptable** - La imagen se ajusta al viewport manteniendo su proporción
-- **Zoom interactivo enfocado** - Acerca y aleja el mapa con la rueda del ratón de forma centrada y matemática en la posición actual del cursor (evita desplazamientos del mapa). Incluye detección de trackpad/pellizco de laptop para transiciones ultra precisas.
-- **Paneo alternativo de cámara** - Desplaza la cámara de forma fluida manteniendo pulsada la rueda del ratón (`Middle Click`) o mediante la tradicional combinación `Alt + Click Izquierdo`.
+- **Zoom interactivo** - Acerca y aleja el mapa con la rueda del ratón
+- **Paneo con botón central** - Desplaza el mapa arrastrando con la rueda
 - **Sombra de arrastre** - Mientras arrastras un token queda una copia semitransparente en su casilla original
 - **Control de capas** - Desde Ajustes puedes subir o bajar un token para colocarlo encima o debajo de otros
 - **Capa de tiles** - Inserta losetas independientes para escenografía, muévelas y redimensiónalas desde su propia capa
@@ -177,7 +175,16 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.86**
+> **Versión actual: 2.4.87**
+
+**Resumen de cambios v2.4.87:**
+
+- **Sincronización Absoluta de Pilas en Previsualización de Contenedores**: Corrección del comportamiento al expulsar cartas apiladas desde el menú inferior de previsualización de un tablero. Al sacar una carta hija, se desvincula de forma limpia de su pila y se recalcula el contador del montón restante. Al sacar la carta superior (padre), se mueve todo el montón (padre e hijos) de forma sincronizada a la derecha, impidiendo conteos erróneos u hojas de cartas que queden huérfanas o "invisibles" dentro del tablero.
+- **Previsualización de Cartas para Todos los Contenedores**: Habilitada la barra inferior de previsualización con imágenes en miniatura para todos los tableros contenedores (`isCardContainer`) que tengan cartas dentro al seleccionarlos o pasar el ratón, permitiendo expulsar cartas de forma individual a la derecha del tablero con un solo clic.
+- **Preservación de Posición al Eliminar Tableros**: Modificado el borrado de tableros contenedores en `deleteItem` para que las cartas de su interior conserven exactamente su posición y rotación originales en el tablero de juego en lugar de agruparse y moverse automáticamente.
+- **Preservación de Pilas de Cartas en Contenedores**: Corrección del comportamiento al mover una pila de cartas a un contenedor del tablero, manteniendo intacta la relación de jerarquía (pilas) e impidiendo que las cartas inferiores salgan desplazadas individualmente, garantizando que el contador general del contenedor compute correctamente el total de la pila.
+- **Sincronización de Pilas en Desacoples**: Se ajustó el desacople de contenedores y los flujos de desapilado rápido (`unstackTopCard`, `unstackAllCards`, `unstackSpecificCard`) para sincronizar de manera consistente el contenedor de destino de las cartas resultantes.
+- **Apilamiento 3D Dinámico de Fichas**: Se implementó una lógica de orden de arrastre virtual que permite que la ficha que se está arrastrando se eleve dinámicamente en 3D (`translateY`) al pasar sobre un montón de fichas estáticas, simulando una torre física en tiempo real. Al soltarse, la ficha se sitúa permanentemente encima del montón y conserva su z-index (`zIndex: 999` en arrastre) y posición exacta de coordenadas de destino.
 
 **Resumen de cambios v2.4.86:**
 
@@ -2156,7 +2163,7 @@ Guía rápida: ver `docs/Minimapa.md`.
 - El marcador `Escalera` usa un diseño de planta con peldaños, marco y sombreado de desnivel, ocupando todo su recuadro; las zonas de mapa se renderizan siempre por debajo de muros y tokens.
 - La sección `Tablero` permite añadir cartas a la mesa o a la mano del token activo; en este modo el HUD de combate sustituye acciones, ataques y objetos por una mano horizontal de cartas entre retrato y fin de turno, con volteo y salida rápida a mesa.
 - La mano del `Tablero` queda asociada al último token activo y solo se oculta al pulsar en vacío, permitiendo seleccionar o arrastrar cartas de la mesa sin perder el destino de mano.
-- En móvil, mantener pulsada una carta del `Tablero` o de la mano abre una previsualización ampliada; si el dedo se desplaza, se cancela la lectura y continúa el arrastre normal.
+- En móvil, mantener pulsada una carta del `Tablero` o de la mano abre una previsualización ampliada; en PC/escritorio, hacer clic con el botón central del ratón/rueda sobre una carta del tablero de cartas abre la misma previsualización ampliada de forma instantánea, previniendo el cursor de autoscroll por defecto del navegador. Si el dedo se desplaza en móvil, se cancela la lectura y continúa el arrastre normal.
 - El tirador amarillo de redimensionado del canvas usa ahora un área táctil ampliada en móvil y bloquea los gestos nativos mientras se arrastra, manteniendo el mismo aspecto visual.
 - La barra de iniciativa/velocidad del canvas se convierte en un carrusel compacto cuando no caben todos los tokens: oculta la barra de scroll, muestra un contador `+N` y permite deslizar con ratón o dedo.
 - Las cartas del `Tablero` pueden apilarse arrastrando una sobre otra; la carta arrastrada queda arriba, la pila sustituye el nombre inferior por miniaturas de las cartas ocultas y el inspector permite sacar una carta concreta.
