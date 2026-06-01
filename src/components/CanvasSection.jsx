@@ -9018,8 +9018,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 )}
 
                 <motion.div
-                    onMouseDown={(e) => canInteract && handleTokenMouseDown(e, item)}
+                    onMouseDown={(e) => {
+                        if (e.button === 2) return; // Ignorar clic derecho para evitar conflictos de arrastre
+                        if (canInteract) handleTokenMouseDown(e, item);
+                    }}
                     onTouchStart={(e) => canInteract && handleTokenMouseDown(e, item)}
+                    onContextMenu={(e) => {
+                        if (isCard && canInteract) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            updateItem(item.id, { faceDown: !item.faceDown }, true);
+                        }
+                    }}
                     onDoubleClick={(e) => {
                         if (!canInteract) return;
 
@@ -9437,7 +9447,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         if (isBoardDie) {
                                             updateItem(item.id, { dieLaunchMode: !item.dieLaunchMode }, true);
                                         } else if (isCard) {
-                                            updateItem(item.id, { faceDown: !item.faceDown });
+                                            updateItem(item.id, { faceDown: !item.faceDown }, true);
                                         } else {
                                             rotateItem(item.id, 45);
                                         }
@@ -9448,7 +9458,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         if (isBoardDie) {
                                             updateItem(item.id, { dieLaunchMode: !item.dieLaunchMode }, true);
                                         } else if (isCard) {
-                                            updateItem(item.id, { faceDown: !item.faceDown });
+                                            updateItem(item.id, { faceDown: !item.faceDown }, true);
                                         } else {
                                             rotateItem(item.id, 45);
                                         }
@@ -13896,7 +13906,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     <div className="bg-[#0b1120] border border-[#c8aa6e]/20 rounded-lg p-3 space-y-3">
                                                         <div className="flex items-center gap-2">
                                                             <button
-                                                                onClick={() => updateItem(token.id, { faceDown: !token.faceDown })}
+                                                                onClick={() => updateItem(token.id, { faceDown: !token.faceDown }, true)}
                                                                 className="shrink-0 px-3 py-2 rounded border border-[#c8aa6e]/40 bg-[#c8aa6e]/10 text-[#f8e7b9] hover:bg-[#c8aa6e]/20 text-[10px] font-bold uppercase tracking-widest transition-colors"
                                                             >
                                                                 Voltear
