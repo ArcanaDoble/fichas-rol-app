@@ -8557,7 +8557,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const isInstantBoardDieMove = isBoardDie && instantBoardDieMoveIdsRef.current.has(item.id);
         const itemMotionTransition = isBoardMarker || isBoardDie
             ? (isLocallyInteracting || isInstantBoardDieMove ? { duration: 0 } : { type: 'spring', stiffness: 520, damping: 28, mass: 0.55 })
-            : isToken && !isLocallyInteracting
+            : (isToken || isCard || isCardContainer) && !isLocallyInteracting
                 ? { type: 'tween', duration: 0.42, ease: [0.22, 1, 0.36, 1] }
                 : { duration: 0 };
         const combatPlacementItems = combatOccupancyFeedback?.tokenId && tokenOriginalPos[combatOccupancyFeedback.tokenId]
