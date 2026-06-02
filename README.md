@@ -185,6 +185,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
   - **Efecto 3D Tilt Hover y Glare**: Cada carta implementa un envoltorio 3D de inclinación interactiva y destellos de reflejos (glare) en tiempo real al deslizar el ratón, imitando la sensación física de un juego de cartas premium.
   - **Ordenación por Arrastre (Drag & Drop)**: Integración nativa de `Reorder` de Framer Motion para reordenar las cartas de la baraja cómodamente arrastrándolas por la pantalla.
   - **Buscador de Biblioteca y Clasificación**: Un buscador lateral de plantillas de cartas (conectado en tiempo real a la colección `canvas_cards` de Firestore) permite agregar copias con un solo toque. Cada carta cuenta con un selector de categoría estético tipo badge pill (Acción, Atributo, Trampa, Arma, Armadura, Minion/Skill) y contadores dinámicos que resumen el tipo de baraja creada.
+  - **Cabeceras y Títulos Premium**: Rediseño visual de las cabeceras del constructor de barajas en `DeckBuilderView.jsx` utilizando tipografía clásica `Cinzel`, degradados de color dorados (`from-[#f0e6d2] to-[#c8aa6e]`), sombras de texto rúnicas y subtítulos descriptivos ampliados con espaciado ancho (tracking) para maximizar la inmersión y coherencia con el diseño general del juego.
 
 **Resumen de cambios v2.5.3:**
 

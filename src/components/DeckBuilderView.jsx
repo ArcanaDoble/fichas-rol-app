@@ -331,8 +331,12 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
                             {/* Header Panel matching ProgressionView */}
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 md:mb-12 border-b border-[#c8aa6e]/20 pb-4 md:pb-6 gap-4">
                                 <div>
-                                    <h2 className="text-2xl md:text-4xl font-['Cinzel'] text-[#f0e6d2] mb-1 md:mb-2">COLECCIÓN</h2>
-                                    <p className="text-slate-400 text-xs md:text-sm uppercase tracking-widest">BARAJA</p>
+                                    <h1 className="text-3xl md:text-5xl lg:text-6xl font-['Cinzel'] font-bold text-transparent bg-clip-text bg-gradient-to-b from-[#f0e6d2] to-[#c8aa6e] drop-shadow-[0_2px_12px_rgba(200,170,110,0.25)] tracking-wider mb-2 uppercase">
+                                        Colección de Barajas
+                                    </h1>
+                                    <p className="text-[#c8aa6e]/85 text-xs md:text-sm font-bold uppercase tracking-[0.25em]">
+                                        Mazos y Cartas Tácticas
+                                    </p>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     {onBack && (
@@ -499,9 +503,11 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
                                         <FiArrowLeft className="w-5 h-5 stroke-[2.5]" />
                                     </button>
                                     <div>
-                                        <h2 className="text-2xl md:text-4xl font-['Cinzel'] text-[#f0e6d2] mb-1 md:mb-2 uppercase">{activeDeck.name}</h2>
-                                        <p className="text-slate-400 text-xs md:text-sm uppercase tracking-widest">
-                                            Propietario: <span className="text-[#c8aa6e] font-bold">{ownerName}</span>
+                                        <h1 className="text-3xl md:text-5xl lg:text-6xl font-['Cinzel'] font-bold text-transparent bg-clip-text bg-gradient-to-b from-[#f0e6d2] to-[#c8aa6e] drop-shadow-[0_2px_12px_rgba(200,170,110,0.25)] tracking-wider mb-2 uppercase">
+                                            {activeDeck.name}
+                                        </h1>
+                                        <p className="text-[#c8aa6e]/85 text-xs md:text-sm font-bold uppercase tracking-[0.25em]">
+                                            Personalización de Baraja — {ownerName}
                                         </p>
                                     </div>
                                 </div>
