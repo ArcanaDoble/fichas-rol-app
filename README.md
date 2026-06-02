@@ -175,7 +175,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.88**
+> **Versión actual: 2.4.89**
+
+**Resumen de cambios v2.4.89:**
+
+- **Precisión Tipográfica en Justificación de Texto**: Solventado cualquier posible desfase (offset) de alineación sub-píxel o pixel-level en el canvas de previsualización de cartas bajo texto justificado. Se asociaron y preservaron los estilos originales de segmento (negrita, cursiva, color) en los tokens de espacio (`getStyledWordsOfLine`) y se rediseñó el motor de justificación para medir y calcular dinámicamente el ancho de espacio natural de cada estilo mediante `measureStyledWordWidth`, asegurando una coincidencia matemática exacta de 100% con los límites físicos (`maxWidth`) de la carta independientemente de su formato.
 
 **Resumen de cambios v2.4.88:**
 

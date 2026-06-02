@@ -1164,7 +1164,13 @@ const getStyledWordsOfLine = (line) => {
     parts.forEach((part) => {
       if (part === '') return;
       if (part.trim() === '') {
-        words.push({ text: part, isSpace: true });
+        words.push({
+          text: part,
+          bold: seg.bold,
+          italic: seg.italic,
+          color: seg.color,
+          isSpace: true,
+        });
       } else {
         words.push({
           text: part,
@@ -1307,13 +1313,13 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
       return;
     }
     
-    const defaultSpaceWidth = context.measureText(' ').width;
-    const spaceWidth = defaultSpaceWidth + (extraWidth / spaceTokensCount);
+    const extraSpaceShare = extraWidth / spaceTokensCount;
     let cursorX = x;
     
     styledWords.forEach((word) => {
       if (word.isSpace) {
-        cursorX += spaceWidth;
+        const spaceNaturalWidth = measureStyledWordWidth(context, word, ignoreIcons);
+        cursorX += spaceNaturalWidth + extraSpaceShare;
       } else {
         drawSingleStyledWord(context, word, cursorX, y, resourceImages, ignoreIcons);
         cursorX += measureStyledWordWidth(context, word, ignoreIcons);
