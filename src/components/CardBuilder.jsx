@@ -977,9 +977,9 @@ const getActiveFontSize = (context) => {
   return match ? parseInt(match[1], 10) : 60;
 };
 
-const measureTextWithIcons = (context, text) => {
+const measureTextWithIcons = (context, text, ignoreIcons = false) => {
   const baseWidth = context.measureText(text).width;
-  if (!text) return baseWidth;
+  if (!text || ignoreIcons) return baseWidth;
   KEYWORD_REGEX.lastIndex = 0;
   const matches = text.match(KEYWORD_REGEX);
   if (!matches) return baseWidth;
@@ -1136,14 +1136,14 @@ const applySegmentStyle = (context, seg, layoutFontInfo) => {
   }
 };
 
-const measureStyledText = (context, text, layoutFontInfo = {}) => {
+const measureStyledText = (context, text, layoutFontInfo = {}, ignoreIcons = false) => {
   const segments = parseStyles(text);
   let totalWidth = 0;
   
   context.save();
   segments.forEach((seg) => {
     applySegmentStyle(context, seg, layoutFontInfo);
-    totalWidth += measureTextWithIcons(context, seg.text);
+    totalWidth += measureTextWithIcons(context, seg.text, ignoreIcons);
   });
   context.restore();
   
@@ -1180,7 +1180,7 @@ const getStyledWordsOfLine = (line) => {
   return words;
 };
 
-const drawSingleStyledWord = (context, word, x, y, resourceImages = {}) => {
+const drawSingleStyledWord = (context, word, x, y, resourceImages = {}, ignoreIcons = false) => {
   const fontInfo = getFontInfoFromContext(context);
   
   context.save();
@@ -1191,37 +1191,41 @@ const drawSingleStyledWord = (context, word, x, y, resourceImages = {}) => {
   const iconGap = fontSize * 0.2;
   const spaceCharWidth = context.measureText(' ').width;
   
-  const kwSegments = parseLineSegments(word.text);
-  let cursorX = x;
-  
-  kwSegments.forEach((seg) => {
-    context.fillText(seg.text, cursorX, y);
-    const textWidth = context.measureText(seg.text).width;
-    cursorX += textWidth;
+  if (ignoreIcons) {
+    context.fillText(word.text, x, y);
+  } else {
+    const kwSegments = parseLineSegments(word.text);
+    let cursorX = x;
     
-    if (seg.isKeyword) {
-      const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
-      const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
-      const shiftX = spaceCharWidth;
+    kwSegments.forEach((seg) => {
+      context.fillText(seg.text, cursorX, y);
+      const textWidth = context.measureText(seg.text).width;
+      cursorX += textWidth;
       
-      if (iconImg) {
-        const iconY = y + (fontSize - iconSize) / 2;
-        context.drawImage(iconImg, cursorX + shiftX, iconY, iconSize, iconSize);
+      if (seg.isKeyword) {
+        const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
+        const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
+        const shiftX = spaceCharWidth;
+        
+        if (iconImg) {
+          const iconY = y + (fontSize - iconSize) / 2;
+          context.drawImage(iconImg, cursorX + shiftX, iconY, iconSize, iconSize);
+        }
+        cursorX += iconSize + iconGap + shiftX;
       }
-      cursorX += iconSize + iconGap + shiftX;
-    }
-  });
+    });
+  }
   
   context.restore();
 };
 
-const measureStyledWordWidth = (context, word) => {
+const measureStyledWordWidth = (context, word, ignoreIcons = false) => {
   const fontInfo = getFontInfoFromContext(context);
   let wordWidth = 0;
   
   context.save();
   applySegmentStyle(context, word, fontInfo);
-  wordWidth = measureTextWithIcons(context, word.text);
+  wordWidth = measureTextWithIcons(context, word.text, ignoreIcons);
   context.restore();
   
   return wordWidth;
@@ -1247,7 +1251,7 @@ const tokenizeParagraph = (paragraph) => {
   return preserved.split(/\s+/).map(w => w.replace(/cuerpo_a_cuerpo/gi, 'cuerpo a cuerpo'));
 };
 
-const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, resourceImages = {}) => {
+const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, resourceImages = {}, ignoreIcons = false) => {
   if (!justify) {
     const fontInfo = getFontInfoFromContext(context);
     const styleSegments = parseStyles(line);
@@ -1265,24 +1269,29 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
       const iconSize = fontSize * 0.9;
       const iconGap = fontSize * 0.2;
       
-      const kwSegments = parseLineSegments(styleSeg.text);
-      kwSegments.forEach((seg) => {
-        context.fillText(seg.text, cursorX, y);
-        const textWidth = context.measureText(seg.text).width;
-        cursorX += textWidth;
-        
-        if (seg.isKeyword) {
-          const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
-          const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
-          const shiftX = spaceCharWidth;
+      if (ignoreIcons) {
+        context.fillText(styleSeg.text, cursorX, y);
+        cursorX += context.measureText(styleSeg.text).width;
+      } else {
+        const kwSegments = parseLineSegments(styleSeg.text);
+        kwSegments.forEach((seg) => {
+          context.fillText(seg.text, cursorX, y);
+          const textWidth = context.measureText(seg.text).width;
+          cursorX += textWidth;
           
-          if (iconImg) {
-            const iconY = y + (fontSize - iconSize) / 2;
-            context.drawImage(iconImg, cursorX + shiftX, iconY, iconSize, iconSize);
+          if (seg.isKeyword) {
+            const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
+            const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
+            const shiftX = spaceCharWidth;
+            
+            if (iconImg) {
+              const iconY = y + (fontSize - iconSize) / 2;
+              context.drawImage(iconImg, cursorX + shiftX, iconY, iconSize, iconSize);
+            }
+            cursorX += iconSize + iconGap + shiftX;
           }
-          cursorX += iconSize + iconGap + shiftX;
-        }
-      });
+        });
+      }
     });
     context.restore();
   } else {
@@ -1290,20 +1299,20 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
     const actualWords = styledWords.filter(w => !w.isSpace);
     
     if (actualWords.length < 2) {
-      drawTextLineWithIcons(context, line, x, y, maxWidth, false, resourceImages);
+      drawTextLineWithIcons(context, line, x, y, maxWidth, false, resourceImages, ignoreIcons);
       return;
     }
     
     const wordsWidth = actualWords.reduce((total, word) => {
-      return total + measureStyledWordWidth(context, word);
+      return total + measureStyledWordWidth(context, word, ignoreIcons);
     }, 0);
     
     const spaceWidth = (maxWidth - wordsWidth) / (actualWords.length - 1);
     let cursorX = x;
     
     actualWords.forEach((word, index) => {
-      drawSingleStyledWord(context, word, cursorX, y, resourceImages);
-      cursorX += measureStyledWordWidth(context, word) + (index < actualWords.length - 1 ? spaceWidth : 0);
+      drawSingleStyledWord(context, word, cursorX, y, resourceImages, ignoreIcons);
+      cursorX += measureStyledWordWidth(context, word, ignoreIcons) + (index < actualWords.length - 1 ? spaceWidth : 0);
     });
   }
 };
@@ -1364,7 +1373,7 @@ const serializeTokens = (tokens) => {
   return result;
 };
 
-const wrapDescriptionText = (context, text, maxWidth, hyphenate = false) => {
+const wrapDescriptionText = (context, text, maxWidth, hyphenate = false, isLore = false) => {
   const paragraphs = text
     .trim()
     .split(/\n+/)
@@ -1397,7 +1406,7 @@ const wrapDescriptionText = (context, text, maxWidth, hyphenate = false) => {
             bold: seg.bold,
             italic: seg.italic,
             color: seg.color,
-          });
+          }, isLore);
 
           if (wordWidth <= maxWidth) {
             tokens.push({
@@ -1416,7 +1425,7 @@ const wrapDescriptionText = (context, text, maxWidth, hyphenate = false) => {
                 bold: seg.bold,
                 italic: seg.italic,
                 color: seg.color,
-              });
+              }, isLore);
               if (nextWidth <= maxWidth || !chunk) {
                 chunk = nextChunk;
               } else {
@@ -1544,7 +1553,7 @@ const getDescriptionFlowItems = (context, text, maxWidth, lineHeight, hyphenate 
       return;
     }
 
-    const wrappedLines = wrapDescriptionText(context, cleanParagraph, maxWidth, hyphenate);
+    const wrappedLines = wrapDescriptionText(context, cleanParagraph, maxWidth, hyphenate, paragraphIsLore);
     wrappedLines.forEach((line) => {
       items.push({
         type: 'text',
@@ -1883,9 +1892,9 @@ const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate =
       }
 
       if (shouldJustify) {
-        drawTextLineWithIcons(context, item.line, dynamicLayout.x, y, dynamicLayout.width, true, resourceImages);
+        drawTextLineWithIcons(context, item.line, dynamicLayout.x, y, dynamicLayout.width, true, resourceImages, item.isLore);
       } else {
-        drawTextLineWithIcons(context, item.line, dynamicLayout.x, y, dynamicLayout.width, false, resourceImages);
+        drawTextLineWithIcons(context, item.line, dynamicLayout.x, y, dynamicLayout.width, false, resourceImages, item.isLore);
       }
     }
     y += item.height;
@@ -2637,18 +2646,48 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     let formatted = selectedText;
     let newStart = start;
     let newEnd = end;
+    let selectionOffsetStart = 0;
+    let selectionOffsetEnd = 0;
 
     if (formatType === 'bold') {
       if (selectedText.startsWith('**') && selectedText.endsWith('**')) {
         formatted = selectedText.slice(2, -2);
+        selectionOffsetStart = 0;
+        selectionOffsetEnd = formatted.length;
       } else {
-        formatted = `**${selectedText}**`;
+        const match = selectedText.match(/^(\s*)(.*?)(\s*)$/);
+        const leadingSpace = match ? match[1] : '';
+        const trimmedText = match ? match[2] : selectedText;
+        const trailingSpace = match ? match[3] : '';
+        formatted = `${leadingSpace}**${trimmedText}**${trailingSpace}`;
+        
+        if (selectedText.length === 0) {
+          selectionOffsetStart = 2;
+          selectionOffsetEnd = 2;
+        } else {
+          selectionOffsetStart = leadingSpace.length;
+          selectionOffsetEnd = leadingSpace.length + trimmedText.length + 4;
+        }
       }
     } else if (formatType === 'italic') {
       if (selectedText.startsWith('*') && !selectedText.startsWith('**') && selectedText.endsWith('*') && !selectedText.endsWith('**')) {
         formatted = selectedText.slice(1, -1);
+        selectionOffsetStart = 0;
+        selectionOffsetEnd = formatted.length;
       } else {
-        formatted = `*${selectedText}*`;
+        const match = selectedText.match(/^(\s*)(.*?)(\s*)$/);
+        const leadingSpace = match ? match[1] : '';
+        const trimmedText = match ? match[2] : selectedText;
+        const trailingSpace = match ? match[3] : '';
+        formatted = `${leadingSpace}*${trimmedText}*${trailingSpace}`;
+        
+        if (selectedText.length === 0) {
+          selectionOffsetStart = 1;
+          selectionOffsetEnd = 1;
+        } else {
+          selectionOffsetStart = leadingSpace.length;
+          selectionOffsetEnd = leadingSpace.length + trimmedText.length + 2;
+        }
       }
     } else if (formatType === 'separator') {
       const before = text.slice(0, start);
@@ -2656,15 +2695,24 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       const prefix = before.endsWith('\n') || before.length === 0 ? '' : '\n';
       const suffix = after.startsWith('\n') || after.length === 0 ? '' : '\n';
       formatted = `${prefix}---${suffix}`;
-      newStart = start;
-      newEnd = end;
+      selectionOffsetStart = formatted.length;
+      selectionOffsetEnd = formatted.length;
     } else if (formatType === 'lore') {
       const fallback = 'Texto de lore';
       const loreText = selectedText || fallback;
       if (selectedText.startsWith(LORE_OPEN_TAG) && selectedText.endsWith(LORE_CLOSE_TAG)) {
         formatted = selectedText.slice(LORE_OPEN_TAG.length, -LORE_CLOSE_TAG.length);
+        selectionOffsetStart = 0;
+        selectionOffsetEnd = formatted.length;
       } else {
         formatted = `${LORE_OPEN_TAG}${loreText}${LORE_CLOSE_TAG}`;
+        if (selectedText.length === 0) {
+          selectionOffsetStart = LORE_OPEN_TAG.length;
+          selectionOffsetEnd = LORE_OPEN_TAG.length + loreText.length;
+        } else {
+          selectionOffsetStart = 0;
+          selectionOffsetEnd = formatted.length;
+        }
       }
     } else if (formatType === 'color') {
       const anyColorMatch = selectedText.match(/^\[color:(#[0-9a-fA-F]{6})\]\{(.*)\}$/);
@@ -2673,8 +2721,12 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
         const innerText = anyColorMatch[2];
         if (existingColor === colorVal) {
           formatted = innerText;
+          selectionOffsetStart = 0;
+          selectionOffsetEnd = formatted.length;
         } else {
           formatted = `[color:${colorVal}]{${innerText}}`;
+          selectionOffsetStart = 0;
+          selectionOffsetEnd = formatted.length;
         }
       } else {
         const enclosing = findAnyEnclosingColorTag(text, start, end);
@@ -2683,13 +2735,24 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
             formatted = enclosing.innerText;
             newStart = enclosing.startIdx;
             newEnd = enclosing.endIdx;
+            selectionOffsetStart = 0;
+            selectionOffsetEnd = formatted.length;
           } else {
             formatted = `[color:${colorVal}]{${enclosing.innerText}}`;
             newStart = enclosing.startIdx;
             newEnd = enclosing.endIdx;
+            selectionOffsetStart = 0;
+            selectionOffsetEnd = formatted.length;
           }
         } else {
           formatted = `[color:${colorVal}]{${selectedText}}`;
+          if (selectedText.length === 0) {
+            selectionOffsetStart = 17; // Longitud de '[color:#ffffff]{'
+            selectionOffsetEnd = 17;
+          } else {
+            selectionOffsetStart = 0;
+            selectionOffsetEnd = formatted.length;
+          }
         }
       }
     }
@@ -2706,7 +2769,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
 
     setTimeout(() => {
       textarea.focus();
-      textarea.setSelectionRange(newStart, newStart + formatted.length);
+      textarea.setSelectionRange(newStart + selectionOffsetStart, newStart + selectionOffsetEnd);
     }, 0);
   };
 
