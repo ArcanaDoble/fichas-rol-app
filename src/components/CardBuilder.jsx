@@ -3319,47 +3319,53 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                 )}
 
                 {usesConsumptionResources && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
+                  <div className="space-y-3">
+                    <div className={`flex items-center justify-between gap-2 ${cardType === 'action' ? 'border-b border-[#c8aa6e]/10 pb-3' : ''}`}>
                       <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                         {cardType === 'weapon' ? 'Consumo' : cardType === 'armor' ? 'Armadura' : 'Consumo'}
                       </label>
                       {cardType === 'action' && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold uppercase text-slate-500">Ranuras:</span>
-                          <select
-                            value={consumptionSlots.length}
-                            onChange={(event) => {
-                              const newCount = parseInt(event.target.value, 10);
-                              setConsumptionSlots((currentSlots) => {
-                                const nextSlots = [...currentSlots];
-                                if (nextSlots.length < newCount) {
-                                  while (nextSlots.length < newCount) {
-                                    nextSlots.push(EMPTY_SLOT);
-                                  }
-                                } else if (nextSlots.length > newCount) {
-                                  nextSlots.length = newCount;
-                                }
-                                return nextSlots;
-                              });
-                              setConsumptionSlotTypes((prevTypes) => {
-                                const nextTypes = [...prevTypes];
-                                if (nextTypes.length < newCount) {
-                                  while (nextTypes.length < newCount) {
-                                    nextTypes.push('consumption');
-                                  }
-                                } else if (nextTypes.length > newCount) {
-                                  nextTypes.length = newCount;
-                                }
-                                return nextTypes;
-                              });
-                            }}
-                            className="bg-[#09090b] border border-[#c8aa6e]/20 px-2 py-0.5 text-[10px] font-bold text-[#f0e6d2] outline-none cursor-pointer rounded"
-                          >
-                            <option value={5}>5</option>
-                            <option value={6}>6</option>
-                            <option value={7}>7</option>
-                          </select>
+                        <div className="flex gap-1">
+                          {[5, 6, 7].map((num) => {
+                            const isSelected = consumptionSlots.length === num;
+                            return (
+                              <button
+                                key={`action-slots-count-${num}`}
+                                type="button"
+                                onClick={() => {
+                                  setConsumptionSlots((currentSlots) => {
+                                    const nextSlots = [...currentSlots];
+                                    if (nextSlots.length < num) {
+                                      while (nextSlots.length < num) {
+                                        nextSlots.push(EMPTY_SLOT);
+                                      }
+                                    } else if (nextSlots.length > num) {
+                                      nextSlots.length = num;
+                                    }
+                                    return nextSlots;
+                                  });
+                                  setConsumptionSlotTypes((prevTypes) => {
+                                    const nextTypes = [...prevTypes];
+                                    if (nextTypes.length < num) {
+                                      while (nextTypes.length < num) {
+                                        nextTypes.push('consumption');
+                                      }
+                                    } else if (nextTypes.length > num) {
+                                      nextTypes.length = num;
+                                    }
+                                    return nextTypes;
+                                  });
+                                }}
+                                className={`h-7 w-10 border text-[10px] font-bold transition cursor-pointer flex items-center justify-center ${
+                                  isSelected
+                                    ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                                    : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                                }`}
+                              >
+                                {num}
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

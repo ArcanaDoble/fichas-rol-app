@@ -175,11 +175,15 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.98**
+> **Versión actual: 2.4.99**
+
+**Resumen de cambios v2.4.99:**
+
+- **Botonera de Selección de Ranuras de Tiempo**: Rediseñamos por completo el selector de ranuras de tiempo de las cartas de Acción en la barra lateral de [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx) para unificarlo estéticamente con el selector de "Filas / Pares visibles" de los rasgos. Reemplazamos la caja de selección desplegable (`select`) por un grupo de botones horizontales (`5`, `6` y `7`) de dimensiones idénticas (`h-7 w-10` y esquinas cuadradas). Al pulsar sobre cualquiera de las cifras, el estado se actualiza dinámicamente y el botón seleccionado adquiere un resalte dorado atómico (`border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]`), resultando en una interfaz sumamente interactiva, de rápido acceso y mucho más limpia.
 
 **Resumen de cambios v2.4.98:**
 
-- **Compactación del Selector de Ranuras de Tiempo**: Refinamos la interfaz del selector de ranuras de tiempo de las cartas de Acción en [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx). Simplificamos las opciones visuales eliminando la etiqueta de texto redundante `(Por defecto)`, mostrando directamente los números limpios `5`, `6` y `7` para no saturar de forma innecesaria la altura del formulario. Asimismo, ajustamos y compactamos el relleno vertical (`py-0.5`) de la caja de selección en la barra lateral para un acabado estético más ceñido y profesional.
+- **Compactación del Selector de Ranuras de Tiempo**: Refinamos la interfaz inicial de selección en Acción simplificando la nomenclatura y reduciendo el relleno (comportamiento modificado en v2.4.99 por una botonera de números interactiva).
 
 **Resumen de cambios v2.4.97:**
 
