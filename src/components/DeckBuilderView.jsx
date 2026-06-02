@@ -542,7 +542,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
                                             Mi Baraja ({ (activeDeck.cards || []).length } cartas)
                                         </span>
                                         <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">
-                                            💡 Arrastra las cartas horizontalmente para ordenar
+                                            💡 Arrastra las cartas verticalmente para ordenar
                                         </span>
                                     </div>
 
@@ -556,10 +556,10 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
                                         </div>
                                     ) : (
                                         <Reorder.Group 
-                                            axis="x" 
+                                            axis="y" 
                                             values={activeDeck.cards || []} 
                                             onReorder={handleReorder}
-                                            className="flex flex-row gap-6 overflow-x-auto pb-6 pt-2 px-1 custom-scrollbar w-full select-none"
+                                            className="flex flex-col gap-8 w-full select-none items-center"
                                         >
                                             {activeDeck.cards.map((card) => {
                                                 const category = CARD_TYPES.find(t => t.id === card.type) || CARD_TYPES[0];
@@ -569,35 +569,35 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
                                                     <Reorder.Item 
                                                         key={card.id} 
                                                         value={card}
-                                                        className="flex flex-col gap-2.5 z-10 w-44 md:w-52 shrink-0"
+                                                        className="flex flex-col gap-2.5 z-10 w-44 md:w-52 shrink-0 relative"
                                                     >
                                                         {/* Interactive card with 3D tilt wrapper */}
                                                         <TiltCard frontUrl={card.frontUrl} name={card.name}>
-                                                            <div className="absolute top-2 left-2 z-20 flex items-center gap-1.5 px-2 py-0.5 bg-slate-950/80 border border-[#c8aa6e]/30 rounded text-[9px] text-[#f0e6d2] font-bold uppercase tracking-widest backdrop-blur-sm shadow">
-                                                                <FiMenu className="w-3 h-3 text-[#c8aa6e]" />
-                                                                <span className="line-clamp-1">{card.name}</span>
-                                                            </div>
-                                                        </TiltCard>
-
-                                                        {/* Badges for changing categories or deleting */}
-                                                        <div className="flex items-center gap-1.5 bg-slate-900/60 p-1.5 rounded border border-slate-800/80">
+                                                            {/* Floating cycle category pill */}
                                                             <button
-                                                                onClick={() => handleCycleCardType(card.id)}
-                                                                className={`flex-1 flex items-center justify-center gap-1 py-1 border rounded text-[9px] font-bold uppercase tracking-wider transition-all hover:brightness-125 ${category.color}`}
-                                                                title="Hacer clic para cambiar de tipo"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleCycleCardType(card.id);
+                                                                }}
+                                                                className={`absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-4 py-1.5 border rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-md shadow-lg transition-all hover:scale-105 active:scale-95 ${category.color} bg-black/60 hover:brightness-125`}
+                                                                title="Cambiar tipo de carta"
                                                             >
-                                                                <CategoryIcon className="w-3 h-3" />
+                                                                <CategoryIcon className="w-3.5 h-3.5" />
                                                                 <span>{category.label}</span>
                                                             </button>
 
+                                                            {/* Floating Delete Button */}
                                                             <button
-                                                                onClick={() => handleRemoveCardFromDeck(card.id)}
-                                                                className="p-1 px-2 text-red-500 hover:text-red-400 border border-slate-800 hover:border-red-900/40 hover:bg-red-950/20 rounded transition-all flex items-center justify-center"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleRemoveCardFromDeck(card.id);
+                                                                }}
+                                                                className="absolute top-2.5 right-2.5 z-30 p-2 bg-black/60 hover:bg-red-600/90 text-slate-300 hover:text-white rounded-full transition-all border border-white/10 hover:border-red-500/40 shadow backdrop-blur-sm"
                                                                 title="Quitar de la baraja"
                                                             >
-                                                                <FiTrash2 className="w-3 h-3" />
+                                                                <FiTrash2 className="w-3.5 h-3.5" />
                                                             </button>
-                                                        </div>
+                                                        </TiltCard>
                                                     </Reorder.Item>
                                                 );
                                             })}
