@@ -2139,20 +2139,14 @@ const drawCardCanvas = (
       context.closePath();
       context.clip();
 
-      // Definir la caja de origen (source rect) sin los márgenes transparentes de la imagen
-      let sx, sy, sw, sh;
-      if (actionCenterMode === 'Cuerpo') {
-        sx = 290; sy = 290; sw = 1890; sh = 2830;
-      } else if (actionCenterMode === 'Hambre') {
-        sx = 290; sy = 290; sw = 2390; sh = 2290;
-      } else if (actionCenterMode === 'Mente') {
-        sx = 300; sy = 300; sw = 2030; sh = 2410;
-      } else {
-        sx = 0; sy = 0; sw = actionAttributeImg.width; sh = actionAttributeImg.height;
-      }
+      // Definir la caja de origen (usando la imagen completa con sus márgenes naturales)
+      const sx = 0;
+      const sy = 0;
+      const sw = actionAttributeImg.width;
+      const sh = actionAttributeImg.height;
 
-      // Escalado proporcional para rellenar (cover) la ventana
-      const scale = Math.max(rw / sw, rh / sh);
+      // Escalado proporcional para ajustar (fit/contain) dentro de la ventana de ilustración
+      const scale = Math.min(rw / sw, rh / sh);
       const dw = sw * scale;
       const dh = sh * scale;
       const dx = rx + (rw - dw) / 2;
