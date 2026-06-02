@@ -175,7 +175,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.91**
+> **Versión actual: 2.4.92**
+
+**Resumen de cambios v2.4.92:**
+
+- **Espacio Estanco y Natural tras Iconos en Justificado**: Corregido el ensanchamiento tipográfico excesivo de la justificación justo después de un icono de palabra clave. Modificamos el tokenizador `getStyledWordsOfLine` para marcar los espacios en blanco que siguen inmediatamente a un token de palabra clave (`isAfterIcon`). En el renderizado justificado, estos espacios se mantienen estancos a su ancho natural (`measureStyledWordWidth`), mientras que los espacios estándares entre palabras absorben y distribuyen el resto del ancho excedente de forma atómica. Si se desactivan los iconos (p. ej. en bloques de Lore), todos los espacios se justifican de manera uniforme.
 
 **Resumen de cambios v2.4.91:**
 

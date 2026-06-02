@@ -1182,6 +1182,18 @@ const getStyledWordsOfLine = (line) => {
     });
   });
   
+  // Mark spaces that immediately follow a keyword token
+  for (let i = 0; i < words.length - 1; i++) {
+    const current = words[i];
+    const next = words[i + 1];
+    if (!current.isSpace && next.isSpace) {
+      KEYWORD_REGEX.lastIndex = 0;
+      if (KEYWORD_REGEX.test(current.text)) {
+        next.isAfterIcon = true;
+      }
+    }
+  }
+  
   return words;
 };
 
@@ -1298,6 +1310,9 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
   } else {
     const styledWords = getStyledWordsOfLine(line);
     const spaceTokensCount = styledWords.filter(w => w.isSpace).length;
+    const activeSpaceTokensCount = ignoreIcons 
+      ? spaceTokensCount 
+      : styledWords.filter(w => w.isSpace && !w.isAfterIcon).length;
     
     const fontInfo = getFontInfoFromContext(context);
     const naturalWidth = measureStyledText(context, line, fontInfo, ignoreIcons);
@@ -1308,13 +1323,17 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
       return;
     }
     
-    const extraSpaceShare = extraWidth / spaceTokensCount;
+    const extraSpaceShare = activeSpaceTokensCount > 0 
+      ? extraWidth / activeSpaceTokensCount 
+      : extraWidth / spaceTokensCount;
     let cursorX = x;
     
     styledWords.forEach((word) => {
       if (word.isSpace) {
         const spaceNaturalWidth = measureStyledWordWidth(context, word, ignoreIcons);
-        cursorX += spaceNaturalWidth + extraSpaceShare;
+        const isTightSpace = word.isAfterIcon && !ignoreIcons;
+        const share = (activeSpaceTokensCount === 0 || !isTightSpace) ? extraSpaceShare : 0;
+        cursorX += spaceNaturalWidth + share;
       } else {
         drawSingleStyledWord(context, word, cursorX, y, resourceImages, ignoreIcons);
         cursorX += measureStyledWordWidth(context, word, ignoreIcons);
