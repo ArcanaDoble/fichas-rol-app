@@ -175,11 +175,15 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.5.2**
+> **Versión actual: 2.5.3**
+
+**Resumen de cambios v2.5.3:**
+
+- **Remoción de Consumo y Escalado de Atributos**: Implementamos la desactivación automática y total del riel de consumo y de sus ranuras (círculos) en las cartas de Acción cuando se selecciona un atributo (`Cuerpo`, `Hambre` o `Mente`) en `CardBuilder.jsx`. Esto elimina la opción anterior de "Quitar Letrero de Consumo" y oculta dinámicamente toda la configuración de consumo del panel lateral para una interfaz de usuario completamente limpia. Asimismo, reestructuramos el motor de dibujo en el canvas para que las imágenes de atributos se rendericen maximizadas y centradas dentro de la ventana de ilustración de la carta (`rx = 125, ry = 410, rw = 1630, rh = 2100`), aplicando coordenadas de recorte exactas para omitir sus márgenes transparentes originales (`290px` - `300px`) y un algoritmo de escalado proporcional (cover/fill) con máscara de bordes redondeados, garantizando un acabado estético de alta definición y 100% libre de distorsiones o achatamientos.
 
 **Resumen de cambios v2.5.2:**
 
-- **Atributos de Acción e Icono Central Personalizado**: Implementamos la capacidad de renderizar una imagen de atributo (`Mente`, `Cuerpo` o `Hambre`) en el centro exacto de la carta de Acción en [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx) en lugar de los dados estándar. Integramos una barra de selección en el panel lateral para alternar cómodamente entre el modo `Dado` y los tres atributos disponibles. Al seleccionar un atributo, el sistema carga dinámicamente su imagen correspondiente en formato WebP de alta fidelidad (`Mente.webp`, `Cuerpo.webp` o `Hambre.webp`) y la plasma de forma sobria en el centro con un tamaño de `540` px (la misma ubicación y proporción que un dado único). Adicionalmente, habilitamos una opción interactiva ("Quitar Letrero de Consumo") que permite ocultar por completo la placa base metálica del riel de consumo sin interferir en los círculos de ranuras.
+- **Atributos de Acción e Icono Central Personalizado**: Implementamos la capacidad de renderizar una imagen de atributo (`Mente`, `Cuerpo` o `Hambre`) en el centro de la carta de Acción en [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx). Integramos una barra de selección en el panel lateral para alternar entre el modo `Dado` y los tres atributos. Al seleccionar un atributo, el sistema carga su imagen correspondiente (`Mente.webp`, `Cuerpo.webp` o `Hambre.webp`) y la plasma en el centro. Habilitamos además una opción interactiva ("Quitar Letrero de Consumo") para ocultar por completo la placa base metálica del riel de consumo.
 
 **Resumen de cambios v2.5.1:**
 
