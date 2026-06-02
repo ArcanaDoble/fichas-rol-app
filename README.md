@@ -175,7 +175,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.94**
+> **Versión actual: 2.4.95**
+
+**Resumen de cambios v2.4.95:**
+
+- **Centrado Vertical Automático para Textos Cortos**: Añadimos soporte de alineación vertical equilibrada en [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx) para los cuadros de descripción de las cartas. Cuando el contenido redactado es corto y no ocupa toda la altura física disponible del panel (por ejemplo, en descripciones simples de 1 a 4 líneas), el motor calcula dinámicamente la altura total requerida por todos los elementos (líneas de texto, separadores y espacios de interlineado) y aplica de forma matemática un desfase de inicio vertical para posicionar todo el bloque de contenido exactamente en el centro geométrico del panel. Esto mantiene la total consistencia del tamaño de letra base de la baraja y erradica por completo la sensación visual de vacío inferior o asimetría.
 
 **Resumen de cambios v2.4.94:**
 

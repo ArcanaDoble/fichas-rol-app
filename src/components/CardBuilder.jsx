@@ -1874,7 +1874,12 @@ const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate =
   const family = dynamicLayout.family || "Georgia, serif";
   context.font = `${style}${dynamicLayout.weight || '400'} ${fitted.size}px ${family}`;
 
+  const totalTextHeight = fitted.items.reduce((total, item) => total + item.height, 0);
   let y = dynamicLayout.y;
+  if (totalTextHeight < dynamicLayout.height) {
+    y += Math.round((dynamicLayout.height - totalTextHeight) / 2);
+  }
+
   fitted.items.forEach((item, index) => {
     if (y + item.height > dynamicLayout.y + dynamicLayout.height) return;
 
