@@ -175,7 +175,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.97**
+> **Versión actual: 2.4.98**
+
+**Resumen de cambios v2.4.98:**
+
+- **Compactación del Selector de Ranuras de Tiempo**: Refinamos la interfaz del selector de ranuras de tiempo de las cartas de Acción en [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx). Simplificamos las opciones visuales eliminando la etiqueta de texto redundante `(Por defecto)`, mostrando directamente los números limpios `5`, `6` y `7` para no saturar de forma innecesaria la altura del formulario. Asimismo, ajustamos y compactamos el relleno vertical (`py-0.5`) de la caja de selección en la barra lateral para un acabado estético más ceñido y profesional.
 
 **Resumen de cambios v2.4.97:**
 

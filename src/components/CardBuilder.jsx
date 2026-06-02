@@ -3354,9 +3354,9 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                                 return nextTypes;
                               });
                             }}
-                            className="bg-[#09090b] border border-[#c8aa6e]/20 px-2 py-1 text-[10px] font-bold text-[#f0e6d2] outline-none cursor-pointer rounded"
+                            className="bg-[#09090b] border border-[#c8aa6e]/20 px-2 py-0.5 text-[10px] font-bold text-[#f0e6d2] outline-none cursor-pointer rounded"
                           >
-                            <option value={5}>5 (Por defecto)</option>
+                            <option value={5}>5</option>
                             <option value={6}>6</option>
                             <option value={7}>7</option>
                           </select>
