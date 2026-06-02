@@ -418,7 +418,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
                                                     </div>
 
                                                     {/* Folder Front Cover/Flap */}
-                                                    <div className="absolute bottom-0 inset-x-0 h-[48%] bg-[#1b2130]/90 border-t border-slate-800/80 rounded-b-lg shadow-[0_-5px_15px_rgba(0,0,0,0.5)] group-hover/folder:border-t-[#c8aa6e]/40 transition-colors duration-300 flex items-center justify-end px-3 z-10">
+                                                    <div className="absolute bottom-0 inset-x-0 h-[48%] bg-[#1b2130]/90 border-t border-slate-800/80 rounded-b-lg shadow-[0_-5px_15px_rgba(0,0,0,0.5)] group-hover/folder:border-t-[#c8aa6e]/40 transition-colors duration-300 flex items-center justify-center z-10">
                                                         <span className="text-[9px] text-[#c8aa6e]/85 font-bold uppercase tracking-wider bg-black/45 px-2 py-0.5 rounded border border-[#c8aa6e]/20">
                                                             {totalCards} {totalCards === 1 ? 'Carta' : 'Cartas'}
                                                         </span>
@@ -450,9 +450,14 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
                                                                     </button>
                                                                 </div>
                                                             ) : (
-                                                                <h4 className="font-cinzel text-base font-bold text-[#f0e6d2] uppercase tracking-wide group-hover:text-[#c8aa6e] transition-colors leading-tight truncate">
-                                                                    {deck.name}
-                                                                </h4>
+                                                                <>
+                                                                    <h4 className="font-cinzel text-base font-bold text-[#f0e6d2] uppercase tracking-wide group-hover:text-[#c8aa6e] transition-colors leading-tight truncate">
+                                                                        {deck.name}
+                                                                    </h4>
+                                                                    <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mt-1 inline-block">
+                                                                        cartas: {totalCards}
+                                                                    </span>
+                                                                </>
                                                             )}
                                                         </div>
                                                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
@@ -472,24 +477,6 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
                                                                 <FiTrash2 className="w-3.5 h-3.5" />
                                                             </button>
                                                         </div>
-                                                    </div>
-
-                                                    {/* Deck Category Count Badges */}
-                                                    <div className="flex flex-wrap gap-1 text-[8px] uppercase font-bold tracking-wider text-slate-500">
-                                                        {CARD_TYPES.map(type => {
-                                                            const count = counts[type.id] || 0;
-                                                            if (count === 0) return null;
-                                                            const Icon = type.icon;
-                                                            return (
-                                                                <div 
-                                                                    key={type.id} 
-                                                                    className="flex items-center gap-0.5 px-1.5 py-0.2 bg-slate-900/60 border border-slate-800/40 rounded text-slate-400"
-                                                                >
-                                                                    <Icon className="w-2 h-2 text-[#c8aa6e]/70" />
-                                                                    <span>{count}</span>
-                                                                </div>
-                                                            );
-                                                        })}
                                                     </div>
                                                 </div>
                                             </motion.div>
@@ -555,7 +542,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
                                             Mi Baraja ({ (activeDeck.cards || []).length } cartas)
                                         </span>
                                         <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">
-                                            💡 Arrastra las cartas para ordenar
+                                            💡 Arrastra las cartas horizontalmente para ordenar
                                         </span>
                                     </div>
 
@@ -569,10 +556,10 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
                                         </div>
                                     ) : (
                                         <Reorder.Group 
-                                            axis="y" 
+                                            axis="x" 
                                             values={activeDeck.cards || []} 
                                             onReorder={handleReorder}
-                                            className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6"
+                                            className="flex flex-row gap-6 overflow-x-auto pb-6 pt-2 px-1 custom-scrollbar w-full select-none"
                                         >
                                             {activeDeck.cards.map((card) => {
                                                 const category = CARD_TYPES.find(t => t.id === card.type) || CARD_TYPES[0];
@@ -582,7 +569,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
                                                     <Reorder.Item 
                                                         key={card.id} 
                                                         value={card}
-                                                        className="flex flex-col gap-2.5 z-10"
+                                                        className="flex flex-col gap-2.5 z-10 w-44 md:w-52 shrink-0"
                                                     >
                                                         {/* Interactive card with 3D tilt wrapper */}
                                                         <TiltCard frontUrl={card.frontUrl} name={card.name}>
