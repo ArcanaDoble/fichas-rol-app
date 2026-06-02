@@ -175,7 +175,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.99**
+> **Versión actual: 2.5.0**
+
+**Resumen de cambios v2.5.0:**
+
+- **Centrado Adaptativo de Rasgos Solitarios**: Implementamos un algoritmo inteligente de detección de rasgos en [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx) que evalúa fila por fila (pares de rasgos). Si en una fila del formulario lateral el usuario escribe texto para un rasgo (izquierdo o derecho) y deja el rasgo complementario vacío o con el valor por defecto (`-`), el sistema oculta automáticamente la columna vacía del canvas y redibuja el rasgo con contenido centrado horizontalmente en el medio de la carta (con un ancho expandido de `740` px, idéntico al de las cartas que cuentan con un único rasgo como las trampas). Si ambos rasgos tienen texto o ambos están en blanco, se dibuja su maquetación normal en doble columna de forma simétrica.
 
 **Resumen de cambios v2.4.99:**
 

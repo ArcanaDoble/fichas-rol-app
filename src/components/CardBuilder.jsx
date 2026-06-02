@@ -2131,9 +2131,39 @@ const drawCardCanvas = (
     const traitSlots = cardType === 'skill'
       ? getTraitSlots(typeConfig.layout).slice(2, 2 + activeTraitsCount)
       : getTraitSlots(typeConfig.layout).slice(0, activeTraitsCount);
-    traitSlots.forEach((slot, index) => {
-      drawTraitBadge(context, slot, slotLabels[index] || '');
-    });
+
+    if (typeConfig.maxTraits > 2) {
+      for (let r = 0; r < activeRows; r++) {
+        const leftIndex = r * 2;
+        const rightIndex = r * 2 + 1;
+        const leftVal = (slotLabels[leftIndex] || '').trim();
+        const rightVal = (slotLabels[rightIndex] || '').trim();
+        const leftSlot = traitSlots[leftIndex];
+        const rightSlot = traitSlots[rightIndex];
+
+        const leftHasContent = leftVal && leftVal !== '-';
+        const rightHasContent = rightVal && rightVal !== '-';
+
+        if (leftHasContent && !rightHasContent) {
+          // Draw left trait centered in the card
+          const centeredSlot = { x: 574, y: leftSlot.y, width: 740, height: leftSlot.height };
+          drawTraitBadge(context, centeredSlot, leftVal);
+        } else if (!leftHasContent && rightHasContent) {
+          // Draw right trait centered in the card
+          const centeredSlot = { x: 574, y: rightSlot.y, width: 740, height: rightSlot.height };
+          drawTraitBadge(context, centeredSlot, rightVal);
+        } else {
+          // Draw both normally (even if empty or "-")
+          if (leftSlot) drawTraitBadge(context, leftSlot, leftVal);
+          if (rightSlot) drawTraitBadge(context, rightSlot, rightVal);
+        }
+      }
+    } else {
+      // For cards with 1 max trait (trap/status)
+      traitSlots.forEach((slot, index) => {
+        drawTraitBadge(context, slot, slotLabels[index] || '');
+      });
+    }
   }
 
   if (cardType !== 'action') {
