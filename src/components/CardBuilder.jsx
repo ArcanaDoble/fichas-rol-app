@@ -1565,11 +1565,12 @@ const getDescriptionFlowItems = (context, text, maxWidth, lineHeight, hyphenate 
     }
 
     const wrappedLines = wrapDescriptionText(context, cleanParagraph, maxWidth, hyphenate, paragraphIsLore);
-    wrappedLines.forEach((line) => {
+    wrappedLines.forEach((line, lineIdx) => {
       items.push({
         type: 'text',
         line,
         isLore: paragraphIsLore,
+        isLastLineOfParagraph: lineIdx === wrappedLines.length - 1,
         height: paragraphIsLore ? Math.round(lineHeight * 1.02) : lineHeight,
       });
     });
@@ -1885,12 +1886,9 @@ const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate =
     if (item.type === 'separator') {
       drawDescriptionSeparator(context, dynamicLayout, y, fitted.lineHeight);
     } else if (item.type === 'text' && item.line) {
-      const nextTextItem = fitted.items.slice(index + 1).find((candidate) => candidate.type === 'text' || candidate.type === 'separator');
       const shouldJustify = Boolean(
-        nextTextItem &&
-        nextTextItem.type === 'text' &&
+        !item.isLastLineOfParagraph &&
         !item.isLore &&
-        !nextTextItem.isLore &&
         item.line.includes(' ')
       );
 
