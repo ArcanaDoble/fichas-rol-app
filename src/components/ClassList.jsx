@@ -55,6 +55,7 @@ import { uploadDataUrl } from '../utils/storage';
 import Sidebar, { MobileNav } from './Sidebar';
 import ProgressionView from './ProgressionView';
 import LoadoutView from './LoadoutView';
+import DeckBuilderView from './DeckBuilderView';
 import CardBuilder from './CardBuilder';
 import HexIcon from './HexIcon';
 import { RelicsView } from './RelicsView';
@@ -4982,6 +4983,15 @@ const ClassList = ({
           );
         /* Funciones movidas al scope principal, ver más arriba */
         case 'progression':
+          if (isPlayerMode) {
+            return (
+              <DeckBuilderView
+                ownerId={editingClass.id}
+                ownerName={editingClass.name}
+                isPlayer={true}
+              />
+            );
+          }
           return (
             <ProgressionView
               dndClass={editingClass}

@@ -12,7 +12,8 @@ import {
     FiStar,
     FiUser,
     FiLayout,
-    FiImage
+    FiImage,
+    FiLayers
 } from 'react-icons/fi';
 import { FaSkull } from 'react-icons/fa';
 
@@ -88,6 +89,15 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
             color: 'indigo',
             icon: FiImage,
             features: ['Canvas', 'Fondos', 'Nombre'],
+            isNew: true,
+        },
+        {
+            id: 'master_decks',
+            title: 'Colección de Barajas',
+            description: 'Accede y gestiona la colección de barajas y mazos de cartas globales del Máster.',
+            color: 'indigo',
+            icon: FiLayers,
+            features: ['Mazos', 'Colección', 'Drag & Drop'],
             isNew: true,
         },
         {

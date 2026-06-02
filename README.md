@@ -175,7 +175,16 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.5.3**
+> **Versión actual: 2.6.0**
+
+**Resumen de cambios v2.6.0:**
+
+- **Constructor de Barajas y Mazos (Deck Builder)**: Diseñamos e implementamos un sistema premium e interactivo para la gestión y creación de múltiples barajas de cartas tácticas (`DeckBuilderView.jsx`).
+  - **Acceso para Jugadores**: En la lista de clases en modo jugador (`ClassList.jsx`), la pestaña "Constelación/progresión" se transforma por completo en un constructor de barajas adaptado a la estética de la ficha, manteniendo intacta la progresión de niveles clásica en la interfaz del Master.
+  - **Acceso para el Master**: Añadimos un acceso directo independiente ("Colección de Barajas") en el menú principal del Master (`MasterMenu.jsx` y enrutado en `App.js`) para acceder a los mazos globales de la campaña sin interferir con las fichas de los jugadores.
+  - **Efecto 3D Tilt Hover y Glare**: Cada carta implementa un envoltorio 3D de inclinación interactiva y destellos de reflejos (glare) en tiempo real al deslizar el ratón, imitando la sensación física de un juego de cartas premium.
+  - **Ordenación por Arrastre (Drag & Drop)**: Integración nativa de `Reorder` de Framer Motion para reordenar las cartas de la baraja cómodamente arrastrándolas por la pantalla.
+  - **Buscador de Biblioteca y Clasificación**: Un buscador lateral de plantillas de cartas (conectado en tiempo real a la colección `canvas_cards` de Firestore) permite agregar copias con un solo toque. Cada carta cuenta con un selector de categoría estético tipo badge pill (Acción, Atributo, Trampa, Arma, Armadura, Minion/Skill) y contadores dinámicos que resumen el tipo de baraja creada.
 
 **Resumen de cambios v2.5.3:**
 

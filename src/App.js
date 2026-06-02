@@ -64,6 +64,7 @@ import { CharacterListView } from './components/CharacterListView';
 import InitiativeTracker from './components/InitiativeTracker';
 import CanvasSection from './components/CanvasSection';
 import CardBuilder from './components/CardBuilder';
+import DeckBuilderView from './components/DeckBuilderView';
 import EnemyViewModal from './components/EnemyViewModal';
 import BestiaryView from './components/BestiaryView';
 import StatusEffectsManager from './components/StatusEffectsManager';
@@ -7337,6 +7338,19 @@ function App() {
   if (userType === 'master' && authenticated && chosenView === 'card_builder') {
     return withTooltips(
       <CardBuilder mode="master" onBack={() => setChosenView(null)} />
+    );
+  }
+  if (userType === 'master' && authenticated && chosenView === 'master_decks') {
+    return withTooltips(
+      <div className="h-screen overflow-hidden bg-[#09090b] flex flex-col">
+        <div className="flex-none p-4 bg-gray-900 border-b border-gray-800 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-amber-500 font-['Cinzel']">Colección de Barajas del Master</h2>
+          <Boton color="gray" onClick={() => setChosenView(null)}>Volver</Boton>
+        </div>
+        <div className="flex-1 overflow-hidden relative">
+          <DeckBuilderView ownerId="master" ownerName="Master" isPlayer={false} />
+        </div>
+      </div>
     );
   }
   if (userType === 'master' && authenticated && !chosenView) {
