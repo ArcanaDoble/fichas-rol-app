@@ -317,7 +317,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
                 `}
             </style>
 
-            <div className="max-w-5xl mx-auto p-4 pt-12 md:p-8 lg:p-12">
+            <div className="max-w-7xl mx-auto p-4 pt-12 md:p-8 lg:p-12">
                 <AnimatePresence mode="wait">
                     {/* 1. VIEW MODE: CATALOG OF FOLDERS / DECKS */}
                     {!activeDeck ? (
@@ -359,7 +359,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
                                     </p>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-12">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-12">
                                     {decks.map((deck) => {
                                         const counts = getCardCounts(deck);
                                         const totalCards = (deck.cards || []).length;
@@ -553,7 +553,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
                                             axis="y" 
                                             values={activeDeck.cards || []} 
                                             onReorder={handleReorder}
-                                            className="grid grid-cols-2 md:grid-cols-3 gap-6"
+                                            className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6"
                                         >
                                             {activeDeck.cards.map((card) => {
                                                 const category = CARD_TYPES.find(t => t.id === card.type) || CARD_TYPES[0];
