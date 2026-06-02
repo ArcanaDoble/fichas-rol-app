@@ -332,7 +332,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 md:mb-12 border-b border-[#c8aa6e]/20 pb-4 md:pb-6 gap-4">
                                 <div>
                                     <h2 className="text-3xl font-fantasy text-[#f0e6d2] mb-2">COLECCIÓN</h2>
-                                    <p className="text-slate-400 text-xs uppercase tracking-widest">mazos y gestión de cartas de rol</p>
+                                    <p className="text-slate-400 text-xs uppercase tracking-widest">gestión de mazos y cartas de rol</p>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     {onBack && (
@@ -369,22 +369,73 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
                                             <motion.div
                                                 key={deck.id}
                                                 onClick={() => !isEditingName && setActiveDeck(deck)}
-                                                className="group relative cursor-pointer aspect-[3/4.2] rounded bg-[#131722]/60 border border-slate-800 hover:border-[#c8aa6e]/60 transition-all duration-300 overflow-hidden flex flex-col justify-between p-5 hover:-translate-y-1 hover:shadow-[0_15px_30px_rgba(0,0,0,0.5)] shadow-md"
+                                                className="group relative cursor-pointer flex flex-col justify-between transition-all duration-300 hover:-translate-y-1"
                                             >
-                                                {/* Folder Bisel/Backing */}
-                                                <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-[#c8aa6e]/5 to-transparent pointer-events-none" />
+                                                {/* Visual Folder Container */}
+                                                <div className="w-full relative aspect-[4/3] flex flex-col items-center justify-end group/folder mb-3 overflow-visible">
+                                                    {/* Folder Back */}
+                                                    <div className="absolute inset-0 bg-[#121620]/30 border border-slate-800/60 rounded-lg group-hover/folder:border-[#c8aa6e]/30 group-hover/folder:bg-[#121620]/50 transition-colors duration-300">
+                                                        {/* Folder Tab */}
+                                                        <div className="absolute -top-3 left-3 w-20 h-3 bg-[#121620]/30 border-t border-x border-slate-800/60 rounded-t-md group-hover/folder:border-[#c8aa6e]/30 group-hover/folder:bg-[#121620]/50 transition-colors duration-300"></div>
+                                                    </div>
 
-                                                {/* Deck Header */}
-                                                <div>
+                                                    {/* 3 stacked cards peeking out of folder */}
+                                                    <div className="absolute inset-x-0 bottom-2 top-2 flex items-center justify-center overflow-visible">
+                                                        {deck.cards && deck.cards.length > 0 ? (
+                                                            deck.cards.slice(0, 3).map((card, idx) => {
+                                                                const rot = (idx - 1) * 8; // -8, 0, 8
+                                                                const shiftX = (idx - 1) * 16; // -16px, 0, 16px
+                                                                const shiftY = idx === 1 ? -6 : 0;
+                                                                return (
+                                                                    <div
+                                                                        key={card.id}
+                                                                        className="absolute aspect-[3/4.2] h-[85%] rounded border border-slate-700/50 shadow-lg overflow-hidden bg-[#161a23] transition-transform duration-300 group-hover/folder:scale-105"
+                                                                        style={{
+                                                                            transform: `translate(${shiftX}px, ${shiftY}px) rotate(${rot}deg)`,
+                                                                            zIndex: idx + 2,
+                                                                            opacity: 1 - (2 - idx) * 0.15
+                                                                        }}
+                                                                    >
+                                                                        {card.frontUrl ? (
+                                                                            <img 
+                                                                                src={card.frontUrl} 
+                                                                                alt="" 
+                                                                                className="w-full h-full object-cover select-none pointer-events-none"
+                                                                            />
+                                                                        ) : (
+                                                                            <div className="w-full h-full bg-[#161a23] flex items-center justify-center p-1 border border-dashed border-[#c8aa6e]/20">
+                                                                                <span className="text-[6px] text-slate-500 uppercase tracking-widest text-center truncate">{card.name}</span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })
+                                                        ) : (
+                                                            <div className="opacity-15 group-hover/folder:opacity-30 transition-opacity flex items-center justify-center h-full z-10">
+                                                                <FiLayers className="w-8 h-8 text-[#c8aa6e] stroke-[1.5]" />
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Folder Front Cover/Flap */}
+                                                    <div className="absolute bottom-0 inset-x-0 h-[48%] bg-[#1b2130]/90 border-t border-slate-800/80 rounded-b-lg shadow-[0_-5px_15px_rgba(0,0,0,0.5)] group-hover/folder:border-t-[#c8aa6e]/40 transition-colors duration-300 flex items-center justify-end px-3 z-10">
+                                                        <span className="text-[9px] text-[#c8aa6e]/85 font-bold uppercase tracking-wider bg-black/45 px-2 py-0.5 rounded border border-[#c8aa6e]/20">
+                                                            {totalCards} {totalCards === 1 ? 'Carta' : 'Cartas'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Text and stats below the folder */}
+                                                <div className="px-1 flex flex-col gap-1.5">
                                                     <div className="flex items-start justify-between gap-2">
-                                                        <div className="flex-1">
+                                                        <div className="flex-1 min-w-0">
                                                             {isEditingName ? (
                                                                 <div className="flex items-center gap-1 onClick-stopPropagation" onClick={e => e.stopPropagation()}>
                                                                     <input
                                                                         type="text"
                                                                         value={editDeckNameText}
                                                                         onChange={(e) => setEditDeckNameText(e.target.value)}
-                                                                        className="w-full bg-[#1b2130] border border-[#c8aa6e] text-sm text-[#f0e6d2] font-bold p-1 px-2 rounded outline-none"
+                                                                        className="w-full bg-[#1b2130] border border-[#c8aa6e] text-xs text-[#f0e6d2] font-bold p-1 px-2 rounded outline-none"
                                                                         autoFocus
                                                                         onKeyDown={(e) => {
                                                                             if (e.key === 'Enter') handleRenameDeck(deck.id, e);
@@ -399,79 +450,47 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
                                                                     </button>
                                                                 </div>
                                                             ) : (
-                                                                <h4 className="font-cinzel text-lg font-bold text-[#f0e6d2] uppercase tracking-wide group-hover:text-[#c8aa6e] transition-colors leading-tight">
+                                                                <h4 className="font-cinzel text-base font-bold text-[#f0e6d2] uppercase tracking-wide group-hover:text-[#c8aa6e] transition-colors leading-tight truncate">
                                                                     {deck.name}
                                                                 </h4>
                                                             )}
                                                         </div>
-                                                        <div className="flex items-center gap-1 opacity-40 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                                                             <button 
                                                                 onClick={(e) => {
                                                                     setEditingDeckName(deck.id);
                                                                     setEditDeckNameText(deck.name);
                                                                 }}
-                                                                className="p-1 hover:text-[#c8aa6e] rounded hover:bg-slate-800/50"
+                                                                className="p-1 text-slate-500 hover:text-[#c8aa6e] rounded hover:bg-slate-800/50"
                                                             >
                                                                 <FiEdit2 className="w-3.5 h-3.5" />
                                                             </button>
                                                             <button 
                                                                 onClick={(e) => handleDeleteDeck(deck.id, e)}
-                                                                className="p-1 hover:text-red-500 rounded hover:bg-slate-800/50"
+                                                                className="p-1 text-slate-500 hover:text-red-500 rounded hover:bg-slate-800/50"
                                                             >
                                                                 <FiTrash2 className="w-3.5 h-3.5" />
                                                             </button>
                                                         </div>
                                                     </div>
 
-                                                    <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mt-1 inline-block">
-                                                        {totalCards} {totalCards === 1 ? 'Carta' : 'Cartas'}
-                                                    </span>
-                                                </div>
-
-                                                {/* Folder Deck Mini Previews */}
-                                                <div className="h-[40%] flex items-center justify-center relative my-4">
-                                                    {deck.cards && deck.cards.length > 0 ? (
-                                                        deck.cards.slice(0, 3).map((card, idx) => (
-                                                            <div
-                                                                key={card.id}
-                                                                className="absolute aspect-[3/4.2] h-full rounded border border-slate-700/50 shadow-md overflow-hidden bg-[#161a23]"
-                                                                style={{
-                                                                    left: `calc(50% - 25px + ${idx * 15}px)`,
-                                                                    transform: `rotate(${(idx - 1) * 8}deg) translateZ(0)`,
-                                                                    zIndex: idx,
-                                                                    opacity: 1 - (2 - idx) * 0.15
-                                                                }}
-                                                            >
-                                                                {card.frontUrl && (
-                                                                    <img 
-                                                                        src={card.frontUrl} 
-                                                                        alt="" 
-                                                                        className="w-full h-full object-cover select-none pointer-events-none"
-                                                                    />
-                                                                )}
-                                                            </div>
-                                                        ))
-                                                    ) : (
-                                                        <FiFolder className="w-16 h-16 text-slate-800 stroke-[1] group-hover:scale-110 transition-transform duration-300" />
-                                                    )}
-                                                </div>
-
-                                                {/* Deck Category Count Badges */}
-                                                <div className="border-t border-slate-800 pt-3 flex flex-wrap gap-2 text-[10px] uppercase font-bold tracking-wider text-slate-400">
-                                                    {CARD_TYPES.map(type => {
-                                                        const count = counts[type.id] || 0;
-                                                        if (count === 0) return null;
-                                                        const Icon = type.icon;
-                                                        return (
-                                                            <div 
-                                                                key={type.id} 
-                                                                className="flex items-center gap-1 px-2 py-0.5 rounded bg-slate-900 border border-slate-800"
-                                                            >
-                                                                <Icon className="w-2.5 h-2.5 text-[#c8aa6e]" />
-                                                                <span>{count}</span>
-                                                            </div>
-                                                        );
-                                                    })}
+                                                    {/* Deck Category Count Badges */}
+                                                    <div className="flex flex-wrap gap-1 text-[8px] uppercase font-bold tracking-wider text-slate-500">
+                                                        {CARD_TYPES.map(type => {
+                                                            const count = counts[type.id] || 0;
+                                                            if (count === 0) return null;
+                                                            const Icon = type.icon;
+                                                            return (
+                                                                <div 
+                                                                    key={type.id} 
+                                                                    className="flex items-center gap-0.5 px-1.5 py-0.2 bg-slate-900/60 border border-slate-800/40 rounded text-slate-400"
+                                                                >
+                                                                    <Icon className="w-2 h-2 text-[#c8aa6e]/70" />
+                                                                    <span>{count}</span>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
                                                 </div>
                                             </motion.div>
                                         );
