@@ -314,10 +314,12 @@ const drawActionConsumptionRail = (context, consumptionSlots, resourceImages) =>
   const height = 156;
   const slotSize = 122;
   const circleSize = 108; // Rediseñado a 108px para separación y proporción estéticas de los círculos
-  const railWidth = 780;
-  const railX = (CANVAS_WIDTH - railWidth) / 2; // Centered
   const slotGap = 8;
-  const slotsWidth = slotSize * 5 + slotGap * 4;
+  const slotCount = consumptionSlots.length;
+  const slotsWidth = slotSize * slotCount + slotGap * (slotCount - 1);
+  const railPadding = 138; // Margen exacto para las esquinas biseladas del riel centrado
+  const railWidth = Math.max(780, slotsWidth + railPadding);
+  const railX = (CANVAS_WIDTH - railWidth) / 2; // Centered
   const startX = railX + (railWidth - slotsWidth) / 2 + slotSize / 2;
 
   drawRailBase(context, railX, y, railWidth, height, 'center');
@@ -2641,6 +2643,34 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
 
   const handleTypeChange = (typeId) => {
     setCardType(typeId);
+    
+    // Ensure consumption slots are reset to length 5 if switching away from 'action'
+    if (typeId !== 'action') {
+      setConsumptionSlots((currentSlots) => {
+        const nextSlots = [...currentSlots];
+        if (nextSlots.length !== 5) {
+          nextSlots.length = 5;
+          for (let i = 0; i < 5; i++) {
+            if (nextSlots[i] === undefined) {
+              nextSlots[i] = EMPTY_SLOT;
+            }
+          }
+        }
+        return nextSlots;
+      });
+      setConsumptionSlotTypes((prevTypes) => {
+        const nextTypes = [...prevTypes];
+        if (nextTypes.length !== 5) {
+          nextTypes.length = 5;
+          for (let i = 0; i < 5; i++) {
+            if (nextTypes[i] === undefined) {
+              nextTypes[i] = 'consumption';
+            }
+          }
+        }
+        return nextTypes;
+      });
+    }
     if (typeId === 'trap') {
       setVisibleTraitRows(1);
       setShowTraits(true);
@@ -3289,11 +3319,51 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                 )}
 
                 {usesConsumptionResources && (
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                    {cardType === 'weapon' ? 'Consumo' : cardType === 'armor' ? 'Armadura' : 'Consumo'}
-                  </label>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        {cardType === 'weapon' ? 'Consumo' : cardType === 'armor' ? 'Armadura' : 'Consumo'}
+                      </label>
+                      {cardType === 'action' && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold uppercase text-slate-500">Ranuras:</span>
+                          <select
+                            value={consumptionSlots.length}
+                            onChange={(event) => {
+                              const newCount = parseInt(event.target.value, 10);
+                              setConsumptionSlots((currentSlots) => {
+                                const nextSlots = [...currentSlots];
+                                if (nextSlots.length < newCount) {
+                                  while (nextSlots.length < newCount) {
+                                    nextSlots.push(EMPTY_SLOT);
+                                  }
+                                } else if (nextSlots.length > newCount) {
+                                  nextSlots.length = newCount;
+                                }
+                                return nextSlots;
+                              });
+                              setConsumptionSlotTypes((prevTypes) => {
+                                const nextTypes = [...prevTypes];
+                                if (nextTypes.length < newCount) {
+                                  while (nextTypes.length < newCount) {
+                                    nextTypes.push('consumption');
+                                  }
+                                } else if (nextTypes.length > newCount) {
+                                  nextTypes.length = newCount;
+                                }
+                                return nextTypes;
+                              });
+                            }}
+                            className="bg-[#09090b] border border-[#c8aa6e]/20 px-2 py-1 text-[10px] font-bold text-[#f0e6d2] outline-none cursor-pointer rounded"
+                          >
+                            <option value={5}>5 (Por defecto)</option>
+                            <option value={6}>6</option>
+                            <option value={7}>7</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {consumptionSlots.map((slot, index) => (
                       <div
                         key={`consumption-slot-${index}`}

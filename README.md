@@ -175,7 +175,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.96**
+> **Versión actual: 2.4.97**
+
+**Resumen de cambios v2.4.97:**
+
+- **Ranuras de Tiempo Dinámicas para Cartas de Acción**: Añadimos soporte para habilitar hasta 7 ranuras de tiempo (consumo) en las cartas de Acción en [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx). En la barra lateral se integra un nuevo selector dinámico que permite elegir entre 5 (predeterminado), 6 o 7 ranuras. Al aumentar el número de slots, el riel de consumo centrado (`drawActionConsumptionRail`) calcula dinámicamente el ancho físico total requerido por los círculos (`slotsWidth`) y escala horizontalmente su base (`railWidth`), garantizando una diagramación perfectamente equilibrada y simétrica en el canvas sin importar el número de ranuras habilitadas. Al cambiar a cualquier otro tipo de carta (Armas, Armaduras, Habilidades, etc.), el sistema restablece de forma segura el arreglo a 5 slots para evitar regresiones de formato.
 
 **Resumen de cambios v2.4.96:**
 
