@@ -1255,6 +1255,50 @@ const tokenizeParagraph = (paragraph) => {
 };
 
 const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, resourceImages = {}, ignoreIcons = false) => {
+  if (justify === 'center') {
+    const fontInfo = getFontInfoFromContext(context);
+    const styleSegments = parseStyles(line);
+    
+    if (styleSegments.length === 0) return;
+    
+    const naturalWidth = measureStyledText(context, line, fontInfo, ignoreIcons);
+    let cursorX = x + (maxWidth - naturalWidth) / 2;
+    
+    context.save();
+    styleSegments.forEach((styleSeg) => {
+      applySegmentStyle(context, styleSeg, fontInfo);
+      
+      const fontSize = getActiveFontSize(context);
+      const iconSize = fontSize * 0.9;
+      const iconPadding = fontSize * 0.15;
+      
+      if (ignoreIcons) {
+        context.fillText(styleSeg.text, cursorX, y);
+        cursorX += context.measureText(styleSeg.text).width;
+      } else {
+        const kwSegments = parseLineSegments(styleSeg.text);
+        kwSegments.forEach((seg) => {
+          context.fillText(seg.text, cursorX, y);
+          const textWidth = context.measureText(seg.text).width;
+          cursorX += textWidth;
+          
+          if (seg.isKeyword) {
+            const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
+            const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
+            
+            if (iconImg) {
+              const iconY = y + (fontSize - iconSize) / 2;
+              context.drawImage(iconImg, cursorX + iconPadding, iconY, iconSize, iconSize);
+            }
+            cursorX += iconSize + iconPadding * 2;
+          }
+        });
+      }
+    });
+    context.restore();
+    return;
+  }
+
   if (!justify) {
     const fontInfo = getFontInfoFromContext(context);
     const styleSegments = parseStyles(line);
@@ -1895,15 +1939,15 @@ const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate =
       if (item.isLore) {
         context.fillStyle = 'rgba(255,255,255,0.84)';
         context.font = `italic ${dynamicLayout.weight || '400'} ${Math.max(48, Math.round(fitted.size * 0.94))}px ${family}`;
+        drawTextLineWithIcons(context, item.line, dynamicLayout.x, y, dynamicLayout.width, 'center', resourceImages, item.isLore);
       } else {
         context.fillStyle = 'rgba(255,255,255,0.96)';
         context.font = `${style}${dynamicLayout.weight || '400'} ${fitted.size}px ${family}`;
-      }
-
-      if (shouldJustify) {
-        drawTextLineWithIcons(context, item.line, dynamicLayout.x, y, dynamicLayout.width, true, resourceImages, item.isLore);
-      } else {
-        drawTextLineWithIcons(context, item.line, dynamicLayout.x, y, dynamicLayout.width, false, resourceImages, item.isLore);
+        if (shouldJustify) {
+          drawTextLineWithIcons(context, item.line, dynamicLayout.x, y, dynamicLayout.width, true, resourceImages, item.isLore);
+        } else {
+          drawTextLineWithIcons(context, item.line, dynamicLayout.x, y, dynamicLayout.width, false, resourceImages, item.isLore);
+        }
       }
     }
     y += item.height;

@@ -175,7 +175,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.95**
+> **Versión actual: 2.4.96**
+
+**Resumen de cambios v2.4.96:**
+
+- **Alineación Centrada para Texto Narrativo (Lore)**: Añadimos soporte de alineación horizontal centrada en [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx) para los bloques de texto narrativo (`isLore`). El motor de dibujo calcula dinámicamente el ancho natural del texto formateado en cada línea y ajusta el cursor de inicio para centrar simétricamente las oraciones dentro de los márgenes de la carta. Esto proporciona un acabado visual sumamente elegante y clásico para las citas de flavor o texto de trasfondo.
 
 **Resumen de cambios v2.4.95:**
 
