@@ -1182,18 +1182,6 @@ const getStyledWordsOfLine = (line) => {
     });
   });
   
-  // Mark spaces that immediately follow a keyword token
-  for (let i = 0; i < words.length - 1; i++) {
-    const current = words[i];
-    const next = words[i + 1];
-    if (!current.isSpace && next.isSpace) {
-      KEYWORD_REGEX.lastIndex = 0;
-      if (KEYWORD_REGEX.test(current.text)) {
-        next.isAfterIcon = true;
-      }
-    }
-  }
-  
   return words;
 };
 
@@ -1310,39 +1298,23 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
   } else {
     const styledWords = getStyledWordsOfLine(line);
     const spaceTokensCount = styledWords.filter(w => w.isSpace).length;
-    const activeSpaceTokensCount = ignoreIcons 
-      ? spaceTokensCount 
-      : styledWords.filter(w => w.isSpace && !w.isAfterIcon).length;
     
     const fontInfo = getFontInfoFromContext(context);
     const naturalWidth = measureStyledText(context, line, fontInfo, ignoreIcons);
     const extraWidth = maxWidth - naturalWidth;
     
-    if (spaceTokensCount === 0 || extraWidth <= 0) {
+    if (spaceTokensCount < 2 || extraWidth <= 0) {
       drawTextLineWithIcons(context, line, x, y, maxWidth, false, resourceImages, ignoreIcons);
       return;
     }
     
-    const extraSpaceShare = activeSpaceTokensCount > 0 
-      ? extraWidth / activeSpaceTokensCount 
-      : extraWidth / spaceTokensCount;
-
-    const defaultSpaceWidth = context.measureText(' ').width;
-    const maxAllowedShare = defaultSpaceWidth * 1.5; // Typographic loose line threshold (max 2.5x normal space width)
-    if (extraSpaceShare > maxAllowedShare) {
-      // Fallback to normal left-aligned drawing to avoid ugly massive gaps between words
-      drawTextLineWithIcons(context, line, x, y, maxWidth, false, resourceImages, ignoreIcons);
-      return;
-    }
-    
+    const extraSpaceShare = extraWidth / spaceTokensCount;
     let cursorX = x;
     
     styledWords.forEach((word) => {
       if (word.isSpace) {
         const spaceNaturalWidth = measureStyledWordWidth(context, word, ignoreIcons);
-        const isTightSpace = word.isAfterIcon && !ignoreIcons;
-        const share = (activeSpaceTokensCount === 0 || !isTightSpace) ? extraSpaceShare : 0;
-        cursorX += spaceNaturalWidth + share;
+        cursorX += spaceNaturalWidth + extraSpaceShare;
       } else {
         drawSingleStyledWord(context, word, cursorX, y, resourceImages, ignoreIcons);
         cursorX += measureStyledWordWidth(context, word, ignoreIcons);

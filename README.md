@@ -175,11 +175,15 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.93**
+> **Versión actual: 2.4.94**
+
+**Resumen de cambios v2.4.94:**
+
+- **Justificación Uniforme y Constante para Texto no Guionizado**: Refinamos y unificamos el motor de justificación tipográfica en [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx). Eliminamos el umbral restrictivo de líneas laxas (`maxAllowedShare`) y el comportamiento estanco post-icono (`isAfterIcon`) que forzaban la caída a alineación izquierda. Ahora, todos los espacios de la línea (incluidos los que siguen a los iconos de palabra clave) absorben la justificación de manera homogénea y equilibrada, distribuyendo el ancho sobrante de forma atómica y garantizando un párrafo totalmente justificado. La conmutación a alineación izquierda se reserva exclusivamente para casos de imposibilidad física extrema (líneas con menos de 2 espacios).
 
 **Resumen de cambios v2.4.93:**
 
-- **Umbral de Líneas Laxas (Loose Lines) en Justificación**: Implementamos un control de calidad tipográfica que evita la generación de espacios gigantescos entre palabras cuando un párrafo no está guionizado. Definimos un umbral límite de estiramiento equivalente a 1.5 veces el ancho del espacio por defecto (`defaultSpaceWidth * 1.5`). Si el reparto de la justificación supera este límite debido a la falta de guiones (como cuando una palabra larga se empuja por completo al renglón inferior y quedan pocas palabras en la línea), el motor cancela la justificación y conmuta de manera elegante y automática a una alineación estándar a la izquierda, erradicando por completo cualquier río o hueco de espacio anómalo.
+- **Umbral de Líneas Laxas (Loose Lines) en Justificación**: Implementamos un control de calidad tipográfica inicial para conmutar a alineación izquierda cuando el estiramiento superaba 1.5 veces el ancho por defecto (comportamiento modificado en v2.4.94 para garantizar justificación uniforme).
 
 **Resumen de cambios v2.4.92:**
 
