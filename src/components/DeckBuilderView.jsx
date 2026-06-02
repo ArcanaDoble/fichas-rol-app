@@ -132,6 +132,19 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
     const [newDeckName, setNewDeckName] = useState('');
     const [editingDeckName, setEditingDeckName] = useState(null);
     const [editDeckNameText, setEditDeckNameText] = useState('');
+    const [draggedIndex, setDraggedIndex] = useState(null);
+    const [localCards, setLocalCards] = useState([]);
+
+    // Sync localCards with activeDeck when not dragging
+    useEffect(() => {
+        if (activeDeck) {
+            if (draggedIndex === null) {
+                setLocalCards(activeDeck.cards || []);
+            }
+        } else {
+            setLocalCards([]);
+        }
+    }, [activeDeck, draggedIndex]);
 
     // Real-time listener for decks
     useEffect(() => {
@@ -217,7 +230,8 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
             type: 'action' // default category
         };
 
-        const updatedCards = [...(activeDeck.cards || []), newCard];
+        const updatedCards = [...localCards, newCard];
+        setLocalCards(updatedCards);
         try {
             await updateDoc(doc(db, 'card_decks', activeDeck.id), {
                 cards: updatedCards
@@ -230,7 +244,8 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
     // Remove card from current deck
     const handleRemoveCardFromDeck = async (cardId) => {
         if (!activeDeck) return;
-        const updatedCards = (activeDeck.cards || []).filter(c => c.id !== cardId);
+        const updatedCards = localCards.filter(c => c.id !== cardId);
+        setLocalCards(updatedCards);
         try {
             await updateDoc(doc(db, 'card_decks', activeDeck.id), {
                 cards: updatedCards
@@ -243,7 +258,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
     // Cycle card type category
     const handleCycleCardType = async (cardId) => {
         if (!activeDeck) return;
-        const updatedCards = (activeDeck.cards || []).map(card => {
+        const updatedCards = localCards.map(card => {
             if (card.id === cardId) {
                 const currentIndex = CARD_TYPES.findIndex(t => t.id === card.type);
                 const nextIndex = (currentIndex + 1) % CARD_TYPES.length;
@@ -252,6 +267,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
             return card;
         });
 
+        setLocalCards(updatedCards);
         try {
             await updateDoc(doc(db, 'card_decks', activeDeck.id), {
                 cards: updatedCards
@@ -262,14 +278,26 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
     };
 
     // Handle Framer Motion Drag/Drop sorting
-    const handleReorder = async (reorderedCards) => {
+    const handleSwap = (draggedIdx, targetIdx) => {
+        if (draggedIdx === null || draggedIdx === targetIdx) return;
+
+        const updatedCards = [...localCards];
+        const [draggedCard] = updatedCards.splice(draggedIdx, 1);
+        updatedCards.splice(targetIdx, 0, draggedCard);
+
+        setLocalCards(updatedCards);
+        setDraggedIndex(targetIdx);
+    };
+
+    const handleDragEnd = async () => {
+        setDraggedIndex(null);
         if (!activeDeck) return;
         try {
             await updateDoc(doc(db, 'card_decks', activeDeck.id), {
-                cards: reorderedCards
+                cards: localCards
             });
         } catch (err) {
-            console.error("Error reordering cards:", err);
+            console.error("Error saving card order:", err);
         }
     };
 
@@ -542,7 +570,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
                                             Mi Baraja ({ (activeDeck.cards || []).length } cartas)
                                         </span>
                                         <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">
-                                            💡 Arrastra las cartas verticalmente para ordenar
+                                            💡 Arrastra las cartas para reordenar la baraja
                                         </span>
                                     </div>
 
@@ -555,53 +583,65 @@ export const DeckBuilderView = ({ ownerId, ownerName, isPlayer = true, onBack })
                                             </p>
                                         </div>
                                     ) : (
-                                        <Reorder.Group 
-                                            axis="y" 
-                                            values={activeDeck.cards || []} 
-                                            onReorder={handleReorder}
-                                            className="flex flex-col gap-8 w-full select-none items-center"
+                                        <div 
+                                            className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 w-full select-none"
                                         >
-                                            {activeDeck.cards.map((card) => {
+                                            {localCards.map((card, index) => {
                                                 const category = CARD_TYPES.find(t => t.id === card.type) || CARD_TYPES[0];
                                                 const CategoryIcon = category.icon;
 
                                                 return (
-                                                    <Reorder.Item 
+                                                    <motion.div 
                                                         key={card.id} 
-                                                        value={card}
-                                                        className="flex flex-col gap-2.5 z-10 w-44 md:w-52 shrink-0 relative"
+                                                        layout
+                                                        drag
+                                                        dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+                                                        dragElastic={0.8}
+                                                        dragTransition={{ bounceStiffness: 600, bounceDamping: 25 }}
+                                                        onDragStart={() => setDraggedIndex(index)}
+                                                        onDragEnd={handleDragEnd}
+                                                        onMouseEnter={() => {
+                                                            if (draggedIndex !== null && draggedIndex !== index) {
+                                                                handleSwap(draggedIndex, index);
+                                                            }
+                                                        }}
+                                                        className={`flex flex-col gap-2.5 z-10 w-full max-w-[240px] mx-auto relative cursor-grab active:cursor-grabbing transition-all duration-200 ${draggedIndex === index ? 'z-50 scale-105 shadow-2xl' : 'opacity-100'}`}
+                                                        style={{
+                                                            pointerEvents: draggedIndex === index ? 'none' : 'auto'
+                                                        }}
                                                     >
                                                         {/* Interactive card with 3D tilt wrapper */}
-                                                        <TiltCard frontUrl={card.frontUrl} name={card.name}>
-                                                            {/* Floating cycle category pill */}
+                                                        <TiltCard frontUrl={card.frontUrl} name={card.name} active={draggedIndex !== index}>
+                                                            {/* Floating cycle category button (top-left) */}
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     handleCycleCardType(card.id);
                                                                 }}
-                                                                className={`absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-4 py-1.5 border rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-md shadow-lg transition-all hover:scale-105 active:scale-95 ${category.color} bg-black/60 hover:brightness-125`}
-                                                                title="Cambiar tipo de carta"
+                                                                onPointerDown={(e) => e.stopPropagation()}
+                                                                className={`absolute top-2.5 left-2.5 z-30 w-7 h-7 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-sm shadow border border-white/10 hover:border-[#c8aa6e]/40 transition-all hover:scale-105 active:scale-95 cursor-pointer ${category.color.split(' ')[0]}`}
+                                                                title={`Tipo actual: ${category.label}. Clic para cambiar.`}
                                                             >
                                                                 <CategoryIcon className="w-3.5 h-3.5" />
-                                                                <span>{category.label}</span>
                                                             </button>
 
-                                                            {/* Floating Delete Button */}
+                                                            {/* Floating Delete Button (top-right) */}
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     handleRemoveCardFromDeck(card.id);
                                                                 }}
-                                                                className="absolute top-2.5 right-2.5 z-30 p-2 bg-black/60 hover:bg-red-600/90 text-slate-300 hover:text-white rounded-full transition-all border border-white/10 hover:border-red-500/40 shadow backdrop-blur-sm"
+                                                                onPointerDown={(e) => e.stopPropagation()}
+                                                                className="absolute top-2.5 right-2.5 z-30 w-7 h-7 flex items-center justify-center rounded-full bg-black/60 hover:bg-red-600/90 text-slate-400 hover:text-white transition-all border border-white/10 hover:border-red-500/40 shadow backdrop-blur-sm hover:scale-105 active:scale-95 cursor-pointer"
                                                                 title="Quitar de la baraja"
                                                             >
-                                                                <FiTrash2 className="w-3.5 h-3.5" />
+                                                                <FiX className="w-3.5 h-3.5" />
                                                             </button>
                                                         </TiltCard>
-                                                    </Reorder.Item>
+                                                    </motion.div>
                                                 );
                                             })}
-                                        </Reorder.Group>
+                                        </div>
                                     )}
                                 </div>
 

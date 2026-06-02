@@ -2284,4 +2284,24 @@ Guía rápida: ver `docs/Minimapa.md`.
   - Al pasar sobre un posible destino, la tarjeta destino escala un 105% con un marco dorado brillante y una sombra difusa que indica de forma espectacular que la ranura está lista para recibir el elemento.
 - **Seguridad Máster**: Los controles de arrastre se activan únicamente para el Master de la partida (`!isPlayerView`), asegurando que solo el director de juego pueda manipular y organizar los catálogos en tiempo real.
 
+## Novedades: Grid de Cartas Responsivo en la Colección (v2.4.48)
+
+- **Distribución de rejilla fluida**: Se actualizó el layout de la baraja activa para estructurarse en una cuadrícula (CSS Grid) responsiva en lugar de una columna vertical estática o una barra horizontal.
+- **Responsividad adaptada al espacio**:
+  - **Escritorio y pantallas ultra-anchas**: Las cartas se organizan de 3 en 3 (`xl:grid-cols-3`) cuando hay suficiente espacio útil en la pantalla.
+  - **Tabletas y laptops**: Se adaptan automáticamente de 2 en 2 para garantizar que las cartas mantengan su proporción y tamaño óptimo sin comprimirse ni solaparse.
+  - **Dispositivos móviles**: Se muestran de 1 en 1 en una sola columna vertical ergonómica, ideal para navegación táctil.
+- **Preservación de proporciones**: Se limitó el ancho máximo de las tarjetas a `240px` y se centraron en su celda (`max-w-[240px] mx-auto`), asegurando que la estética premium y su relación de aspecto original se mantengan intactas en cualquier resolución.
+
+## Novedades: Arrastre 2D Dinámico y Ajustes de Controles en Cartas (v2.4.49)
+
+- **Arrastre y reordenación 2D fluida**: Se sustituyó el drag nativo estático por un sistema de arrastre táctil premium basado en Framer Motion (`drag`, `layout`). Las cartas vecinas se desplazan dinámicamente y con físicas suaves para abrir hueco mientras arrastras, reordenando la baraja en tiempo real con latencia cero en la interfaz antes de persistir el orden en Firestore.
+- **Controles flotantes simétricos**:
+  - **Esquina superior izquierda**: Se reubicó el selector/cambio de rol y tipo de carta, mostrándolo como un botón circular compacto que cambia de color según el tipo actual (Acción, Atributo, Trampa, etc.) y evita tener que usar la barra de botones inferior.
+  - **Esquina superior derecha**: Se reemplazó el icono y estilo de la papelera clásica por un botón de cierre limpio (`FiX`) del mismo tamaño exacto y diseño circular translúcido, unificándolo con la línea estética general del resto de la aplicación.
+  - **Limpieza del Canvas**: Se eliminaron las barras de herramientas y etiquetas inferiores de la carta, permitiendo que la ilustración base y los textos ocupen todo el espacio visible sin recuadros redundantes.
+- **Desactivación inteligente de Tilt**: El efecto de rotación 3D se deshabilita temporalmente sobre la tarjeta que se está arrastrando en ese instante, previniendo distorsiones angulares mientras se desplaza bajo el cursor.
+
+
+
 
