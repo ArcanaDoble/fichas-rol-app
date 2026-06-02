@@ -2225,6 +2225,50 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
   );
   const hasSplitDescription = usesSplitDescription(activeType, showTraits);
 
+  const descriptionMaxLength = useMemo(() => {
+    const hasRails = activeType.id === 'weapon' || activeType.id === 'armor' || activeType.id === 'trap' || activeType.id === 'skill';
+    let baseHeight = hasRails ? 740 : 895;
+
+    let yOffset = 0;
+    if (showTraits) {
+      if (activeType.id === 'weapon') {
+        const activeRows = Math.min(visibleTraitRows, 3);
+        const hiddenRows = 3 - activeRows;
+        yOffset = hiddenRows * 240;
+      } else if (activeType.id === 'skill') {
+        const activeRows = Math.min(visibleTraitRows, 2);
+        const hiddenRows = 2 - activeRows;
+        yOffset = hiddenRows * 240;
+      } else if (activeType.id === 'armor') {
+        const activeRows = Math.min(visibleTraitRows, 4);
+        const hiddenRows = 4 - activeRows;
+        yOffset = hiddenRows * 230;
+      }
+    }
+
+    let finalHeight = baseHeight + yOffset;
+
+    if (!showTraits) {
+      if (activeType.id === 'weapon') {
+        finalHeight = 1465;
+      } else if (activeType.id === 'armor') {
+        finalHeight = 1772;
+      } else if (activeType.id === 'skill') {
+        finalHeight = 1233;
+      }
+    }
+
+    if (activeType.id === 'trap') {
+      if (showTraits) {
+        finalHeight = 1465;
+      } else {
+        finalHeight = 1772;
+      }
+    }
+
+    return Math.round(520 * (finalHeight / 740));
+  }, [activeType, showTraits, visibleTraitRows]);
+
   const loadCachedImage = useCallback(async (src) => {
     const cachedImage = imageCacheRef.current.get(src);
     if (cachedImage) return cachedImage;
@@ -3312,7 +3356,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                   onFocus={() => setFocusedField('description')}
                   onBlur={() => setFocusedField(null)}
                   rows={hasSplitDescription ? 4 : 5}
-                  maxLength={hasSplitDescription ? 360 : 520}
+                  maxLength={hasSplitDescription ? 360 : descriptionMaxLength}
                   className="min-h-[112px] w-full resize-y border border-t-0 border-[#c8aa6e]/25 bg-[#09090b]/80 px-4 py-3 text-base font-semibold leading-relaxed text-[#f0e6d2] outline-none transition placeholder:text-slate-600 focus:border-[#c8aa6e]/70 focus:shadow-[0_4px_12px_rgba(200,170,110,0.06),_4px_0_12px_rgba(200,170,110,0.06),_-4px_0_12px_rgba(200,170,110,0.06)] rounded-b-md"
                   placeholder={hasSplitDescription ? 'Descripción de la carta' : 'Texto descriptivo de la carta'}
                 />

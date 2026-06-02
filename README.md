@@ -175,7 +175,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.90**
+> **Versión actual: 2.4.91**
+
+**Resumen de cambios v2.4.91:**
+
+- **Escalado Proporcional Dinámico del Límite de Caracteres**: Implementado el aumento proporcional automático del límite de caracteres (`maxLength`) en el cuadro de texto de descripción en base al espacio físico real ocupado por el panel de texto en el canvas. Al desactivar rasgos o quitar pares de slots (ranuras de cargas/consumos), el panel del canvas se expande verticalmente (hasta un máximo de `1772` píxeles de alto en cartas sin rasgos como Armaduras y Trampas), lo que incrementa lineal y proporcionalmente el límite de escritura permitida (escalando dinámicamente desde `520` hasta un máximo de `1245` caracteres).
 
 **Resumen de cambios v2.4.90:**
 
