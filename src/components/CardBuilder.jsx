@@ -1296,23 +1296,28 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
     context.restore();
   } else {
     const styledWords = getStyledWordsOfLine(line);
-    const actualWords = styledWords.filter(w => !w.isSpace);
+    const spaceTokensCount = styledWords.filter(w => w.isSpace).length;
     
-    if (actualWords.length < 2) {
+    const fontInfo = getFontInfoFromContext(context);
+    const naturalWidth = measureStyledText(context, line, fontInfo, ignoreIcons);
+    const extraWidth = maxWidth - naturalWidth;
+    
+    if (spaceTokensCount === 0 || extraWidth <= 0) {
       drawTextLineWithIcons(context, line, x, y, maxWidth, false, resourceImages, ignoreIcons);
       return;
     }
     
-    const wordsWidth = actualWords.reduce((total, word) => {
-      return total + measureStyledWordWidth(context, word, ignoreIcons);
-    }, 0);
-    
-    const spaceWidth = (maxWidth - wordsWidth) / (actualWords.length - 1);
+    const defaultSpaceWidth = context.measureText(' ').width;
+    const spaceWidth = defaultSpaceWidth + (extraWidth / spaceTokensCount);
     let cursorX = x;
     
-    actualWords.forEach((word, index) => {
-      drawSingleStyledWord(context, word, cursorX, y, resourceImages, ignoreIcons);
-      cursorX += measureStyledWordWidth(context, word, ignoreIcons) + (index < actualWords.length - 1 ? spaceWidth : 0);
+    styledWords.forEach((word) => {
+      if (word.isSpace) {
+        cursorX += spaceWidth;
+      } else {
+        drawSingleStyledWord(context, word, cursorX, y, resourceImages, ignoreIcons);
+        cursorX += measureStyledWordWidth(context, word, ignoreIcons);
+      }
     });
   }
 };
