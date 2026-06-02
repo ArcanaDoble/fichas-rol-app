@@ -311,7 +311,7 @@ const getActionDicePositions = (qty) => {
   return [];
 };
 
-const drawActionConsumptionRail = (context, consumptionSlots, resourceImages) => {
+const drawActionConsumptionRail = (context, consumptionSlots, resourceImages, hideActionConsumptionLabel = false) => {
   const y = 2356;
   const height = 156;
   const slotSize = 122;
@@ -324,7 +324,9 @@ const drawActionConsumptionRail = (context, consumptionSlots, resourceImages) =>
   const railX = (CANVAS_WIDTH - railWidth) / 2; // Centered
   const startX = railX + (railWidth - slotsWidth) / 2 + slotSize / 2;
 
-  drawRailBase(context, railX, y, railWidth, height, 'center');
+  if (!hideActionConsumptionLabel) {
+    drawRailBase(context, railX, y, railWidth, height, 'center');
+  }
 
   const displayConsumptionSlots = [...consumptionSlots].reverse();
 
@@ -1999,6 +2001,9 @@ const drawCardCanvas = (
   visibleTraitRows = 3,
   minionAttributes = DEFAULT_MINION_ATTRIBUTES,
   renderScale = 1,
+  actionCenterMode = 'dado',
+  actionAttributeImg = null,
+  hideActionConsumptionLabel = false,
 ) => {
   const targetWidth = Math.max(1, Math.round(CANVAS_WIDTH * renderScale));
   const targetHeight = Math.max(1, Math.round(CANVAS_HEIGHT * renderScale));
@@ -2112,7 +2117,11 @@ const drawCardCanvas = (
   } else if (cardType === 'armor' || cardType === 'trap') {
     drawChargeResources();
   } else if (cardType === 'action') {
-    if (diceIconImg) {
+    if (actionCenterMode !== 'dado' && actionAttributeImg) {
+      context.save();
+      context.drawImage(actionAttributeImg, CANVAS_WIDTH / 2 - 540 / 2, 1410 - 540 / 2, 540, 540);
+      context.restore();
+    } else if (diceIconImg) {
       const positions = getActionDicePositions(diceQty);
       positions.forEach((pos) => {
         context.save();
@@ -2120,7 +2129,7 @@ const drawCardCanvas = (
         context.restore();
       });
     }
-    drawActionConsumptionRail(context, consumptionSlots, resourceImages);
+    drawActionConsumptionRail(context, consumptionSlots, resourceImages, hideActionConsumptionLabel);
   } else if (cardType === 'status') {
     if (elementIconImg) {
       context.save();
@@ -2217,6 +2226,8 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
   const [resourceMode, setResourceMode] = useState(RESOURCE_MODE_BOTH);
   const [consumptionSlotTypes, setConsumptionSlotTypes] = useState(['consumption', 'consumption', 'consumption', 'consumption', 'consumption']);
   const [minionAttributes, setMinionAttributes] = useState(DEFAULT_MINION_ATTRIBUTES);
+  const [actionCenterMode, setActionCenterMode] = useState('dado'); // 'dado' | 'Mente' | 'Cuerpo' | 'Hambre'
+  const [hideActionConsumptionLabel, setHideActionConsumptionLabel] = useState(false);
 
   // History system for undo/redo
   const descriptionHistoryRef = useRef({ past: [], future: [] });
@@ -2430,7 +2441,17 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       }
     }
 
-    if (cardType === 'weapon' || cardType === 'action' || cardType === 'skill') {
+    let actionAttributeImg = null;
+    if (cardType === 'action' && actionCenterMode !== 'dado') {
+      const attrSrc = `${process.env.PUBLIC_URL || ''}/interfaz/acciones/${actionCenterMode}.webp`;
+      try {
+        actionAttributeImg = await loadCachedImage(attrSrc);
+      } catch (e) {
+        console.error("Could not load action attribute image:", e);
+      }
+    }
+
+    if (cardType === 'weapon' || (cardType === 'action' && actionCenterMode === 'dado') || cardType === 'skill') {
       // Load Dice Icon Image
       const diceSrc = `${process.env.PUBLIC_URL || ''}/dados/cartas/${diceType}.webp`;
       try {
@@ -2543,11 +2564,14 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       visibleTraitRows,
       minionAttributes,
       renderScale,
+      actionCenterMode,
+      actionAttributeImg,
+      hideActionConsumptionLabel,
     );
 
     if (updateStatus) setImageStatus('ready');
     return undefined;
-  }, [activeBackground, cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage]);
+  }, [activeBackground, cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode, hideActionConsumptionLabel]);
 
   useEffect(() => {
     let disposed = false;
@@ -2642,6 +2666,8 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     setSelectedElement('Ninguno');
     setCustomColorActive(false);
     setCustomColor('#c8aa6e');
+    setActionCenterMode('dado');
+    setHideActionConsumptionLabel(false);
   };
 
   const handleTraitChange = (index, value) => {
@@ -2691,6 +2717,8 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     
     // Ensure consumption slots are reset to length 5 if switching away from 'action'
     if (typeId !== 'action') {
+      setActionCenterMode('dado');
+      setHideActionConsumptionLabel(false);
       setConsumptionSlots((currentSlots) => {
         const nextSlots = [...currentSlots];
         if (nextSlots.length !== 5) {
@@ -3208,7 +3236,47 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                   </>
                 )}
 
-                {(cardType === 'weapon' || cardType === 'action' || cardType === 'skill') && (cardType !== 'weapon' || selectedElement === 'Ninguno') && (
+                {cardType === 'action' && (
+                  <div className="space-y-3 border-t border-[#c8aa6e]/10 pt-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        Icono Central / Atributo
+                      </label>
+                      <select
+                        value={actionCenterMode}
+                        onChange={(event) => {
+                          const val = event.target.value;
+                          setActionCenterMode(val);
+                          if (val === 'dado') {
+                            setHideActionConsumptionLabel(false);
+                          }
+                        }}
+                        className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
+                      >
+                        <option value="dado">Dado de Acción (Estándar)</option>
+                        <option value="Hambre">Atributo: Hambre (Estómago)</option>
+                        <option value="Cuerpo">Atributo: Cuerpo (Corazón)</option>
+                        <option value="Mente">Atributo: Mente (Cerebro)</option>
+                      </select>
+                    </div>
+
+                    {actionCenterMode !== 'dado' && (
+                      <div className="flex items-center gap-2 pt-1 pb-1">
+                        <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={hideActionConsumptionLabel}
+                            onChange={(event) => setHideActionConsumptionLabel(event.target.checked)}
+                            className="h-4 w-4 accent-[#c8aa6e] cursor-pointer"
+                          />
+                          Quitar Letrero de Consumo
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {(cardType === 'weapon' || (cardType === 'action' && actionCenterMode === 'dado') || cardType === 'skill') && (cardType !== 'weapon' || selectedElement === 'Ninguno') && (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">

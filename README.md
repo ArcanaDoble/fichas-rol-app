@@ -175,7 +175,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.5.1**
+> **Versión actual: 2.5.2**
+
+**Resumen de cambios v2.5.2:**
+
+- **Atributos de Acción e Icono Central Personalizado**: Implementamos la capacidad de renderizar una imagen de atributo (`Mente`, `Cuerpo` o `Hambre`) en el centro exacto de la carta de Acción en [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx) en lugar de los dados estándar. Integramos una barra de selección en el panel lateral para alternar cómodamente entre el modo `Dado` y los tres atributos disponibles. Al seleccionar un atributo, el sistema carga dinámicamente su imagen correspondiente en formato WebP de alta fidelidad (`Mente.webp`, `Cuerpo.webp` o `Hambre.webp`) y la plasma de forma sobria en el centro con un tamaño de `540` px (la misma ubicación y proporción que un dado único). Adicionalmente, habilitamos una opción interactiva ("Quitar Letrero de Consumo") que permite ocultar por completo la placa base metálica del riel de consumo sin interferir en los círculos de ranuras.
 
 **Resumen de cambios v2.5.1:**
 
