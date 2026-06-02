@@ -1326,6 +1326,15 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
     const extraSpaceShare = activeSpaceTokensCount > 0 
       ? extraWidth / activeSpaceTokensCount 
       : extraWidth / spaceTokensCount;
+
+    const defaultSpaceWidth = context.measureText(' ').width;
+    const maxAllowedShare = defaultSpaceWidth * 1.5; // Typographic loose line threshold (max 2.5x normal space width)
+    if (extraSpaceShare > maxAllowedShare) {
+      // Fallback to normal left-aligned drawing to avoid ugly massive gaps between words
+      drawTextLineWithIcons(context, line, x, y, maxWidth, false, resourceImages, ignoreIcons);
+      return;
+    }
+    
     let cursorX = x;
     
     styledWords.forEach((word) => {

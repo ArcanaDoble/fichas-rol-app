@@ -175,7 +175,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.92**
+> **Versión actual: 2.4.93**
+
+**Resumen de cambios v2.4.93:**
+
+- **Umbral de Líneas Laxas (Loose Lines) en Justificación**: Implementamos un control de calidad tipográfica que evita la generación de espacios gigantescos entre palabras cuando un párrafo no está guionizado. Definimos un umbral límite de estiramiento equivalente a 1.5 veces el ancho del espacio por defecto (`defaultSpaceWidth * 1.5`). Si el reparto de la justificación supera este límite debido a la falta de guiones (como cuando una palabra larga se empuja por completo al renglón inferior y quedan pocas palabras en la línea), el motor cancela la justificación y conmuta de manera elegante y automática a una alineación estándar a la izquierda, erradicando por completo cualquier río o hueco de espacio anómalo.
 
 **Resumen de cambios v2.4.92:**
 
