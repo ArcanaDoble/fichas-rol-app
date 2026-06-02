@@ -175,7 +175,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.5.0**
+> **Versión actual: 2.5.1**
+
+**Resumen de cambios v2.5.1:**
+
+- **Modos de Recursos Personalizados para Cartas de Trampa**: Ampliamos el panel de control de "Recursos" en la barra lateral de [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx) cuando se diseña una carta de tipo Trampa. Añadimos soporte completo para cuatro modos de renderizado interactivos: `Carga + consumo`, `Solo carga`, `Solo consumo` y `Sin recursos` (esta última opción elimina por completo todos los rieles de recursos del canvas). Al seleccionar `Solo consumo`, la carta de Trampa adopta dinámicamente el comportamiento de una carta de Acción, habilitando la botonera de cantidad de ranuras de tiempo (`5`, `6` y `7` slots) y dibujando el riel de consumo centrado y autocalibrado de forma simétrica sobre el canvas.
 
 **Resumen de cambios v2.5.0:**
 

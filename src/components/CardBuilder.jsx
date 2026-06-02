@@ -86,6 +86,8 @@ const DEFAULT_CHARGE_SLOTS = ['Hambre', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPT
 const DEFAULT_CONSUMPTION_SLOTS = ['Tiempo', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
 const RESOURCE_MODE_BOTH = 'charge-consumption';
 const RESOURCE_MODE_CHARGE_ONLY = 'charge-only';
+const RESOURCE_MODE_CONSUMPTION_ONLY = 'consumption-only';
+const RESOURCE_MODE_NONE = 'none';
 const RESOURCE_CARD_TYPES = new Set(['weapon', 'armor', 'trap', 'skill']);
 
 export const WEAPON_TYPES = [
@@ -2069,6 +2071,13 @@ const drawCardCanvas = (
   context.restore();
 
   const drawChargeResources = () => {
+    if (resourceMode === RESOURCE_MODE_NONE) {
+      return;
+    }
+    if (resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY) {
+      drawActionConsumptionRail(context, consumptionSlots, resourceImages);
+      return;
+    }
     if (resourceMode === RESOURCE_MODE_CHARGE_ONLY) {
       drawCenteredChargeRail(context, chargeSlots, resourceImages);
       return;
@@ -2431,9 +2440,11 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       }
     }
 
-    const loadsChargeResources = RESOURCE_CARD_TYPES.has(cardType);
+    const loadsChargeResources = RESOURCE_CARD_TYPES.has(cardType) && (
+      resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CHARGE_ONLY
+    );
     const loadsConsumptionResources = cardType === 'action' || (
-      RESOURCE_CARD_TYPES.has(cardType) && resourceMode !== RESOURCE_MODE_CHARGE_ONLY
+      RESOURCE_CARD_TYPES.has(cardType) && (resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY)
     );
     const loadsMinionAttributes = cardType === 'skill';
 
@@ -2673,6 +2684,10 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
 
   const handleTypeChange = (typeId) => {
     setCardType(typeId);
+    
+    if (typeId !== 'trap') {
+      setResourceMode(RESOURCE_MODE_BOTH);
+    }
     
     // Ensure consumption slots are reset to length 5 if switching away from 'action'
     if (typeId !== 'action') {
@@ -3014,7 +3029,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
 
   const usesChargeResources = RESOURCE_CARD_TYPES.has(cardType);
   const usesConsumptionResources = cardType === 'action' || cardType === 'status' || (
-    usesChargeResources && resourceMode !== RESOURCE_MODE_CHARGE_ONLY
+    usesChargeResources && (resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY)
   );
 
   return (
@@ -3311,11 +3326,35 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                       >
                         Solo carga
                       </button>
+                      {cardType === 'trap' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setResourceMode(RESOURCE_MODE_CONSUMPTION_ONLY)}
+                            className={`border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition ${resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY
+                              ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                              : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                              }`}
+                          >
+                            Solo consumo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setResourceMode(RESOURCE_MODE_NONE)}
+                            className={`border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition ${resourceMode === RESOURCE_MODE_NONE
+                              ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                              : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                              }`}
+                          >
+                            Sin recursos
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}
 
-                {usesChargeResources && (
+                {usesChargeResources && (resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CHARGE_ONLY) && (
                   <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-3">
                     <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                       Carga
@@ -3350,11 +3389,11 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
 
                 {usesConsumptionResources && (
                   <div className="space-y-3">
-                    <div className={`flex items-center justify-between gap-2 ${cardType === 'action' ? 'border-b border-[#c8aa6e]/10 pb-3' : ''}`}>
+                    <div className={`flex items-center justify-between gap-2 ${(cardType === 'action' || (cardType === 'trap' && resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY)) ? 'border-b border-[#c8aa6e]/10 pb-3' : ''}`}>
                       <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                         {cardType === 'weapon' ? 'Consumo' : cardType === 'armor' ? 'Armadura' : 'Consumo'}
                       </label>
-                      {cardType === 'action' && (
+                      {(cardType === 'action' || (cardType === 'trap' && resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY)) && (
                         <div className="flex gap-1">
                           {[5, 6, 7].map((num) => {
                             const isSelected = consumptionSlots.length === num;
