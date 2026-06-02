@@ -985,8 +985,7 @@ const measureTextWithIcons = (context, text, ignoreIcons = false) => {
   if (!matches) return baseWidth;
   
   const fontSize = getActiveFontSize(context);
-  const spaceCharWidth = context.measureText(' ').width;
-  const extraWidthPerMatch = fontSize * 1.1 + spaceCharWidth; // 0.9 * size for icon + 0.2 * size for spacing + 1 keyboard space width
+  const extraWidthPerMatch = fontSize * 1.20; // 0.9 * size for icon + 0.15 * size * 2 for padding
   return baseWidth + matches.length * extraWidthPerMatch;
 };
 
@@ -1194,8 +1193,7 @@ const drawSingleStyledWord = (context, word, x, y, resourceImages = {}, ignoreIc
   
   const fontSize = getActiveFontSize(context);
   const iconSize = fontSize * 0.9;
-  const iconGap = fontSize * 0.2;
-  const spaceCharWidth = context.measureText(' ').width;
+  const iconPadding = fontSize * 0.15;
   
   if (ignoreIcons) {
     context.fillText(word.text, x, y);
@@ -1211,13 +1209,12 @@ const drawSingleStyledWord = (context, word, x, y, resourceImages = {}, ignoreIc
       if (seg.isKeyword) {
         const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
         const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
-        const shiftX = spaceCharWidth;
         
         if (iconImg) {
           const iconY = y + (fontSize - iconSize) / 2;
-          context.drawImage(iconImg, cursorX + shiftX, iconY, iconSize, iconSize);
+          context.drawImage(iconImg, cursorX + iconPadding, iconY, iconSize, iconSize);
         }
-        cursorX += iconSize + iconGap + shiftX;
+        cursorX += iconSize + iconPadding * 2;
       }
     });
   }
@@ -1264,7 +1261,6 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
     
     if (styleSegments.length === 0) return;
     
-    const spaceCharWidth = context.measureText(' ').width;
     let cursorX = x;
     
     context.save();
@@ -1273,7 +1269,7 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
       
       const fontSize = getActiveFontSize(context);
       const iconSize = fontSize * 0.9;
-      const iconGap = fontSize * 0.2;
+      const iconPadding = fontSize * 0.15;
       
       if (ignoreIcons) {
         context.fillText(styleSeg.text, cursorX, y);
@@ -1288,13 +1284,12 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
           if (seg.isKeyword) {
             const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
             const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
-            const shiftX = spaceCharWidth;
             
             if (iconImg) {
               const iconY = y + (fontSize - iconSize) / 2;
-              context.drawImage(iconImg, cursorX + shiftX, iconY, iconSize, iconSize);
+              context.drawImage(iconImg, cursorX + iconPadding, iconY, iconSize, iconSize);
             }
-            cursorX += iconSize + iconGap + shiftX;
+            cursorX += iconSize + iconPadding * 2;
           }
         });
       }

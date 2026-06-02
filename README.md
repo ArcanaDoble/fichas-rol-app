@@ -175,7 +175,11 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.89**
+> **Versión actual: 2.4.90**
+
+**Resumen de cambios v2.4.90:**
+
+- **Optimización de Espaciado en Iconos Inline**: Corregido el problema de espaciado excesivo (huecos grandes) que se generaba alrededor de los iconos de palabras clave integrados en el texto. Sustituimos el margen fijo basado en caracteres de espacio (`spaceCharWidth`) por un margen proporcional exacto de 15% del tamaño de fuente (`fontSize * 0.15`) en ambos lados de la imagen. Esto previene la duplicación de espacios en blanco y mantiene los iconos de elementos, dados y consumos perfectamente integrados y visualmente equilibrados con el texto adyacente.
 
 **Resumen de cambios v2.4.89:**
 
