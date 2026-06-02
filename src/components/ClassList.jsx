@@ -5047,6 +5047,7 @@ const ClassList = ({
           onSave={readOnly ? undefined : handleSaveChanges}
           hasUnsavedChanges={hasUnsavedChanges}
           saveButtonState={saveButtonState}
+          isPlayerMode={isPlayerMode}
         />
         <div className="flex-1 relative overflow-hidden pb-16 md:pb-0">
           {renderActiveView()}
@@ -5069,6 +5070,7 @@ const ClassList = ({
           onSave={readOnly ? undefined : handleSaveChanges}
           hasUnsavedChanges={hasUnsavedChanges}
           saveButtonState={saveButtonState}
+          isPlayerMode={isPlayerMode}
         />
       </div>
     );
