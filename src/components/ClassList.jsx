@@ -1496,6 +1496,8 @@ const ClassList = ({
   creatorLabel = "Campeón",
   isPlayerMode = false,
   initialCharacterName = null,
+  currentUserId = null,
+  knownPlayers = [],
 }) => {
   const [classes, setClasses] = useState([]);
   const [isAutoOpening, setIsAutoOpening] = useState(!!initialCharacterName);
@@ -4988,6 +4990,8 @@ const ClassList = ({
               <DeckBuilderView
                 ownerId={editingClass.id}
                 ownerName={editingClass.name}
+                currentUserId={currentUserId || editingClass.owner || editingClass.name}
+                knownPlayers={knownPlayers}
                 isPlayer={true}
               />
             );
@@ -5028,7 +5032,11 @@ const ClassList = ({
           );
         case 'store':
           return (
-            <CardBuilder mode={isPlayerMode ? 'player' : 'master'} />
+            <CardBuilder
+              mode={isPlayerMode ? 'player' : 'master'}
+              characterName={isPlayerMode ? editingClass.name : ''}
+              currentUserId={currentUserId || editingClass.owner || editingClass.name}
+            />
           );
         default:
           return null;
@@ -5404,6 +5412,8 @@ ClassList.propTypes = {
     }),
   ),
   rarityColorMap: PropTypes.objectOf(PropTypes.string),
+  currentUserId: PropTypes.string,
+  knownPlayers: PropTypes.arrayOf(PropTypes.string),
 };
 
 export default ClassList;

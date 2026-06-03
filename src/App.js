@@ -4525,6 +4525,8 @@ function App() {
         habilidades={habilidades}
         glossary={glossary}
         rarityColorMap={rarityColorMap}
+        currentUserId={playerName}
+        knownPlayers={existingPlayers}
       />
     );
   }
@@ -5676,6 +5678,7 @@ function App() {
         habilidades={habilidades}
         glossary={glossary}
         rarityColorMap={rarityColorMap}
+        knownPlayers={existingPlayers}
         onBack={() => setChosenView(null)}
         onLaunchMinigame={handleLaunchMinigame}
         onLaunchDiceCalculator={handleLaunchDiceCalculator}
@@ -7326,6 +7329,7 @@ function App() {
             habilidades={habilidades}
             glossary={glossary}
             rarityColorMap={rarityColorMap}
+            knownPlayers={existingPlayers}
             onLaunchDiceCalculator={handleLaunchDiceCalculator}
             onLaunchSpeedSystem={handleLaunchSpeedSystem}
             onLaunchMinigame={handleLaunchMinigame}
@@ -7342,15 +7346,7 @@ function App() {
   }
   if (userType === 'master' && authenticated && chosenView === 'master_decks') {
     return withTooltips(
-      <div className="h-screen overflow-hidden bg-[#09090b] flex flex-col">
-        <div className="flex-none p-4 bg-gray-900 border-b border-gray-800 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-amber-500 font-['Cinzel']">Colección de Barajas del Master</h2>
-          <Boton color="gray" onClick={() => setChosenView(null)}>Volver</Boton>
-        </div>
-        <div className="flex-1 overflow-hidden relative">
-          <DeckBuilderView ownerId="master" ownerName="Master" isPlayer={false} />
-        </div>
-      </div>
+      <DeckBuilderView ownerId="master" ownerName="Master" currentUserId="master" knownPlayers={existingPlayers} isPlayer={false} onBack={() => setChosenView(null)} />
     );
   }
   if (userType === 'master' && authenticated && !chosenView) {

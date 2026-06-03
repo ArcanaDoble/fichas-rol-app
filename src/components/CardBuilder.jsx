@@ -1,6 +1,25 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { ChevronLeft, Download, Palette, RotateCcw, Tag, Type } from 'lucide-react';
+import {
+  ChevronLeft,
+  Database,
+  Download,
+  Loader2,
+  Palette,
+  RotateCcw,
+  Tag,
+  Type,
+  UploadCloud
+} from 'lucide-react';
+import {
+  addDoc,
+  collection,
+  getDocs,
+  updateDoc,
+  doc
+} from 'firebase/firestore';
+import { db } from '../firebase';
+import { uploadDataUrl } from '../utils/storage';
 import HexColorInput from './HexColorInput';
 
 export const CARD_BACKGROUNDS = [
@@ -89,6 +108,8 @@ const RESOURCE_MODE_CHARGE_ONLY = 'charge-only';
 const RESOURCE_MODE_CONSUMPTION_ONLY = 'consumption-only';
 const RESOURCE_MODE_NONE = 'none';
 const RESOURCE_CARD_TYPES = new Set(['weapon', 'armor', 'trap', 'skill']);
+const COLLECTION_ACCESS_EDIT = 'edit';
+const COLLECTION_ACCESS_HIDDEN = 'hidden';
 
 export const WEAPON_TYPES = [
   'Cuerpo a cuerpo',
@@ -2224,7 +2245,47 @@ const drawCardCanvas = (
   }
 };
 
-const CardBuilder = ({ onBack, mode = 'player' }) => {
+const getDeckAccessForViewer = (deck, viewerId) => {
+  if (!deck?.isMasterLibrary) return COLLECTION_ACCESS_EDIT;
+  return deck.permissions?.[viewerId] || COLLECTION_ACCESS_HIDDEN;
+};
+
+const getLibraryCardType = (builderCardType) => {
+  if (builderCardType === 'skill') return 'minion';
+  if (['weapon', 'armor', 'trap', 'action', 'status'].includes(builderCardType)) return builderCardType;
+  return 'action';
+};
+
+const MASTER_LIBRARY_TYPE_TARGETS = {
+  action: { name: 'Acciones', aliases: ['accion', 'acciones', 'accion rapida', 'acciones universales'] },
+  weapon: { name: 'Armas', aliases: ['arma', 'armas'] },
+  armor: { name: 'Armaduras', aliases: ['armadura', 'armaduras'] },
+  trap: { name: 'Trampas', aliases: ['trampa', 'trampas'] },
+  status: { name: 'Estados', aliases: ['estado', 'estados'] },
+  minion: { name: 'Minions', aliases: ['minion', 'minions'] },
+  skill: { name: 'Habilidades', aliases: ['habilidad', 'habilidades', 'skill', 'skills'] },
+  attribute: { name: 'Atributos', aliases: ['atributo', 'atributos'] }
+};
+
+const normalizeLibraryName = (value = '') => (
+  value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+);
+
+const getSafeFileSlug = (value) => (
+  normalizeCardName(value)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '') || 'carta'
+);
+
+const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserId = '' }) => {
   const canvasRef = useRef(null);
   const descriptionRef = useRef(null);
   const flavorTextRef = useRef(null);
@@ -2250,6 +2311,8 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
   const [selectedElement, setSelectedElement] = useState('Ninguno');
   const [customColorActive, setCustomColorActive] = useState(false);
   const [customColor, setCustomColor] = useState('#c8aa6e');
+  const [isUploadingCharacterCard, setIsUploadingCharacterCard] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
 
   // New states for Weapon properties
   const [weaponType, setWeaponType] = useState('Cuerpo a cuerpo');
@@ -3071,19 +3134,187 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     );
   };
 
-  const handleDownload = async () => {
+  const renderExportDataUrl = async () => {
     const exportCanvas = document.createElement('canvas');
     await drawCard(exportCanvas, 1, false);
+    return exportCanvas.toDataURL('image/png');
+  };
+
+  const handleDownload = async () => {
+    const dataUrl = await renderExportDataUrl();
     const link = document.createElement('a');
-    const safeName = normalizeCardName(cardName)
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '') || 'carta';
+    const safeName = getSafeFileSlug(cardName);
     link.download = `${safeName}.png`;
-    link.href = exportCanvas.toDataURL('image/png');
+    link.href = dataUrl;
     link.click();
+  };
+
+  const findOrCreateCharacterLibrary = async (ownerName) => {
+    const snap = await getDocs(collection(db, 'card_decks'));
+    const libraries = snap.docs
+      .map((deckDoc) => ({ id: deckDoc.id, ...deckDoc.data() }))
+      .filter((deck) => deck.isMasterLibrary === true && (deck.name || '').trim() === ownerName);
+
+    const visibleLibrary = libraries.find((deck) => (
+      getDeckAccessForViewer(deck, currentUserId) !== COLLECTION_ACCESS_HIDDEN
+      || getDeckAccessForViewer(deck, ownerName) !== COLLECTION_ACCESS_HIDDEN
+      || mode === 'master'
+    ));
+
+    if (visibleLibrary) {
+      const hasEditAccess = (
+        mode === 'master'
+        || getDeckAccessForViewer(visibleLibrary, currentUserId) === COLLECTION_ACCESS_EDIT
+        || getDeckAccessForViewer(visibleLibrary, ownerName) === COLLECTION_ACCESS_EDIT
+      );
+      if (!hasEditAccess) {
+        throw new Error('CHARACTER_LIBRARY_EXISTS_WITHOUT_EDIT_ACCESS');
+      }
+      return visibleLibrary;
+    }
+
+    if (libraries.length > 0) {
+      throw new Error('CHARACTER_LIBRARY_EXISTS_WITHOUT_ACCESS');
+    }
+
+    const permissions = {};
+    if (currentUserId) permissions[currentUserId] = COLLECTION_ACCESS_EDIT;
+    if (ownerName && ownerName !== currentUserId) permissions[ownerName] = COLLECTION_ACCESS_EDIT;
+
+    const createdRef = await addDoc(collection(db, 'card_decks'), {
+      name: ownerName,
+      ownerId: 'master',
+      createdAt: Date.now(),
+      cards: [],
+      isMasterLibrary: true,
+      permissions,
+      source: 'character-builder',
+      createdBy: currentUserId || ownerName
+    });
+
+    return {
+      id: createdRef.id,
+      name: ownerName,
+      cards: [],
+      isMasterLibrary: true,
+      permissions
+    };
+  };
+
+  const findOrCreateMasterTypeLibrary = async (libraryType) => {
+    const target = MASTER_LIBRARY_TYPE_TARGETS[libraryType] || MASTER_LIBRARY_TYPE_TARGETS.action;
+    const aliases = target.aliases.map(normalizeLibraryName);
+    const snap = await getDocs(collection(db, 'card_decks'));
+    const libraries = snap.docs
+      .map((deckDoc) => ({ id: deckDoc.id, ...deckDoc.data() }))
+      .filter((deck) => deck.isMasterLibrary === true && deck.ownerId === 'master');
+
+    const matchingLibrary = libraries.find((deck) => {
+      const deckName = normalizeLibraryName(deck.name || '');
+      if (!deckName) return false;
+      return aliases.some((alias) => deckName === alias || deckName.includes(alias) || alias.includes(deckName));
+    });
+
+    if (matchingLibrary) {
+      return matchingLibrary;
+    }
+
+    const createdRef = await addDoc(collection(db, 'card_decks'), {
+      name: target.name,
+      ownerId: 'master',
+      createdAt: Date.now(),
+      cards: [],
+      isMasterLibrary: true,
+      permissions: {},
+      source: 'master-card-builder',
+      autoType: libraryType
+    });
+
+    return {
+      id: createdRef.id,
+      name: target.name,
+      cards: [],
+      isMasterLibrary: true,
+      permissions: {}
+    };
+  };
+
+  const buildUploadedCardPayload = (cardId, frontUrl, type, ownerName) => ({
+    id: cardId,
+    templateId: cardId,
+    name: normalizeCardName(cardName) || 'Carta sin nombre',
+    frontUrl,
+    type,
+    visibleToPlayers: true,
+    createdAt: Date.now(),
+    createdBy: currentUserId || ownerName || mode,
+    ...(ownerName ? { characterName: ownerName } : {})
+  });
+
+  const handleUploadToCharacterLibrary = async () => {
+    const ownerName = (characterName || '').trim();
+    if (!ownerName) {
+      alert('No se pudo detectar el nombre exacto del personaje para crear su colección.');
+      return;
+    }
+
+    setIsUploadingCharacterCard(true);
+    setUploadStatus('');
+    try {
+      const library = await findOrCreateCharacterLibrary(ownerName);
+      const dataUrl = await renderExportDataUrl();
+      const cardId = Math.random().toString(36).substr(2, 9);
+      const safeName = getSafeFileSlug(cardName);
+      const frontUrl = await uploadDataUrl(
+        dataUrl,
+        `deck-library-cards/${library.id}/${Date.now()}-${cardId}-${safeName}.png`
+      );
+      const newCard = {
+        ...buildUploadedCardPayload(cardId, frontUrl, getLibraryCardType(cardType), ownerName),
+        characterName: ownerName
+      };
+      await updateDoc(doc(db, 'card_decks', library.id), {
+        cards: [...(library.cards || []), newCard]
+      });
+      setUploadStatus(`Subida a ${ownerName}`);
+    } catch (error) {
+      console.error('Error uploading character card:', error);
+      if (error?.message === 'CHARACTER_LIBRARY_EXISTS_WITHOUT_ACCESS') {
+        alert(`La colección "${ownerName}" ya está creada, pero no tienes permisos para verla o editarla. Contacta con el Master.`);
+      } else if (error?.message === 'CHARACTER_LIBRARY_EXISTS_WITHOUT_EDIT_ACCESS') {
+        alert(`La colección "${ownerName}" ya existe, pero no tienes permiso de edición. Contacta con el Master.`);
+      } else {
+        alert('No se pudo subir la carta a la colección del personaje.');
+      }
+    } finally {
+      setIsUploadingCharacterCard(false);
+    }
+  };
+
+  const handleUploadToMasterLibrary = async () => {
+    setIsUploadingCharacterCard(true);
+    setUploadStatus('');
+    try {
+      const libraryType = getLibraryCardType(cardType);
+      const library = await findOrCreateMasterTypeLibrary(libraryType);
+      const dataUrl = await renderExportDataUrl();
+      const cardId = Math.random().toString(36).substr(2, 9);
+      const safeName = getSafeFileSlug(cardName);
+      const frontUrl = await uploadDataUrl(
+        dataUrl,
+        `deck-library-cards/${library.id}/${Date.now()}-${cardId}-${safeName}.png`
+      );
+      const newCard = buildUploadedCardPayload(cardId, frontUrl, libraryType, 'master');
+      await updateDoc(doc(db, 'card_decks', library.id), {
+        cards: [...(library.cards || []), newCard]
+      });
+      setUploadStatus(`Subida a ${library.name || 'colección base'}`);
+    } catch (error) {
+      console.error('Error uploading master card:', error);
+      alert('No se pudo subir la carta a la colección base del Master.');
+    } finally {
+      setIsUploadingCharacterCard(false);
+    }
   };
 
   const usesChargeResources = RESOURCE_CARD_TYPES.has(cardType);
@@ -3152,8 +3383,53 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
             >
               <Download className="h-4 w-4" />
             </button>
+            {mode === 'player' && characterName && (
+              <button
+                type="button"
+                onClick={handleUploadToCharacterLibrary}
+                disabled={imageStatus !== 'ready' || isUploadingCharacterCard}
+                className="inline-flex h-10 items-center justify-center gap-2 border border-emerald-400/35 bg-emerald-950/25 px-3 font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200 transition hover:border-emerald-300/70 hover:bg-emerald-900/30 disabled:cursor-wait disabled:opacity-45"
+                title={`Subir a la colección ${characterName}`}
+              >
+                {isUploadingCharacterCard ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <UploadCloud className="h-4 w-4" />
+                )}
+                <span className="hidden sm:inline">Subir a colección</span>
+              </button>
+            )}
+            {mode === 'master' && (
+              <button
+                type="button"
+                onClick={handleUploadToMasterLibrary}
+                disabled={imageStatus !== 'ready' || isUploadingCharacterCard}
+                className="inline-flex h-10 items-center justify-center gap-2 border border-emerald-400/35 bg-emerald-950/25 px-3 font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200 transition hover:border-emerald-300/70 hover:bg-emerald-900/30 disabled:cursor-wait disabled:opacity-45"
+                title="Subir a colección base por tipo"
+              >
+                {isUploadingCharacterCard ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <UploadCloud className="h-4 w-4" />
+                )}
+                <span className="hidden sm:inline">Subir a base</span>
+              </button>
+            )}
           </div>
         </div>
+
+        {((mode === 'player' && characterName) || mode === 'master') && (
+          <div className="flex flex-wrap items-center gap-2 border border-emerald-400/15 bg-emerald-950/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-100/80">
+            <Database className="h-3.5 w-3.5 text-emerald-300" />
+            <span className="text-slate-400">{mode === 'master' ? 'Destino automático:' : 'Colección de personaje:'}</span>
+            <span className="text-emerald-200">
+              {mode === 'master'
+                ? (MASTER_LIBRARY_TYPE_TARGETS[getLibraryCardType(cardType)]?.name || 'Colección base')
+                : characterName}
+            </span>
+            {uploadStatus && <span className="ml-auto text-[#c8aa6e]">{uploadStatus}</span>}
+          </div>
+        )}
 
         <div className="grid flex-1 gap-5 lg:grid-cols-[minmax(280px,380px)_1fr]">
           <aside className="relative z-20 order-2 flex flex-col gap-5 border border-[#c8aa6e]/20 bg-[#0b1120]/75 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.25)] md:p-5 lg:order-1">
@@ -3829,14 +4105,25 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                 className="relative w-full max-w-[380px] sm:max-w-[460px] lg:max-w-[520px] lg:max-h-[calc(100vh-220px)] shrink-0 select-none"
                 style={{ aspectRatio: '1888/2624' }}
               >
-                {/* Glow radial centrado exactamente detrás de la previsualización de la carta */}
-                <div className="pointer-events-none absolute -inset-[32%] bg-[radial-gradient(circle_at_center,_rgba(200,170,110,0.18)_0%,_rgba(9,9,11,0)_70%)] z-0" />
+                {/* Luz ambiental suave detrás de la previsualización, sin cortes visibles. */}
+                <div
+                  className="pointer-events-none absolute left-1/2 top-1/2 z-0 h-[122%] w-[128%] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
+                  style={{
+                    background: 'radial-gradient(ellipse at center, rgba(200,170,110,0.13) 0%, rgba(200,170,110,0.055) 38%, rgba(5,7,13,0) 72%)',
+                  }}
+                />
+                <div
+                  className="pointer-events-none absolute left-1/2 top-[48%] z-0 h-[92%] w-[108%] -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl"
+                  style={{
+                    background: 'radial-gradient(ellipse at center, rgba(255,245,220,0.055) 0%, rgba(200,170,110,0.03) 34%, rgba(5,7,13,0) 76%)',
+                  }}
+                />
                 
                 <canvas
                   ref={canvasRef}
                   width={CANVAS_WIDTH}
                   height={CANVAS_HEIGHT}
-                  className="relative z-10 block w-full h-full border border-white/15 bg-black shadow-[0_28px_90px_rgba(0,0,0,0.7)] select-none outline-none"
+                  className="relative z-10 block w-full h-full border border-white/15 bg-black shadow-[0_26px_70px_rgba(0,0,0,0.62),0_0_34px_rgba(200,170,110,0.055)] select-none outline-none"
                 />
                 {imageStatus === 'loading' && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs font-bold uppercase tracking-[0.25em] text-[#c8aa6e]">
@@ -3860,6 +4147,8 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
 CardBuilder.propTypes = {
   onBack: PropTypes.func,
   mode: PropTypes.oneOf(['player', 'master']),
+  characterName: PropTypes.string,
+  currentUserId: PropTypes.string,
 };
 
 export default CardBuilder;

@@ -1623,6 +1623,8 @@ const getCardContainerItems = (containerId, items = []) => items
     .filter(item => isCardItem(item) && item.containerId === containerId)
     .sort((a, b) => (Number(a.containerOrder) || 0) - (Number(b.containerOrder) || 0));
 
+const isMasterLibraryDeck = (deck) => deck?.isMasterLibrary === true;
+
 const MASTER_HAND_SEAT_ID = '__master__';
 const normalizeHandSeatId = (value) => (value || '').toString().trim();
 const getCardHandTokenId = (item = {}) => item.handTokenId || item.ownerId;
@@ -4229,6 +4231,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [uploadingToken, setUploadingToken] = useState(false);
     const [cards, setCards] = useState([]);
     const [uploadingCard, setUploadingCard] = useState(false);
+    const [boardDecks, setBoardDecks] = useState([]);
 
     // Estado para arrastrar y ordenar en la biblioteca (Sidebar)
     const [draggedLibraryItemId, setDraggedLibraryItemId] = useState(null);
@@ -4458,6 +4461,51 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             unsubChars();
         };
     }, [isMaster, playerName]);
+
+    const boardDeckOwnerIds = useMemo(() => {
+        if (!isBoardMode) return [];
+        if (!isPlayerView) return ['master'];
+
+        const ids = new globalThis.Set([currentUserId, playerName].filter(Boolean));
+        availableCharacters.forEach((character) => {
+            if (!character || character._isTemplate) return;
+            const owner = character.owner || character.ownerName || character.playerName;
+            if (
+                owner === playerName ||
+                owner === currentUserId ||
+                character.name === playerName ||
+                character.displayName === playerName
+            ) {
+                ids.add(character.id);
+                if (character.name) ids.add(character.name);
+            }
+        });
+        return Array.from(ids);
+    }, [availableCharacters, currentUserId, isBoardMode, isPlayerView, playerName]);
+
+    useEffect(() => {
+        if (!isBoardMode) {
+            setBoardDecks([]);
+            return undefined;
+        }
+
+        const unsubDecks = onSnapshot(collection(db, 'card_decks'), (snap) => {
+            const ownerIds = new globalThis.Set(boardDeckOwnerIds);
+            const decksData = snap.docs
+                .map(deckDoc => ({ id: deckDoc.id, ...deckDoc.data() }))
+                .filter(deck => !isMasterLibraryDeck(deck))
+                .filter(deck => ownerIds.has(deck.ownerId))
+                .sort((a, b) => {
+                    const aOrder = typeof a.sortOrder === 'number' ? a.sortOrder : Number.MAX_SAFE_INTEGER;
+                    const bOrder = typeof b.sortOrder === 'number' ? b.sortOrder : Number.MAX_SAFE_INTEGER;
+                    if (aOrder !== bOrder) return aOrder - bOrder;
+                    return (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' });
+                });
+            setBoardDecks(decksData);
+        });
+
+        return () => unsubDecks();
+    }, [boardDeckOwnerIds, isBoardMode]);
 
     // Estado para Cuadro de Selección
     const [selectionBox, setSelectionBox] = useState(null); // { start: {x,y}, current: {x,y} } (Screen Coords)
@@ -7233,6 +7281,91 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             items: nextItems,
             lastModified: Date.now()
         }).catch(err => console.error("Error saving card container:", err));
+    };
+
+    const addDeckToBoard = (deck) => {
+        if (!activeScenario || !isBoardMode || !deck) return;
+
+        const deckCards = (deck.cards || []).filter(card => card?.frontUrl);
+        if (deckCards.length === 0) {
+            triggerToast('Baraja vacía', 'No hay cartas para colocar en el tablero', 'info');
+            return;
+        }
+
+        const centerX = (WORLD_SIZE / 2) - (offset.x / zoom);
+        const centerY = (WORLD_SIZE / 2) - (offset.y / zoom);
+        const cardWidth = Math.max(90, (gridConfig.cellWidth || 120) * 0.72);
+        const cardHeight = Math.round(cardWidth * 1.4);
+        const gapX = Math.round(cardWidth * 0.22);
+        const gapY = Math.round(cardHeight * 0.16);
+        const paddingX = Math.round(cardWidth * 0.28);
+        const paddingTop = Math.round(cardHeight * 0.32);
+        const paddingBottom = Math.round(cardHeight * 0.24);
+        const maxColumns = Math.max(1, Math.min(6, Math.ceil(Math.sqrt(deckCards.length * 1.35))));
+        const columns = Math.min(deckCards.length, maxColumns);
+        const rows = Math.ceil(deckCards.length / columns);
+        const boardWidth = Math.round((columns * cardWidth) + ((columns - 1) * gapX) + (paddingX * 2));
+        const boardHeight = Math.round((rows * cardHeight) + ((rows - 1) * gapY) + paddingTop + paddingBottom);
+        const boardX = centerX - (boardWidth / 2);
+        const boardY = centerY - (boardHeight / 2);
+        const timestamp = Date.now();
+        const containerId = `card-container-${timestamp}`;
+
+        const container = {
+            id: containerId,
+            type: 'cardContainer',
+            x: boardX,
+            y: boardY,
+            width: boardWidth,
+            height: boardHeight,
+            rotation: 0,
+            layer: 'CARD',
+            zone: 'board',
+            name: deck.name || 'Baraja',
+            containerKind: 'deck',
+            sourceDeckId: deck.id,
+            ownerId: currentUserId,
+            ownerName: playerName || (isPlayerView ? currentUserId : 'Master'),
+            snapToGrid: false,
+        };
+
+        const deckItems = deckCards.map((card, index) => {
+            const col = index % columns;
+            const row = Math.floor(index / columns);
+            return {
+                id: `card-${timestamp}-${index}`,
+                type: 'card',
+                x: boardX + paddingX + (col * (cardWidth + gapX)),
+                y: boardY + paddingTop + (row * (cardHeight + gapY)),
+                width: cardWidth,
+                height: cardHeight,
+                frontImage: card.frontUrl,
+                backImage: card.backUrl || null,
+                faceDown: false,
+                rotation: 0,
+                layer: 'CARD',
+                name: card.name || `Carta ${index + 1}`,
+                ownerId: currentUserId,
+                ownerName: playerName || (isPlayerView ? currentUserId : 'Master'),
+                zone: 'board',
+                containerId,
+                containerOrder: timestamp + index,
+                stackParentId: null,
+                stackIds: [],
+                sourceDeckId: deck.id,
+                sourceCardId: card.id || card.templateId || null,
+                snapToGrid: false,
+            };
+        });
+
+        const nextItems = [...(activeScenario.items || []), container, ...deckItems];
+        setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
+        setSelectedTokenIds([containerId]);
+        lastSelectedIdRef.current = containerId;
+        updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
+            items: nextItems,
+            lastModified: Date.now()
+        }).catch(err => console.error("Error saving deck board:", err));
     };
 
     const addBoardMarkerToBoard = () => {
@@ -13300,6 +13433,60 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     </div>
                                                 </div>
 
+                                                {boardDecks.length > 0 && (
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.2em] text-[#c8aa6e]/75">
+                                                            <FolderOpen className="h-3 w-3" />
+                                                            Barajas
+                                                        </div>
+                                                        <div className="grid grid-cols-1 gap-2">
+                                                            {boardDecks.map(deck => {
+                                                                const deckCards = (deck.cards || []).filter(card => card?.frontUrl);
+                                                                return (
+                                                                    <button
+                                                                        key={deck.id}
+                                                                        type="button"
+                                                                        onClick={() => addDeckToBoard(deck)}
+                                                                        disabled={deckCards.length === 0}
+                                                                        className="group flex items-center gap-3 rounded-lg border border-slate-800 bg-[#0b1120]/75 p-2 text-left transition-all hover:border-[#c8aa6e]/45 hover:bg-[#c8aa6e]/5 disabled:cursor-not-allowed disabled:opacity-45"
+                                                                        title="Crear tablero con esta baraja"
+                                                                    >
+                                                                        <div className="relative h-12 w-12 flex-none">
+                                                                            {deckCards.slice(0, 3).map((card, index) => (
+                                                                                <img
+                                                                                    key={`${deck.id}-${card.id || index}`}
+                                                                                    src={card.frontUrl}
+                                                                                    alt=""
+                                                                                    className="absolute h-11 w-8 rounded border border-black/60 object-cover shadow-lg"
+                                                                                    style={{
+                                                                                        left: `${index * 8}px`,
+                                                                                        top: `${index * 2}px`,
+                                                                                        transform: `rotate(${(index - 1) * 5}deg)`,
+                                                                                        zIndex: index + 1,
+                                                                                    }}
+                                                                                />
+                                                                            ))}
+                                                                            {deckCards.length === 0 && (
+                                                                                <div className="flex h-12 w-12 items-center justify-center rounded border border-dashed border-slate-700 text-slate-600">
+                                                                                    <FolderOpen className="h-5 w-5" />
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="min-w-0 flex-1">
+                                                                            <div className="truncate font-fantasy text-xs uppercase tracking-wider text-[#f0e6d2] group-hover:text-[#c8aa6e]">
+                                                                                {deck.name || 'Baraja'}
+                                                                            </div>
+                                                                            <div className="mt-0.5 text-[8px] font-bold uppercase tracking-widest text-slate-500">
+                                                                                {deckCards.length} cartas - crear tablero
+                                                                            </div>
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 <label className={`
                                                     flex flex-col items-center justify-center w-full h-32
                                                     border-2 border-dashed border-slate-700/50 rounded-xl
@@ -13640,6 +13827,60 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         </h4>
                                                         <p className="text-[9px] text-slate-600 mt-1">Añade cartas a mesa o mano. La mano cuenta para la iniciativa del token que controles.</p>
                                                     </div>
+
+                                                    {boardDecks.length > 0 && (
+                                                        <div className="space-y-2">
+                                                            <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.2em] text-[#c8aa6e]/75">
+                                                                <FolderOpen className="h-3 w-3" />
+                                                                Barajas
+                                                            </div>
+                                                            <div className="grid grid-cols-1 gap-2">
+                                                                {boardDecks.map(deck => {
+                                                                    const deckCards = (deck.cards || []).filter(card => card?.frontUrl);
+                                                                    return (
+                                                                        <button
+                                                                            key={deck.id}
+                                                                            type="button"
+                                                                            onClick={() => addDeckToBoard(deck)}
+                                                                            disabled={deckCards.length === 0}
+                                                                            className="group flex items-center gap-3 rounded-lg border border-slate-800 bg-[#0b1120]/75 p-2 text-left transition-all hover:border-[#c8aa6e]/45 hover:bg-[#c8aa6e]/5 disabled:cursor-not-allowed disabled:opacity-45"
+                                                                            title="Crear tablero con esta baraja"
+                                                                        >
+                                                                            <div className="relative h-12 w-12 flex-none">
+                                                                                {deckCards.slice(0, 3).map((card, index) => (
+                                                                                    <img
+                                                                                        key={`${deck.id}-${card.id || index}`}
+                                                                                        src={card.frontUrl}
+                                                                                        alt=""
+                                                                                        className="absolute h-11 w-8 rounded border border-black/60 object-cover shadow-lg"
+                                                                                        style={{
+                                                                                            left: `${index * 8}px`,
+                                                                                            top: `${index * 2}px`,
+                                                                                            transform: `rotate(${(index - 1) * 5}deg)`,
+                                                                                            zIndex: index + 1,
+                                                                                        }}
+                                                                                    />
+                                                                                ))}
+                                                                                {deckCards.length === 0 && (
+                                                                                    <div className="flex h-12 w-12 items-center justify-center rounded border border-dashed border-slate-700 text-slate-600">
+                                                                                        <FolderOpen className="h-5 w-5" />
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="min-w-0 flex-1">
+                                                                                <div className="truncate font-fantasy text-xs uppercase tracking-wider text-[#f0e6d2] group-hover:text-[#c8aa6e]">
+                                                                                    {deck.name || 'Baraja'}
+                                                                                </div>
+                                                                                <div className="mt-0.5 text-[8px] font-bold uppercase tracking-widest text-slate-500">
+                                                                                    {deckCards.length} cartas - crear tablero
+                                                                                </div>
+                                                                            </div>
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    )}
 
                                                     <label className={`
                                                         flex flex-col items-center justify-center w-full h-28
