@@ -3544,7 +3544,11 @@ const getModularContainerHeight = (blockId, remainingHeight, isLast, description
   if (blockId === 'minion') return 0;
   if (blockId === 'charge') return 0;
   if (blockId === 'description') {
-    return Math.max(MODULAR_DESCRIPTION_UNIT_HEIGHT, MODULAR_DESCRIPTION_UNIT_HEIGHT * descriptionUnits);
+    const baseHeight = Math.max(MODULAR_DESCRIPTION_UNIT_HEIGHT, MODULAR_DESCRIPTION_UNIT_HEIGHT * descriptionUnits);
+    if (isLast) {
+      return Math.max(baseHeight, remainingHeight);
+    }
+    return baseHeight;
   }
   return 180;
 };
@@ -3942,48 +3946,9 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const hasSplitDescription = usesSplitDescription(activeType, showTraits);
 
   const descriptionMaxLength = useMemo(() => {
-    const hasRails = activeType.id === 'weapon' || activeType.id === 'armor' || activeType.id === 'trap' || activeType.id === 'skill';
-    let baseHeight = hasRails ? 740 : 895;
-
-    let yOffset = 0;
-    if (showTraits) {
-      if (activeType.id === 'weapon') {
-        const activeRows = Math.min(visibleTraitRows, 3);
-        const hiddenRows = 3 - activeRows;
-        yOffset = hiddenRows * 240;
-      } else if (activeType.id === 'skill') {
-        const activeRows = Math.min(visibleTraitRows, 2);
-        const hiddenRows = 2 - activeRows;
-        yOffset = hiddenRows * 240;
-      } else if (activeType.id === 'armor') {
-        const activeRows = Math.min(visibleTraitRows, 4);
-        const hiddenRows = 4 - activeRows;
-        yOffset = hiddenRows * 230;
-      }
-    }
-
-    let finalHeight = baseHeight + yOffset;
-
-    if (!showTraits) {
-      if (activeType.id === 'weapon') {
-        finalHeight = 1465;
-      } else if (activeType.id === 'armor') {
-        finalHeight = 1772;
-      } else if (activeType.id === 'skill') {
-        finalHeight = 1233;
-      }
-    }
-
-    if (activeType.id === 'trap') {
-      if (showTraits) {
-        finalHeight = 1465;
-      } else {
-        finalHeight = 1772;
-      }
-    }
-
-    return Math.round(520 * (finalHeight / 740));
-  }, [activeType, showTraits, visibleTraitRows]);
+    // Generous limit to allow filling the available container space without input blocking
+    return 4000;
+  }, []);
 
   const loadCachedImage = useCallback(async (src) => {
     const cachedImage = imageCacheRef.current.get(src);

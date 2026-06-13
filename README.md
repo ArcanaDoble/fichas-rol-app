@@ -183,7 +183,14 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.6.9**
+> **Versión actual: 2.7.0**
+
+**Resumen de cambios v2.7.0:**
+
+- **Ampliación de Límite de Caracteres en Descripción**:
+  - Elevamos el límite máximo de caracteres (`descriptionMaxLength`) a un valor generoso y fijo de `4000` (anteriormente limitado dinámicamente a valores bajos como ~500-1000). Esto elimina la restricción del navegador que impedía escribir descripciones largas en la caja de edición lateral.
+- **Auto-crecimiento del Último Contenedor de la Carta**:
+  - Modificamos el cálculo del alto modular (`getModularContainerHeight`) para que, si el bloque de descripción es el último contenedor renderizable de la carta, este crezca dinámicamente y ocupe el 100% del espacio vertical restante disponible hasta el límite inferior (`contentBottom`), permitiendo visualizar descripciones extensas sin solapamiento con los slots de carga del pie.
 
 **Resumen de cambios v2.6.9:**
 
