@@ -165,8 +165,8 @@ const ELEMENT_CONSUMPTION_STYLES = {
   Viento: { stroke: '#6d958a', fill: 'rgba(109,149,138,0.15)' },
 };
 
-const CARD_ACCENT_PRESETS = [
-  { id: 'base', label: 'Normal', value: '#c46f1f' },
+const ACCENT_PRESET_COLORS = [
+  { id: 'default', label: 'Base', value: '#c46f1f' },
   { id: 'gold', label: 'Dorado', value: '#c8aa6e' },
   { id: 'red', label: 'Rojo', value: '#ad5134' },
   { id: 'green', label: 'Verde', value: '#73824f' },
@@ -3546,7 +3546,6 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const [selectedElement, setSelectedElement] = useState('Ninguno');
   const [customColorActive, setCustomColorActive] = useState(false);
   const [customColor, setCustomColor] = useState('#c8aa6e');
-  const [accentMode, setAccentMode] = useState('base');
   const [isUploadingCharacterCard, setIsUploadingCharacterCard] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
 
@@ -4109,7 +4108,6 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     setSelectedElement('Ninguno');
     setCustomColorActive(false);
     setCustomColor('#c8aa6e');
-    setAccentMode('base');
     setActionCenterMode('dado');
   };
 
@@ -5490,63 +5488,56 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                 Acento
               </div>
 
-              <div className="mt-3 space-y-3 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
-                <div className="grid grid-cols-3 gap-1.5">
-                  {CARD_ACCENT_PRESETS.map((preset) => {
-                    const isSelected = accentMode === preset.id;
+              <div className="mt-3 space-y-2.5 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
+                <div className="grid grid-cols-4 gap-2">
+                  {ACCENT_PRESET_COLORS.map((preset) => {
+                    const isSelected = preset.id === 'default'
+                      ? !customColorActive
+                      : customColorActive && customColor.toLowerCase() === preset.value.toLowerCase();
                     return (
                       <button
                         key={preset.id}
                         type="button"
                         onClick={() => {
-                          setAccentMode(preset.id);
-                          setCustomColorActive(preset.id !== 'base');
-                          setCustomColor(preset.value);
-                          if (preset.id !== 'base') {
-                            setSelectedBackground('Gris.webp');
+                          if (preset.id === 'default') {
+                            setCustomColorActive(false);
+                          } else {
+                            setCustomColorActive(true);
+                            setCustomColor(preset.value);
                           }
                         }}
-                        className={`group flex h-12 flex-col items-center justify-center gap-1 border px-1.5 text-[8.5px] font-black uppercase tracking-[0.1em] transition ${
+                        className={`flex h-11 items-center justify-center border text-[8px] font-black uppercase tracking-[0.08em] transition ${
                           isSelected
-                            ? 'border-[#c8aa6e] bg-[#c8aa6e]/12 text-[#f0e6d2] shadow-[0_0_16px_rgba(200,170,110,0.08)]'
-                            : 'border-slate-800 bg-[#09090b]/55 text-slate-500 hover:border-[#c8aa6e]/50 hover:text-[#d8c391]'
+                            ? 'border-[#f0e6d2] text-[#f0e6d2]'
+                            : 'border-slate-800 text-slate-500 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
                         }`}
+                        style={{ background: `linear-gradient(135deg, ${preset.value}44, ${preset.value}12)` }}
                         title={preset.label}
                       >
-                        <span
-                          className="h-4 w-8 shrink-0 border border-black/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]"
-                          style={{
-                            background: `linear-gradient(135deg, ${preset.value} 0%, ${preset.value}cc 48%, #1b1a17 100%)`,
-                          }}
-                        />
-                        <span className="min-w-0 max-w-full truncate">{preset.label}</span>
+                        {preset.label}
                       </button>
                     );
                   })}
+                </div>
+                <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                      Personalizado
+                    </span>
                   <button
                     type="button"
                     onClick={() => {
-                      setAccentMode('custom');
                       setCustomColorActive(true);
-                      setSelectedBackground('Gris.webp');
                     }}
-                    className={`flex h-12 flex-col items-center justify-center gap-1 border px-1.5 text-[8.5px] font-black uppercase tracking-[0.1em] transition ${
-                      accentMode === 'custom'
-                        ? 'border-[#c8aa6e] bg-[#c8aa6e]/12 text-[#f0e6d2] shadow-[0_0_16px_rgba(200,170,110,0.08)]'
-                        : 'border-slate-800 bg-[#09090b]/55 text-slate-500 hover:border-[#c8aa6e]/50 hover:text-[#d8c391]'
+                    className={`border px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition ${
+                      customColorActive && !ACCENT_PRESET_COLORS.some((preset) => preset.id !== 'default' && preset.value.toLowerCase() === customColor.toLowerCase())
+                        ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                        : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
                     }`}
                   >
-                    <span
-                      className="h-4 w-8 shrink-0 border border-black/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]"
-                      style={{
-                        background: `linear-gradient(135deg, ${customColor || '#c8aa6e'} 0%, ${customColor || '#c8aa6e'}cc 48%, #1b1a17 100%)`,
-                      }}
-                    />
-                    <span>Hex</span>
+                    Hex
                   </button>
-                </div>
-                {accentMode === 'custom' && (
-                  <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-2.5">
+                  </div>
                     <HexColorInput
                       value={customColor}
                       onChange={(value) => {
@@ -5557,8 +5548,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                     <p className="text-[10px] italic leading-normal text-slate-400">
                       Cambia la línea bajo la imagen, los rombos y los indicadores activos.
                     </p>
-                  </div>
-                )}
+                </div>
               </div>
             </div>
           </aside>
