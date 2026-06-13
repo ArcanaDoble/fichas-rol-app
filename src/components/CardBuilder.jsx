@@ -2680,41 +2680,41 @@ const traceDiamondPath = (context, x, y, size) => {
 };
 
 const CHARGE_FOOTER_LINE_Y = 2328;
-const CHARGE_FOOTER_RESERVED_HEIGHT = 170;
+const CHARGE_FOOTER_RESERVED_HEIGHT = 110;
 const CHARGE_STYLES = {
   Hambre: { stroke: '#3d7d45', fill: 'rgba(61,125,69,0.88)' },
   Cuerpo: { stroke: '#a93832', fill: 'rgba(169,56,50,0.88)' },
   Mente: { stroke: '#2f6fb3', fill: 'rgba(47,111,179,0.88)' },
 };
 
-const drawInlineChargeContainer = (context, centerY, chargeSlots, accent = '#c46f1f') => {
+const drawModularChargeFooter = (context, chargeSlots, resourceImages = {}, accent = '#c46f1f') => {
   const slots = Array.from({ length: CHARGE_SLOT_COUNT }, (_, index) => chargeSlots[index] || EMPTY_SLOT);
-  const areaStartX = 610;
-  const areaEndX = 1574;
-  const areaCenterX = areaStartX + (areaEndX - areaStartX) / 2; // 1092
-  // Centers: [906, 990, 1092, 1194, 1278] (Equidistant edge-to-edge gaps: ~20.5px)
-  const centers = [areaCenterX - 186, areaCenterX - 102, areaCenterX, areaCenterX + 102, areaCenterX + 186];
+  const y = CHARGE_FOOTER_LINE_Y;
+  const centers = [764, 848, 944, 1040, 1124];
   const sizes = [45, 45, 70, 45, 45];
 
   context.save();
   context.strokeStyle = 'rgba(181,92,18,0.58)';
   context.lineWidth = 3;
   context.beginPath();
-  context.moveTo(centers[0], centerY);
-  context.lineTo(centers[4], centerY);
+  context.moveTo(314, y);
+  context.lineTo(715, y);
+  context.moveTo(1173, y);
+  context.lineTo(1574, y);
   context.stroke();
 
   slots.forEach((slot, index) => {
     const x = centers[index];
     const size = sizes[index];
     
-    // Determine the color corresponding to each charge (all 5 slots are active charge slots)
+    // Determine the color corresponding to each charge
     const slotColor = slot === 'Hambre' ? '#3d7d45'
                     : slot === 'Cuerpo' ? '#a93832'
                     : slot === 'Mente' ? '#2f6fb3'
                     : accent;
                     
-    drawSectionDiamond(context, x, centerY, size, slotColor);
+    // Draw the diamond shape matching the style of the body diamonds but colored
+    drawSectionDiamond(context, x, y, size, slotColor);
   });
   context.restore();
 };
@@ -3516,13 +3516,16 @@ const drawModularDescription = (context, y, height, description, hyphenate, sing
       } else {
         context.font = `${isNarrativeStyle ? 'italic ' : 'italic '}${isNarrativeStyle ? '700' : '400'} ${fontSize}px Lato, Arial, sans-serif`;
         context.fillStyle = isPreview ? 'rgba(29,33,32,0.42)' : (isNarrativeStyle ? accent : '#171a19');
+        const shouldJustify = isNarrativeStyle
+          ? 'center'
+          : Boolean(!item.isLastLineOfParagraph && item.line.includes(' '));
         drawTextLineWithIcons(
           context,
           item.line,
           x,
           cursorY,
           maxWidth,
-          isNarrativeStyle ? 'center' : false,
+          shouldJustify,
           resourceImages,
           isNarrativeStyle || item.isLore,
         );
@@ -3539,7 +3542,7 @@ const getModularContainerHeight = (blockId, remainingHeight, isLast, description
   if (blockId === 'damage') return 180;
   if (blockId === 'traits') return 190;
   if (blockId === 'minion') return 0;
-  if (blockId === 'charge') return 180;
+  if (blockId === 'charge') return 0;
   if (blockId === 'description') {
     return Math.max(MODULAR_DESCRIPTION_UNIT_HEIGHT, MODULAR_DESCRIPTION_UNIT_HEIGHT * descriptionUnits);
   }
@@ -3549,7 +3552,7 @@ const getModularContainerHeight = (blockId, remainingHeight, isLast, description
 const getRenderableCardContainers = (containers) => (
   containers
     .map((container, index) => normalizeCardContainer(container, index))
-    .filter((block) => block.id !== 'minion')
+    .filter((block) => block.id !== 'minion' && block.id !== 'charge')
 );
 
 const getDescriptionUnitBudget = (containers, cardType = 'weapon') => {
@@ -3561,7 +3564,9 @@ const getDescriptionUnitBudget = (containers, cardType = 'weapon') => {
     if (block.id === 'description') return total;
     return total + getModularContainerHeight(block.id, 0, false);
   }, 0);
-  const availableHeight = Math.max(0, 2386 - MODULAR_CONTENT_TOP - fixedHeight);
+  const hasChargeFooter = containers.some((container, index) => getContainerId(container, index) === 'charge');
+  const footerHeight = hasChargeFooter ? CHARGE_FOOTER_RESERVED_HEIGHT : 0;
+  const availableHeight = Math.max(0, 2386 - MODULAR_CONTENT_TOP - fixedHeight - footerHeight);
   return Math.max(descriptionCount, Math.min(descriptionCount * 6, Math.floor(availableHeight / MODULAR_DESCRIPTION_UNIT_HEIGHT)));
 };
 
@@ -3641,8 +3646,9 @@ const drawCardCanvas = (
     [block.id]: block.label,
   }), {});
   const normalizedBlocks = cardContainers.map((container, index) => normalizeCardContainer(container, index));
+  const hasChargeFooter = normalizedBlocks.some((block) => block.id === 'charge');
   const blocks = getRenderableCardContainers(cardContainers, cardType);
-  if (blocks.length === 0) {
+  if (blocks.length === 0 && !hasChargeFooter) {
     drawEmptyContainersMessage(context);
     context.restore();
     return;
@@ -3650,7 +3656,7 @@ const drawCardCanvas = (
 
   const descriptionUnitBudget = getDescriptionUnitBudget(cardContainers, cardType);
   let usedDescriptionUnits = 0;
-  const contentBottom = 2386;
+  const contentBottom = hasChargeFooter ? 2386 - CHARGE_FOOTER_RESERVED_HEIGHT : 2386;
   let y = MODULAR_CONTENT_TOP;
 
   blocks.forEach((block, index) => {
@@ -3710,13 +3716,6 @@ const drawCardCanvas = (
       );
     } else if (blockId === 'minion') {
       // Placeholder: se gestiona desde el menú, pero todavía no se renderiza.
-    } else if (blockId === 'charge') {
-      drawInlineChargeContainer(
-        context,
-        blockCenterY,
-        chargeSlots,
-        accent,
-      );
     } else if (blockId === 'description') {
       drawModularDescription(
         context,
@@ -3731,7 +3730,8 @@ const drawCardCanvas = (
     }
 
     const dividerY = y + blockHeight - 14;
-    if (dividerY < contentBottom - 18) {
+    const isLastBlock = index === blocks.length - 1;
+    if (!isLastBlock && dividerY < contentBottom - 18) {
       drawContainerDivider(context, dividerY, accent);
     }
     y += blockHeight;
@@ -3739,6 +3739,9 @@ const drawCardCanvas = (
       usedDescriptionUnits += descriptionUnits;
     }
   });
+  if (hasChargeFooter) {
+    drawModularChargeFooter(context, chargeSlots, resourceImages, accent);
+  }
   context.restore();
 };
 
@@ -5621,30 +5624,61 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                           5 rombos
                         </span>
                       </div>
-                      <div className="grid grid-cols-5 gap-1.5">
-                        {activeChargeSlots.map((slot, index) => (
-                          <label
-                            key={`${container.key}-charge-slot-${index}`}
-                            className="space-y-1"
-                          >
-                            <span className="block text-center text-[9px] font-black uppercase tracking-[0.1em] text-slate-500">
-                              {index + 1}
-                            </span>
-                            <select
-                              value={slot}
-                              onChange={(event) => handleChargeSlotChange(index, event.target.value)}
-                              className="h-8 w-full min-w-0 border border-[#c8aa6e]/20 bg-[#09090b]/80 px-1 text-[10px] font-bold uppercase text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70"
-                              aria-label={`Carga slot ${index + 1}`}
+                      <div className="flex items-end justify-center gap-3 py-2">
+                        {activeChargeSlots.map((slot, index) => {
+                          const chargeOptions = ['', 'Hambre', 'Cuerpo', 'Mente'];
+                          const currentIdx = chargeOptions.indexOf(slot);
+                          const nextValue = chargeOptions[(currentIdx + 1) % chargeOptions.length];
+                          const colorMap = { Hambre: '#3d7d45', Cuerpo: '#a93832', Mente: '#2f6fb3' };
+                          const slotColor = colorMap[slot] || '#c8aa6e33';
+                          const diamondSize = 38;
+                          const labelMap = { Hambre: 'HAM', Cuerpo: 'CUE', Mente: 'MEN' };
+
+                          return (
+                            <div
+                              key={`${container.key}-charge-slot-${index}`}
+                              className="flex flex-col items-center gap-1 cursor-pointer group"
+                              onClick={() => handleChargeSlotChange(index, nextValue)}
+                              title={`Slot ${index + 1}: ${slot || 'Vacío'} — Click para cambiar`}
                             >
-                              <option value="">Vacío</option>
-                              {CHARGE_TYPES.map((option) => (
-                                <option key={`${container.key}-charge-${index}-${option.id}`} value={option.id}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        ))}
+                              <svg
+                                width={diamondSize + 6}
+                                height={diamondSize + 6}
+                                viewBox={`0 0 ${diamondSize + 6} ${diamondSize + 6}`}
+                                className="transition-transform duration-150 group-hover:scale-110"
+                              >
+                                <rect
+                                  x={(diamondSize + 6) / 2 - diamondSize / 2 / Math.SQRT2}
+                                  y={(diamondSize + 6) / 2 - diamondSize / 2 / Math.SQRT2}
+                                  width={diamondSize / Math.SQRT2}
+                                  height={diamondSize / Math.SQRT2}
+                                  transform={`rotate(45 ${(diamondSize + 6) / 2} ${(diamondSize + 6) / 2})`}
+                                  fill={slot ? slotColor : 'transparent'}
+                                  stroke={slot ? slotColor : '#c8aa6e44'}
+                                  strokeWidth={slot ? 0 : 1.5}
+                                  rx="2"
+                                />
+                                {slot && (
+                                  <text
+                                    x={(diamondSize + 6) / 2}
+                                    y={(diamondSize + 6) / 2}
+                                    textAnchor="middle"
+                                    dominantBaseline="central"
+                                    fill="#fff"
+                                    fontSize={11}
+                                    fontWeight="900"
+                                    fontFamily="Inter, sans-serif"
+                                  >
+                                    {labelMap[slot] || ''}
+                                  </text>
+                                )}
+                              </svg>
+                              <span className={`text-[8px] font-bold uppercase tracking-wider ${slot ? 'text-slate-300' : 'text-slate-600'}`}>
+                                {slot || '—'}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );

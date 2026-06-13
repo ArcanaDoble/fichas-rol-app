@@ -183,7 +183,18 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.6.8**
+> **Versión actual: 2.6.9**
+
+**Resumen de cambios v2.6.9:**
+
+- **Rediseño de Slots de Carga en Menú y Rombos Clicables**:
+  - Reemplazamos los dropdowns `<select>` del editor lateral por 5 rombos SVG interactivos y del mismo tamaño (38px).
+  - Estos rombos ciclan dinámicamente entre Vacío, Hambre (verde), Cuerpo (rojo) y Mente (azul) al hacer click sobre ellos, y muestran abreviaturas claras ("HAM", "CUE", "MEN") en su interior para evitar textos truncados.
+- **Justificado del Texto de Descripción Principal**:
+  - Implementamos la alineación justificada para el bloque principal de descripciones de la carta. Las líneas intermedias distribuyen su espaciado de forma uniforme, mientras que la última línea de cada párrafo se alinea a la izquierda de forma limpia.
+- **Optimización de Espacio y Eliminación de Divisor Redundante**:
+  - Eliminamos la línea divisora rústica con rombo que se dibujaba de manera redundante tras el último contenedor activo de la carta.
+  - Redujimos el espacio reservada para el pie de página de cargas de `170px` a `110px` (`CHARGE_FOOTER_RESERVED_HEIGHT`), ampliando el espacio vertical disponible para descripciones en la carta.
 
 **Resumen de cambios v2.6.8:**
 
