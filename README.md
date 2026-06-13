@@ -183,7 +183,14 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.6.7**
+> **Versión actual: 2.6.8**
+
+**Resumen de cambios v2.6.8:**
+
+- **Revertido de Slot 3 y Contenedor de Carga Inline**:
+  - Habilitamos nuevamente la edición del tercer slot de carga en el panel lateral (removiendo el divisor estático) para que sea completamente interactivo e igual al resto de slots de carga.
+  - Modificamos el flujo de renderizado en `drawCardCanvas` para dibujar el bloque de cargas `charge` de forma inline como un bloque modular estándar en lugar de forzarlo como un pie de página fijo. Esto evita que el bloque de descripción se comprima en exceso y cause guionizados antiestéticos en el texto.
+  - Calculamos centros de rombos en `drawInlineChargeContainer` (`[areaCenterX - 186, areaCenterX - 102, areaCenterX, areaCenterX + 102, areaCenterX + 186]`) para que la separación física libre (de borde a borde) entre todos los rombos sea exactamente la misma (~20.5px).
 
 **Resumen de cambios v2.6.7:**
 

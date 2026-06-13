@@ -2687,35 +2687,34 @@ const CHARGE_STYLES = {
   Mente: { stroke: '#2f6fb3', fill: 'rgba(47,111,179,0.88)' },
 };
 
-const drawModularChargeFooter = (context, chargeSlots, resourceImages = {}, accent = '#c46f1f') => {
+const drawInlineChargeContainer = (context, centerY, chargeSlots, accent = '#c46f1f') => {
   const slots = Array.from({ length: CHARGE_SLOT_COUNT }, (_, index) => chargeSlots[index] || EMPTY_SLOT);
-  const y = CHARGE_FOOTER_LINE_Y;
-  const centers = [764, 848, 944, 1040, 1124];
+  const areaStartX = 610;
+  const areaEndX = 1574;
+  const areaCenterX = areaStartX + (areaEndX - areaStartX) / 2; // 1092
+  // Centers: [906, 990, 1092, 1194, 1278] (Equidistant edge-to-edge gaps: ~20.5px)
+  const centers = [areaCenterX - 186, areaCenterX - 102, areaCenterX, areaCenterX + 102, areaCenterX + 186];
   const sizes = [45, 45, 70, 45, 45];
 
   context.save();
   context.strokeStyle = 'rgba(181,92,18,0.58)';
   context.lineWidth = 3;
   context.beginPath();
-  context.moveTo(314, y);
-  context.lineTo(715, y);
-  context.moveTo(1173, y);
-  context.lineTo(1574, y);
+  context.moveTo(centers[0], centerY);
+  context.lineTo(centers[4], centerY);
   context.stroke();
 
   slots.forEach((slot, index) => {
     const x = centers[index];
     const size = sizes[index];
     
-    // Determine the color corresponding to each charge (slot 3 is always the accent decorator)
-    const slotColor = index === 2 ? accent
-                    : slot === 'Hambre' ? '#3d7d45'
+    // Determine the color corresponding to each charge (all 5 slots are active charge slots)
+    const slotColor = slot === 'Hambre' ? '#3d7d45'
                     : slot === 'Cuerpo' ? '#a93832'
                     : slot === 'Mente' ? '#2f6fb3'
                     : accent;
                     
-    // Draw the diamond shape matching the style of the body diamonds but colored
-    drawSectionDiamond(context, x, y, size, slotColor);
+    drawSectionDiamond(context, x, centerY, size, slotColor);
   });
   context.restore();
 };
@@ -3540,7 +3539,7 @@ const getModularContainerHeight = (blockId, remainingHeight, isLast, description
   if (blockId === 'damage') return 180;
   if (blockId === 'traits') return 190;
   if (blockId === 'minion') return 0;
-  if (blockId === 'charge') return 0;
+  if (blockId === 'charge') return 180;
   if (blockId === 'description') {
     return Math.max(MODULAR_DESCRIPTION_UNIT_HEIGHT, MODULAR_DESCRIPTION_UNIT_HEIGHT * descriptionUnits);
   }
@@ -3550,7 +3549,7 @@ const getModularContainerHeight = (blockId, remainingHeight, isLast, description
 const getRenderableCardContainers = (containers) => (
   containers
     .map((container, index) => normalizeCardContainer(container, index))
-    .filter((block) => block.id !== 'minion' && block.id !== 'charge')
+    .filter((block) => block.id !== 'minion')
 );
 
 const getDescriptionUnitBudget = (containers, cardType = 'weapon') => {
@@ -3562,9 +3561,7 @@ const getDescriptionUnitBudget = (containers, cardType = 'weapon') => {
     if (block.id === 'description') return total;
     return total + getModularContainerHeight(block.id, 0, false);
   }, 0);
-  const hasChargeFooter = containers.some((container, index) => getContainerId(container, index) === 'charge');
-  const footerHeight = hasChargeFooter ? CHARGE_FOOTER_RESERVED_HEIGHT : 0;
-  const availableHeight = Math.max(0, 2386 - MODULAR_CONTENT_TOP - fixedHeight - footerHeight);
+  const availableHeight = Math.max(0, 2386 - MODULAR_CONTENT_TOP - fixedHeight);
   return Math.max(descriptionCount, Math.min(descriptionCount * 6, Math.floor(availableHeight / MODULAR_DESCRIPTION_UNIT_HEIGHT)));
 };
 
@@ -3644,9 +3641,8 @@ const drawCardCanvas = (
     [block.id]: block.label,
   }), {});
   const normalizedBlocks = cardContainers.map((container, index) => normalizeCardContainer(container, index));
-  const hasChargeFooter = normalizedBlocks.some((block) => block.id === 'charge');
   const blocks = getRenderableCardContainers(cardContainers, cardType);
-  if (blocks.length === 0 && !hasChargeFooter) {
+  if (blocks.length === 0) {
     drawEmptyContainersMessage(context);
     context.restore();
     return;
@@ -3654,7 +3650,7 @@ const drawCardCanvas = (
 
   const descriptionUnitBudget = getDescriptionUnitBudget(cardContainers, cardType);
   let usedDescriptionUnits = 0;
-  const contentBottom = hasChargeFooter ? 2386 - CHARGE_FOOTER_RESERVED_HEIGHT : 2386;
+  const contentBottom = 2386;
   let y = MODULAR_CONTENT_TOP;
 
   blocks.forEach((block, index) => {
@@ -3714,6 +3710,13 @@ const drawCardCanvas = (
       );
     } else if (blockId === 'minion') {
       // Placeholder: se gestiona desde el menú, pero todavía no se renderiza.
+    } else if (blockId === 'charge') {
+      drawInlineChargeContainer(
+        context,
+        blockCenterY,
+        chargeSlots,
+        accent,
+      );
     } else if (blockId === 'description') {
       drawModularDescription(
         context,
@@ -3736,9 +3739,6 @@ const drawCardCanvas = (
       usedDescriptionUnits += descriptionUnits;
     }
   });
-  if (hasChargeFooter) {
-    drawModularChargeFooter(context, chargeSlots, resourceImages, accent);
-  }
   context.restore();
 };
 
@@ -5622,38 +5622,29 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                         </span>
                       </div>
                       <div className="grid grid-cols-5 gap-1.5">
-                        {activeChargeSlots.map((slot, index) => {
-                          const isSeparator = index === 2;
-                          return (
-                            <div
-                              key={`${container.key}-charge-slot-${index}`}
-                              className="space-y-1"
+                        {activeChargeSlots.map((slot, index) => (
+                          <label
+                            key={`${container.key}-charge-slot-${index}`}
+                            className="space-y-1"
+                          >
+                            <span className="block text-center text-[9px] font-black uppercase tracking-[0.1em] text-slate-500">
+                              {index + 1}
+                            </span>
+                            <select
+                              value={slot}
+                              onChange={(event) => handleChargeSlotChange(index, event.target.value)}
+                              className="h-8 w-full min-w-0 border border-[#c8aa6e]/20 bg-[#09090b]/80 px-1 text-[10px] font-bold uppercase text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70"
+                              aria-label={`Carga slot ${index + 1}`}
                             >
-                              <span className="block text-center text-[9px] font-black uppercase tracking-[0.1em] text-slate-500">
-                                {index + 1}
-                              </span>
-                              {isSeparator ? (
-                                <div className="h-8 w-full flex items-center justify-center border border-dashed border-[#c8aa6e]/15 bg-[#09090b]/40 px-1 text-[9px] font-bold uppercase text-slate-500 rounded select-none">
-                                  Divisor
-                                </div>
-                              ) : (
-                                <select
-                                  value={slot}
-                                  onChange={(event) => handleChargeSlotChange(index, event.target.value)}
-                                  className="h-8 w-full min-w-0 border border-[#c8aa6e]/20 bg-[#09090b]/80 px-1 text-[10px] font-bold uppercase text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70"
-                                  aria-label={`Carga slot ${index + 1}`}
-                                >
-                                  <option value="">Vacío</option>
-                                  {CHARGE_TYPES.map((option) => (
-                                    <option key={`${container.key}-charge-${index}-${option.id}`} value={option.id}>
-                                      {option.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              )}
-                            </div>
-                          );
-                        })}
+                              <option value="">Vacío</option>
+                              {CHARGE_TYPES.map((option) => (
+                                <option key={`${container.key}-charge-${index}-${option.id}`} value={option.id}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ))}
                       </div>
                     </div>
                   );
