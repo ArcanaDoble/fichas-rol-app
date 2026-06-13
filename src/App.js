@@ -64,6 +64,7 @@ import { CharacterListView } from './components/CharacterListView';
 import InitiativeTracker from './components/InitiativeTracker';
 import CanvasSection from './components/CanvasSection';
 import CardBuilder from './components/CardBuilder';
+import DeckBuilderView from './components/DeckBuilderView';
 import EnemyViewModal from './components/EnemyViewModal';
 import BestiaryView from './components/BestiaryView';
 import StatusEffectsManager from './components/StatusEffectsManager';
@@ -4524,6 +4525,8 @@ function App() {
         habilidades={habilidades}
         glossary={glossary}
         rarityColorMap={rarityColorMap}
+        currentUserId={playerName}
+        knownPlayers={existingPlayers}
       />
     );
   }
@@ -5675,6 +5678,7 @@ function App() {
         habilidades={habilidades}
         glossary={glossary}
         rarityColorMap={rarityColorMap}
+        knownPlayers={existingPlayers}
         onBack={() => setChosenView(null)}
         onLaunchMinigame={handleLaunchMinigame}
         onLaunchDiceCalculator={handleLaunchDiceCalculator}
@@ -7325,6 +7329,7 @@ function App() {
             habilidades={habilidades}
             glossary={glossary}
             rarityColorMap={rarityColorMap}
+            knownPlayers={existingPlayers}
             onLaunchDiceCalculator={handleLaunchDiceCalculator}
             onLaunchSpeedSystem={handleLaunchSpeedSystem}
             onLaunchMinigame={handleLaunchMinigame}
@@ -7337,6 +7342,11 @@ function App() {
   if (userType === 'master' && authenticated && chosenView === 'card_builder') {
     return withTooltips(
       <CardBuilder mode="master" onBack={() => setChosenView(null)} />
+    );
+  }
+  if (userType === 'master' && authenticated && chosenView === 'master_decks') {
+    return withTooltips(
+      <DeckBuilderView ownerId="master" ownerName="Master" currentUserId="master" knownPlayers={existingPlayers} isPlayer={false} onBack={() => setChosenView(null)} />
     );
   }
   if (userType === 'master' && authenticated && !chosenView) {

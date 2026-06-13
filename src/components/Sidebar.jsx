@@ -19,12 +19,25 @@ export const MobileNav = ({
     onTabChange,
     onSave,
     hasUnsavedChanges = false,
-    saveButtonState = 'idle'
+    saveButtonState = 'idle',
+    isPlayerMode = false
 }) => {
+    const resolvedMenuItems = menuItems.map(item => {
+        if (item.id === 'progression' && isPlayerMode) {
+            return {
+                ...item,
+                label: 'COLECCIÓN',
+                sub: 'Baraja',
+                mobileLabel: 'Colección'
+            };
+        }
+        return item;
+    });
+
     return (
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0b1120]/98 border-t border-[#c8aa6e]/30 backdrop-blur-xl" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
             <div className="flex items-center justify-around px-1 py-2">
-                {menuItems.map((item) => (
+                {resolvedMenuItems.map((item) => (
                     <button
                         key={item.id}
                         onClick={() => onTabChange(item.id)}
@@ -86,7 +99,8 @@ MobileNav.propTypes = {
     onTabChange: PropTypes.func.isRequired,
     onSave: PropTypes.func,
     hasUnsavedChanges: PropTypes.bool,
-    saveButtonState: PropTypes.oneOf(['idle', 'saving', 'success', 'error'])
+    saveButtonState: PropTypes.oneOf(['idle', 'saving', 'success', 'error']),
+    isPlayerMode: PropTypes.bool
 };
 
 // Sidebar Desktop (oculto en móvil)
@@ -99,8 +113,20 @@ const Sidebar = ({
     characterAvatar,
     onSave,
     hasUnsavedChanges = false,
-    saveButtonState = 'idle'
+    saveButtonState = 'idle',
+    isPlayerMode = false
 }) => {
+    const resolvedMenuItems = menuItems.map(item => {
+        if (item.id === 'progression' && isPlayerMode) {
+            return {
+                ...item,
+                label: 'COLECCIÓN',
+                sub: 'Baraja',
+                mobileLabel: 'Colección'
+            };
+        }
+        return item;
+    });
 
     return (
         <div className="hidden md:flex w-20 lg:w-72 xl:w-80 h-full flex-col bg-[#0b1120]/95 border-r border-[#c8aa6e]/20 relative z-30 backdrop-blur-xl shadow-[4px_0_24px_rgba(0,0,0,0.4)] transition-all duration-300">
@@ -151,7 +177,7 @@ const Sidebar = ({
 
             {/* Navigation Menu */}
             <nav className="flex-1 flex flex-col gap-1 py-6 px-2 lg:px-4 overflow-y-auto">
-                {menuItems.map((item) => (
+                {resolvedMenuItems.map((item) => (
                     <button
                         key={item.id}
                         onClick={() => onTabChange(item.id)}
@@ -250,7 +276,8 @@ Sidebar.propTypes = {
     characterAvatar: PropTypes.string,
     onSave: PropTypes.func,
     hasUnsavedChanges: PropTypes.bool,
-    saveButtonState: PropTypes.oneOf(['idle', 'saving', 'success', 'error'])
+    saveButtonState: PropTypes.oneOf(['idle', 'saving', 'success', 'error']),
+    isPlayerMode: PropTypes.bool
 };
 
 export default Sidebar;

@@ -66,13 +66,23 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Acceso directo** desde el menú Máster mediante la nueva opción «Lista de Clases».
 - **Constructor de cartas**: la antigua pestaña «Tienda» de la ficha pasa a ser «Cartas» y abre un canvas para previsualizar una carta con textos guía, escribir su nombre, descripción y texto narrativo cuando el formato lo requiere, cambiar entre los 15 fondos base WebP incluidos en `public/cards`, definir rasgos por tipo de carta con letreros generados en canvas y configurar cartas de arma con dados, alcance, tipo de arma, cargas y consumos con ranuras táctiles; sus fondos e iconos propios cargan en WebP optimizado y el Máster también dispone de acceso directo desde su menú principal.
 - **Tipos de arma simplificados en cartas**: el constructor de cartas usa solo tres iconos WebP para `Cuerpo a cuerpo`, `Distancia` y `Magia`, reemplazando el catálogo anterior de iconos de armas específicas.
-- **Recursos en trampas y habilidades**: las cartas de `Trampa` y `Habilidad` pueden usar cargas y consumos como armas y armaduras, con un modo de solo carga que centra el raíl de cargas en el canvas.
+- **Recursos en trampas y minions**: las cartas de `Trampa` y `Minion` pueden usar cargas y consumos como armas y armaduras, con un modo de solo carga que centra el raíl de cargas en el canvas.
 - **Dado Variable y Elementos en Armas**:
   - Se añade el dado **DX** (dado variable) al final de la selección de dados de daño para armas. Al activarse, se oculta la cantidad numérica en la carta y se sustituye la celda de cantidad en el editor por el aviso: *"Dado variable. Depende de otros factores."*
   - Se agrega el icono **Variable** al final de la pool de consumos para su selección y asignación en ranuras.
   - Se integra un selector de **Elemento / Estado** para armas. Si un arma tiene un elemento asignado (distinto de "Ninguno"), se ocultan los campos de dados y cantidad en el editor y se dibuja el icono del elemento en lugar del dado en el canvas con las mismas propiedades.
-- **Cuadros de texto en cartas**: las descripciones y textos narrativos del constructor se dibujan sobre paneles negros translúcidos sin marco, con padding interno y centrado vertical para textos cortos.
+- **Cuadros de texto en cartas**: las descripciones y textos narrativos del constructor se dibujan sobre paneles negros translúcidos sin marco, con padding interno y texto de usuario alineado desde la esquina superior izquierda.
+- **Previsualización del constructor más pulida**: el halo detrás de la carta usa luces elípticas difuminadas y una sombra más suave para evitar cortes visibles alrededor de la previsualización.
+- **Subida directa a colección de personaje**: desde el constructor, un jugador puede subir el PNG final a una colección base con el nombre exacto del personaje; si no existe se crea con permisos de edición para ese jugador, y si existe oculta se muestra un aviso para contactar con el Master.
+- **Subida automática del Master por tipo**: el constructor del Master puede enviar la carta creada a una colección base oculta según su tipo (`Acciones`, `Estados`, `Armas`, etc.); si existe una colección equivalente la reutiliza y, si no existe, la crea sin permisos visibles para jugadores.
+- **Cartas disponibles con descarga PNG**: las barajas muestran el lateral como `Cartas disponibles` y cada carta importable incluye un icono para descargar su imagen en PNG sin pasar por el constructor.
+- **Borrado visual de barajas y colecciones**: eliminar una baraja o colección base abre un aviso personalizado con la misma estética del borrado de cartas base.
+- **Barajas en el tablero de cartas**: en encuentros de tablero, la biblioteca de cartas muestra las barajas normales disponibles para Master o jugador. Al seleccionarlas se crea un tablero con el nombre de la baraja y sus cartas distribuidas con holgura, manteniendo el orden original para poder moverlas juntas y reorganizarlas luego en mesa.
+- **Ocultación de cartas dentro de tableros**: el Master puede marcar un tablero de cartas desde el inspector para que los jugadores vean solo el tablero, sin revelar las cartas contenidas ni sus posiciones hasta que se saquen o se elimine el tablero.
 - **Ajustes de trampa y armadura en cartas**: las trampas y armaduras amplían el cuadro de texto al ocultar sus rasgos, y las armaduras usan ranuras específicas sin selector de consumo/elemento.
+- **Separación de reglas y lore en cartas**: el cuadro de texto permite insertar separadores con `---` y marcar bloques narrativos con `[lore]...[/lore]`, con botones directos en la barra de formato del editor.
+- **Cartas de Minion**: el antiguo tipo `Habilidad` del constructor pasa a `Minion`, con dado, cantidad, alcance/regla, tipo de arma, una fila superior de atributos `Hambre`, `Cuerpo` y `Mente` con iconos y valores editables, y hasta 4 rasgos en las dos filas inferiores.
+- **Rendimiento del constructor de cartas**: el canvas agrupa redibujos rápidos, reutiliza cargas de imágenes en curso, precarga recursos comunes en segundo plano y usa una previsualización interna más ligera en móvil sin perder resolución al exportar.
 - **Edición directa de todos los campos**: haz clic en título, subtítulo, descripción, etiquetas, reglas o listas para actualizar la clase y guarda los cambios con un solo botón.
 - **Hitos con seguimiento**: marca la inspiración completada mediante checks persistentes y resaltados que mantienen el estilo luminiscente del panel.
 - **Niveles de clase dinámicos**: controla el número de niveles con un deslizador configurable desde 0 en adelante y edita cada hito de progreso en línea.
@@ -172,7 +182,99 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.4.86**
+> **Versión actual: 2.6.0**
+
+**Resumen de cambios v2.6.0:**
+
+- **Constructor de Barajas y Mazos (Deck Builder)**: Diseñamos e implementamos un sistema premium e interactivo para la gestión y creación de múltiples barajas de cartas tácticas (`DeckBuilderView.jsx`).
+  - **Acceso para Jugadores**: En la lista de clases en modo jugador (`ClassList.jsx`), la pestaña "Constelación/progresión" se transforma por completo en un constructor de barajas adaptado a la estética de la ficha, manteniendo intacta la progresión de niveles clásica en la interfaz del Master.
+  - **Acceso para el Master**: Añadimos un acceso directo independiente ("Colección de Barajas") en el menú principal del Master (`MasterMenu.jsx` y enrutado en `App.js`) para acceder a los mazos globales de la campaña sin interferir con las fichas de los jugadores.
+  - **Efecto 3D Tilt Hover y Glare**: Cada carta implementa un envoltorio 3D de inclinación interactiva y destellos de reflejos (glare) en tiempo real al deslizar el ratón, imitando la sensación física de un juego de cartas premium.
+  - **Intercambio por Arrastre (Drag & Drop)**: Las cartas permanecen ancladas a una cuadrícula estable y el arrastre usa una copia flotante fija, evitando desbordes laterales o cartas fuera de la interfaz. Al soltar una carta sobre otra se intercambian sus posiciones de forma inmediata, sin movimiento residual posterior al drop.
+  - **Orden Manual de Barajas**: Las barajas normales también pueden arrastrarse unas sobre otras para intercambiar posición y guardar un `sortOrder` propio, disponible tanto para Master como para jugadores.
+  - **Color Personalizable de Barajas**: Master y jugadores pueden cambiar el color visual de sus barajas desde una paleta plana de esferas integrada en el catálogo, con tonos aplicados directamente a la carpeta y persistidos en Firestore. Al entrar en una baraja, el color seleccionado se refleja de forma contenida en la línea de cabecera y el propietario. Las colecciones base respetan sus reglas de permisos: el Master y los usuarios con edición también pueden ajustar su color.
+  - **Controles Flotantes de Carta Refinados**: El botón de eliminación pasa a una papelera integrada con la estética oscura/dorada de las cartas, y el cambio de tipo/rol queda como control iconográfico compacto con microindicador de rotación.
+  - **Glossy Glare más Realista**: El reflejo hover de las cartas mantiene el brillo circular bajo el ratón, pero con una caída radial más suave, elegante y sutil para parecer una luz blanca real sobre una superficie brillante, sin barras ni ondas marcadas.
+  - **Colecciones Base del Master**: El Master puede crear barajas especiales con distintivo de base de datos para actuar como bibliotecas universales de cartas. Cada colección permite asignar permisos por jugador (`Oculto`, `Ver`, `Editar`) y publicar u ocultar cartas concretas sin eliminar el resto de la colección. Las colecciones base editables incluyen subida directa de cartas desde imagen, y esas cartas aparecen como plantillas mostrando el nombre de su colección de origen.
+  - **Orden Visual de Colecciones Base**: Las colecciones universales se muestran separadas debajo de las barajas normales mediante una línea de sección. Por defecto se ordenan alfabéticamente, pero el Master puede arrastrarlas unas sobre otras para intercambiar su posición y guardar un orden manual persistente.
+  - **Confirmación de Borrado en Cartas Base**: Al eliminar una carta de una colección base, tanto el Master como los jugadores con permiso de edición reciben un aviso personalizado adaptado a la estética de cartas y optimizado para móvil, evitando borrados accidentales de la base de datos compartida.
+  - **Buscador de Biblioteca y Clasificación**: Un buscador lateral recopila exclusivamente las cartas de colecciones base del Master para las que el usuario tenga permisos, permitiendo agregarlas con un solo toque. Cada carta cuenta con un selector de categoría estético tipo badge pill (Acción, Atributo, Trampa, Arma, Armadura, Minion, Habilidad, Estado) y contadores dinámicos que resumen el tipo de baraja creada; al pulsar un contador se filtra la baraja activa por ese tipo.
+  - **Cabeceras y Títulos Premium**: Rediseño visual de las cabeceras del constructor de barajas en `DeckBuilderView.jsx` utilizando tipografía clásica `Cinzel`, degradados de color dorados (`from-[#f0e6d2] to-[#c8aa6e]`), sombras de texto rúnicas y subtítulos descriptivos ampliados con espaciado ancho (tracking) para maximizar la inmersión y coherencia con el diseño general del juego.
+
+**Resumen de cambios v2.5.3:**
+
+- **Remoción de Consumo y Escalado de Atributos**: Implementamos la desactivación automática y total del riel de consumo y de sus ranuras (círculos) en las cartas de Acción cuando se selecciona un atributo (`Cuerpo`, `Hambre` o `Mente`) en `CardBuilder.jsx`. Esto elimina la opción anterior de "Quitar Letrero de Consumo" y oculta dinámicamente toda la configuración de consumo del panel lateral para una interfaz de usuario completamente limpia. Asimismo, reestructuramos el motor de dibujo en el canvas para que las imágenes de atributos se rendericen maximizadas y centradas dentro de la ventana de ilustración de la carta (`rx = 125, ry = 410, rw = 1630, rh = 2100`), aplicando coordenadas de recorte exactas para omitir sus márgenes transparentes originales (`290px` - `300px`) y un algoritmo de escalado proporcional (cover/fill) con máscara de bordes redondeados, garantizando un acabado estético de alta definición y 100% libre de distorsiones o achatamientos.
+
+**Resumen de cambios v2.5.2:**
+
+- **Atributos de Acción e Icono Central Personalizado**: Implementamos la capacidad de renderizar una imagen de atributo (`Mente`, `Cuerpo` o `Hambre`) en el centro de la carta de Acción en [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx). Integramos una barra de selección en el panel lateral para alternar entre el modo `Dado` y los tres atributos. Al seleccionar un atributo, el sistema carga su imagen correspondiente (`Mente.webp`, `Cuerpo.webp` o `Hambre.webp`) y la plasma en el centro. Habilitamos además una opción interactiva ("Quitar Letrero de Consumo") para ocultar por completo la placa base metálica del riel de consumo.
+
+**Resumen de cambios v2.5.1:**
+
+- **Modos de Recursos Personalizados para Cartas de Trampa**: Ampliamos el panel de control de "Recursos" en la barra lateral de [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx) cuando se diseña una carta de tipo Trampa. Añadimos soporte completo para cuatro modos de renderizado interactivos: `Carga + consumo`, `Solo carga`, `Solo consumo` y `Sin recursos` (esta última opción elimina por completo todos los rieles de recursos del canvas). Al seleccionar `Solo consumo`, la carta de Trampa adopta dinámicamente el comportamiento de una carta de Acción, habilitando la botonera de cantidad de ranuras de tiempo (`5`, `6` y `7` slots) y dibujando el riel de consumo centrado y autocalibrado de forma simétrica sobre el canvas.
+
+**Resumen de cambios v2.5.0:**
+
+- **Centrado Adaptativo de Rasgos Solitarios**: Implementamos un algoritmo inteligente de detección de rasgos en [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx) que evalúa fila por fila (pares de rasgos). Si en una fila del formulario lateral el usuario escribe texto para un rasgo (izquierdo o derecho) y deja el rasgo complementario vacío o con el valor por defecto (`-`), el sistema oculta automáticamente la columna vacía del canvas y redibuja el rasgo con contenido centrado horizontalmente en el medio de la carta (con un ancho expandido de `740` px, idéntico al de las cartas que cuentan con un único rasgo como las trampas). Si ambos rasgos tienen texto o ambos están en blanco, se dibuja su maquetación normal en doble columna de forma simétrica.
+
+**Resumen de cambios v2.4.99:**
+
+- **Botonera de Selección de Ranuras de Tiempo**: Rediseñamos por completo el selector de ranuras de tiempo de las cartas de Acción en la barra lateral de [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx) para unificarlo estéticamente con el selector de "Filas / Pares visibles" de los rasgos. Reemplazamos la caja de selección desplegable (`select`) por un grupo de botones horizontales (`5`, `6` y `7`) de dimensiones idénticas (`h-7 w-10` y esquinas cuadradas). Al pulsar sobre cualquiera de las cifras, el estado se actualiza dinámicamente y el botón seleccionado adquiere un resalte dorado atómico (`border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]`), resultando en una interfaz sumamente interactiva, de rápido acceso y mucho más limpia.
+
+**Resumen de cambios v2.4.98:**
+
+- **Compactación del Selector de Ranuras de Tiempo**: Refinamos la interfaz inicial de selección en Acción simplificando la nomenclatura y reduciendo el relleno (comportamiento modificado en v2.4.99 por una botonera de números interactiva).
+
+**Resumen de cambios v2.4.97:**
+
+- **Ranuras de Tiempo Dinámicas para Cartas de Acción**: Añadimos soporte para habilitar hasta 7 ranuras de tiempo (consumo) en las cartas de Acción en [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx). En la barra lateral se integra un nuevo selector dinámico que permite elegir entre 5 (predeterminado), 6 o 7 ranuras. Al aumentar el número de slots, el riel de consumo centrado (`drawActionConsumptionRail`) calcula dinámicamente el ancho físico total requerido por los círculos (`slotsWidth`) y escala horizontalmente su base (`railWidth`), garantizando una diagramación perfectamente equilibrada y simétrica en el canvas sin importar el número de ranuras habilitadas. Al cambiar a cualquier otro tipo de carta (Armas, Armaduras, Habilidades, etc.), el sistema restablece de forma segura el arreglo a 5 slots para evitar regresiones de formato.
+
+**Resumen de cambios v2.4.96:**
+
+- **Alineación Centrada para Texto Narrativo (Lore)**: Añadimos soporte de alineación horizontal centrada en [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx) para los bloques de texto narrativo (`isLore`). El motor de dibujo calcula dinámicamente el ancho natural del texto formateado en cada línea y ajusta el cursor de inicio para centrar simétricamente las oraciones dentro de los márgenes de la carta. Esto proporciona un acabado visual sumamente elegante y clásico para las citas de flavor o texto de trasfondo.
+
+**Resumen de cambios v2.4.95:**
+
+- **Centrado Vertical Automático para Textos Cortos**: Añadimos soporte de alineación vertical equilibrada en [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx) para los cuadros de descripción de las cartas. Cuando el contenido redactado es corto y no ocupa toda la altura física disponible del panel (por ejemplo, en descripciones simples de 1 a 4 líneas), el motor calcula dinámicamente la altura total requerida por todos los elementos (líneas de texto, separadores y espacios de interlineado) y aplica de forma matemática un desfase de inicio vertical para posicionar todo el bloque de contenido exactamente en el centro geométrico del panel. Esto mantiene la total consistencia del tamaño de letra base de la baraja y erradica por completo la sensación visual de vacío inferior o asimetría.
+
+**Resumen de cambios v2.4.94:**
+
+- **Justificación Uniforme y Constante para Texto no Guionizado**: Refinamos y unificamos el motor de justificación tipográfica en [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx). Eliminamos el umbral restrictivo de líneas laxas (`maxAllowedShare`) y el comportamiento estanco post-icono (`isAfterIcon`) que forzaban la caída a alineación izquierda. Ahora, todos los espacios de la línea (incluidos los que siguen a los iconos de palabra clave) absorben la justificación de manera homogénea y equilibrada, distribuyendo el ancho sobrante de forma atómica y garantizando un párrafo totalmente justificado. La conmutación a alineación izquierda se reserva exclusivamente para casos de imposibilidad física extrema (líneas con menos de 2 espacios).
+
+**Resumen de cambios v2.4.93:**
+
+- **Umbral de Líneas Laxas (Loose Lines) en Justificación**: Implementamos un control de calidad tipográfica inicial para conmutar a alineación izquierda cuando el estiramiento superaba 1.5 veces el ancho por defecto (comportamiento modificado en v2.4.94 para garantizar justificación uniforme).
+
+**Resumen de cambios v2.4.92:**
+
+- **Espacio Estanco y Natural tras Iconos en Justificado**: Corregido el ensanchamiento tipográfico excesivo de la justificación justo después de un icono de palabra clave. Modificamos el tokenizador `getStyledWordsOfLine` para marcar los espacios en blanco que siguen inmediatamente a un token de palabra clave (`isAfterIcon`). En el renderizado justificado, estos espacios se mantienen estancos a su ancho natural (`measureStyledWordWidth`), mientras que los espacios estándares entre palabras absorben y distribuyen el resto del ancho excedente de forma atómica. Si se desactivan los iconos (p. ej. en bloques de Lore), todos los espacios se justifican de manera uniforme.
+
+**Resumen de cambios v2.4.91:**
+
+- **Escalado Proporcional Dinámico del Límite de Caracteres**: Implementado el aumento proporcional automático del límite de caracteres (`maxLength`) en el cuadro de texto de descripción en base al espacio físico real ocupado por el panel de texto en el canvas. Al desactivar rasgos o quitar pares de slots (ranuras de cargas/consumos), el panel del canvas se expande verticalmente (hasta un máximo de `1772` píxeles de alto en cartas sin rasgos como Armaduras y Trampas), lo que incrementa lineal y proporcionalmente el límite de escritura permitida (escalando dinámicamente desde `520` hasta un máximo de `1245` caracteres).
+
+**Resumen de cambios v2.4.90:**
+
+- **Optimización de Espaciado en Iconos Inline**: Corregido el problema de espaciado excesivo (huecos grandes) que se generaba alrededor de los iconos de palabras clave integrados en el texto. Sustituimos el margen fijo basado en caracteres de espacio (`spaceCharWidth`) por un margen proporcional exacto de 15% del tamaño de fuente (`fontSize * 0.15`) en ambos lados de la imagen. Esto previene la duplicación de espacios en blanco y mantiene los iconos de elementos, dados y consumos perfectamente integrados y visualmente equilibrados con el texto adyacente.
+
+**Resumen de cambios v2.4.89:**
+
+- **Precisión Tipográfica en Justificación de Texto**: Solventado cualquier posible desfase (offset) de alineación sub-píxel o pixel-level en el canvas de previsualización de cartas bajo texto justificado. Se asociaron y preservaron los estilos originales de segmento (negrita, cursiva, color) en los tokens de espacio (`getStyledWordsOfLine`) y se rediseñó el motor de justificación para medir y calcular dinámicamente el ancho de espacio natural de cada estilo mediante `measureStyledWordWidth`, asegurando una coincidencia matemática exacta de 100% con los límites físicos (`maxWidth`) de la carta independientemente de su formato.
+
+**Resumen de cambios v2.4.88:**
+
+- **Previsualización de Cartas con Botón Central (PC/Escritorio)**: Implementación del acceso rápido mediante el clic del botón central/rueda del ratón (`e.button === 1`) sobre cartas en el tablero (`isBoardMode && isCardItem`), abriendo la previsualización ampliada idéntica a la pulsación larga de móvil. Se bloquea el autoscroll del navegador.
+- **Volteo de Cartas mediante Clic Derecho y Persistencia Inmediata**: Integración del evento `onContextMenu` para permitir voltear cartas rápidamente con clic derecho en PC. Se unificaron y configuraron todas las vías de volteo de cartas (HUD rápido, botón del inspector y clic derecho) para persistir inmediatamente en Firestore de forma atómica y en tiempo real.
+- **Sincronización Multiusuario Segura y Conflict-Free en VTT**: Solucionado el problema crítico de sincronización de Firebase donde múltiples jugadores editando o arrastrando fichas a la vez sobrescribían los cambios de otros. Se implementaron bloqueos transaccionales con reconciliación de cambios de servidor en vivo, prevención generalizada de rebotes (snapbacks) de cualquier campo persistente (`recentLocalWritesRef` con soporte para posición, rotación, volteo y otros parámetros) durante modificaciones rápidas y consecutivas, y resguardo local de borradores de edición de inspector para Master y jugadores.
+
+**Resumen de cambios v2.4.87:**
+
+- **Sincronización Absoluta de Pilas en Previsualización de Contenedores**: Corrección del comportamiento al expulsar cartas apiladas desde el menú inferior de previsualización de un tablero. Al sacar una carta hija, se desvincula de forma limpia de su pila y se recalcula el contador del montón restante. Al sacar la carta superior (padre), se mueve todo el montón (padre e hijos) de forma sincronizada a la derecha, impidiendo conteos erróneos u hojas de cartas que queden huérfanas o "invisibles" dentro del tablero.
+- **Previsualización de Cartas para Todos los Contenedores**: Habilitada la barra inferior de previsualización con imágenes en miniatura para todos los tableros contenedores (`isCardContainer`) que tengan cartas dentro al seleccionarlos o pasar el ratón, permitiendo expulsar cartas de forma individual a la derecha del tablero con un solo clic.
+- **Preservación de Posición al Eliminar Tableros**: Modificado el borrado de tableros contenedores en `deleteItem` para que las cartas de su interior conserven exactamente su posición y rotación originales en el tablero de juego en lugar de agruparse y moverse automáticamente.
+- **Preservación de Pilas de Cartas en Contenedores**: Corrección del comportamiento al mover una pila de cartas a un contenedor del tablero, manteniendo intacta la relación de jerarquía (pilas) e impidiendo que las cartas inferiores salgan desplazadas individualmente, garantizando que el contador general del contenedor compute correctamente el total de la pila.
+- **Sincronización de Pilas en Desacoples**: Se ajustó el desacople de contenedores y los flujos de desapilado rápido (`unstackTopCard`, `unstackAllCards`, `unstackSpecificCard`) para sincronizar de manera consistente el contenedor de destino de las cartas resultantes.
+- **Apilamiento 3D Dinámico de Fichas**: Se implementó una lógica de orden de arrastre virtual que permite que la ficha que se está arrastrando se eleve dinámicamente en 3D (`translateY`) al pasar sobre un montón de fichas estáticas, simulando una torre física en tiempo real. Al soltarse, la ficha se sitúa permanentemente encima del montón y conserva su z-index (`zIndex: 999` en arrastre) y posición exacta de coordenadas de destino.
 
 **Resumen de cambios v2.4.86:**
 
@@ -2151,7 +2253,7 @@ Guía rápida: ver `docs/Minimapa.md`.
 - El marcador `Escalera` usa un diseño de planta con peldaños, marco y sombreado de desnivel, ocupando todo su recuadro; las zonas de mapa se renderizan siempre por debajo de muros y tokens.
 - La sección `Tablero` permite añadir cartas a la mesa o a la mano del token activo; en este modo el HUD de combate sustituye acciones, ataques y objetos por una mano horizontal de cartas entre retrato y fin de turno, con volteo y salida rápida a mesa.
 - La mano del `Tablero` queda asociada al último token activo y solo se oculta al pulsar en vacío, permitiendo seleccionar o arrastrar cartas de la mesa sin perder el destino de mano.
-- En móvil, mantener pulsada una carta del `Tablero` o de la mano abre una previsualización ampliada; si el dedo se desplaza, se cancela la lectura y continúa el arrastre normal.
+- En móvil, mantener pulsada una carta del `Tablero` o de la mano abre una previsualización ampliada; en PC/escritorio, hacer clic con el botón central del ratón/rueda sobre una carta del tablero de cartas abre la misma previsualización ampliada de forma instantánea, previniendo el cursor de autoscroll por defecto del navegador. Si el dedo se desplaza en móvil, se cancela la lectura y continúa el arrastre normal.
 - El tirador amarillo de redimensionado del canvas usa ahora un área táctil ampliada en móvil y bloquea los gestos nativos mientras se arrastra, manteniendo el mismo aspecto visual.
 - La barra de iniciativa/velocidad del canvas se convierte en un carrusel compacto cuando no caben todos los tokens: oculta la barra de scroll, muestra un contador `+N` y permite deslizar con ratón o dedo.
 - Las cartas del `Tablero` pueden apilarse arrastrando una sobre otra; la carta arrastrada queda arriba, la pila sustituye el nombre inferior por miniaturas de las cartas ocultas y el inspector permite sacar una carta concreta.
@@ -2186,4 +2288,34 @@ Guía rápida: ver `docs/Minimapa.md`.
 - **Alternado de Color Inteligente**: La pulsación repetida de un color sobre texto ya coloreado retira el formato de color de forma inmediata, facilitando la edición rápida de descripciones.
 - **Historial de Deshacer/Rehacer**: Implementación nativa de la pila de historial en textareas para `Ctrl + Z` y `Ctrl + Y`, con agrupación inteligente por tiempo para fusionar pulsaciones rápidas consecutivas en acciones por palabras/frases en lugar de letra a letra.
 - **Reinicio con Dado Limpio**: El botón "Restablecer" inicializa la carta de Arma con el elemento `Ninguno` por defecto, permitiendo previsualizar de inmediato un dado limpio de `1d6` en el canvas en lugar del elemento Fuego.
+
+## Novedades: Reordenación de Biblioteca por Arrastrar y Soltar (v2.4.47)
+
+- **Arrastrar para ordenar**: Habilitado el soporte de arrastrar y soltar (Drag and Drop) para ordenar cómodamente las cartas en la "Biblioteca de Cartas" y los tokens en la "Biblioteca de Tokens" dentro de la barra lateral.
+- **Interpolación de tiempo inteligente**: El orden se guarda de forma persistente en Firebase recalculando dinámicamente marcas de tiempo equilibradas entre elementos adyacentes, sin necesidad de alterar la base de datos ni añadir colecciones complejas.
+- **UX Premium con Animaciones**: 
+  - Al arrastrar un elemento, este reduce su opacidad al 35% y muestra un contorno punteado (estilo "hueco vacío").
+  - Al pasar sobre un posible destino, la tarjeta destino escala un 105% con un marco dorado brillante y una sombra difusa que indica de forma espectacular que la ranura está lista para recibir el elemento.
+- **Seguridad Máster**: Los controles de arrastre se activan únicamente para el Master de la partida (`!isPlayerView`), asegurando que solo el director de juego pueda manipular y organizar los catálogos en tiempo real.
+
+## Novedades: Grid de Cartas Responsivo en la Colección (v2.4.48)
+
+- **Distribución de rejilla fluida**: Se actualizó el layout de la baraja activa para estructurarse en una cuadrícula (CSS Grid) responsiva en lugar de una columna vertical estática o una barra horizontal.
+- **Responsividad adaptada al espacio**:
+  - **Escritorio y pantallas ultra-anchas**: Las cartas se organizan de 3 en 3 (`xl:grid-cols-3`) cuando hay suficiente espacio útil en la pantalla.
+  - **Tabletas y laptops**: Se adaptan automáticamente de 2 en 2 para garantizar que las cartas mantengan su proporción y tamaño óptimo sin comprimirse ni solaparse.
+  - **Dispositivos móviles**: Se muestran de 1 en 1 en una sola columna vertical ergonómica, ideal para navegación táctil.
+- **Preservación de proporciones**: Se limitó el ancho máximo de las tarjetas a `240px` y se centraron en su celda (`max-w-[240px] mx-auto`), asegurando que la estética premium y su relación de aspecto original se mantengan intactas en cualquier resolución.
+
+## Novedades: Arrastre 2D Dinámico y Ajustes de Controles en Cartas (v2.4.49)
+
+- **Arrastre y reordenación 2D fluida**: Se sustituyó el drag nativo estático por un sistema de arrastre táctil premium basado en Framer Motion (`drag`, `layout`). Las cartas vecinas se desplazan dinámicamente y con físicas suaves para abrir hueco mientras arrastras, reordenando la baraja en tiempo real con latencia cero en la interfaz antes de persistir el orden en Firestore.
+- **Controles flotantes simétricos**:
+  - **Esquina superior izquierda**: Se reubicó el selector/cambio de rol y tipo de carta, mostrándolo como un botón circular compacto que cambia de color según el tipo actual (Acción, Atributo, Trampa, etc.) y evita tener que usar la barra de botones inferior.
+  - **Esquina superior derecha**: Se reemplazó el icono y estilo de la papelera clásica por un botón de cierre limpio (`FiX`) del mismo tamaño exacto y diseño circular translúcido, unificándolo con la línea estética general del resto de la aplicación.
+  - **Limpieza del Canvas**: Se eliminaron las barras de herramientas y etiquetas inferiores de la carta, permitiendo que la ilustración base y los textos ocupen todo el espacio visible sin recuadros redundantes.
+- **Desactivación inteligente de Tilt**: El efecto de rotación 3D se deshabilita temporalmente sobre la tarjeta que se está arrastrando en ese instante, previniendo distorsiones angulares mientras se desplaza bajo el cursor.
+
+
+
 

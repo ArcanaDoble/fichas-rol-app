@@ -1,6 +1,25 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { ChevronLeft, Download, Palette, RotateCcw, Tag, Type } from 'lucide-react';
+import {
+  ChevronLeft,
+  Database,
+  Download,
+  Loader2,
+  Palette,
+  RotateCcw,
+  Tag,
+  Type,
+  UploadCloud
+} from 'lucide-react';
+import {
+  addDoc,
+  collection,
+  getDocs,
+  updateDoc,
+  doc
+} from 'firebase/firestore';
+import { db } from '../firebase';
+import { uploadDataUrl } from '../utils/storage';
 import HexColorInput from './HexColorInput';
 
 export const CARD_BACKGROUNDS = [
@@ -27,6 +46,7 @@ export const CARD_BACKGROUNDS = [
 
 const CANVAS_WIDTH = 1888;
 const CANVAS_HEIGHT = 2624;
+const MOBILE_PREVIEW_RENDER_SCALE = 0.25;
 const DEFAULT_CARD_NAME = 'NOMBRE DE CARTA';
 const DEFAULT_DESCRIPTION = '';
 const DEFAULT_FLAVOR_TEXT = '';
@@ -40,7 +60,7 @@ const CARD_TYPES = [
   { id: 'armor', label: 'Armadura', maxTraits: 8, layout: 'armor' },
   { id: 'trap', label: 'Trampa', maxTraits: 1, layout: 'trap' },
   { id: 'action', label: 'Acción', maxTraits: 0, layout: 'none' },
-  { id: 'skill', label: 'Habilidad', maxTraits: 6, layout: 'weapon' },
+  { id: 'skill', label: 'Minion', maxTraits: 4, layout: 'weapon' },
   { id: 'status', label: 'Estado', maxTraits: 1, layout: 'trap' },
 ];
 
@@ -58,6 +78,12 @@ export const ELEMENT_TYPES = [
 ];
 
 const DEFAULT_TRAITS = ['-', '-', '-', '-', '-', '-', '-', '-'];
+const MINION_ATTRIBUTE_TYPES = ['Hambre', 'Cuerpo', 'Mente'];
+const DEFAULT_MINION_ATTRIBUTES = {
+  Hambre: 1,
+  Cuerpo: 1,
+  Mente: 1,
+};
 
 const CHARGE_TYPES = [
   { id: 'Hambre', label: 'Hambre', src: '/interfaz/cargas/Hambre.webp' },
@@ -79,7 +105,11 @@ const DEFAULT_CHARGE_SLOTS = ['Hambre', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPT
 const DEFAULT_CONSUMPTION_SLOTS = ['Tiempo', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
 const RESOURCE_MODE_BOTH = 'charge-consumption';
 const RESOURCE_MODE_CHARGE_ONLY = 'charge-only';
+const RESOURCE_MODE_CONSUMPTION_ONLY = 'consumption-only';
+const RESOURCE_MODE_NONE = 'none';
 const RESOURCE_CARD_TYPES = new Set(['weapon', 'armor', 'trap', 'skill']);
+const COLLECTION_ACCESS_EDIT = 'edit';
+const COLLECTION_ACCESS_HIDDEN = 'hidden';
 
 export const WEAPON_TYPES = [
   'Cuerpo a cuerpo',
@@ -105,6 +135,15 @@ const WEAPON_TYPE_ALIASES = [
 const getWeaponTypeIconSrc = (weaponType) => (
   `${process.env.PUBLIC_URL || ''}/tipo/${encodeURIComponent(weaponType)}.webp`
 );
+
+const getPreviewRenderScale = () => {
+  if (typeof window === 'undefined') return 1;
+  const isCoarsePointer = window.matchMedia?.('(pointer: coarse)').matches;
+  const isNarrowViewport = window.matchMedia?.('(max-width: 820px)').matches;
+  const deviceMemory = Number(window.navigator?.deviceMemory || 0);
+  const isLowMemoryDevice = deviceMemory > 0 && deviceMemory <= 4;
+  return isCoarsePointer || isNarrowViewport || isLowMemoryDevice ? MOBILE_PREVIEW_RENDER_SCALE : 1;
+};
 
 const drawDiceIcon = (context, x, y, size, imgElement, qty, showQty = true) => {
   if (!imgElement) return;
@@ -298,10 +337,12 @@ const drawActionConsumptionRail = (context, consumptionSlots, resourceImages) =>
   const height = 156;
   const slotSize = 122;
   const circleSize = 108; // Rediseñado a 108px para separación y proporción estéticas de los círculos
-  const railWidth = 780;
-  const railX = (CANVAS_WIDTH - railWidth) / 2; // Centered
   const slotGap = 8;
-  const slotsWidth = slotSize * 5 + slotGap * 4;
+  const slotCount = consumptionSlots.length;
+  const slotsWidth = slotSize * slotCount + slotGap * (slotCount - 1);
+  const railPadding = 138; // Margen exacto para las esquinas biseladas del riel centrado
+  const railWidth = Math.max(780, slotsWidth + railPadding);
+  const railX = (CANVAS_WIDTH - railWidth) / 2; // Centered
   const startX = railX + (railWidth - slotsWidth) / 2 + slotSize / 2;
 
   drawRailBase(context, railX, y, railWidth, height, 'center');
@@ -739,9 +780,13 @@ const getDescriptionLayouts = (typeConfig, showTraits, singleTextStyle = 'narrat
 
   let yOffset = 0;
   if (showTraits) {
-    if (typeConfig.id === 'weapon' || typeConfig.id === 'skill') {
+    if (typeConfig.id === 'weapon') {
       const activeRows = Math.min(visibleTraitRows, 3);
       const hiddenRows = 3 - activeRows;
+      yOffset = hiddenRows * 240;
+    } else if (typeConfig.id === 'skill') {
+      const activeRows = Math.min(visibleTraitRows, 2);
+      const hiddenRows = 2 - activeRows;
       yOffset = hiddenRows * 240;
     } else if (typeConfig.id === 'armor') {
       const activeRows = Math.min(visibleTraitRows, 4);
@@ -762,8 +807,8 @@ const getDescriptionLayouts = (typeConfig, showTraits, singleTextStyle = 'narrat
       y = 508;
       height = 1772;
     } else if (typeConfig.id === 'skill') {
-      y = 508;
-      height = 1772;
+      y = 1047;
+      height = 1233;
     }
   }
 
@@ -957,18 +1002,21 @@ const getActiveFontSize = (context) => {
   return match ? parseInt(match[1], 10) : 60;
 };
 
-const measureTextWithIcons = (context, text) => {
+const measureTextWithIcons = (context, text, ignoreIcons = false) => {
   const baseWidth = context.measureText(text).width;
-  if (!text) return baseWidth;
+  if (!text || ignoreIcons) return baseWidth;
   KEYWORD_REGEX.lastIndex = 0;
   const matches = text.match(KEYWORD_REGEX);
   if (!matches) return baseWidth;
   
   const fontSize = getActiveFontSize(context);
-  const spaceCharWidth = context.measureText(' ').width;
-  const extraWidthPerMatch = fontSize * 1.1 + spaceCharWidth; // 0.9 * size for icon + 0.2 * size for spacing + 1 keyboard space width
+  const extraWidthPerMatch = fontSize * 1.20; // 0.9 * size for icon + 0.15 * size * 2 for padding
   return baseWidth + matches.length * extraWidthPerMatch;
 };
+
+const DESCRIPTION_SEPARATOR_REGEX = /^\s*-{3,}\s*$/;
+const LORE_OPEN_TAG = '[lore]';
+const LORE_CLOSE_TAG = '[/lore]';
 
 const parseStyles = (text) => {
   const segments = [];
@@ -1032,6 +1080,43 @@ const parseStyles = (text) => {
   return segments;
 };
 
+const splitLoreSegments = (text, initialIsLore = false) => {
+  const segments = [];
+  let cursor = 0;
+  let isLore = initialIsLore;
+
+  while (cursor < text.length) {
+    const nextOpen = text.indexOf(LORE_OPEN_TAG, cursor);
+    const nextClose = text.indexOf(LORE_CLOSE_TAG, cursor);
+    let nextTag = -1;
+    let nextIsOpen = false;
+
+    if (nextOpen !== -1 && (nextClose === -1 || nextOpen < nextClose)) {
+      nextTag = nextOpen;
+      nextIsOpen = true;
+    } else if (nextClose !== -1) {
+      nextTag = nextClose;
+    }
+
+    if (nextTag === -1) {
+      segments.push({ text: text.slice(cursor), isLore });
+      break;
+    }
+
+    if (nextTag > cursor) {
+      segments.push({ text: text.slice(cursor, nextTag), isLore });
+    }
+
+    cursor = nextTag + (nextIsOpen ? LORE_OPEN_TAG.length : LORE_CLOSE_TAG.length);
+    isLore = nextIsOpen;
+  }
+
+  return {
+    segments: segments.filter((segment) => segment.text.length > 0),
+    isLore,
+  };
+};
+
 const getFontInfoFromContext = (context) => {
   const fontStr = context.font;
   const italic = fontStr.includes('italic');
@@ -1075,14 +1160,14 @@ const applySegmentStyle = (context, seg, layoutFontInfo) => {
   }
 };
 
-const measureStyledText = (context, text, layoutFontInfo = {}) => {
+const measureStyledText = (context, text, layoutFontInfo = {}, ignoreIcons = false) => {
   const segments = parseStyles(text);
   let totalWidth = 0;
   
   context.save();
   segments.forEach((seg) => {
     applySegmentStyle(context, seg, layoutFontInfo);
-    totalWidth += measureTextWithIcons(context, seg.text);
+    totalWidth += measureTextWithIcons(context, seg.text, ignoreIcons);
   });
   context.restore();
   
@@ -1103,7 +1188,13 @@ const getStyledWordsOfLine = (line) => {
     parts.forEach((part) => {
       if (part === '') return;
       if (part.trim() === '') {
-        words.push({ text: part, isSpace: true });
+        words.push({
+          text: part,
+          bold: seg.bold,
+          italic: seg.italic,
+          color: seg.color,
+          isSpace: true,
+        });
       } else {
         words.push({
           text: part,
@@ -1119,7 +1210,7 @@ const getStyledWordsOfLine = (line) => {
   return words;
 };
 
-const drawSingleStyledWord = (context, word, x, y, resourceImages = {}) => {
+const drawSingleStyledWord = (context, word, x, y, resourceImages = {}, ignoreIcons = false) => {
   const fontInfo = getFontInfoFromContext(context);
   
   context.save();
@@ -1127,40 +1218,42 @@ const drawSingleStyledWord = (context, word, x, y, resourceImages = {}) => {
   
   const fontSize = getActiveFontSize(context);
   const iconSize = fontSize * 0.9;
-  const iconGap = fontSize * 0.2;
-  const spaceCharWidth = context.measureText(' ').width;
+  const iconPadding = fontSize * 0.15;
   
-  const kwSegments = parseLineSegments(word.text);
-  let cursorX = x;
-  
-  kwSegments.forEach((seg) => {
-    context.fillText(seg.text, cursorX, y);
-    const textWidth = context.measureText(seg.text).width;
-    cursorX += textWidth;
+  if (ignoreIcons) {
+    context.fillText(word.text, x, y);
+  } else {
+    const kwSegments = parseLineSegments(word.text);
+    let cursorX = x;
     
-    if (seg.isKeyword) {
-      const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
-      const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
-      const shiftX = spaceCharWidth;
+    kwSegments.forEach((seg) => {
+      context.fillText(seg.text, cursorX, y);
+      const textWidth = context.measureText(seg.text).width;
+      cursorX += textWidth;
       
-      if (iconImg) {
-        const iconY = y + (fontSize - iconSize) / 2;
-        context.drawImage(iconImg, cursorX + shiftX, iconY, iconSize, iconSize);
+      if (seg.isKeyword) {
+        const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
+        const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
+        
+        if (iconImg) {
+          const iconY = y + (fontSize - iconSize) / 2;
+          context.drawImage(iconImg, cursorX + iconPadding, iconY, iconSize, iconSize);
+        }
+        cursorX += iconSize + iconPadding * 2;
       }
-      cursorX += iconSize + iconGap + shiftX;
-    }
-  });
+    });
+  }
   
   context.restore();
 };
 
-const measureStyledWordWidth = (context, word) => {
+const measureStyledWordWidth = (context, word, ignoreIcons = false) => {
   const fontInfo = getFontInfoFromContext(context);
   let wordWidth = 0;
   
   context.save();
   applySegmentStyle(context, word, fontInfo);
-  wordWidth = measureTextWithIcons(context, word.text);
+  wordWidth = measureTextWithIcons(context, word.text, ignoreIcons);
   context.restore();
   
   return wordWidth;
@@ -1186,14 +1279,57 @@ const tokenizeParagraph = (paragraph) => {
   return preserved.split(/\s+/).map(w => w.replace(/cuerpo_a_cuerpo/gi, 'cuerpo a cuerpo'));
 };
 
-const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, resourceImages = {}) => {
+const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, resourceImages = {}, ignoreIcons = false) => {
+  if (justify === 'center') {
+    const fontInfo = getFontInfoFromContext(context);
+    const styleSegments = parseStyles(line);
+    
+    if (styleSegments.length === 0) return;
+    
+    const naturalWidth = measureStyledText(context, line, fontInfo, ignoreIcons);
+    let cursorX = x + (maxWidth - naturalWidth) / 2;
+    
+    context.save();
+    styleSegments.forEach((styleSeg) => {
+      applySegmentStyle(context, styleSeg, fontInfo);
+      
+      const fontSize = getActiveFontSize(context);
+      const iconSize = fontSize * 0.9;
+      const iconPadding = fontSize * 0.15;
+      
+      if (ignoreIcons) {
+        context.fillText(styleSeg.text, cursorX, y);
+        cursorX += context.measureText(styleSeg.text).width;
+      } else {
+        const kwSegments = parseLineSegments(styleSeg.text);
+        kwSegments.forEach((seg) => {
+          context.fillText(seg.text, cursorX, y);
+          const textWidth = context.measureText(seg.text).width;
+          cursorX += textWidth;
+          
+          if (seg.isKeyword) {
+            const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
+            const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
+            
+            if (iconImg) {
+              const iconY = y + (fontSize - iconSize) / 2;
+              context.drawImage(iconImg, cursorX + iconPadding, iconY, iconSize, iconSize);
+            }
+            cursorX += iconSize + iconPadding * 2;
+          }
+        });
+      }
+    });
+    context.restore();
+    return;
+  }
+
   if (!justify) {
     const fontInfo = getFontInfoFromContext(context);
     const styleSegments = parseStyles(line);
     
     if (styleSegments.length === 0) return;
     
-    const spaceCharWidth = context.measureText(' ').width;
     let cursorX = x;
     
     context.save();
@@ -1202,47 +1338,56 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
       
       const fontSize = getActiveFontSize(context);
       const iconSize = fontSize * 0.9;
-      const iconGap = fontSize * 0.2;
+      const iconPadding = fontSize * 0.15;
       
-      const kwSegments = parseLineSegments(styleSeg.text);
-      kwSegments.forEach((seg) => {
-        context.fillText(seg.text, cursorX, y);
-        const textWidth = context.measureText(seg.text).width;
-        cursorX += textWidth;
-        
-        if (seg.isKeyword) {
-          const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
-          const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
-          const shiftX = spaceCharWidth;
+      if (ignoreIcons) {
+        context.fillText(styleSeg.text, cursorX, y);
+        cursorX += context.measureText(styleSeg.text).width;
+      } else {
+        const kwSegments = parseLineSegments(styleSeg.text);
+        kwSegments.forEach((seg) => {
+          context.fillText(seg.text, cursorX, y);
+          const textWidth = context.measureText(seg.text).width;
+          cursorX += textWidth;
           
-          if (iconImg) {
-            const iconY = y + (fontSize - iconSize) / 2;
-            context.drawImage(iconImg, cursorX + shiftX, iconY, iconSize, iconSize);
+          if (seg.isKeyword) {
+            const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
+            const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
+            
+            if (iconImg) {
+              const iconY = y + (fontSize - iconSize) / 2;
+              context.drawImage(iconImg, cursorX + iconPadding, iconY, iconSize, iconSize);
+            }
+            cursorX += iconSize + iconPadding * 2;
           }
-          cursorX += iconSize + iconGap + shiftX;
-        }
-      });
+        });
+      }
     });
     context.restore();
   } else {
     const styledWords = getStyledWordsOfLine(line);
-    const actualWords = styledWords.filter(w => !w.isSpace);
+    const spaceTokensCount = styledWords.filter(w => w.isSpace).length;
     
-    if (actualWords.length < 2) {
-      drawTextLineWithIcons(context, line, x, y, maxWidth, false, resourceImages);
+    const fontInfo = getFontInfoFromContext(context);
+    const naturalWidth = measureStyledText(context, line, fontInfo, ignoreIcons);
+    const extraWidth = maxWidth - naturalWidth;
+    
+    if (spaceTokensCount < 2 || extraWidth <= 0) {
+      drawTextLineWithIcons(context, line, x, y, maxWidth, false, resourceImages, ignoreIcons);
       return;
     }
     
-    const wordsWidth = actualWords.reduce((total, word) => {
-      return total + measureStyledWordWidth(context, word);
-    }, 0);
-    
-    const spaceWidth = (maxWidth - wordsWidth) / (actualWords.length - 1);
+    const extraSpaceShare = extraWidth / spaceTokensCount;
     let cursorX = x;
     
-    actualWords.forEach((word, index) => {
-      drawSingleStyledWord(context, word, cursorX, y, resourceImages);
-      cursorX += measureStyledWordWidth(context, word) + (index < actualWords.length - 1 ? spaceWidth : 0);
+    styledWords.forEach((word) => {
+      if (word.isSpace) {
+        const spaceNaturalWidth = measureStyledWordWidth(context, word, ignoreIcons);
+        cursorX += spaceNaturalWidth + extraSpaceShare;
+      } else {
+        drawSingleStyledWord(context, word, cursorX, y, resourceImages, ignoreIcons);
+        cursorX += measureStyledWordWidth(context, word, ignoreIcons);
+      }
     });
   }
 };
@@ -1303,7 +1448,7 @@ const serializeTokens = (tokens) => {
   return result;
 };
 
-const wrapDescriptionText = (context, text, maxWidth, hyphenate = false) => {
+const wrapDescriptionText = (context, text, maxWidth, hyphenate = false, isLore = false) => {
   const paragraphs = text
     .trim()
     .split(/\n+/)
@@ -1336,7 +1481,7 @@ const wrapDescriptionText = (context, text, maxWidth, hyphenate = false) => {
             bold: seg.bold,
             italic: seg.italic,
             color: seg.color,
-          });
+          }, isLore);
 
           if (wordWidth <= maxWidth) {
             tokens.push({
@@ -1355,7 +1500,7 @@ const wrapDescriptionText = (context, text, maxWidth, hyphenate = false) => {
                 bold: seg.bold,
                 italic: seg.italic,
                 color: seg.color,
-              });
+              }, isLore);
               if (nextWidth <= maxWidth || !chunk) {
                 chunk = nextChunk;
               } else {
@@ -1469,23 +1614,85 @@ const wrapDescriptionText = (context, text, maxWidth, hyphenate = false) => {
   return lines;
 };
 
+const getDescriptionFlowItems = (context, text, maxWidth, lineHeight, hyphenate = false) => {
+  const lines = text.trim().split(/\n/);
+  const items = [];
+  let paragraph = '';
+  let paragraphIsLore = false;
+  let activeLore = false;
+
+  const flushParagraph = () => {
+    const cleanParagraph = paragraph.trim();
+    if (!cleanParagraph) {
+      paragraph = '';
+      return;
+    }
+
+    const wrappedLines = wrapDescriptionText(context, cleanParagraph, maxWidth, hyphenate, paragraphIsLore);
+    wrappedLines.forEach((line, lineIdx) => {
+      items.push({
+        type: 'text',
+        line,
+        isLore: paragraphIsLore,
+        isLastLineOfParagraph: lineIdx === wrappedLines.length - 1,
+        height: paragraphIsLore ? Math.round(lineHeight * 1.02) : lineHeight,
+      });
+    });
+    paragraph = '';
+  };
+
+  lines.forEach((rawLine) => {
+    if (DESCRIPTION_SEPARATOR_REGEX.test(rawLine)) {
+      flushParagraph();
+      items.push({ type: 'separator', height: Math.round(lineHeight * 0.74) });
+      return;
+    }
+
+    const loreResult = splitLoreSegments(rawLine, activeLore);
+    activeLore = loreResult.isLore;
+    const { segments } = loreResult;
+    if (segments.length === 0) {
+      flushParagraph();
+      items.push({ type: 'gap', height: Math.round(lineHeight * 0.55) });
+      return;
+    }
+
+    segments.forEach((segment) => {
+      const cleanText = segment.text.trim();
+      if (!cleanText) return;
+
+      if (paragraph && paragraphIsLore !== segment.isLore) {
+        flushParagraph();
+      }
+
+      paragraphIsLore = segment.isLore;
+      paragraph = paragraph ? `${paragraph} ${cleanText}` : cleanText;
+    });
+  });
+
+  flushParagraph();
+  while (items.length > 0 && (items[0].type === 'gap' || items[0].type === 'separator')) items.shift();
+  while (items.length > 0 && (items[items.length - 1].type === 'gap' || items[items.length - 1].type === 'separator')) items.pop();
+  return items;
+};
+
 const fitDescriptionFont = (context, text, layout, hyphenate = false) => {
   let size = layout.fontSize;
   let lineHeight = layout.lineHeight;
-  let lines = [];
+  let items = [];
   const style = layout.italic ? 'italic ' : '';
   const family = layout.family || "Georgia, serif";
 
   while (size > 48) {
     context.font = `${style}${layout.weight} ${size}px ${family}`;
-    lines = wrapDescriptionText(context, text, layout.width, hyphenate);
-    const textHeight = lines.length * lineHeight;
+    items = getDescriptionFlowItems(context, text, layout.width, lineHeight, hyphenate);
+    const textHeight = items.reduce((total, item) => total + item.height, 0);
     if (textHeight <= layout.height) break;
     size -= 1;
     lineHeight = Math.round(size * 1.22);
   }
 
-  return { size, lineHeight, lines };
+  return { size, lineHeight, items };
 };
 
 const drawPreviewText = (context, text, layout) => {
@@ -1594,6 +1801,118 @@ const drawJustifiedLine = (context, line, x, y, maxWidth) => {
   });
 };
 
+const drawDescriptionSeparator = (context, layout, y, lineHeight) => {
+  const centerY = y + lineHeight * 0.36;
+  const inset = Math.min(150, layout.width * 0.18);
+  const gradient = context.createLinearGradient(layout.x + inset, centerY, layout.x + layout.width - inset, centerY);
+  gradient.addColorStop(0, 'rgba(255,255,255,0)');
+  gradient.addColorStop(0.2, 'rgba(255,255,255,0.28)');
+  gradient.addColorStop(0.5, 'rgba(200,170,110,0.34)');
+  gradient.addColorStop(0.8, 'rgba(255,255,255,0.28)');
+  gradient.addColorStop(1, 'rgba(255,255,255,0)');
+
+  context.save();
+  context.shadowColor = 'rgba(255,255,255,0.24)';
+  context.shadowBlur = 8;
+  context.lineWidth = 2;
+  context.strokeStyle = gradient;
+  context.beginPath();
+  context.moveTo(layout.x + inset, centerY);
+  context.lineTo(layout.x + layout.width - inset, centerY);
+  context.stroke();
+
+  context.shadowBlur = 0;
+  context.fillStyle = 'rgba(255,255,255,0.42)';
+  const dotRadius = Math.max(3, lineHeight * 0.045);
+  [-1, 0, 1].forEach((offset) => {
+    context.beginPath();
+    context.arc(layout.x + layout.width / 2 + offset * dotRadius * 4.2, centerY, dotRadius, 0, Math.PI * 2);
+    context.fill();
+  });
+  context.restore();
+};
+
+const drawMinionAttributes = (context, attributes, resourceImages = {}) => {
+  const slots = [
+    { x: 225, y: 807, width: 430, height: 175 },
+    { x: 729, y: 807, width: 430, height: 175 },
+    { x: 1233, y: 807, width: 430, height: 175 },
+  ];
+
+  MINION_ATTRIBUTE_TYPES.forEach((attribute, index) => {
+    const slot = slots[index];
+    const { x, y, width, height } = slot;
+    const bevel = 58;
+    const icon = resourceImages[`attribute:${attribute}`] || resourceImages[`keyword:${attribute}`];
+    const iconSize = 70;
+    const value = Number.isFinite(Number(attributes?.[attribute])) ? Number(attributes[attribute]) : 0;
+
+    context.save();
+    const traceAttributePath = (grow = 0) => {
+      const gx = x - grow;
+      const gy = y - grow * 0.65;
+      const gw = width + grow * 2;
+      const gh = height + grow * 1.3;
+      const gb = bevel + grow * 0.4;
+      context.beginPath();
+      context.moveTo(gx + gb, gy);
+      context.lineTo(gx + gw - gb, gy);
+      context.lineTo(gx + gw, gy + gh / 2);
+      context.lineTo(gx + gw - gb, gy + gh);
+      context.lineTo(gx + gb, gy + gh);
+      context.lineTo(gx, gy + gh / 2);
+      context.closePath();
+    };
+
+    traceAttributePath();
+    const fill = context.createLinearGradient(x, y, x, y + height);
+    fill.addColorStop(0, 'rgba(0,0,0,0.88)');
+    fill.addColorStop(0.52, 'rgba(0,0,0,0.98)');
+    fill.addColorStop(1, 'rgba(0,0,0,0.84)');
+    context.fillStyle = fill;
+    context.shadowColor = 'rgba(0,0,0,0.85)';
+    context.shadowBlur = 16;
+    context.fill();
+
+    traceAttributePath(2);
+    context.shadowColor = 'rgba(255,255,255,0.46)';
+    context.shadowBlur = 24;
+    context.lineWidth = 4;
+    context.strokeStyle = 'rgba(255,255,255,0.28)';
+    context.stroke();
+
+    traceAttributePath();
+    context.shadowBlur = 0;
+    context.lineWidth = 2.5;
+    context.strokeStyle = 'rgba(255,255,255,0.58)';
+    context.stroke();
+
+    if (icon) {
+      context.save();
+      context.shadowColor = 'rgba(255,255,255,0.24)';
+      context.shadowBlur = 10;
+      context.drawImage(icon, x + 82, y + height / 2 - iconSize / 2, iconSize, iconSize);
+      context.restore();
+    }
+
+    context.fillStyle = 'rgba(255,255,255,0.96)';
+    context.shadowColor = 'rgba(0,0,0,0.88)';
+    context.shadowBlur = 8;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    if ('letterSpacing' in context) context.letterSpacing = '0px';
+    context.font = '900 76px Cinzel, Georgia, serif';
+    context.fillText(String(value), x + width / 2 + 15, y + height / 2 - 10);
+
+    context.fillStyle = 'rgba(200,170,110,0.92)';
+    context.font = '900 24px Lato, Arial, sans-serif';
+    if ('letterSpacing' in context) context.letterSpacing = '2px';
+    context.fillText(attribute.toUpperCase(), x + width / 2 + 16, y + height / 2 + 48);
+
+    context.restore();
+  });
+};
+
 const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate = false, resourceImages = {}) => {
   const hasUserText = textValue.trim().length > 0;
   const text = hasUserText ? textValue.trim() : previewText;
@@ -1624,17 +1943,39 @@ const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate =
   const family = dynamicLayout.family || "Georgia, serif";
   context.font = `${style}${dynamicLayout.weight || '400'} ${fitted.size}px ${family}`;
 
+  const totalTextHeight = fitted.items.reduce((total, item) => total + item.height, 0);
   let y = dynamicLayout.y;
-  fitted.lines.forEach((line, index) => {
-    if (y + fitted.lineHeight > dynamicLayout.y + dynamicLayout.height) return;
-    if (line) {
-      if (shouldJustifyLine(fitted.lines, index)) {
-        drawTextLineWithIcons(context, line, dynamicLayout.x, y, dynamicLayout.width, true, resourceImages);
+  if (totalTextHeight < dynamicLayout.height) {
+    y += Math.round((dynamicLayout.height - totalTextHeight) / 2);
+  }
+
+  fitted.items.forEach((item, index) => {
+    if (y + item.height > dynamicLayout.y + dynamicLayout.height) return;
+
+    if (item.type === 'separator') {
+      drawDescriptionSeparator(context, dynamicLayout, y, fitted.lineHeight);
+    } else if (item.type === 'text' && item.line) {
+      const shouldJustify = Boolean(
+        !item.isLastLineOfParagraph &&
+        !item.isLore &&
+        item.line.includes(' ')
+      );
+
+      if (item.isLore) {
+        context.fillStyle = 'rgba(255,255,255,0.84)';
+        context.font = `italic ${dynamicLayout.weight || '400'} ${Math.max(48, Math.round(fitted.size * 0.94))}px ${family}`;
+        drawTextLineWithIcons(context, item.line, dynamicLayout.x, y, dynamicLayout.width, 'center', resourceImages, item.isLore);
       } else {
-        drawTextLineWithIcons(context, line, dynamicLayout.x, y, dynamicLayout.width, false, resourceImages);
+        context.fillStyle = 'rgba(255,255,255,0.96)';
+        context.font = `${style}${dynamicLayout.weight || '400'} ${fitted.size}px ${family}`;
+        if (shouldJustify) {
+          drawTextLineWithIcons(context, item.line, dynamicLayout.x, y, dynamicLayout.width, true, resourceImages, item.isLore);
+        } else {
+          drawTextLineWithIcons(context, item.line, dynamicLayout.x, y, dynamicLayout.width, false, resourceImages, item.isLore);
+        }
       }
     }
-    y += fitted.lineHeight;
+    y += item.height;
   });
 
   context.restore();
@@ -1677,8 +2018,20 @@ const drawCardCanvas = (
   customColor = '#c8aa6e',
   singleTextStyle = 'narrative',
   visibleTraitRows = 3,
+  minionAttributes = DEFAULT_MINION_ATTRIBUTES,
+  renderScale = 1,
+  actionCenterMode = 'dado',
+  actionAttributeImg = null,
 ) => {
+  const targetWidth = Math.max(1, Math.round(CANVAS_WIDTH * renderScale));
+  const targetHeight = Math.max(1, Math.round(CANVAS_HEIGHT * renderScale));
+  if (canvas.width !== targetWidth) canvas.width = targetWidth;
+  if (canvas.height !== targetHeight) canvas.height = targetHeight;
+
   const context = canvas.getContext('2d');
+  context.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = renderScale < 1 ? 'medium' : 'high';
 
   context.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   context.drawImage(image, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -1741,6 +2094,13 @@ const drawCardCanvas = (
   context.restore();
 
   const drawChargeResources = () => {
+    if (resourceMode === RESOURCE_MODE_NONE) {
+      return;
+    }
+    if (resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY) {
+      drawActionConsumptionRail(context, consumptionSlots, resourceImages);
+      return;
+    }
     if (resourceMode === RESOURCE_MODE_CHARGE_ONLY) {
       drawCenteredChargeRail(context, chargeSlots, resourceImages);
       return;
@@ -1750,9 +2110,9 @@ const drawCardCanvas = (
   };
 
   // Draw weapon interface if cardType is weapon or armor or action!
-  if (cardType === 'weapon') {
+  if (cardType === 'weapon' || cardType === 'skill') {
     // 1. Draw Dice or Element Icon
-    if (elementIconImg) {
+    if (cardType === 'weapon' && elementIconImg) {
       context.save();
       context.drawImage(elementIconImg, 290 - 200/2, 615 - 200/2, 200, 200);
       context.restore();
@@ -1769,18 +2129,63 @@ const drawCardCanvas = (
     }
 
     drawChargeResources();
-  } else if (cardType === 'armor' || cardType === 'trap' || cardType === 'skill') {
+    if (cardType === 'skill') {
+      drawMinionAttributes(context, minionAttributes, resourceImages);
+    }
+  } else if (cardType === 'armor' || cardType === 'trap') {
     drawChargeResources();
   } else if (cardType === 'action') {
-    if (diceIconImg) {
-      const positions = getActionDicePositions(diceQty);
-      positions.forEach((pos) => {
-        context.save();
-        context.drawImage(diceIconImg, pos.x - pos.size / 2, pos.y - pos.size / 2, pos.size, pos.size);
-        context.restore();
-      });
+    if (actionCenterMode !== 'dado' && actionAttributeImg) {
+      context.save();
+      // Trazar máscara con bordes redondeados para la ventana de ilustración
+      context.beginPath();
+      const rx = 125;
+      const ry = 410;
+      const rw = 1630;
+      const rh = 2100;
+      const radius = 50;
+      if (context.roundRect) {
+        context.roundRect(rx, ry, rw, rh, radius);
+      } else {
+        context.moveTo(rx + radius, ry);
+        context.lineTo(rx + rw - radius, ry);
+        context.quadraticCurveTo(rx + rw, ry, rx + rw, ry + radius);
+        context.lineTo(rx + rw, ry + rh - radius);
+        context.quadraticCurveTo(rx + rw, ry + rh, rx + rw - radius, ry + rh);
+        context.lineTo(rx + radius, ry + rh);
+        context.quadraticCurveTo(rx, ry + rh, rx, ry + rh - radius);
+        context.lineTo(rx, ry + radius);
+        context.quadraticCurveTo(rx, ry, rx + radius, ry);
+      }
+      context.closePath();
+      context.clip();
+
+      // Definir la caja de origen (usando la imagen completa con sus márgenes naturales)
+      const sx = 0;
+      const sy = 0;
+      const sw = actionAttributeImg.width;
+      const sh = actionAttributeImg.height;
+
+      // Escalado proporcional para ajustar (fit/contain) dentro de la ventana de ilustración
+      const scale = Math.min(rw / sw, rh / sh);
+      const dw = sw * scale;
+      const dh = sh * scale;
+      const dx = rx + (rw - dw) / 2;
+      const dy = ry + (rh - dh) / 2;
+
+      context.drawImage(actionAttributeImg, sx, sy, sw, sh, dx, dy, dw, dh);
+      context.restore();
+    } else {
+      if (diceIconImg) {
+        const positions = getActionDicePositions(diceQty);
+        positions.forEach((pos) => {
+          context.save();
+          context.drawImage(diceIconImg, pos.x - pos.size / 2, pos.y - pos.size / 2, pos.size, pos.size);
+          context.restore();
+        });
+      }
+      drawActionConsumptionRail(context, consumptionSlots, resourceImages);
     }
-    drawActionConsumptionRail(context, consumptionSlots, resourceImages);
   } else if (cardType === 'status') {
     if (elementIconImg) {
       context.save();
@@ -1797,9 +2202,42 @@ const drawCardCanvas = (
     const activeRows = typeConfig.maxTraits > 2 ? Math.min(visibleTraitRows, typeConfig.maxTraits / 2) : 1;
     const activeTraitsCount = typeConfig.maxTraits > 2 ? activeRows * 2 : typeConfig.maxTraits;
     const slotLabels = traits.slice(0, activeTraitsCount);
-    getTraitSlots(typeConfig.layout).slice(0, activeTraitsCount).forEach((slot, index) => {
-      drawTraitBadge(context, slot, slotLabels[index] || '');
-    });
+    const traitSlots = cardType === 'skill'
+      ? getTraitSlots(typeConfig.layout).slice(2, 2 + activeTraitsCount)
+      : getTraitSlots(typeConfig.layout).slice(0, activeTraitsCount);
+
+    if (typeConfig.maxTraits > 2) {
+      for (let r = 0; r < activeRows; r++) {
+        const leftIndex = r * 2;
+        const rightIndex = r * 2 + 1;
+        const leftVal = (slotLabels[leftIndex] || '').trim();
+        const rightVal = (slotLabels[rightIndex] || '').trim();
+        const leftSlot = traitSlots[leftIndex];
+        const rightSlot = traitSlots[rightIndex];
+
+        const leftHasContent = leftVal && leftVal !== '-';
+        const rightHasContent = rightVal && rightVal !== '-';
+
+        if (leftHasContent && !rightHasContent) {
+          // Draw left trait centered in the card
+          const centeredSlot = { x: 574, y: leftSlot.y, width: 740, height: leftSlot.height };
+          drawTraitBadge(context, centeredSlot, leftVal);
+        } else if (!leftHasContent && rightHasContent) {
+          // Draw right trait centered in the card
+          const centeredSlot = { x: 574, y: rightSlot.y, width: 740, height: rightSlot.height };
+          drawTraitBadge(context, centeredSlot, rightVal);
+        } else {
+          // Draw both normally (even if empty or "-")
+          if (leftSlot) drawTraitBadge(context, leftSlot, leftVal);
+          if (rightSlot) drawTraitBadge(context, rightSlot, rightVal);
+        }
+      }
+    } else {
+      // For cards with 1 max trait (trap/status)
+      traitSlots.forEach((slot, index) => {
+        drawTraitBadge(context, slot, slotLabels[index] || '');
+      });
+    }
   }
 
   if (cardType !== 'action') {
@@ -1807,14 +2245,57 @@ const drawCardCanvas = (
   }
 };
 
-const CardBuilder = ({ onBack, mode = 'player' }) => {
+const getDeckAccessForViewer = (deck, viewerId) => {
+  if (!deck?.isMasterLibrary) return COLLECTION_ACCESS_EDIT;
+  return deck.permissions?.[viewerId] || COLLECTION_ACCESS_HIDDEN;
+};
+
+const getLibraryCardType = (builderCardType) => {
+  if (builderCardType === 'skill') return 'minion';
+  if (['weapon', 'armor', 'trap', 'action', 'status'].includes(builderCardType)) return builderCardType;
+  return 'action';
+};
+
+const MASTER_LIBRARY_TYPE_TARGETS = {
+  action: { name: 'Acciones', aliases: ['accion', 'acciones', 'accion rapida', 'acciones universales'] },
+  weapon: { name: 'Armas', aliases: ['arma', 'armas'] },
+  armor: { name: 'Armaduras', aliases: ['armadura', 'armaduras'] },
+  trap: { name: 'Trampas', aliases: ['trampa', 'trampas'] },
+  status: { name: 'Estados', aliases: ['estado', 'estados'] },
+  minion: { name: 'Minions', aliases: ['minion', 'minions'] },
+  skill: { name: 'Habilidades', aliases: ['habilidad', 'habilidades', 'skill', 'skills'] },
+  attribute: { name: 'Atributos', aliases: ['atributo', 'atributos'] }
+};
+
+const normalizeLibraryName = (value = '') => (
+  value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+);
+
+const getSafeFileSlug = (value) => (
+  normalizeCardName(value)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '') || 'carta'
+);
+
+const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserId = '' }) => {
   const canvasRef = useRef(null);
   const descriptionRef = useRef(null);
   const flavorTextRef = useRef(null);
   const imageCacheRef = useRef(new Map());
+  const imageLoadCacheRef = useRef(new Map());
   const activeImageRef = useRef(null);
   const fontLoadPromiseRef = useRef(null);
   const drawSequenceRef = useRef(0);
+  const drawTimerRef = useRef(null);
+  const drawFrameRef = useRef(null);
   const [cardName, setCardName] = useState('Gris');
   const [description, setDescription] = useState(DEFAULT_DESCRIPTION);
   const [flavorText, setFlavorText] = useState(DEFAULT_FLAVOR_TEXT);
@@ -1830,6 +2311,8 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
   const [selectedElement, setSelectedElement] = useState('Ninguno');
   const [customColorActive, setCustomColorActive] = useState(false);
   const [customColor, setCustomColor] = useState('#c8aa6e');
+  const [isUploadingCharacterCard, setIsUploadingCharacterCard] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
 
   // New states for Weapon properties
   const [weaponType, setWeaponType] = useState('Cuerpo a cuerpo');
@@ -1840,6 +2323,8 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
   const [consumptionSlots, setConsumptionSlots] = useState(DEFAULT_CONSUMPTION_SLOTS);
   const [resourceMode, setResourceMode] = useState(RESOURCE_MODE_BOTH);
   const [consumptionSlotTypes, setConsumptionSlotTypes] = useState(['consumption', 'consumption', 'consumption', 'consumption', 'consumption']);
+  const [minionAttributes, setMinionAttributes] = useState(DEFAULT_MINION_ATTRIBUTES);
+  const [actionCenterMode, setActionCenterMode] = useState('dado'); // 'dado' | 'Mente' | 'Cuerpo' | 'Hambre'
 
   // History system for undo/redo
   const descriptionHistoryRef = useRef({ past: [], future: [] });
@@ -1938,11 +2423,83 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
   );
   const hasSplitDescription = usesSplitDescription(activeType, showTraits);
 
-  const drawCard = useCallback(async () => {
-    const canvas = canvasRef.current;
+  const descriptionMaxLength = useMemo(() => {
+    const hasRails = activeType.id === 'weapon' || activeType.id === 'armor' || activeType.id === 'trap' || activeType.id === 'skill';
+    let baseHeight = hasRails ? 740 : 895;
+
+    let yOffset = 0;
+    if (showTraits) {
+      if (activeType.id === 'weapon') {
+        const activeRows = Math.min(visibleTraitRows, 3);
+        const hiddenRows = 3 - activeRows;
+        yOffset = hiddenRows * 240;
+      } else if (activeType.id === 'skill') {
+        const activeRows = Math.min(visibleTraitRows, 2);
+        const hiddenRows = 2 - activeRows;
+        yOffset = hiddenRows * 240;
+      } else if (activeType.id === 'armor') {
+        const activeRows = Math.min(visibleTraitRows, 4);
+        const hiddenRows = 4 - activeRows;
+        yOffset = hiddenRows * 230;
+      }
+    }
+
+    let finalHeight = baseHeight + yOffset;
+
+    if (!showTraits) {
+      if (activeType.id === 'weapon') {
+        finalHeight = 1465;
+      } else if (activeType.id === 'armor') {
+        finalHeight = 1772;
+      } else if (activeType.id === 'skill') {
+        finalHeight = 1233;
+      }
+    }
+
+    if (activeType.id === 'trap') {
+      if (showTraits) {
+        finalHeight = 1465;
+      } else {
+        finalHeight = 1772;
+      }
+    }
+
+    return Math.round(520 * (finalHeight / 740));
+  }, [activeType, showTraits, visibleTraitRows]);
+
+  const loadCachedImage = useCallback(async (src) => {
+    const cachedImage = imageCacheRef.current.get(src);
+    if (cachedImage) return cachedImage;
+
+    const pendingLoad = imageLoadCacheRef.current.get(src);
+    if (pendingLoad) return pendingLoad;
+
+    const loadPromise = new Promise((resolve, reject) => {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = src;
+      img.onload = () => {
+        imageCacheRef.current.set(src, img);
+        imageLoadCacheRef.current.delete(src);
+        resolve(img);
+      };
+      img.onerror = (error) => {
+        imageLoadCacheRef.current.delete(src);
+        reject(error);
+      };
+    });
+
+    imageLoadCacheRef.current.set(src, loadPromise);
+    return loadPromise;
+  }, []);
+
+  const drawCard = useCallback(async (targetCanvas = canvasRef.current, renderScale = getPreviewRenderScale(), updateStatus = true) => {
+    const canvas = targetCanvas;
     if (!canvas || !activeBackground) return undefined;
     const drawId = drawSequenceRef.current + 1;
-    drawSequenceRef.current = drawId;
+    if (updateStatus) {
+      drawSequenceRef.current = drawId;
+    }
 
     if (document.fonts?.load) {
       try {
@@ -1954,80 +2511,65 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
         // If font loading is unavailable, the canvas still renders with the fallback serif.
       }
     }
-    if (drawId !== drawSequenceRef.current) return undefined;
+    if (updateStatus && drawId !== drawSequenceRef.current) return undefined;
 
     // 1. Load Background Image
-    let backgroundImage = imageCacheRef.current.get(activeBackground.src);
-    if (!backgroundImage) {
-      try {
-        backgroundImage = await new Promise((resolve, reject) => {
-          const img = new Image();
-          img.decoding = 'async';
-          img.src = activeBackground.src;
-          img.onload = () => resolve(img);
-          img.onerror = reject;
-        });
-        imageCacheRef.current.set(activeBackground.src, backgroundImage);
-      } catch (e) {
-        console.error("Could not load background image:", e);
-        setImageStatus('error');
-        return undefined;
-      }
+    let backgroundImage = null;
+    try {
+      backgroundImage = await loadCachedImage(activeBackground.src);
+    } catch (e) {
+      console.error("Could not load background image:", e);
+        if (updateStatus) setImageStatus('error');
+      return undefined;
     }
 
-    if (drawId !== drawSequenceRef.current) return undefined;
+    if (updateStatus && drawId !== drawSequenceRef.current) return undefined;
 
-    // Load Weapon Type Image if cardType is weapon
+    // Load Weapon Type Image if cardType is weapon-like
     let weaponIconImg = null;
     let diceIconImg = null;
     const resourceImages = {};
-    if (cardType === 'weapon') {
+    if (cardType === 'weapon' || cardType === 'skill') {
       const iconSrc = getWeaponTypeIconSrc(weaponType);
-      weaponIconImg = imageCacheRef.current.get(iconSrc);
-      if (!weaponIconImg) {
-        try {
-          weaponIconImg = await new Promise((resolve, reject) => {
-            const img = new Image();
-            img.decoding = 'async';
-            img.src = iconSrc;
-            img.onload = () => resolve(img);
-            img.onerror = reject;
-          });
-          imageCacheRef.current.set(iconSrc, weaponIconImg);
-        } catch (e) {
-          console.error("Could not load weapon type icon:", e);
-        }
+      try {
+        weaponIconImg = await loadCachedImage(iconSrc);
+      } catch (e) {
+        console.error("Could not load weapon type icon:", e);
       }
     }
 
-    if (cardType === 'weapon' || cardType === 'action') {
+    let actionAttributeImg = null;
+    if (cardType === 'action' && actionCenterMode !== 'dado') {
+      const attrSrc = `${process.env.PUBLIC_URL || ''}/interfaz/acciones/${actionCenterMode}.webp`;
+      try {
+        actionAttributeImg = await loadCachedImage(attrSrc);
+      } catch (e) {
+        console.error("Could not load action attribute image:", e);
+      }
+    }
+
+    if (cardType === 'weapon' || (cardType === 'action' && actionCenterMode === 'dado') || cardType === 'skill') {
       // Load Dice Icon Image
       const diceSrc = `${process.env.PUBLIC_URL || ''}/dados/cartas/${diceType}.webp`;
-      diceIconImg = imageCacheRef.current.get(diceSrc);
-      if (!diceIconImg) {
-        try {
-          diceIconImg = await new Promise((resolve, reject) => {
-            const img = new Image();
-            img.decoding = 'async';
-            img.src = diceSrc;
-            img.onload = () => resolve(img);
-            img.onerror = reject;
-          });
-          imageCacheRef.current.set(diceSrc, diceIconImg);
-        } catch (e) {
-          console.error("Could not load dice icon image:", e);
-        }
+      try {
+        diceIconImg = await loadCachedImage(diceSrc);
+      } catch (e) {
+        console.error("Could not load dice icon image:", e);
       }
     }
 
-    const loadsChargeResources = RESOURCE_CARD_TYPES.has(cardType);
-    const loadsConsumptionResources = cardType === 'action' || (
-      RESOURCE_CARD_TYPES.has(cardType) && resourceMode !== RESOURCE_MODE_CHARGE_ONLY
+    const loadsChargeResources = RESOURCE_CARD_TYPES.has(cardType) && (
+      resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CHARGE_ONLY
     );
+    const loadsConsumptionResources = (cardType === 'action' && actionCenterMode === 'dado') || (
+      RESOURCE_CARD_TYPES.has(cardType) && (resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY)
+    );
+    const loadsMinionAttributes = cardType === 'skill';
 
-    if (loadsChargeResources || loadsConsumptionResources) {
+    if (loadsChargeResources || loadsConsumptionResources || loadsMinionAttributes) {
       const resourceOptions = [
         ...CHARGE_TYPES.map((option) => ({ ...option, cacheKey: `charge:${option.id}` })),
+        ...CHARGE_TYPES.map((option) => ({ ...option, cacheKey: `attribute:${option.id}` })),
         ...CONSUMPTION_TYPES.map((option) => ({ ...option, cacheKey: `consumption:${option.id}` })),
         ...ELEMENT_TYPES.filter((option) => option.id !== 'Ninguno').map((option) => ({
           id: option.id,
@@ -2040,24 +2582,17 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
         loadsChargeResources && chargeSlots.includes(option.id) && option.cacheKey.startsWith('charge:')
       ) || (
         loadsConsumptionResources && consumptionSlots.includes(option.id) && option.cacheKey.startsWith('consumption:')
+      ) || (
+        loadsMinionAttributes && MINION_ATTRIBUTE_TYPES.includes(option.id) && option.cacheKey.startsWith('attribute:')
       ));
 
       await Promise.all(requiredResourceOptions.map(async (option) => {
         const src = `${process.env.PUBLIC_URL || ''}${option.src}`;
-        let icon = imageCacheRef.current.get(src);
-        if (!icon) {
-          try {
-            icon = await new Promise((resolve, reject) => {
-              const img = new Image();
-              img.decoding = 'async';
-              img.src = src;
-              img.onload = () => resolve(img);
-              img.onerror = reject;
-            });
-            imageCacheRef.current.set(src, icon);
-          } catch (e) {
-            console.error(`Could not load resource icon: ${option.cacheKey}`, e);
-          }
+        let icon = null;
+        try {
+          icon = await loadCachedImage(src);
+        } catch (e) {
+          console.error(`Could not load resource icon: ${option.cacheKey}`, e);
         }
         if (icon) {
           resourceImages[option.cacheKey] = icon;
@@ -2069,20 +2604,10 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     if ((cardType === 'status' || cardType === 'weapon') && selectedElement !== 'Ninguno') {
       const suffix = cardType === 'weapon' ? '_p' : '';
       const elementSrc = `${process.env.PUBLIC_URL || ''}/elementos/${selectedElement}${suffix}.webp`;
-      elementIconImg = imageCacheRef.current.get(elementSrc);
-      if (!elementIconImg) {
-        try {
-          elementIconImg = await new Promise((resolve, reject) => {
-            const img = new Image();
-            img.decoding = 'async';
-            img.src = elementSrc;
-            img.onload = () => resolve(img);
-            img.onerror = reject;
-          });
-          imageCacheRef.current.set(elementSrc, elementIconImg);
-        } catch (e) {
-          console.error("Could not load element icon image:", e);
-        }
+      try {
+        elementIconImg = await loadCachedImage(elementSrc);
+      } catch (e) {
+        console.error("Could not load element icon image:", e);
       }
     }
 
@@ -2094,20 +2619,11 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
         const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === kwMatch.toLowerCase());
         if (!matchedKw) return;
         const src = `${process.env.PUBLIC_URL || ''}${KEYWORD_ICONS[matchedKw]}`;
-        let icon = imageCacheRef.current.get(src);
-        if (!icon) {
-          try {
-            icon = await new Promise((resolve, reject) => {
-              const img = new Image();
-              img.decoding = 'async';
-              img.src = src;
-              img.onload = () => resolve(img);
-              img.onerror = reject;
-            });
-            imageCacheRef.current.set(src, icon);
-          } catch (e) {
-            console.error(`Could not load keyword icon: ${matchedKw}`, e);
-          }
+        let icon = null;
+        try {
+          icon = await loadCachedImage(src);
+        } catch (e) {
+          console.error(`Could not load keyword icon: ${matchedKw}`, e);
         }
         if (icon) {
           resourceImages[`keyword:${matchedKw}`] = icon;
@@ -2115,7 +2631,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       }));
     }
 
-    if (drawId !== drawSequenceRef.current) return undefined;
+    if (updateStatus && drawId !== drawSequenceRef.current) return undefined;
 
     // 2. Draw the card canvas.
     drawCardCanvas(
@@ -2143,42 +2659,86 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
       customColor,
       singleTextStyle,
       visibleTraitRows,
+      minionAttributes,
+      renderScale,
+      actionCenterMode,
+      actionAttributeImg,
     );
 
-    setImageStatus('ready');
+    if (updateStatus) setImageStatus('ready');
     return undefined;
-  }, [activeBackground, cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle, visibleTraitRows]);
+  }, [activeBackground, cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode]);
 
   useEffect(() => {
-    let cleanup;
     let disposed = false;
 
-    Promise.resolve(drawCard()).then((drawCleanup) => {
-      if (disposed) {
-        if (typeof drawCleanup === 'function') drawCleanup();
-        return;
-      }
-      cleanup = drawCleanup;
-    });
+    drawTimerRef.current = window.setTimeout(() => {
+      drawFrameRef.current = window.requestAnimationFrame(() => {
+        Promise.resolve(drawCard()).then(() => {
+          if (disposed) return;
+        });
+      });
+    }, 35);
 
     return () => {
       disposed = true;
-      if (typeof cleanup === 'function') cleanup();
+      if (drawTimerRef.current) {
+        window.clearTimeout(drawTimerRef.current);
+        drawTimerRef.current = null;
+      }
+      if (drawFrameRef.current) {
+        window.cancelAnimationFrame(drawFrameRef.current);
+        drawFrameRef.current = null;
+      }
     };
   }, [drawCard]);
 
   useEffect(() => {
+    const preload = () => {
+      const commonSources = [
+        ...WEAPON_TYPES.map((type) => getWeaponTypeIconSrc(type)),
+        ...['D4', 'D6', 'D8', 'D10', 'D12', 'DX'].map((type) => `${process.env.PUBLIC_URL || ''}/dados/cartas/${type}.webp`),
+        ...CHARGE_TYPES.map((option) => `${process.env.PUBLIC_URL || ''}${option.src}`),
+        ...CONSUMPTION_TYPES.map((option) => `${process.env.PUBLIC_URL || ''}${option.src}`),
+      ];
+
+      commonSources.forEach((src) => {
+        loadCachedImage(src).catch(() => {});
+      });
+    };
+
+    if ('requestIdleCallback' in window) {
+      const idleId = window.requestIdleCallback(preload, { timeout: 1500 });
+      return () => window.cancelIdleCallback?.(idleId);
+    }
+
+    const timeoutId = window.setTimeout(preload, 750);
+    return () => window.clearTimeout(timeoutId);
+  }, [loadCachedImage]);
+
+  useEffect(() => {
+    let disposed = false;
+
+    Promise.resolve(loadCachedImage(activeBackground.src)).then((image) => {
+      if (disposed) {
+        return;
+      }
+      imageCacheRef.current.set(activeBackground.src, image);
+    }).catch(() => {
+      if (!disposed) setImageStatus('error');
+    });
+
+    return () => {
+      disposed = true;
+    };
+  }, [activeBackground.src, loadCachedImage]);
+
+  useEffect(() => {
     CARD_BACKGROUNDS.forEach((background) => {
       if (imageCacheRef.current.has(background.src)) return;
-
-      const image = new Image();
-      image.decoding = 'async';
-      image.src = background.src;
-      image.onload = () => {
-        imageCacheRef.current.set(background.src, image);
-      };
+      loadCachedImage(background.src).catch(() => {});
     });
-  }, []);
+  }, [loadCachedImage]);
 
   const handleReset = () => {
     setCardName('Gris');
@@ -2198,9 +2758,11 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     setConsumptionSlots(DEFAULT_CONSUMPTION_SLOTS);
     setResourceMode(RESOURCE_MODE_BOTH);
     setConsumptionSlotTypes(['consumption', 'consumption', 'consumption', 'consumption', 'consumption']);
+    setMinionAttributes(DEFAULT_MINION_ATTRIBUTES);
     setSelectedElement('Ninguno');
     setCustomColorActive(false);
     setCustomColor('#c8aa6e');
+    setActionCenterMode('dado');
   };
 
   const handleTraitChange = (index, value) => {
@@ -2227,6 +2789,15 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     });
   };
 
+  const handleMinionAttributeChange = (attribute, value) => {
+    const parsed = parseInt(value, 10);
+    const nextValue = Number.isFinite(parsed) ? Math.min(99, Math.max(0, parsed)) : 0;
+    setMinionAttributes((currentAttributes) => ({
+      ...currentAttributes,
+      [attribute]: nextValue,
+    }));
+  };
+
   const handleDiceQtyChange = (value) => {
     const maxQty = cardType === 'action' ? 6 : 9;
     setDiceQty(Math.min(maxQty, Math.max(1, value)));
@@ -2234,6 +2805,39 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
 
   const handleTypeChange = (typeId) => {
     setCardType(typeId);
+    
+    if (typeId !== 'trap') {
+      setResourceMode(RESOURCE_MODE_BOTH);
+    }
+    
+    // Ensure consumption slots are reset to length 5 if switching away from 'action'
+    if (typeId !== 'action') {
+      setActionCenterMode('dado');
+      setConsumptionSlots((currentSlots) => {
+        const nextSlots = [...currentSlots];
+        if (nextSlots.length !== 5) {
+          nextSlots.length = 5;
+          for (let i = 0; i < 5; i++) {
+            if (nextSlots[i] === undefined) {
+              nextSlots[i] = EMPTY_SLOT;
+            }
+          }
+        }
+        return nextSlots;
+      });
+      setConsumptionSlotTypes((prevTypes) => {
+        const nextTypes = [...prevTypes];
+        if (nextTypes.length !== 5) {
+          nextTypes.length = 5;
+          for (let i = 0; i < 5; i++) {
+            if (nextTypes[i] === undefined) {
+              nextTypes[i] = 'consumption';
+            }
+          }
+        }
+        return nextTypes;
+      });
+    }
     if (typeId === 'trap') {
       setVisibleTraitRows(1);
       setShowTraits(true);
@@ -2274,6 +2878,8 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
         nextSlots[0] = 'Tiempo';
         return nextSlots;
       });
+    } else if (typeId === 'skill') {
+      setVisibleTraitRows(2);
     } else {
       setVisibleTraitRows(3);
     }
@@ -2334,18 +2940,73 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     let formatted = selectedText;
     let newStart = start;
     let newEnd = end;
+    let selectionOffsetStart = 0;
+    let selectionOffsetEnd = 0;
 
     if (formatType === 'bold') {
       if (selectedText.startsWith('**') && selectedText.endsWith('**')) {
         formatted = selectedText.slice(2, -2);
+        selectionOffsetStart = 0;
+        selectionOffsetEnd = formatted.length;
       } else {
-        formatted = `**${selectedText}**`;
+        const match = selectedText.match(/^(\s*)(.*?)(\s*)$/);
+        const leadingSpace = match ? match[1] : '';
+        const trimmedText = match ? match[2] : selectedText;
+        const trailingSpace = match ? match[3] : '';
+        formatted = `${leadingSpace}**${trimmedText}**${trailingSpace}`;
+        
+        if (selectedText.length === 0) {
+          selectionOffsetStart = 2;
+          selectionOffsetEnd = 2;
+        } else {
+          selectionOffsetStart = leadingSpace.length;
+          selectionOffsetEnd = leadingSpace.length + trimmedText.length + 4;
+        }
       }
     } else if (formatType === 'italic') {
       if (selectedText.startsWith('*') && !selectedText.startsWith('**') && selectedText.endsWith('*') && !selectedText.endsWith('**')) {
         formatted = selectedText.slice(1, -1);
+        selectionOffsetStart = 0;
+        selectionOffsetEnd = formatted.length;
       } else {
-        formatted = `*${selectedText}*`;
+        const match = selectedText.match(/^(\s*)(.*?)(\s*)$/);
+        const leadingSpace = match ? match[1] : '';
+        const trimmedText = match ? match[2] : selectedText;
+        const trailingSpace = match ? match[3] : '';
+        formatted = `${leadingSpace}*${trimmedText}*${trailingSpace}`;
+        
+        if (selectedText.length === 0) {
+          selectionOffsetStart = 1;
+          selectionOffsetEnd = 1;
+        } else {
+          selectionOffsetStart = leadingSpace.length;
+          selectionOffsetEnd = leadingSpace.length + trimmedText.length + 2;
+        }
+      }
+    } else if (formatType === 'separator') {
+      const before = text.slice(0, start);
+      const after = text.slice(end);
+      const prefix = before.endsWith('\n') || before.length === 0 ? '' : '\n';
+      const suffix = after.startsWith('\n') || after.length === 0 ? '' : '\n';
+      formatted = `${prefix}---${suffix}`;
+      selectionOffsetStart = formatted.length;
+      selectionOffsetEnd = formatted.length;
+    } else if (formatType === 'lore') {
+      const fallback = 'Texto de lore';
+      const loreText = selectedText || fallback;
+      if (selectedText.startsWith(LORE_OPEN_TAG) && selectedText.endsWith(LORE_CLOSE_TAG)) {
+        formatted = selectedText.slice(LORE_OPEN_TAG.length, -LORE_CLOSE_TAG.length);
+        selectionOffsetStart = 0;
+        selectionOffsetEnd = formatted.length;
+      } else {
+        formatted = `${LORE_OPEN_TAG}${loreText}${LORE_CLOSE_TAG}`;
+        if (selectedText.length === 0) {
+          selectionOffsetStart = LORE_OPEN_TAG.length;
+          selectionOffsetEnd = LORE_OPEN_TAG.length + loreText.length;
+        } else {
+          selectionOffsetStart = 0;
+          selectionOffsetEnd = formatted.length;
+        }
       }
     } else if (formatType === 'color') {
       const anyColorMatch = selectedText.match(/^\[color:(#[0-9a-fA-F]{6})\]\{(.*)\}$/);
@@ -2354,8 +3015,12 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
         const innerText = anyColorMatch[2];
         if (existingColor === colorVal) {
           formatted = innerText;
+          selectionOffsetStart = 0;
+          selectionOffsetEnd = formatted.length;
         } else {
           formatted = `[color:${colorVal}]{${innerText}}`;
+          selectionOffsetStart = 0;
+          selectionOffsetEnd = formatted.length;
         }
       } else {
         const enclosing = findAnyEnclosingColorTag(text, start, end);
@@ -2364,13 +3029,24 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
             formatted = enclosing.innerText;
             newStart = enclosing.startIdx;
             newEnd = enclosing.endIdx;
+            selectionOffsetStart = 0;
+            selectionOffsetEnd = formatted.length;
           } else {
             formatted = `[color:${colorVal}]{${enclosing.innerText}}`;
             newStart = enclosing.startIdx;
             newEnd = enclosing.endIdx;
+            selectionOffsetStart = 0;
+            selectionOffsetEnd = formatted.length;
           }
         } else {
           formatted = `[color:${colorVal}]{${selectedText}}`;
+          if (selectedText.length === 0) {
+            selectionOffsetStart = 17; // Longitud de '[color:#ffffff]{'
+            selectionOffsetEnd = 17;
+          } else {
+            selectionOffsetStart = 0;
+            selectionOffsetEnd = formatted.length;
+          }
         }
       }
     }
@@ -2387,7 +3063,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
 
     setTimeout(() => {
       textarea.focus();
-      textarea.setSelectionRange(newStart, newStart + formatted.length);
+      textarea.setSelectionRange(newStart + selectionOffsetStart, newStart + selectionOffsetEnd);
     }, 0);
   };
 
@@ -2425,6 +3101,22 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
           >
             I
           </button>
+          <button
+            type="button"
+            onClick={() => applyFormat(ref, 'separator')}
+            className="h-6 px-2.5 text-[10px] font-extrabold uppercase tracking-wider border border-slate-800 bg-[#09090b]/40 text-slate-300 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e] cursor-pointer flex items-center justify-center transition"
+            title="Insertar separador"
+          >
+            ---
+          </button>
+          <button
+            type="button"
+            onClick={() => applyFormat(ref, 'lore')}
+            className="h-6 px-2.5 text-[10px] font-extrabold uppercase tracking-wider border border-slate-800 bg-[#09090b]/40 text-slate-300 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e] cursor-pointer flex items-center justify-center transition"
+            title="Marcar como lore"
+          >
+            Lore
+          </button>
         </div>
         <div className="flex items-center gap-1.5">
           {presetColors.map((color) => (
@@ -2442,25 +3134,192 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
     );
   };
 
-  const handleDownload = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  const renderExportDataUrl = async () => {
+    const exportCanvas = document.createElement('canvas');
+    await drawCard(exportCanvas, 1, false);
+    return exportCanvas.toDataURL('image/png');
+  };
 
+  const handleDownload = async () => {
+    const dataUrl = await renderExportDataUrl();
     const link = document.createElement('a');
-    const safeName = normalizeCardName(cardName)
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '') || 'carta';
+    const safeName = getSafeFileSlug(cardName);
     link.download = `${safeName}.png`;
-    link.href = canvas.toDataURL('image/png');
+    link.href = dataUrl;
     link.click();
   };
 
+  const findOrCreateCharacterLibrary = async (ownerName) => {
+    const snap = await getDocs(collection(db, 'card_decks'));
+    const libraries = snap.docs
+      .map((deckDoc) => ({ id: deckDoc.id, ...deckDoc.data() }))
+      .filter((deck) => deck.isMasterLibrary === true && (deck.name || '').trim() === ownerName);
+
+    const visibleLibrary = libraries.find((deck) => (
+      getDeckAccessForViewer(deck, currentUserId) !== COLLECTION_ACCESS_HIDDEN
+      || getDeckAccessForViewer(deck, ownerName) !== COLLECTION_ACCESS_HIDDEN
+      || mode === 'master'
+    ));
+
+    if (visibleLibrary) {
+      const hasEditAccess = (
+        mode === 'master'
+        || getDeckAccessForViewer(visibleLibrary, currentUserId) === COLLECTION_ACCESS_EDIT
+        || getDeckAccessForViewer(visibleLibrary, ownerName) === COLLECTION_ACCESS_EDIT
+      );
+      if (!hasEditAccess) {
+        throw new Error('CHARACTER_LIBRARY_EXISTS_WITHOUT_EDIT_ACCESS');
+      }
+      return visibleLibrary;
+    }
+
+    if (libraries.length > 0) {
+      throw new Error('CHARACTER_LIBRARY_EXISTS_WITHOUT_ACCESS');
+    }
+
+    const permissions = {};
+    if (currentUserId) permissions[currentUserId] = COLLECTION_ACCESS_EDIT;
+    if (ownerName && ownerName !== currentUserId) permissions[ownerName] = COLLECTION_ACCESS_EDIT;
+
+    const createdRef = await addDoc(collection(db, 'card_decks'), {
+      name: ownerName,
+      ownerId: 'master',
+      createdAt: Date.now(),
+      cards: [],
+      isMasterLibrary: true,
+      permissions,
+      source: 'character-builder',
+      createdBy: currentUserId || ownerName
+    });
+
+    return {
+      id: createdRef.id,
+      name: ownerName,
+      cards: [],
+      isMasterLibrary: true,
+      permissions
+    };
+  };
+
+  const findOrCreateMasterTypeLibrary = async (libraryType) => {
+    const target = MASTER_LIBRARY_TYPE_TARGETS[libraryType] || MASTER_LIBRARY_TYPE_TARGETS.action;
+    const aliases = target.aliases.map(normalizeLibraryName);
+    const snap = await getDocs(collection(db, 'card_decks'));
+    const libraries = snap.docs
+      .map((deckDoc) => ({ id: deckDoc.id, ...deckDoc.data() }))
+      .filter((deck) => deck.isMasterLibrary === true && deck.ownerId === 'master');
+
+    const matchingLibrary = libraries.find((deck) => {
+      const deckName = normalizeLibraryName(deck.name || '');
+      if (!deckName) return false;
+      return aliases.some((alias) => deckName === alias || deckName.includes(alias) || alias.includes(deckName));
+    });
+
+    if (matchingLibrary) {
+      return matchingLibrary;
+    }
+
+    const createdRef = await addDoc(collection(db, 'card_decks'), {
+      name: target.name,
+      ownerId: 'master',
+      createdAt: Date.now(),
+      cards: [],
+      isMasterLibrary: true,
+      permissions: {},
+      source: 'master-card-builder',
+      autoType: libraryType
+    });
+
+    return {
+      id: createdRef.id,
+      name: target.name,
+      cards: [],
+      isMasterLibrary: true,
+      permissions: {}
+    };
+  };
+
+  const buildUploadedCardPayload = (cardId, frontUrl, type, ownerName) => ({
+    id: cardId,
+    templateId: cardId,
+    name: normalizeCardName(cardName) || 'Carta sin nombre',
+    frontUrl,
+    type,
+    visibleToPlayers: true,
+    createdAt: Date.now(),
+    createdBy: currentUserId || ownerName || mode,
+    ...(ownerName ? { characterName: ownerName } : {})
+  });
+
+  const handleUploadToCharacterLibrary = async () => {
+    const ownerName = (characterName || '').trim();
+    if (!ownerName) {
+      alert('No se pudo detectar el nombre exacto del personaje para crear su colección.');
+      return;
+    }
+
+    setIsUploadingCharacterCard(true);
+    setUploadStatus('');
+    try {
+      const library = await findOrCreateCharacterLibrary(ownerName);
+      const dataUrl = await renderExportDataUrl();
+      const cardId = Math.random().toString(36).substr(2, 9);
+      const safeName = getSafeFileSlug(cardName);
+      const frontUrl = await uploadDataUrl(
+        dataUrl,
+        `deck-library-cards/${library.id}/${Date.now()}-${cardId}-${safeName}.png`
+      );
+      const newCard = {
+        ...buildUploadedCardPayload(cardId, frontUrl, getLibraryCardType(cardType), ownerName),
+        characterName: ownerName
+      };
+      await updateDoc(doc(db, 'card_decks', library.id), {
+        cards: [...(library.cards || []), newCard]
+      });
+      setUploadStatus(`Subida a ${ownerName}`);
+    } catch (error) {
+      console.error('Error uploading character card:', error);
+      if (error?.message === 'CHARACTER_LIBRARY_EXISTS_WITHOUT_ACCESS') {
+        alert(`La colección "${ownerName}" ya está creada, pero no tienes permisos para verla o editarla. Contacta con el Master.`);
+      } else if (error?.message === 'CHARACTER_LIBRARY_EXISTS_WITHOUT_EDIT_ACCESS') {
+        alert(`La colección "${ownerName}" ya existe, pero no tienes permiso de edición. Contacta con el Master.`);
+      } else {
+        alert('No se pudo subir la carta a la colección del personaje.');
+      }
+    } finally {
+      setIsUploadingCharacterCard(false);
+    }
+  };
+
+  const handleUploadToMasterLibrary = async () => {
+    setIsUploadingCharacterCard(true);
+    setUploadStatus('');
+    try {
+      const libraryType = getLibraryCardType(cardType);
+      const library = await findOrCreateMasterTypeLibrary(libraryType);
+      const dataUrl = await renderExportDataUrl();
+      const cardId = Math.random().toString(36).substr(2, 9);
+      const safeName = getSafeFileSlug(cardName);
+      const frontUrl = await uploadDataUrl(
+        dataUrl,
+        `deck-library-cards/${library.id}/${Date.now()}-${cardId}-${safeName}.png`
+      );
+      const newCard = buildUploadedCardPayload(cardId, frontUrl, libraryType, 'master');
+      await updateDoc(doc(db, 'card_decks', library.id), {
+        cards: [...(library.cards || []), newCard]
+      });
+      setUploadStatus(`Subida a ${library.name || 'colección base'}`);
+    } catch (error) {
+      console.error('Error uploading master card:', error);
+      alert('No se pudo subir la carta a la colección base del Master.');
+    } finally {
+      setIsUploadingCharacterCard(false);
+    }
+  };
+
   const usesChargeResources = RESOURCE_CARD_TYPES.has(cardType);
-  const usesConsumptionResources = cardType === 'action' || cardType === 'status' || (
-    usesChargeResources && resourceMode !== RESOURCE_MODE_CHARGE_ONLY
+  const usesConsumptionResources = (cardType === 'action' && actionCenterMode === 'dado') || cardType === 'status' || (
+    usesChargeResources && (resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY)
   );
 
   return (
@@ -2524,8 +3383,53 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
             >
               <Download className="h-4 w-4" />
             </button>
+            {mode === 'player' && characterName && (
+              <button
+                type="button"
+                onClick={handleUploadToCharacterLibrary}
+                disabled={imageStatus !== 'ready' || isUploadingCharacterCard}
+                className="inline-flex h-10 items-center justify-center gap-2 border border-emerald-400/35 bg-emerald-950/25 px-3 font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200 transition hover:border-emerald-300/70 hover:bg-emerald-900/30 disabled:cursor-wait disabled:opacity-45"
+                title={`Subir a la colección ${characterName}`}
+              >
+                {isUploadingCharacterCard ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <UploadCloud className="h-4 w-4" />
+                )}
+                <span className="hidden sm:inline">Subir a colección</span>
+              </button>
+            )}
+            {mode === 'master' && (
+              <button
+                type="button"
+                onClick={handleUploadToMasterLibrary}
+                disabled={imageStatus !== 'ready' || isUploadingCharacterCard}
+                className="inline-flex h-10 items-center justify-center gap-2 border border-emerald-400/35 bg-emerald-950/25 px-3 font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200 transition hover:border-emerald-300/70 hover:bg-emerald-900/30 disabled:cursor-wait disabled:opacity-45"
+                title="Subir a colección base por tipo"
+              >
+                {isUploadingCharacterCard ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <UploadCloud className="h-4 w-4" />
+                )}
+                <span className="hidden sm:inline">Subir a base</span>
+              </button>
+            )}
           </div>
         </div>
+
+        {((mode === 'player' && characterName) || mode === 'master') && (
+          <div className="flex flex-wrap items-center gap-2 border border-emerald-400/15 bg-emerald-950/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-100/80">
+            <Database className="h-3.5 w-3.5 text-emerald-300" />
+            <span className="text-slate-400">{mode === 'master' ? 'Destino automático:' : 'Colección de personaje:'}</span>
+            <span className="text-emerald-200">
+              {mode === 'master'
+                ? (MASTER_LIBRARY_TYPE_TARGETS[getLibraryCardType(cardType)]?.name || 'Colección base')
+                : characterName}
+            </span>
+            {uploadStatus && <span className="ml-auto text-[#c8aa6e]">{uploadStatus}</span>}
+          </div>
+        )}
 
         <div className="grid flex-1 gap-5 lg:grid-cols-[minmax(280px,380px)_1fr]">
           <aside className="relative z-20 order-2 flex flex-col gap-5 border border-[#c8aa6e]/20 bg-[#0b1120]/75 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.25)] md:p-5 lg:order-1">
@@ -2572,11 +3476,11 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                    cardType === 'armor' ? 'Propiedades de la Armadura' : 
                    cardType === 'trap' ? 'Propiedades de la Trampa' :
                    cardType === 'action' ? 'Propiedades de la Acción' : 
-                   cardType === 'skill' ? 'Propiedades de la Habilidad' :
+                   cardType === 'skill' ? 'Propiedades del Minion' :
                    'Propiedades del Estado'}
                 </div>
                 
-                {cardType === 'weapon' && (
+                {(cardType === 'weapon' || cardType === 'skill') && (
                   <>
                     {/* 1. Tipo de Arma */}
                     <div className="space-y-1.5">
@@ -2618,31 +3522,52 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                         ))}
                       </div>
                     </div>
-                    {/* 3. Elemento / Estado */}
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        Elemento / Estado
-                      </label>
-                      <select
-                        value={selectedElement}
-                        onChange={(event) => setSelectedElement(event.target.value)}
-                        className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
-                      >
-                        {ELEMENT_TYPES.map((type) => (
-                          <option key={type.id} value={type.id}>
-                            {type.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    {cardType === 'weapon' && (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          Elemento / Estado
+                        </label>
+                        <select
+                          value={selectedElement}
+                          onChange={(event) => setSelectedElement(event.target.value)}
+                          className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
+                        >
+                          {ELEMENT_TYPES.map((type) => (
+                            <option key={type.id} value={type.id}>
+                              {type.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </>
                 )}
 
-                {(cardType === 'weapon' || cardType === 'action') && (cardType !== 'weapon' || selectedElement === 'Ninguno') && (
+                {cardType === 'action' && (
+                  <div className="space-y-3 border-t border-[#c8aa6e]/10 pt-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        Icono Central / Atributo
+                      </label>
+                      <select
+                        value={actionCenterMode}
+                        onChange={(event) => setActionCenterMode(event.target.value)}
+                        className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
+                      >
+                        <option value="dado">Dado de Acción (Estándar)</option>
+                        <option value="Hambre">Atributo: Hambre (Estómago)</option>
+                        <option value="Cuerpo">Atributo: Cuerpo (Corazón)</option>
+                        <option value="Mente">Atributo: Mente (Cerebro)</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {(cardType === 'weapon' || (cardType === 'action' && actionCenterMode === 'dado') || cardType === 'skill') && (cardType !== 'weapon' || selectedElement === 'Ninguno') && (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        {cardType === 'weapon' ? 'Dado de Daño' : 'Dado de Acción'}
+                        {cardType === 'weapon' ? 'Dado de Daño' : cardType === 'skill' ? 'Dado del Minion' : 'Dado de Acción'}
                       </label>
                       <select
                         value={diceType}
@@ -2697,6 +3622,39 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                   </div>
                 )}
 
+                {cardType === 'skill' && (
+                  <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-3">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      Atributos del Minion
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {MINION_ATTRIBUTE_TYPES.map((attribute) => {
+                        const iconSrc = `${process.env.PUBLIC_URL || ''}/interfaz/cargas/${attribute}.webp`;
+                        return (
+                          <label
+                            key={`minion-attribute-${attribute}`}
+                            className="grid grid-cols-[2rem_1fr] items-center border border-[#c8aa6e]/20 bg-[#09090b]/80"
+                            title={attribute}
+                          >
+                            <span className="flex h-full items-center justify-center border-r border-[#c8aa6e]/15">
+                              <img src={iconSrc} alt="" className="h-5 w-5 object-contain" />
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={99}
+                              value={minionAttributes[attribute]}
+                              onChange={(event) => handleMinionAttributeChange(attribute, event.target.value)}
+                              className="h-[34px] min-w-0 bg-transparent px-1 text-center text-sm font-black text-[#f0e6d2] outline-none"
+                              aria-label={`Atributo ${attribute}`}
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {usesChargeResources && (
                   <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-3">
                     <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -2723,11 +3681,35 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                       >
                         Solo carga
                       </button>
+                      {cardType === 'trap' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setResourceMode(RESOURCE_MODE_CONSUMPTION_ONLY)}
+                            className={`border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition ${resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY
+                              ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                              : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                              }`}
+                          >
+                            Solo consumo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setResourceMode(RESOURCE_MODE_NONE)}
+                            className={`border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition ${resourceMode === RESOURCE_MODE_NONE
+                              ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                              : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                              }`}
+                          >
+                            Sin recursos
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}
 
-                {usesChargeResources && (
+                {usesChargeResources && (resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CHARGE_ONLY) && (
                   <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-3">
                     <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                       Carga
@@ -2761,11 +3743,57 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                 )}
 
                 {usesConsumptionResources && (
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                    {cardType === 'weapon' ? 'Consumo' : cardType === 'armor' ? 'Armadura' : 'Consumo'}
-                  </label>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="space-y-3">
+                    <div className={`flex items-center justify-between gap-2 ${(cardType === 'action' || (cardType === 'trap' && resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY)) ? 'border-b border-[#c8aa6e]/10 pb-3' : ''}`}>
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        {cardType === 'weapon' ? 'Consumo' : cardType === 'armor' ? 'Armadura' : 'Consumo'}
+                      </label>
+                      {(cardType === 'action' || (cardType === 'trap' && resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY)) && (
+                        <div className="flex gap-1">
+                          {[5, 6, 7].map((num) => {
+                            const isSelected = consumptionSlots.length === num;
+                            return (
+                              <button
+                                key={`action-slots-count-${num}`}
+                                type="button"
+                                onClick={() => {
+                                  setConsumptionSlots((currentSlots) => {
+                                    const nextSlots = [...currentSlots];
+                                    if (nextSlots.length < num) {
+                                      while (nextSlots.length < num) {
+                                        nextSlots.push(EMPTY_SLOT);
+                                      }
+                                    } else if (nextSlots.length > num) {
+                                      nextSlots.length = num;
+                                    }
+                                    return nextSlots;
+                                  });
+                                  setConsumptionSlotTypes((prevTypes) => {
+                                    const nextTypes = [...prevTypes];
+                                    if (nextTypes.length < num) {
+                                      while (nextTypes.length < num) {
+                                        nextTypes.push('consumption');
+                                      }
+                                    } else if (nextTypes.length > num) {
+                                      nextTypes.length = num;
+                                    }
+                                    return nextTypes;
+                                  });
+                                }}
+                                className={`h-7 w-10 border text-[10px] font-bold transition cursor-pointer flex items-center justify-center ${
+                                  isSelected
+                                    ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                                    : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                                }`}
+                              >
+                                {num}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {consumptionSlots.map((slot, index) => (
                       <div
                         key={`consumption-slot-${index}`}
@@ -2877,7 +3905,7 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                   onFocus={() => setFocusedField('description')}
                   onBlur={() => setFocusedField(null)}
                   rows={hasSplitDescription ? 4 : 5}
-                  maxLength={hasSplitDescription ? 360 : 520}
+                  maxLength={hasSplitDescription ? 360 : descriptionMaxLength}
                   className="min-h-[112px] w-full resize-y border border-t-0 border-[#c8aa6e]/25 bg-[#09090b]/80 px-4 py-3 text-base font-semibold leading-relaxed text-[#f0e6d2] outline-none transition placeholder:text-slate-600 focus:border-[#c8aa6e]/70 focus:shadow-[0_4px_12px_rgba(200,170,110,0.06),_4px_0_12px_rgba(200,170,110,0.06),_-4px_0_12px_rgba(200,170,110,0.06)] rounded-b-md"
                   placeholder={hasSplitDescription ? 'Descripción de la carta' : 'Texto descriptivo de la carta'}
                 />
@@ -3077,14 +4105,25 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
                 className="relative w-full max-w-[380px] sm:max-w-[460px] lg:max-w-[520px] lg:max-h-[calc(100vh-220px)] shrink-0 select-none"
                 style={{ aspectRatio: '1888/2624' }}
               >
-                {/* Glow radial centrado exactamente detrás de la previsualización de la carta */}
-                <div className="pointer-events-none absolute -inset-[32%] bg-[radial-gradient(circle_at_center,_rgba(200,170,110,0.18)_0%,_rgba(9,9,11,0)_70%)] z-0" />
+                {/* Luz ambiental suave detrás de la previsualización, sin cortes visibles. */}
+                <div
+                  className="pointer-events-none absolute left-1/2 top-1/2 z-0 h-[122%] w-[128%] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
+                  style={{
+                    background: 'radial-gradient(ellipse at center, rgba(200,170,110,0.13) 0%, rgba(200,170,110,0.055) 38%, rgba(5,7,13,0) 72%)',
+                  }}
+                />
+                <div
+                  className="pointer-events-none absolute left-1/2 top-[48%] z-0 h-[92%] w-[108%] -translate-x-1/2 -translate-y-1/2 rounded-full blur-2xl"
+                  style={{
+                    background: 'radial-gradient(ellipse at center, rgba(255,245,220,0.055) 0%, rgba(200,170,110,0.03) 34%, rgba(5,7,13,0) 76%)',
+                  }}
+                />
                 
                 <canvas
                   ref={canvasRef}
                   width={CANVAS_WIDTH}
                   height={CANVAS_HEIGHT}
-                  className="relative z-10 block w-full h-full border border-white/15 bg-black shadow-[0_28px_90px_rgba(0,0,0,0.7)] select-none outline-none"
+                  className="relative z-10 block w-full h-full border border-white/15 bg-black shadow-[0_26px_70px_rgba(0,0,0,0.62),0_0_34px_rgba(200,170,110,0.055)] select-none outline-none"
                 />
                 {imageStatus === 'loading' && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs font-bold uppercase tracking-[0.25em] text-[#c8aa6e]">
@@ -3108,6 +4147,8 @@ const CardBuilder = ({ onBack, mode = 'player' }) => {
 CardBuilder.propTypes = {
   onBack: PropTypes.func,
   mode: PropTypes.oneOf(['player', 'master']),
+  characterName: PropTypes.string,
+  currentUserId: PropTypes.string,
 };
 
 export default CardBuilder;

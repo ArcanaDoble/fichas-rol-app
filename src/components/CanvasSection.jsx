@@ -21,7 +21,7 @@ import {
     getItemTraits,
 } from '../utils/armorSystem';
 import { db, storage } from '../firebase';
-import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, query, where, orderBy, getDoc, getDocs, serverTimestamp, addDoc, limit } from 'firebase/firestore';
+import { collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, query, where, orderBy, getDoc, getDocs, serverTimestamp, addDoc, limit, runTransaction } from 'firebase/firestore';
 import { nanoid } from 'nanoid';
 import { getCustomImage, useCustomEquipmentImages } from '../hooks/useCustomEquipmentImages';
 import { parseDieValue } from '../utils/damage';
@@ -1622,6 +1622,21 @@ const isDiscardContainer = (item = {}) => {
 const getCardContainerItems = (containerId, items = []) => items
     .filter(item => isCardItem(item) && item.containerId === containerId)
     .sort((a, b) => (Number(a.containerOrder) || 0) - (Number(b.containerOrder) || 0));
+
+const isContainerCardsHiddenForPlayers = (container = {}) => (
+    isCardContainerItem(container) && container.hideContainedCardsForPlayers === true
+);
+
+const isCardHiddenByContainerForPlayer = (item, items = [], isPlayerView = false) => {
+    if (!isPlayerView || !isCardItem(item) || !item.containerId) return false;
+    const parentContainer = items.find(candidate => (
+        candidate?.id === item.containerId &&
+        isCardContainerItem(candidate)
+    ));
+    return isContainerCardsHiddenForPlayers(parentContainer);
+};
+
+const isMasterLibraryDeck = (deck) => deck?.isMasterLibrary === true;
 
 const MASTER_HAND_SEAT_ID = '__master__';
 const normalizeHandSeatId = (value) => (value || '').toString().trim();
@@ -4096,6 +4111,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [availableCharacters, setAvailableCharacters] = useState([]);
     const activeScenarioRef = useRef(null);
     useEffect(() => { activeScenarioRef.current = activeScenario; }, [activeScenario]);
+    const localUnsavedEditsRef = useRef({}); // { [itemId]: { [key]: value } }
+    const recentLocalWritesRef = useRef({}); // { [itemId]: { x, y, rotation, time } }
+    const lastFlipTimesRef = useRef({}); // { [cardId]: timestamp }
+    const activePersistPromiseRef = useRef(null);
+    const nextPersistRequestRef = useRef(null); // { scenarioId, finalItems, originalItems, explicitModifiedIds }
     const instantBoardDieMoveIdsRef = useRef(new Set());
 
     const [viewMode, setViewMode] = useState('LIBRARY'); // 'LIBRARY' | 'EDIT'
@@ -4224,6 +4244,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [uploadingToken, setUploadingToken] = useState(false);
     const [cards, setCards] = useState([]);
     const [uploadingCard, setUploadingCard] = useState(false);
+    const [boardDecks, setBoardDecks] = useState([]);
+
+    // Estado para arrastrar y ordenar en la biblioteca (Sidebar)
+    const [draggedLibraryItemId, setDraggedLibraryItemId] = useState(null);
+    const [draggedLibraryItemType, setDraggedLibraryItemType] = useState(null); // 'token' | 'card'
+    const [dragOverLibraryItemId, setDragOverLibraryItemId] = useState(null);
 
     // Estado para Drag & Drop de Tokens en el Canvas
     const [draggedTokenId, setDraggedTokenId] = useState(null); // ID del token principal being dragged (para referencia visual inmediata)
@@ -4449,6 +4475,51 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         };
     }, [isMaster, playerName]);
 
+    const boardDeckOwnerIds = useMemo(() => {
+        if (!isBoardMode) return [];
+        if (!isPlayerView) return ['master'];
+
+        const ids = new globalThis.Set([currentUserId, playerName].filter(Boolean));
+        availableCharacters.forEach((character) => {
+            if (!character || character._isTemplate) return;
+            const owner = character.owner || character.ownerName || character.playerName;
+            if (
+                owner === playerName ||
+                owner === currentUserId ||
+                character.name === playerName ||
+                character.displayName === playerName
+            ) {
+                ids.add(character.id);
+                if (character.name) ids.add(character.name);
+            }
+        });
+        return Array.from(ids);
+    }, [availableCharacters, currentUserId, isBoardMode, isPlayerView, playerName]);
+
+    useEffect(() => {
+        if (!isBoardMode) {
+            setBoardDecks([]);
+            return undefined;
+        }
+
+        const unsubDecks = onSnapshot(collection(db, 'card_decks'), (snap) => {
+            const ownerIds = new globalThis.Set(boardDeckOwnerIds);
+            const decksData = snap.docs
+                .map(deckDoc => ({ id: deckDoc.id, ...deckDoc.data() }))
+                .filter(deck => !isMasterLibraryDeck(deck))
+                .filter(deck => ownerIds.has(deck.ownerId))
+                .sort((a, b) => {
+                    const aOrder = typeof a.sortOrder === 'number' ? a.sortOrder : Number.MAX_SAFE_INTEGER;
+                    const bOrder = typeof b.sortOrder === 'number' ? b.sortOrder : Number.MAX_SAFE_INTEGER;
+                    if (aOrder !== bOrder) return aOrder - bOrder;
+                    return (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' });
+                });
+            setBoardDecks(decksData);
+        });
+
+        return () => unsubDecks();
+    }, [boardDeckOwnerIds, isBoardMode]);
+
     // Estado para Cuadro de Selección
     const [selectionBox, setSelectionBox] = useState(null); // { start: {x,y}, current: {x,y} } (Screen Coords)
 
@@ -4663,19 +4734,65 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     if (!current || current.id !== docSnap.id) return current;
 
                     const remoteItems = remoteData.items || [];
+                    const localItems = Array.isArray(current.items) ? current.items : [];
                     const livePendingTurnState = isUsablePendingTurnState(pendingTurnStateRef.current) ? pendingTurnStateRef.current : null;
 
-                    // Si somos jugadores, protegemos los tokens que estamos manipulando localmente
-                    // para que los snapshots remotos no nos "borren" el movimiento de un turno pendiente
-                    // o de un arrastre en curso.
-                    const mergedItems = isPlayerView ? remoteItems.map(remote => {
-                        const localItem = current.items.find(i => i.id === remote.id);
+                    // Protegemos las fichas que estamos manipulando localmente (tanto Master como jugadores)
+                    // para evitar que los snapshots remotos borren arrastres activos, escrituras recientes (snapback),
+                    // ediciones sin guardar del inspector o turnos pendientes.
+                    const mergedItems = remoteItems.map(remote => {
+                        const localItem = localItems.find(i => i.id === remote.id);
                         if (!localItem) return remote;
 
-                        // Caso 1: Mi ficha en un Turno Pendiente (Preservamos posición/velocidad local)
-                        if (livePendingTurnState && remote.id === livePendingTurnState.tokenId) {
+                        // Caso A: Preservar ediciones no guardadas del inspector (Drafts)
+                        const localEdits = localUnsavedEditsRef.current[remote.id];
+                        let itemWithEdits = localEdits ? { ...remote, ...localEdits } : remote;
+
+                        // Caso B: Preservar posición de fichas arrastradas activamente
+                        if (draggedTokenIdRef.current && selectedTokenIdsRef.current.includes(remote.id)) {
                             return {
-                                ...remote,
+                                ...itemWithEdits,
+                                x: localItem.x,
+                                y: localItem.y,
+                                rotation: localItem.rotation
+                            };
+                        }
+
+                        // Caso C: Prevenir snapback/rubber-banding de campos de escritura persistente recientes (últimos 1500ms)
+                        const recentWrite = recentLocalWritesRef.current[remote.id];
+                        if (recentWrite) {
+                            if (Date.now() - recentWrite.time < 3000) {
+                                // Limpiamos campos confirmados por el servidor
+                                const fieldsToProtect = {};
+                                let hasProtectedFields = false;
+
+                                Object.entries(recentWrite.fields || {}).forEach(([key, val]) => {
+                                    if (remote[key] === val) {
+                                        // Confirmado por el servidor, ya no es necesario protegerlo
+                                    } else {
+                                        fieldsToProtect[key] = val;
+                                        hasProtectedFields = true;
+                                    }
+                                });
+
+                                if (hasProtectedFields) {
+                                    recentLocalWritesRef.current[remote.id].fields = fieldsToProtect;
+                                    itemWithEdits = {
+                                        ...itemWithEdits,
+                                        ...fieldsToProtect
+                                    };
+                                } else {
+                                    delete recentLocalWritesRef.current[remote.id];
+                                }
+                            } else {
+                                delete recentLocalWritesRef.current[remote.id];
+                            }
+                        }
+
+                        // Caso D: Preservar posición en Turnos Pendientes (Combat Mode, solo Jugadores)
+                        if (isPlayerView && livePendingTurnState && remote.id === livePendingTurnState.tokenId) {
+                            return {
+                                ...itemWithEdits,
                                 x: localItem.x,
                                 y: localItem.y,
                                 rotation: localItem.rotation,
@@ -4683,20 +4800,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             };
                         }
 
-                        // Caso 2: Fichas que estoy arrastrando activamente (Preservamos posición local)
-                        if (draggedTokenIdRef.current && selectedTokenIdsRef.current.includes(remote.id)) {
-                            return {
-                                ...remote,
-                                x: localItem.x,
-                                y: localItem.y,
-                                rotation: localItem.rotation
-                            };
-                        }
+                        return itemWithEdits;
+                    });
 
-                        return remote;
-                    }) : remoteItems;
-
-                    const itemsChanged = JSON.stringify(mergedItems) !== JSON.stringify(current.items);
+                    const itemsChanged = JSON.stringify(mergedItems) !== JSON.stringify(localItems);
                     const lastModifiedChanged = remoteData.lastModified !== current.lastModified;
 
                     if (itemsChanged || lastModifiedChanged) {
@@ -5156,13 +5263,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const nextItems = items.map(item => {
             if (movingIds.has(item.id) && isCardItem(item)) {
                 orderOffset += 1;
+                const isSource = item.id === sourceId;
                 return {
                     ...item,
                     zone: 'board',
                     containerId,
                     containerOrder: currentMaxOrder + orderOffset,
-                    stackParentId: null,
-                    stackIds: [],
+                    stackParentId: isSource ? null : sourceId,
+                    stackIds: isSource ? source.stackIds : [],
                     x: item.x,
                     y: item.y,
                     rotation: item.rotation || 0,
@@ -5182,15 +5290,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         return sanitizeCardStacks(nextItems);
     };
 
-    const detachCardFromContainer = (items = [], sourceId) => items.map(item => (
-        item.id === sourceId && isCardItem(item)
-            ? {
-                ...item,
-                containerId: null,
-                containerOrder: null,
-            }
-            : item
-    ));
+    const detachCardFromContainer = (items = [], sourceId) => {
+        const source = items.find(item => item.id === sourceId);
+        if (!isCardItem(source)) return items;
+
+        const movingIds = new globalThis.Set([source.id, ...getCardStackIds(source)].filter(Boolean));
+        return items.map(item => (
+            movingIds.has(item.id) && isCardItem(item)
+                ? {
+                    ...item,
+                    containerId: null,
+                    containerOrder: null,
+                }
+                : item
+        ));
+    };
 
     const stackCardOnTarget = (items = [], sourceId, targetId) => {
         const source = items.find(item => item.id === sourceId);
@@ -5724,6 +5838,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 // Seleccionar items que intersecten y pertenezcan a la capa activa
                 const newSelected = activeScenario.items.filter(item => {
                     if (isStackedCardItem(item)) return false;
+                    if (isCardHiddenByContainerForPlayer(item, activeScenario.items, isPlayerView)) return false;
 
                     const isLight = item.type === 'light';
                     const isWall = item.type === 'wall';
@@ -5734,7 +5849,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                     // Restricción de Jugador: No permitir seleccionar tokens ajenos
                     if (isPlayerView && !isLight && !isWall && !isGeometry) {
-                        const hasPermission = item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName);
+                        const isSandboxItem = item.type === 'card' || item.type === 'card_container' || item.type === 'board_marker' || item.type === 'board_die';
+                        const hasPermission = isSandboxItem || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName));
                         if (!hasPermission) return false;
                     } else if (isPlayerView && (isLight || isWall || isGeometry)) {
                         return false;
@@ -6183,14 +6299,30 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
             // Guardar el estado final en Firebase (Solo si no es movimiento pendiente de combate y si de verdad se movió algo)
             if (shouldSaveToFirebase) {
-                try {
-                    updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-                        items: finalItems,
-                        lastModified: Date.now()
-                    });
-                } catch (error) {
-                    console.error("Error saving moved items:", error);
-                }
+                // Registrar los cambios en recentLocalWritesRef antes de escribir para prevenir snapbacks
+                finalItems.forEach(item => {
+                    const original = tokenOriginalPos[item.id];
+                    if (original && (item.x !== original.x || item.y !== original.y || item.rotation !== original.rotation)) {
+                        recentLocalWritesRef.current[item.id] = {
+                            time: Date.now(),
+                            fields: {
+                                x: item.x,
+                                y: item.y,
+                                rotation: item.rotation
+                            }
+                        };
+                    }
+                });
+
+                const draggedItemIds = Array.from(new globalThis.Set([
+                    draggedTokenId,
+                    rotatingTokenId,
+                    resizingTokenId,
+                    ...(selectedTokenIdsRef.current || []),
+                    ...Object.keys(tokenOriginalPos || {})
+                ].filter(Boolean)));
+
+                safePersistItems(currentScenario.id, finalItems, currentScenario.items, draggedItemIds);
             }
 
             setDraggedTokenId(null);
@@ -6765,6 +6897,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 savePayload.allowedPlayers = activeScenario.allowedPlayers || [];
             }
 
+            // Registrar posiciones escritas en recentLocalWritesRef para evitar snapback
+            (activeScenario.items || []).forEach(item => {
+                recentLocalWritesRef.current[item.id] = {
+                    x: item.x,
+                    y: item.y,
+                    rotation: item.rotation,
+                    time: Date.now()
+                };
+            });
+            // Limpiar localUnsavedEditsRef (borradores de inspector) puesto que ya se guardan
+            localUnsavedEditsRef.current = {};
+
             await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), savePayload);
 
             //  SINCRONIZACIÓN BIDIRECCIONAL: Actualizar fichas de personajes vinculados
@@ -6890,6 +7034,42 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             await deleteDoc(doc(db, 'canvas_tokens', token.id));
         } catch (error) {
             console.error("Error deleting token:", error);
+        }
+    };
+
+    const handleReorderLibraryItem = async (collectionName, itemsList, draggedId, targetId) => {
+        const draggedIndex = itemsList.findIndex(item => item.id === draggedId);
+        const targetIndex = itemsList.findIndex(item => item.id === targetId);
+        if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) return;
+
+        const newItems = [...itemsList];
+        const [removed] = newItems.splice(draggedIndex, 1);
+        newItems.splice(targetIndex, 0, removed);
+
+        let newCreatedAt;
+        if (targetIndex === 0) {
+            // Colocado al inicio, debe ser mayor (más nuevo) que el primer elemento actual
+            const firstItemTime = Number(newItems[1]?.createdAt || Date.now());
+            newCreatedAt = firstItemTime + 1000;
+        } else if (targetIndex === newItems.length - 1) {
+            // Colocado al final, debe ser menor (más viejo) que el último elemento actual
+            const lastItemTime = Number(newItems[newItems.length - 2]?.createdAt || Date.now());
+            newCreatedAt = lastItemTime - 1000;
+        } else {
+            // Colocado en medio
+            const prevItemTime = Number(newItems[targetIndex - 1]?.createdAt || Date.now());
+            const nextItemTime = Number(newItems[targetIndex + 1]?.createdAt || Date.now());
+            newCreatedAt = Math.round((prevItemTime + nextItemTime) / 2);
+        }
+
+        try {
+            await updateDoc(doc(db, collectionName, draggedId), {
+                createdAt: newCreatedAt
+            });
+            triggerToast("Orden actualizado", "Se ha reordenado el elemento", "success");
+        } catch (error) {
+            console.error("Error reordering library item:", error);
+            triggerToast("Error al ordenar", "No se pudo actualizar el orden", "error");
         }
     };
 
@@ -7115,6 +7295,91 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             items: nextItems,
             lastModified: Date.now()
         }).catch(err => console.error("Error saving card container:", err));
+    };
+
+    const addDeckToBoard = (deck) => {
+        if (!activeScenario || !isBoardMode || !deck) return;
+
+        const deckCards = (deck.cards || []).filter(card => card?.frontUrl);
+        if (deckCards.length === 0) {
+            triggerToast('Baraja vacía', 'No hay cartas para colocar en el tablero', 'info');
+            return;
+        }
+
+        const centerX = (WORLD_SIZE / 2) - (offset.x / zoom);
+        const centerY = (WORLD_SIZE / 2) - (offset.y / zoom);
+        const cardWidth = Math.max(90, (gridConfig.cellWidth || 120) * 0.72);
+        const cardHeight = Math.round(cardWidth * 1.4);
+        const gapX = Math.round(cardWidth * 0.22);
+        const gapY = Math.round(cardHeight * 0.16);
+        const paddingX = Math.round(cardWidth * 0.28);
+        const paddingTop = Math.round(cardHeight * 0.32);
+        const paddingBottom = Math.round(cardHeight * 0.24);
+        const maxColumns = Math.max(1, Math.min(6, Math.ceil(Math.sqrt(deckCards.length * 1.35))));
+        const columns = Math.min(deckCards.length, maxColumns);
+        const rows = Math.ceil(deckCards.length / columns);
+        const boardWidth = Math.round((columns * cardWidth) + ((columns - 1) * gapX) + (paddingX * 2));
+        const boardHeight = Math.round((rows * cardHeight) + ((rows - 1) * gapY) + paddingTop + paddingBottom);
+        const boardX = centerX - (boardWidth / 2);
+        const boardY = centerY - (boardHeight / 2);
+        const timestamp = Date.now();
+        const containerId = `card-container-${timestamp}`;
+
+        const container = {
+            id: containerId,
+            type: 'cardContainer',
+            x: boardX,
+            y: boardY,
+            width: boardWidth,
+            height: boardHeight,
+            rotation: 0,
+            layer: 'CARD',
+            zone: 'board',
+            name: deck.name || 'Baraja',
+            containerKind: 'deck',
+            sourceDeckId: deck.id,
+            ownerId: currentUserId,
+            ownerName: playerName || (isPlayerView ? currentUserId : 'Master'),
+            snapToGrid: false,
+        };
+
+        const deckItems = deckCards.map((card, index) => {
+            const col = index % columns;
+            const row = Math.floor(index / columns);
+            return {
+                id: `card-${timestamp}-${index}`,
+                type: 'card',
+                x: boardX + paddingX + (col * (cardWidth + gapX)),
+                y: boardY + paddingTop + (row * (cardHeight + gapY)),
+                width: cardWidth,
+                height: cardHeight,
+                frontImage: card.frontUrl,
+                backImage: card.backUrl || null,
+                faceDown: false,
+                rotation: 0,
+                layer: 'CARD',
+                name: card.name || `Carta ${index + 1}`,
+                ownerId: currentUserId,
+                ownerName: playerName || (isPlayerView ? currentUserId : 'Master'),
+                zone: 'board',
+                containerId,
+                containerOrder: timestamp + index,
+                stackParentId: null,
+                stackIds: [],
+                sourceDeckId: deck.id,
+                sourceCardId: card.id || card.templateId || null,
+                snapToGrid: false,
+            };
+        });
+
+        const nextItems = [...(activeScenario.items || []), container, ...deckItems];
+        setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
+        setSelectedTokenIds([containerId]);
+        lastSelectedIdRef.current = containerId;
+        updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
+            items: nextItems,
+            lastModified: Date.now()
+        }).catch(err => console.error("Error saving deck board:", err));
     };
 
     const addBoardMarkerToBoard = () => {
@@ -7359,30 +7624,51 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const card = (currentScenario.items || []).find(item => item.id === cardId);
         if (!isCardContainerItem(container) || !isCardItem(card)) return;
 
-        const nextItems = (currentScenario.items || []).map(item => (
-            item.id === cardId
-                ? {
+        // Determinar si es una carta con pila debajo (padre) o individual
+        const isParent = getCardStackIds(card).length > 0;
+
+        // Si es padre, sacamos todo su montón junto para mantener el apilado y no dejar cartas huérfanas/invisibles
+        // Si es hijo, solo sacamos esa carta individual
+        const movingIds = new globalThis.Set(isParent
+            ? [card.id, ...getCardStackIds(card)].filter(Boolean)
+            : [card.id]
+        );
+
+        const nextItems = (currentScenario.items || []).map(item => {
+            if (movingIds.has(item.id) && isCardItem(item)) {
+                return {
                     ...item,
                     zone: 'board',
                     containerId: null,
                     containerOrder: null,
-                    stackParentId: null,
-                    stackIds: [],
+                    // Si es hijo individual que sacamos, se desvincula de la pila
+                    stackParentId: isParent ? item.stackParentId : null,
+                    stackIds: isParent ? item.stackIds : [],
                     x: container.x + container.width + 18,
                     y: container.y + Math.max(0, (container.height - (item.height || container.height)) / 2),
                     rotation: 0,
-                }
-                : item
-        ));
+                };
+            }
 
-        setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
+            // Si una carta de la mesa contenía la carta sacada en su stack, la filtramos (desapilado de hija)
+            if (Array.isArray(item.stackIds) && item.stackIds.includes(cardId) && !isParent) {
+                return {
+                    ...item,
+                    stackIds: item.stackIds.filter(id => id !== cardId),
+                };
+            }
+
+            return item;
+        });
+
+        // Saneamos relaciones de pilas
+        const finalItems = sanitizeCardStacks(nextItems);
+
+        setActiveScenario(prev => prev ? { ...prev, items: finalItems } : prev);
         setSelectedTokenIds([cardId]);
         lastSelectedIdRef.current = cardId;
         cardStackQuickActionBlockUntilRef.current = Date.now() + 220;
-        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error removing card from container:", err));
+        safePersistItems(currentScenario.id, finalItems, currentScenario.items);
     };
 
     const moveBoardCardToHand = (cardId) => {
@@ -7428,10 +7714,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
         setSelectedTokenIds(prev => prev.filter(id => !movingIds.has(id)));
-        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error moving card to hand:", err));
+        safePersistItems(currentScenario.id, nextItems, currentScenario.items);
     };
 
     const playHandCardToBoard = (card, clientPoint = null) => {
@@ -7490,10 +7773,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }));
 
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
-        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error playing hand card:", err));
+        safePersistItems(currentScenario.id, nextItems, currentScenario.items);
     };
 
     const getBoardCardPreviewImage = (card) => (
@@ -7699,6 +7979,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 return {
                     ...item,
                     zone: 'board',
+                    containerId: parent.containerId || null,
+                    containerOrder: parent.containerOrder || null,
                     stackParentId: null,
                     stackIds: [],
                     x: parent.x + offsetX,
@@ -7739,6 +8021,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 return {
                     ...item,
                     zone: 'board',
+                    containerId: parent.containerId || null,
+                    containerOrder: parent.containerOrder || null,
                     stackParentId: null,
                     stackIds: [],
                     x: parent.x + (gapX * spreadIndex),
@@ -7793,6 +8077,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 return {
                     ...item,
                     zone: 'board',
+                    containerId: parent.containerId || null,
+                    containerOrder: parent.containerOrder || null,
                     stackParentId: null,
                     stackIds: [],
                     x: parent.x + (offsetX * direction),
@@ -7864,6 +8150,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         if (isCardItem(token) && cardStackQuickActionBlockUntilRef.current > Date.now()) {
             e.nativeEvent?.stopImmediatePropagation?.();
             return;
+        }
+
+        // --- PREVISUALIZACIÓN DE CARTA CON BOTÓN CENTRAL ---
+        if (!isTouch && e.button === 1) {
+            if (isBoardMode && isCardItem(token)) {
+                e.preventDefault();
+                openBoardCardPreview(token);
+                return;
+            }
         }
 
         // --- LÓGICA DE TARGETING (ATAQUE) ---
@@ -8134,9 +8429,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         ...i,
                         containerId: null,
                         containerOrder: null,
-                        x: itemToDelete.x + itemToDelete.width + 18,
-                        y: itemToDelete.y,
-                        rotation: 0,
+                        x: i.x,
+                        y: i.y,
+                        rotation: i.rotation || 0,
                     };
                 }
 
@@ -8333,6 +8628,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const renderItemJSX = (item) => {
         if (isHandCardItem(item)) return null;
         if (isStackedCardItem(item)) return null;
+        if (isCardHiddenByContainerForPlayer(item, activeScenario?.items || [], isPlayerView)) return null;
 
         const original = tokenOriginalPos[item.id];
         const dragOrigin = dragVisualOrigin[item.id];
@@ -8354,9 +8650,25 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 .filter(isBoardMarkerItem)
                 .reduce((count, marker) => {
                     if (marker.id === item.id) return count;
-                    const markerOrder = (activeScenario?.items || []).findIndex(candidate => candidate.id === marker.id);
-                    const itemOrder = (activeScenario?.items || []).findIndex(candidate => candidate.id === item.id);
-                    if (markerOrder < 0 || itemOrder < 0 || markerOrder >= itemOrder) return count;
+
+                    // Orden virtual: la ficha arrastrada se sitúa siempre al tope de la pila
+                    const isItemDragged = draggedTokenId === item.id;
+                    const isMarkerDragged = draggedTokenId === marker.id;
+
+                    let isAbove = false;
+                    if (isItemDragged) {
+                        isAbove = true;
+                    } else if (isMarkerDragged) {
+                        isAbove = false;
+                    } else {
+                        const markerOrder = (activeScenario?.items || []).findIndex(candidate => candidate.id === marker.id);
+                        const itemOrder = (activeScenario?.items || []).findIndex(candidate => candidate.id === item.id);
+                        if (markerOrder < 0 || itemOrder < 0 || markerOrder >= itemOrder) return count;
+                        isAbove = true;
+                    }
+
+                    if (!isAbove) return count;
+
                     const itemCenterX = item.x + (item.width / 2);
                     const itemCenterY = item.y + (item.height / 2);
                     const markerCenterX = marker.x + (marker.width / 2);
@@ -8366,7 +8678,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     return distance <= threshold || getItemOverlapRatio(item, marker) >= 0.18 ? count + 1 : count;
                 }, 0)
             : 0;
-        const containerCardItems = isCardContainer
+        const containerCardsAreHidden = isCardContainer && isContainerCardsHiddenForPlayers(item);
+        const containerCardsHiddenForViewer = isPlayerView && containerCardsAreHidden;
+        const containerCardItems = isCardContainer && !containerCardsHiddenForViewer
             ? getCardContainerItems(item.id, activeScenario?.items || [])
             : [];
         const containerMarkerItems = isCardContainer
@@ -8380,7 +8694,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const value = Number(marker?.markerValue);
             return total + (Number.isFinite(value) ? value : 0);
         }, 0);
-        const containerItemCount = containerCardItems.length + containerMarkerValueTotal;
+        const containerItemCount = containerCardsHiddenForViewer
+            ? null
+            : containerCardItems.length + containerMarkerValueTotal;
         const cardStackCount = isCard ? getCardStackIds(item).length : 0;
         const cardStackItems = isCard && cardStackCount > 0
             ? getCardStackIds(item)
@@ -8394,7 +8710,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const isInstantBoardDieMove = isBoardDie && instantBoardDieMoveIdsRef.current.has(item.id);
         const itemMotionTransition = isBoardMarker || isBoardDie
             ? (isLocallyInteracting || isInstantBoardDieMove ? { duration: 0 } : { type: 'spring', stiffness: 520, damping: 28, mass: 0.55 })
-            : isToken && !isLocallyInteracting
+            : (isToken || isCard || isCardContainer) && !isLocallyInteracting
                 ? { type: 'tween', duration: 0.42, ease: [0.22, 1, 0.36, 1] }
                 : { duration: 0 };
         const combatPlacementItems = combatOccupancyFeedback?.tokenId && tokenOriginalPos[combatOccupancyFeedback.tokenId]
@@ -8874,8 +9190,22 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 )}
 
                 <motion.div
-                    onMouseDown={(e) => canInteract && handleTokenMouseDown(e, item)}
+                    onMouseDown={(e) => {
+                        if (e.button === 2) return; // Ignorar clic derecho para evitar conflictos de arrastre
+                        if (canInteract) handleTokenMouseDown(e, item);
+                    }}
                     onTouchStart={(e) => canInteract && handleTokenMouseDown(e, item)}
+                    onContextMenu={(e) => {
+                        if (isCard && canInteract) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const now = Date.now();
+                            const lastFlip = lastFlipTimesRef.current[item.id] || 0;
+                            if (now - lastFlip < 350) return;
+                            lastFlipTimesRef.current[item.id] = now;
+                            updateItem(item.id, { faceDown: !item.faceDown }, true);
+                        }
+                    }}
                     onDoubleClick={(e) => {
                         if (!canInteract) return;
 
@@ -8908,7 +9238,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         zIndex: isBoardDie
                             ? 80
                             : isBoardMarker
-                                ? (draggedTokenId === item.id ? 70 : 30 + itemOrderIndex)
+                                ? (draggedTokenId === item.id ? 999 : 30 + itemOrderIndex)
                                 : isLight
                                     ? 10
                                     : isGeometry
@@ -9069,19 +9399,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             />
                         ) : isCardContainer ? (
                             <div
-                                className="relative w-full h-full overflow-visible rounded-md border border-dashed border-[#c8aa6e]/55 bg-transparent shadow-[0_0_0_1px_rgba(0,0,0,0.45)]"
+                                className={`relative w-full h-full overflow-visible rounded-md border border-dashed bg-transparent ${containerCardsAreHidden ? 'border-violet-400/70 shadow-[0_0_0_1px_rgba(0,0,0,0.45),0_0_24px_rgba(167,139,250,0.16)]' : 'border-[#c8aa6e]/55 shadow-[0_0_0_1px_rgba(0,0,0,0.45)]'}`}
                             >
-                                <div className="absolute -left-px -top-px h-5 w-5 border-l-2 border-t-2 border-[#c8aa6e]/80 rounded-tl-md pointer-events-none" />
-                                <div className="absolute -right-px -top-px h-5 w-5 border-r-2 border-t-2 border-[#c8aa6e]/80 rounded-tr-md pointer-events-none" />
-                                <div className="absolute -bottom-px -left-px h-5 w-5 border-b-2 border-l-2 border-[#c8aa6e]/80 rounded-bl-md pointer-events-none" />
-                                <div className="absolute -bottom-px -right-px h-5 w-5 border-b-2 border-r-2 border-[#c8aa6e]/80 rounded-br-md pointer-events-none" />
+                                <div className={`absolute -left-px -top-px h-5 w-5 border-l-2 border-t-2 rounded-tl-md pointer-events-none ${containerCardsAreHidden ? 'border-violet-300/85' : 'border-[#c8aa6e]/80'}`} />
+                                <div className={`absolute -right-px -top-px h-5 w-5 border-r-2 border-t-2 rounded-tr-md pointer-events-none ${containerCardsAreHidden ? 'border-violet-300/85' : 'border-[#c8aa6e]/80'}`} />
+                                <div className={`absolute -bottom-px -left-px h-5 w-5 border-b-2 border-l-2 rounded-bl-md pointer-events-none ${containerCardsAreHidden ? 'border-violet-300/85' : 'border-[#c8aa6e]/80'}`} />
+                                <div className={`absolute -bottom-px -right-px h-5 w-5 border-b-2 border-r-2 rounded-br-md pointer-events-none ${containerCardsAreHidden ? 'border-violet-300/85' : 'border-[#c8aa6e]/80'}`} />
                                 <div className="absolute left-2 top-2 flex items-center gap-2 pointer-events-none">
-                                    <span className="rounded bg-black/70 px-2 py-1 text-[8px] font-black uppercase tracking-[0.2em] text-[#f8e7b9] shadow">
+                                    <span className={`rounded px-2 py-1 text-[8px] font-black uppercase tracking-[0.2em] shadow ${containerCardsAreHidden ? 'bg-violet-950/80 text-violet-100' : 'bg-black/70 text-[#f8e7b9]'}`}>
                                         {item.name || 'Tablero'}
                                     </span>
-                                    <span className="rounded-full border border-[#c8aa6e]/45 bg-black/75 px-2 py-0.5 text-[9px] font-black text-[#f8e7b9] shadow">
-                                        {containerItemCount}
-                                    </span>
+                                    {containerItemCount !== null && (
+                                        <span className="rounded-full border border-[#c8aa6e]/45 bg-black/75 px-2 py-0.5 text-[9px] font-black text-[#f8e7b9] shadow">
+                                            {containerItemCount}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         ) : isCard ? (
@@ -9206,7 +9538,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         )}
 
                         {/* Nombre / Pila */}
-                        {isCardContainer && isDiscardContainer(item) && containerCardItems.length > 0 ? (
+                        {isCardContainer && containerCardItems.length > 0 ? (
                             <div className={`absolute top-[calc(100%+0.75rem)] left-1/2 -translate-x-1/2 z-[70] w-[calc((22px*6)+(0.375rem*5))] max-w-[calc(100vw-2rem)] transition-opacity ${isSelected || 'group-hover:opacity-100 opacity-0'}`}>
                                 <div className="flex flex-wrap items-center justify-center gap-1.5">
                                     {containerCardItems.map((containedCard) => {
@@ -9293,7 +9625,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         if (isBoardDie) {
                                             updateItem(item.id, { dieLaunchMode: !item.dieLaunchMode }, true);
                                         } else if (isCard) {
-                                            updateItem(item.id, { faceDown: !item.faceDown });
+                                            const now = Date.now();
+                                            const lastFlip = lastFlipTimesRef.current[item.id] || 0;
+                                            if (now - lastFlip < 350) return;
+                                            lastFlipTimesRef.current[item.id] = now;
+                                            updateItem(item.id, { faceDown: !item.faceDown }, true);
                                         } else {
                                             rotateItem(item.id, 45);
                                         }
@@ -9304,7 +9640,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         if (isBoardDie) {
                                             updateItem(item.id, { dieLaunchMode: !item.dieLaunchMode }, true);
                                         } else if (isCard) {
-                                            updateItem(item.id, { faceDown: !item.faceDown });
+                                            const now = Date.now();
+                                            const lastFlip = lastFlipTimesRef.current[item.id] || 0;
+                                            if (now - lastFlip < 350) return;
+                                            lastFlipTimesRef.current[item.id] = now;
+                                            updateItem(item.id, { faceDown: !item.faceDown }, true);
                                         } else {
                                             rotateItem(item.id, 45);
                                         }
@@ -9353,7 +9693,122 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         );
     };
 
+    const safePersistItems = async (scenarioId, finalItems, originalItems, explicitModifiedIds = null) => {
+        if (!scenarioId || !finalItems) return;
+
+        // Si ya hay una persistencia en curso, encolamos esta petición (que sobrescribirá cualquier petición previa en espera)
+        if (activePersistPromiseRef.current) {
+            nextPersistRequestRef.current = { scenarioId, finalItems, originalItems, explicitModifiedIds };
+            return;
+        }
+
+        // Definimos la función interna que ejecuta el guardado
+        const executePersist = async (reqId, itemsToPersist, origItems, explicitIds) => {
+            const docRef = doc(db, scenarioCollectionName, reqId);
+            const originalMap = new Map((origItems || []).map(i => [i.id, i]));
+            const finalMap = new Map((itemsToPersist || []).map(i => [i.id, i]));
+
+            const modifiedOrAdded = [];
+            itemsToPersist.forEach(item => {
+                const isExplicit = Array.isArray(explicitIds) && explicitIds.includes(item.id);
+                const orig = originalMap.get(item.id);
+                if (isExplicit || !orig || JSON.stringify(orig) !== JSON.stringify(item)) {
+                    modifiedOrAdded.push(item);
+                }
+            });
+
+            const deletedIds = [];
+            (origItems || []).forEach(item => {
+                if (!finalMap.has(item.id)) {
+                    deletedIds.push(item.id);
+                }
+            });
+
+            if (modifiedOrAdded.length === 0 && deletedIds.length === 0) return;
+
+            try {
+                await runTransaction(db, async (transaction) => {
+                    const sfDoc = await transaction.get(docRef);
+                    if (!sfDoc.exists()) return;
+
+                    const currentData = sfDoc.data();
+                    const currentItems = currentData.items || [];
+
+                    let nextItems = currentItems.map(item => {
+                        if (deletedIds.includes(item.id)) return null;
+                        const localMod = modifiedOrAdded.find(m => m.id === item.id);
+                        if (localMod) return localMod;
+                        return item;
+                    }).filter(Boolean);
+
+                    const currentIds = new Set(currentItems.map(i => i.id));
+                    modifiedOrAdded.forEach(newItem => {
+                        if (!currentIds.has(newItem.id)) {
+                            nextItems.push(newItem);
+                        }
+                    });
+
+                    transaction.update(docRef, {
+                        items: nextItems,
+                        lastModified: Date.now()
+                    });
+                });
+            } catch (error) {
+                console.error("Error in safePersistItems transaction:", error);
+                await updateDoc(docRef, {
+                    items: itemsToPersist,
+                    lastModified: Date.now()
+                }).catch(err => console.error("Error in fallback safePersistItems updateDoc:", err));
+            }
+        };
+
+        // Creamos la promesa de ejecución secuencial
+        activePersistPromiseRef.current = (async () => {
+            try {
+                await executePersist(scenarioId, finalItems, originalItems, explicitModifiedIds);
+            } finally {
+                activePersistPromiseRef.current = null;
+                const nextReq = nextPersistRequestRef.current;
+                if (nextReq) {
+                    nextPersistRequestRef.current = null;
+                    safePersistItems(nextReq.scenarioId, nextReq.finalItems, nextReq.originalItems, nextReq.explicitModifiedIds);
+                }
+            }
+        })();
+    };
+
     const updateItem = (itemId, updates, persist = false) => {
+        if (!persist) {
+            // Guardar localmente en el ref de ediciones no guardadas
+            if (!localUnsavedEditsRef.current[itemId]) {
+                localUnsavedEditsRef.current[itemId] = {};
+            }
+            localUnsavedEditsRef.current[itemId] = {
+                ...localUnsavedEditsRef.current[itemId],
+                ...updates
+            };
+        } else {
+            // Si se persiste directamente, limpiamos ese borrador local
+            if (localUnsavedEditsRef.current[itemId]) {
+                Object.keys(updates || {}).forEach(key => {
+                    delete localUnsavedEditsRef.current[itemId][key];
+                });
+                if (Object.keys(localUnsavedEditsRef.current[itemId]).length === 0) {
+                    delete localUnsavedEditsRef.current[itemId];
+                }
+            }
+
+            // Registrar los campos persistentes en recentLocalWritesRef para evitar snapback
+            const existingWrite = recentLocalWritesRef.current[itemId] || { fields: {} };
+            recentLocalWritesRef.current[itemId] = {
+                time: Date.now(),
+                fields: {
+                    ...existingWrite.fields,
+                    ...updates
+                }
+            };
+        }
+
         setActiveScenario(prev => {
             if (!prev) return prev;
             let didChange = false;
@@ -9368,10 +9823,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             if (!didChange) return prev;
 
             if (persist && prev.id) {
-                updateDoc(doc(db, scenarioCollectionName, prev.id), {
-                    items: newItems,
-                    lastModified: Date.now()
-                }).catch(err => console.error("Error persisting item update:", err));
+                safePersistItems(prev.id, newItems, prev.items, [itemId]);
             }
 
             return { ...prev, items: newItems };
@@ -11611,6 +12063,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         });
     }, [activeScenario?.items, isBoardMode]);
     const activeScenarioItems = useMemo(() => activeScenario?.items || [], [activeScenario?.items]);
+
+    useEffect(() => {
+        if (!isPlayerView || activeScenarioItems.length === 0) return;
+        setSelectedTokenIds(prev => {
+            const visibleSelection = prev.filter((id) => {
+                const selectedItem = activeScenarioItems.find(item => item?.id === id);
+                return selectedItem && !isCardHiddenByContainerForPlayer(selectedItem, activeScenarioItems, true);
+            });
+            return visibleSelection.length === prev.length ? prev : visibleSelection;
+        });
+    }, [activeScenarioItems, isPlayerView]);
+
     const canvasRenderItemGroups = useMemo(() => {
         const livePendingTurnState = isUsablePendingTurnState(pendingTurnState) ? pendingTurnState : null;
         const lights = [];
@@ -11618,6 +12082,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         for (const item of activeScenarioItems) {
             if (!item) continue;
+            if (isCardHiddenByContainerForPlayer(item, activeScenarioItems, isPlayerView)) continue;
             let renderItem = item;
 
             if (
@@ -12924,9 +13389,45 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             {tokens.map(token => (
                                                 <div
                                                     key={token.id}
-                                                    className="aspect-square bg-[#0b1120] rounded-lg border border-slate-800 relative group overflow-hidden hover:border-[#c8aa6e]/50 transition-colors cursor-pointer"
+                                                    draggable={!isPlayerView}
+                                                    onDragStart={(e) => {
+                                                        if (isPlayerView) return;
+                                                        setDraggedLibraryItemId(token.id);
+                                                        setDraggedLibraryItemType('token');
+                                                        e.dataTransfer.effectAllowed = 'move';
+                                                    }}
+                                                    onDragOver={(e) => {
+                                                        if (draggedLibraryItemType === 'token' && draggedLibraryItemId !== token.id) {
+                                                            e.preventDefault();
+                                                            setDragOverLibraryItemId(token.id);
+                                                        }
+                                                    }}
+                                                    onDragLeave={() => {
+                                                        if (dragOverLibraryItemId === token.id) {
+                                                            setDragOverLibraryItemId(null);
+                                                        }
+                                                    }}
+                                                    onDrop={async (e) => {
+                                                        e.preventDefault();
+                                                        if (draggedLibraryItemType === 'token' && draggedLibraryItemId && draggedLibraryItemId !== token.id) {
+                                                            await handleReorderLibraryItem('canvas_tokens', tokens, draggedLibraryItemId, token.id);
+                                                        }
+                                                        setDraggedLibraryItemId(null);
+                                                        setDraggedLibraryItemType(null);
+                                                        setDragOverLibraryItemId(null);
+                                                    }}
+                                                    onDragEnd={() => {
+                                                        setDraggedLibraryItemId(null);
+                                                        setDraggedLibraryItemType(null);
+                                                        setDragOverLibraryItemId(null);
+                                                    }}
+                                                    className={`aspect-square bg-[#0b1120] rounded-lg border relative group overflow-hidden transition-all duration-200 cursor-grab active:cursor-grabbing ${
+                                                        draggedLibraryItemId === token.id ? 'opacity-35 border-dashed border-slate-700 scale-95' :
+                                                        dragOverLibraryItemId === token.id ? 'border-[#c8aa6e] ring-2 ring-[#c8aa6e]/30 scale-105 shadow-[0_0_15px_rgba(200,170,110,0.4)]' :
+                                                        'border-slate-800 hover:border-[#c8aa6e]/50'
+                                                    }`}
                                                     onClick={() => addTokenToCanvas(token.url)} // Click to Add
-                                                    title="Click para añadir al mapa"
+                                                    title={isPlayerView ? "Click para añadir al mapa" : "Arrastra para reordenar, click para añadir al mapa"}
                                                 >
                                                     <TokenImageWithLoader
                                                         src={token.url}
@@ -12966,6 +13467,60 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     </div>
                                                 </div>
 
+                                                {boardDecks.length > 0 && (
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.2em] text-[#c8aa6e]/75">
+                                                            <FolderOpen className="h-3 w-3" />
+                                                            Barajas
+                                                        </div>
+                                                        <div className="grid grid-cols-1 gap-2">
+                                                            {boardDecks.map(deck => {
+                                                                const deckCards = (deck.cards || []).filter(card => card?.frontUrl);
+                                                                return (
+                                                                    <button
+                                                                        key={deck.id}
+                                                                        type="button"
+                                                                        onClick={() => addDeckToBoard(deck)}
+                                                                        disabled={deckCards.length === 0}
+                                                                        className="group flex items-center gap-3 rounded-lg border border-slate-800 bg-[#0b1120]/75 p-2 text-left transition-all hover:border-[#c8aa6e]/45 hover:bg-[#c8aa6e]/5 disabled:cursor-not-allowed disabled:opacity-45"
+                                                                        title="Crear tablero con esta baraja"
+                                                                    >
+                                                                        <div className="relative h-12 w-12 flex-none">
+                                                                            {deckCards.slice(0, 3).map((card, index) => (
+                                                                                <img
+                                                                                    key={`${deck.id}-${card.id || index}`}
+                                                                                    src={card.frontUrl}
+                                                                                    alt=""
+                                                                                    className="absolute h-11 w-8 rounded border border-black/60 object-cover shadow-lg"
+                                                                                    style={{
+                                                                                        left: `${index * 8}px`,
+                                                                                        top: `${index * 2}px`,
+                                                                                        transform: `rotate(${(index - 1) * 5}deg)`,
+                                                                                        zIndex: index + 1,
+                                                                                    }}
+                                                                                />
+                                                                            ))}
+                                                                            {deckCards.length === 0 && (
+                                                                                <div className="flex h-12 w-12 items-center justify-center rounded border border-dashed border-slate-700 text-slate-600">
+                                                                                    <FolderOpen className="h-5 w-5" />
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="min-w-0 flex-1">
+                                                                            <div className="truncate font-fantasy text-xs uppercase tracking-wider text-[#f0e6d2] group-hover:text-[#c8aa6e]">
+                                                                                {deck.name || 'Baraja'}
+                                                                            </div>
+                                                                            <div className="mt-0.5 text-[8px] font-bold uppercase tracking-widest text-slate-500">
+                                                                                {deckCards.length} cartas - crear tablero
+                                                                            </div>
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 <label className={`
                                                     flex flex-col items-center justify-center w-full h-32
                                                     border-2 border-dashed border-slate-700/50 rounded-xl
@@ -12991,8 +13546,44 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     {cards.map(card => (
                                                         <div
                                                             key={card.id}
-                                                            className="aspect-[5/7] bg-[#0b1120] rounded-md border border-slate-800 relative group overflow-hidden hover:border-[#c8aa6e]/50 transition-colors"
-                                                            title="Carta"
+                                                            draggable={!isPlayerView}
+                                                            onDragStart={(e) => {
+                                                                if (isPlayerView) return;
+                                                                setDraggedLibraryItemId(card.id);
+                                                                setDraggedLibraryItemType('card');
+                                                                e.dataTransfer.effectAllowed = 'move';
+                                                            }}
+                                                            onDragOver={(e) => {
+                                                                if (draggedLibraryItemType === 'card' && draggedLibraryItemId !== card.id) {
+                                                                    e.preventDefault();
+                                                                    setDragOverLibraryItemId(card.id);
+                                                                }
+                                                            }}
+                                                            onDragLeave={() => {
+                                                                if (dragOverLibraryItemId === card.id) {
+                                                                    setDragOverLibraryItemId(null);
+                                                                }
+                                                            }}
+                                                            onDrop={async (e) => {
+                                                                e.preventDefault();
+                                                                if (draggedLibraryItemType === 'card' && draggedLibraryItemId && draggedLibraryItemId !== card.id) {
+                                                                    await handleReorderLibraryItem('canvas_cards', cards, draggedLibraryItemId, card.id);
+                                                                }
+                                                                setDraggedLibraryItemId(null);
+                                                                setDraggedLibraryItemType(null);
+                                                                setDragOverLibraryItemId(null);
+                                                            }}
+                                                            onDragEnd={() => {
+                                                                setDraggedLibraryItemId(null);
+                                                                setDraggedLibraryItemType(null);
+                                                                setDragOverLibraryItemId(null);
+                                                            }}
+                                                            className={`aspect-[5/7] bg-[#0b1120] rounded-md border relative group overflow-hidden transition-all duration-200 cursor-grab active:cursor-grabbing ${
+                                                                draggedLibraryItemId === card.id ? 'opacity-35 border-dashed border-slate-700 scale-95' :
+                                                                dragOverLibraryItemId === card.id ? 'border-[#c8aa6e] ring-2 ring-[#c8aa6e]/30 scale-105 shadow-[0_0_15px_rgba(200,170,110,0.4)]' :
+                                                                'border-slate-800 hover:border-[#c8aa6e]/50'
+                                                            }`}
+                                                            title={isPlayerView ? "Carta" : "Arrastra para reordenar"}
                                                         >
                                                             <TokenImageWithLoader
                                                                 src={card.frontUrl}
@@ -13271,6 +13862,60 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         <p className="text-[9px] text-slate-600 mt-1">Añade cartas a mesa o mano. La mano cuenta para la iniciativa del token que controles.</p>
                                                     </div>
 
+                                                    {boardDecks.length > 0 && (
+                                                        <div className="space-y-2">
+                                                            <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.2em] text-[#c8aa6e]/75">
+                                                                <FolderOpen className="h-3 w-3" />
+                                                                Barajas
+                                                            </div>
+                                                            <div className="grid grid-cols-1 gap-2">
+                                                                {boardDecks.map(deck => {
+                                                                    const deckCards = (deck.cards || []).filter(card => card?.frontUrl);
+                                                                    return (
+                                                                        <button
+                                                                            key={deck.id}
+                                                                            type="button"
+                                                                            onClick={() => addDeckToBoard(deck)}
+                                                                            disabled={deckCards.length === 0}
+                                                                            className="group flex items-center gap-3 rounded-lg border border-slate-800 bg-[#0b1120]/75 p-2 text-left transition-all hover:border-[#c8aa6e]/45 hover:bg-[#c8aa6e]/5 disabled:cursor-not-allowed disabled:opacity-45"
+                                                                            title="Crear tablero con esta baraja"
+                                                                        >
+                                                                            <div className="relative h-12 w-12 flex-none">
+                                                                                {deckCards.slice(0, 3).map((card, index) => (
+                                                                                    <img
+                                                                                        key={`${deck.id}-${card.id || index}`}
+                                                                                        src={card.frontUrl}
+                                                                                        alt=""
+                                                                                        className="absolute h-11 w-8 rounded border border-black/60 object-cover shadow-lg"
+                                                                                        style={{
+                                                                                            left: `${index * 8}px`,
+                                                                                            top: `${index * 2}px`,
+                                                                                            transform: `rotate(${(index - 1) * 5}deg)`,
+                                                                                            zIndex: index + 1,
+                                                                                        }}
+                                                                                    />
+                                                                                ))}
+                                                                                {deckCards.length === 0 && (
+                                                                                    <div className="flex h-12 w-12 items-center justify-center rounded border border-dashed border-slate-700 text-slate-600">
+                                                                                        <FolderOpen className="h-5 w-5" />
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="min-w-0 flex-1">
+                                                                                <div className="truncate font-fantasy text-xs uppercase tracking-wider text-[#f0e6d2] group-hover:text-[#c8aa6e]">
+                                                                                    {deck.name || 'Baraja'}
+                                                                                </div>
+                                                                                <div className="mt-0.5 text-[8px] font-bold uppercase tracking-widest text-slate-500">
+                                                                                    {deckCards.length} cartas - crear tablero
+                                                                                </div>
+                                                                            </div>
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
                                                     <label className={`
                                                         flex flex-col items-center justify-center w-full h-28
                                                         border-2 border-dashed border-slate-700/50 rounded-xl
@@ -13296,8 +13941,44 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         {cards.map(card => (
                                                             <div
                                                                 key={card.id}
-                                                                className="aspect-[5/7] bg-[#0b1120] rounded-md border border-slate-800 relative group overflow-hidden hover:border-[#c8aa6e]/50 transition-colors"
-                                                                title="Carta"
+                                                                draggable={!isPlayerView}
+                                                                onDragStart={(e) => {
+                                                                    if (isPlayerView) return;
+                                                                    setDraggedLibraryItemId(card.id);
+                                                                    setDraggedLibraryItemType('card');
+                                                                    e.dataTransfer.effectAllowed = 'move';
+                                                                }}
+                                                                onDragOver={(e) => {
+                                                                    if (draggedLibraryItemType === 'card' && draggedLibraryItemId !== card.id) {
+                                                                        e.preventDefault();
+                                                                        setDragOverLibraryItemId(card.id);
+                                                                    }
+                                                                }}
+                                                                onDragLeave={() => {
+                                                                    if (dragOverLibraryItemId === card.id) {
+                                                                        setDragOverLibraryItemId(null);
+                                                                    }
+                                                                }}
+                                                                onDrop={async (e) => {
+                                                                    e.preventDefault();
+                                                                    if (draggedLibraryItemType === 'card' && draggedLibraryItemId && draggedLibraryItemId !== card.id) {
+                                                                        await handleReorderLibraryItem('canvas_cards', cards, draggedLibraryItemId, card.id);
+                                                                    }
+                                                                    setDraggedLibraryItemId(null);
+                                                                    setDraggedLibraryItemType(null);
+                                                                    setDragOverLibraryItemId(null);
+                                                                }}
+                                                                onDragEnd={() => {
+                                                                    setDraggedLibraryItemId(null);
+                                                                    setDraggedLibraryItemType(null);
+                                                                    setDragOverLibraryItemId(null);
+                                                                }}
+                                                                className={`aspect-[5/7] bg-[#0b1120] rounded-md border relative group overflow-hidden transition-all duration-200 cursor-grab active:cursor-grabbing ${
+                                                                    draggedLibraryItemId === card.id ? 'opacity-35 border-dashed border-slate-700 scale-95' :
+                                                                    dragOverLibraryItemId === card.id ? 'border-[#c8aa6e] ring-2 ring-[#c8aa6e]/30 scale-105 shadow-[0_0_15px_rgba(200,170,110,0.4)]' :
+                                                                    'border-slate-800 hover:border-[#c8aa6e]/50'
+                                                                }`}
+                                                                title={isPlayerView ? "Carta" : "Arrastra para reordenar"}
                                                             >
                                                                 <TokenImageWithLoader
                                                                     src={card.frontUrl}
@@ -13410,6 +14091,33 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         className="w-full bg-[#111827] border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-[#c8aa6e] outline-none transition-colors"
                                                     />
                                                 </div>
+
+                                                {isBoardMode && isCardContainerItem(token) && !isPlayerView && (
+                                                    <div className={`rounded-lg border p-3 transition-colors ${isContainerCardsHiddenForPlayers(token) ? 'border-[#c8aa6e]/45 bg-[#c8aa6e]/10' : 'border-slate-800 bg-[#0b1120]'}`}>
+                                                        <div className="flex items-start gap-3">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => updateItem(token.id, { hideContainedCardsForPlayers: !isContainerCardsHiddenForPlayers(token) })}
+                                                                aria-pressed={isContainerCardsHiddenForPlayers(token)}
+                                                                className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-md border transition-colors ${isContainerCardsHiddenForPlayers(token) ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f8e7b9]' : 'border-slate-700 bg-[#111827] text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'}`}
+                                                                title={isContainerCardsHiddenForPlayers(token) ? 'Cartas ocultas para jugadores' : 'Cartas visibles para jugadores'}
+                                                            >
+                                                                {isContainerCardsHiddenForPlayers(token) ? <EyeOff size={18} /> : <Eye size={18} />}
+                                                            </button>
+                                                            <div className="min-w-0 flex-1 space-y-1">
+                                                                <div className="flex items-center gap-2">
+                                                                    <Lock size={12} className={isContainerCardsHiddenForPlayers(token) ? 'text-[#c8aa6e]' : 'text-slate-500'} />
+                                                                    <span className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f0e6d2]">
+                                                                        Ocultar cartas internas
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-[11px] leading-relaxed text-slate-500">
+                                                                    Los jugadores verán el tablero, pero no las cartas que contiene ni su posición. Al sacarlas del tablero o eliminarlo, volverán a mostrarse.
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
 
                                                 {token.type === 'boardMarker' && (
                                                     <div className="bg-[#0b1120] border border-[#c8aa6e]/20 rounded-lg p-3 space-y-4">
@@ -13548,7 +14256,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     <div className="bg-[#0b1120] border border-[#c8aa6e]/20 rounded-lg p-3 space-y-3">
                                                         <div className="flex items-center gap-2">
                                                             <button
-                                                                onClick={() => updateItem(token.id, { faceDown: !token.faceDown })}
+                                                                onClick={() => {
+                                                                    const now = Date.now();
+                                                                    const lastFlip = lastFlipTimesRef.current[token.id] || 0;
+                                                                    if (now - lastFlip < 350) return;
+                                                                    lastFlipTimesRef.current[token.id] = now;
+                                                                    updateItem(token.id, { faceDown: !token.faceDown }, true);
+                                                                }}
                                                                 className="shrink-0 px-3 py-2 rounded border border-[#c8aa6e]/40 bg-[#c8aa6e]/10 text-[#f8e7b9] hover:bg-[#c8aa6e]/20 text-[10px] font-bold uppercase tracking-widest transition-colors"
                                                             >
                                                                 Voltear

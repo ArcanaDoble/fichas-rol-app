@@ -55,6 +55,7 @@ import { uploadDataUrl } from '../utils/storage';
 import Sidebar, { MobileNav } from './Sidebar';
 import ProgressionView from './ProgressionView';
 import LoadoutView from './LoadoutView';
+import DeckBuilderView from './DeckBuilderView';
 import CardBuilder from './CardBuilder';
 import HexIcon from './HexIcon';
 import { RelicsView } from './RelicsView';
@@ -1495,6 +1496,8 @@ const ClassList = ({
   creatorLabel = "Campeón",
   isPlayerMode = false,
   initialCharacterName = null,
+  currentUserId = null,
+  knownPlayers = [],
 }) => {
   const [classes, setClasses] = useState([]);
   const [isAutoOpening, setIsAutoOpening] = useState(!!initialCharacterName);
@@ -4982,6 +4985,17 @@ const ClassList = ({
           );
         /* Funciones movidas al scope principal, ver más arriba */
         case 'progression':
+          if (isPlayerMode) {
+            return (
+              <DeckBuilderView
+                ownerId={editingClass.id}
+                ownerName={editingClass.name}
+                currentUserId={currentUserId || editingClass.owner || editingClass.name}
+                knownPlayers={knownPlayers}
+                isPlayer={true}
+              />
+            );
+          }
           return (
             <ProgressionView
               dndClass={editingClass}
@@ -5018,7 +5032,11 @@ const ClassList = ({
           );
         case 'store':
           return (
-            <CardBuilder mode={isPlayerMode ? 'player' : 'master'} />
+            <CardBuilder
+              mode={isPlayerMode ? 'player' : 'master'}
+              characterName={isPlayerMode ? editingClass.name : ''}
+              currentUserId={currentUserId || editingClass.owner || editingClass.name}
+            />
           );
         default:
           return null;
@@ -5037,6 +5055,7 @@ const ClassList = ({
           onSave={readOnly ? undefined : handleSaveChanges}
           hasUnsavedChanges={hasUnsavedChanges}
           saveButtonState={saveButtonState}
+          isPlayerMode={isPlayerMode}
         />
         <div className="flex-1 relative overflow-hidden pb-16 md:pb-0">
           {renderActiveView()}
@@ -5059,6 +5078,7 @@ const ClassList = ({
           onSave={readOnly ? undefined : handleSaveChanges}
           hasUnsavedChanges={hasUnsavedChanges}
           saveButtonState={saveButtonState}
+          isPlayerMode={isPlayerMode}
         />
       </div>
     );
@@ -5392,6 +5412,8 @@ ClassList.propTypes = {
     }),
   ),
   rarityColorMap: PropTypes.objectOf(PropTypes.string),
+  currentUserId: PropTypes.string,
+  knownPlayers: PropTypes.arrayOf(PropTypes.string),
 };
 
 export default ClassList;
