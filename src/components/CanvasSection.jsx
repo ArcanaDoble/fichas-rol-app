@@ -1623,6 +1623,19 @@ const getCardContainerItems = (containerId, items = []) => items
     .filter(item => isCardItem(item) && item.containerId === containerId)
     .sort((a, b) => (Number(a.containerOrder) || 0) - (Number(b.containerOrder) || 0));
 
+const isContainerCardsHiddenForPlayers = (container = {}) => (
+    isCardContainerItem(container) && container.hideContainedCardsForPlayers === true
+);
+
+const isCardHiddenByContainerForPlayer = (item, items = [], isPlayerView = false) => {
+    if (!isPlayerView || !isCardItem(item) || !item.containerId) return false;
+    const parentContainer = items.find(candidate => (
+        candidate?.id === item.containerId &&
+        isCardContainerItem(candidate)
+    ));
+    return isContainerCardsHiddenForPlayers(parentContainer);
+};
+
 const isMasterLibraryDeck = (deck) => deck?.isMasterLibrary === true;
 
 const MASTER_HAND_SEAT_ID = '__master__';
@@ -5825,6 +5838,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 // Seleccionar items que intersecten y pertenezcan a la capa activa
                 const newSelected = activeScenario.items.filter(item => {
                     if (isStackedCardItem(item)) return false;
+                    if (isCardHiddenByContainerForPlayer(item, activeScenario.items, isPlayerView)) return false;
 
                     const isLight = item.type === 'light';
                     const isWall = item.type === 'wall';
@@ -8614,6 +8628,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const renderItemJSX = (item) => {
         if (isHandCardItem(item)) return null;
         if (isStackedCardItem(item)) return null;
+        if (isCardHiddenByContainerForPlayer(item, activeScenario?.items || [], isPlayerView)) return null;
 
         const original = tokenOriginalPos[item.id];
         const dragOrigin = dragVisualOrigin[item.id];
@@ -8663,7 +8678,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     return distance <= threshold || getItemOverlapRatio(item, marker) >= 0.18 ? count + 1 : count;
                 }, 0)
             : 0;
-        const containerCardItems = isCardContainer
+        const containerCardsAreHidden = isCardContainer && isContainerCardsHiddenForPlayers(item);
+        const containerCardsHiddenForViewer = isPlayerView && containerCardsAreHidden;
+        const containerCardItems = isCardContainer && !containerCardsHiddenForViewer
             ? getCardContainerItems(item.id, activeScenario?.items || [])
             : [];
         const containerMarkerItems = isCardContainer
@@ -8677,7 +8694,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const value = Number(marker?.markerValue);
             return total + (Number.isFinite(value) ? value : 0);
         }, 0);
-        const containerItemCount = containerCardItems.length + containerMarkerValueTotal;
+        const containerItemCount = containerCardsHiddenForViewer
+            ? null
+            : containerCardItems.length + containerMarkerValueTotal;
         const cardStackCount = isCard ? getCardStackIds(item).length : 0;
         const cardStackItems = isCard && cardStackCount > 0
             ? getCardStackIds(item)
@@ -9380,19 +9399,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             />
                         ) : isCardContainer ? (
                             <div
-                                className="relative w-full h-full overflow-visible rounded-md border border-dashed border-[#c8aa6e]/55 bg-transparent shadow-[0_0_0_1px_rgba(0,0,0,0.45)]"
+                                className={`relative w-full h-full overflow-visible rounded-md border border-dashed bg-transparent ${containerCardsAreHidden ? 'border-violet-400/70 shadow-[0_0_0_1px_rgba(0,0,0,0.45),0_0_24px_rgba(167,139,250,0.16)]' : 'border-[#c8aa6e]/55 shadow-[0_0_0_1px_rgba(0,0,0,0.45)]'}`}
                             >
-                                <div className="absolute -left-px -top-px h-5 w-5 border-l-2 border-t-2 border-[#c8aa6e]/80 rounded-tl-md pointer-events-none" />
-                                <div className="absolute -right-px -top-px h-5 w-5 border-r-2 border-t-2 border-[#c8aa6e]/80 rounded-tr-md pointer-events-none" />
-                                <div className="absolute -bottom-px -left-px h-5 w-5 border-b-2 border-l-2 border-[#c8aa6e]/80 rounded-bl-md pointer-events-none" />
-                                <div className="absolute -bottom-px -right-px h-5 w-5 border-b-2 border-r-2 border-[#c8aa6e]/80 rounded-br-md pointer-events-none" />
+                                <div className={`absolute -left-px -top-px h-5 w-5 border-l-2 border-t-2 rounded-tl-md pointer-events-none ${containerCardsAreHidden ? 'border-violet-300/85' : 'border-[#c8aa6e]/80'}`} />
+                                <div className={`absolute -right-px -top-px h-5 w-5 border-r-2 border-t-2 rounded-tr-md pointer-events-none ${containerCardsAreHidden ? 'border-violet-300/85' : 'border-[#c8aa6e]/80'}`} />
+                                <div className={`absolute -bottom-px -left-px h-5 w-5 border-b-2 border-l-2 rounded-bl-md pointer-events-none ${containerCardsAreHidden ? 'border-violet-300/85' : 'border-[#c8aa6e]/80'}`} />
+                                <div className={`absolute -bottom-px -right-px h-5 w-5 border-b-2 border-r-2 rounded-br-md pointer-events-none ${containerCardsAreHidden ? 'border-violet-300/85' : 'border-[#c8aa6e]/80'}`} />
                                 <div className="absolute left-2 top-2 flex items-center gap-2 pointer-events-none">
-                                    <span className="rounded bg-black/70 px-2 py-1 text-[8px] font-black uppercase tracking-[0.2em] text-[#f8e7b9] shadow">
+                                    <span className={`rounded px-2 py-1 text-[8px] font-black uppercase tracking-[0.2em] shadow ${containerCardsAreHidden ? 'bg-violet-950/80 text-violet-100' : 'bg-black/70 text-[#f8e7b9]'}`}>
                                         {item.name || 'Tablero'}
                                     </span>
-                                    <span className="rounded-full border border-[#c8aa6e]/45 bg-black/75 px-2 py-0.5 text-[9px] font-black text-[#f8e7b9] shadow">
-                                        {containerItemCount}
-                                    </span>
+                                    {containerItemCount !== null && (
+                                        <span className="rounded-full border border-[#c8aa6e]/45 bg-black/75 px-2 py-0.5 text-[9px] font-black text-[#f8e7b9] shadow">
+                                            {containerItemCount}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         ) : isCard ? (
@@ -12042,6 +12063,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         });
     }, [activeScenario?.items, isBoardMode]);
     const activeScenarioItems = useMemo(() => activeScenario?.items || [], [activeScenario?.items]);
+
+    useEffect(() => {
+        if (!isPlayerView || activeScenarioItems.length === 0) return;
+        setSelectedTokenIds(prev => {
+            const visibleSelection = prev.filter((id) => {
+                const selectedItem = activeScenarioItems.find(item => item?.id === id);
+                return selectedItem && !isCardHiddenByContainerForPlayer(selectedItem, activeScenarioItems, true);
+            });
+            return visibleSelection.length === prev.length ? prev : visibleSelection;
+        });
+    }, [activeScenarioItems, isPlayerView]);
+
     const canvasRenderItemGroups = useMemo(() => {
         const livePendingTurnState = isUsablePendingTurnState(pendingTurnState) ? pendingTurnState : null;
         const lights = [];
@@ -12049,6 +12082,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         for (const item of activeScenarioItems) {
             if (!item) continue;
+            if (isCardHiddenByContainerForPlayer(item, activeScenarioItems, isPlayerView)) continue;
             let renderItem = item;
 
             if (
@@ -14057,6 +14091,33 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         className="w-full bg-[#111827] border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-[#c8aa6e] outline-none transition-colors"
                                                     />
                                                 </div>
+
+                                                {isBoardMode && isCardContainerItem(token) && !isPlayerView && (
+                                                    <div className={`rounded-lg border p-3 transition-colors ${isContainerCardsHiddenForPlayers(token) ? 'border-[#c8aa6e]/45 bg-[#c8aa6e]/10' : 'border-slate-800 bg-[#0b1120]'}`}>
+                                                        <div className="flex items-start gap-3">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => updateItem(token.id, { hideContainedCardsForPlayers: !isContainerCardsHiddenForPlayers(token) })}
+                                                                aria-pressed={isContainerCardsHiddenForPlayers(token)}
+                                                                className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-md border transition-colors ${isContainerCardsHiddenForPlayers(token) ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f8e7b9]' : 'border-slate-700 bg-[#111827] text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'}`}
+                                                                title={isContainerCardsHiddenForPlayers(token) ? 'Cartas ocultas para jugadores' : 'Cartas visibles para jugadores'}
+                                                            >
+                                                                {isContainerCardsHiddenForPlayers(token) ? <EyeOff size={18} /> : <Eye size={18} />}
+                                                            </button>
+                                                            <div className="min-w-0 flex-1 space-y-1">
+                                                                <div className="flex items-center gap-2">
+                                                                    <Lock size={12} className={isContainerCardsHiddenForPlayers(token) ? 'text-[#c8aa6e]' : 'text-slate-500'} />
+                                                                    <span className="text-[10px] font-black uppercase tracking-[0.22em] text-[#f0e6d2]">
+                                                                        Ocultar cartas internas
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-[11px] leading-relaxed text-slate-500">
+                                                                    Los jugadores verán el tablero, pero no las cartas que contiene ni su posición. Al sacarlas del tablero o eliminarlo, volverán a mostrarse.
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
 
                                                 {token.type === 'boardMarker' && (
                                                     <div className="bg-[#0b1120] border border-[#c8aa6e]/20 rounded-lg p-3 space-y-4">
