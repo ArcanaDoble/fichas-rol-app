@@ -190,7 +190,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Alineación de Estilo de Cargas Modulares y Pintado de Color**:
   - Modificamos `drawModularChargeFooter` para usar el mismo grosor de línea (`lineWidth = 3`) y color (`rgba(181,92,18,0.58)`) de los divisores estándar del cuerpo de la carta (`drawContainerDivider`).
   - Rediseñamos los rombos del pie de cargas para que utilicen `drawSectionDiamond` con rellenos de colores sólidos correspondientes a cada tipo de carga (verde para Hambre, rojo para Cuerpo, azul para Mente y el color de acento de la carta para ranuras vacías), eliminando por completo los iconos y bordes oscuros en el pie de página.
-  - Ajustamos los tamaños de los rombos: el central conserva su escala destacada (`70px`), mientras que los otros cuatro se adaptan a un tamaño de `50px`.
+  - Ajustamos los tamaños de los rombos: el central conserva su escala destacada (`70px`), mientras que los otros cuatro se adaptan a un tamaño de `45px` y se redistribuyen de forma equidistante (`[764, 848, 944, 1040, 1124]`) para equilibrar perfectamente los espacios vacíos intermedios.
   - Implementamos la función `drawBlackIcon` y actualizamos `drawSlotIcon` para pintar las siluetas de los iconos de consumo en negro sólido dentro de los carriles/ranuras de las cabeceras.
 
 **Resumen de cambios v2.6.6:**

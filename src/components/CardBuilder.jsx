@@ -2690,17 +2690,16 @@ const CHARGE_STYLES = {
 const drawModularChargeFooter = (context, chargeSlots, resourceImages = {}, accent = '#c46f1f') => {
   const slots = Array.from({ length: CHARGE_SLOT_COUNT }, (_, index) => chargeSlots[index] || EMPTY_SLOT);
   const y = CHARGE_FOOTER_LINE_Y;
-  const centerX = 944;
-  const centers = [centerX - 180, centerX - 90, centerX, centerX + 90, centerX + 180];
-  const sizes = [50, 50, 70, 50, 50];
+  const centers = [764, 848, 944, 1040, 1124];
+  const sizes = [45, 45, 70, 45, 45];
 
   context.save();
   context.strokeStyle = 'rgba(181,92,18,0.58)';
   context.lineWidth = 3;
   context.beginPath();
   context.moveTo(314, y);
-  context.lineTo(712, y);
-  context.moveTo(1176, y);
+  context.lineTo(715, y);
+  context.moveTo(1173, y);
   context.lineTo(1574, y);
   context.stroke();
 
