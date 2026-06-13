@@ -4,11 +4,16 @@ import {
   ChevronLeft,
   Database,
   Download,
+  Image as ImageIcon,
   Loader2,
   Palette,
+  Plus,
   RotateCcw,
   Tag,
   Type,
+  X,
+  ArrowDown,
+  ArrowUp,
   UploadCloud
 } from 'lucide-react';
 import {
@@ -63,6 +68,28 @@ const CARD_TYPES = [
   { id: 'skill', label: 'Minion', maxTraits: 4, layout: 'weapon' },
   { id: 'status', label: 'Estado', maxTraits: 1, layout: 'trap' },
 ];
+
+const CARD_CONTAINER_TYPES = [
+  { id: 'range', label: 'Alcance' },
+  { id: 'consumption', label: 'Consumo' },
+  { id: 'damage', label: 'Daño' },
+  { id: 'traits', label: 'Rasgos' },
+  { id: 'combat', label: 'Tipo de combate' },
+  { id: 'description', label: 'Descripción' },
+];
+
+const DEFAULT_CARD_CONTAINERS_BY_TYPE = {
+  weapon: ['range', 'consumption', 'damage', 'traits', 'combat', 'description'],
+  armor: ['consumption', 'traits', 'description'],
+  trap: ['range', 'consumption', 'traits', 'description'],
+  action: ['consumption', 'damage', 'description'],
+  skill: ['range', 'damage', 'traits', 'combat', 'description'],
+  status: ['description'],
+};
+
+const getDefaultCardContainers = (typeId) => (
+  DEFAULT_CARD_CONTAINERS_BY_TYPE[typeId] || DEFAULT_CARD_CONTAINERS_BY_TYPE.weapon
+);
 
 export const ELEMENT_TYPES = [
   { id: 'Ninguno', label: 'Ninguno' },
@@ -1993,6 +2020,452 @@ const drawDescription = (context, description, flavorText, typeConfig, showTrait
   drawTextBlock(context, description, layouts.flavor, DESCRIPTION_PREVIEW_TEXT, hyphenate, resourceImages);
 };
 
+const drawRoundRectPath = (context, x, y, width, height, radius) => {
+  const safeRadius = Math.min(radius, width / 2, height / 2);
+  context.beginPath();
+  if (context.roundRect) {
+    context.roundRect(x, y, width, height, safeRadius);
+    return;
+  }
+  context.moveTo(x + safeRadius, y);
+  context.lineTo(x + width - safeRadius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+  context.lineTo(x + width, y + height - safeRadius);
+  context.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+  context.lineTo(x + safeRadius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+  context.lineTo(x, y + safeRadius);
+  context.quadraticCurveTo(x, y, x + safeRadius, y);
+};
+
+const drawCoverImage = (context, image, x, y, width, height) => {
+  if (!image) return;
+  const imageRatio = image.width / image.height;
+  const frameRatio = width / height;
+  let sourceWidth = image.width;
+  let sourceHeight = image.height;
+  let sourceX = 0;
+  let sourceY = 0;
+
+  if (imageRatio > frameRatio) {
+    sourceWidth = image.height * frameRatio;
+    sourceX = (image.width - sourceWidth) / 2;
+  } else {
+    sourceHeight = image.width / frameRatio;
+    sourceY = (image.height - sourceHeight) / 2;
+  }
+
+  context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
+};
+
+const drawGeneratedHeaderBackdrop = (context, x, y, width, height, accent = '#c46f1f') => {
+  context.save();
+  const base = context.createLinearGradient(x, y, x + width, y + height);
+  base.addColorStop(0, '#171819');
+  base.addColorStop(0.42, '#2a251e');
+  base.addColorStop(1, '#111215');
+  context.fillStyle = base;
+  context.fillRect(x, y, width, height);
+
+  const smoke = context.createRadialGradient(x + width * 0.55, y + height * 0.36, 40, x + width * 0.55, y + height * 0.36, width * 0.58);
+  smoke.addColorStop(0, 'rgba(255,235,190,0.18)');
+  smoke.addColorStop(0.36, 'rgba(141,102,62,0.14)');
+  smoke.addColorStop(1, 'rgba(0,0,0,0)');
+  context.fillStyle = smoke;
+  context.fillRect(x, y, width, height);
+
+  context.globalAlpha = 0.2;
+  context.fillStyle = accent;
+  for (let i = 0; i < 9; i++) {
+    const px = x + width * (0.16 + i * 0.085);
+    const top = y + height * (0.62 - (i % 3) * 0.08);
+    context.beginPath();
+    context.moveTo(px, y + height);
+    context.lineTo(px + 36, top);
+    context.lineTo(px + 72, y + height);
+    context.closePath();
+    context.fill();
+  }
+  context.globalAlpha = 1;
+
+  context.fillStyle = 'rgba(0,0,0,0.38)';
+  context.fillRect(x, y, width, height);
+  context.restore();
+};
+
+const fitModularTitleFont = (context, title, maxWidth) => {
+  let size = 176;
+  context.save();
+  while (size > 58) {
+    context.font = `900 ${size}px Lato, Arial, sans-serif`;
+    if (context.measureText(title).width <= maxWidth) break;
+    size -= 4;
+  }
+  context.restore();
+  return size;
+};
+
+const MODULAR_CARD_OUTER_BOUNDS = {
+  x: 62,
+  y: 54,
+  width: 1764,
+  height: 2516,
+};
+
+const applyReferenceCardLayoutScale = (context) => {
+  const scale = CANVAS_WIDTH / MODULAR_CARD_OUTER_BOUNDS.width;
+  context.translate(-MODULAR_CARD_OUTER_BOUNDS.x * scale, -MODULAR_CARD_OUTER_BOUNDS.y * scale);
+  context.scale(scale, scale);
+};
+
+const drawModularFrame = (context, accent = '#c46f1f') => {
+  context.save();
+  const cardEdgeGradient = context.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  cardEdgeGradient.addColorStop(0, '#202223');
+  cardEdgeGradient.addColorStop(0.52, '#17191a');
+  cardEdgeGradient.addColorStop(1, '#0d0f10');
+  context.fillStyle = cardEdgeGradient;
+  context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  context.lineWidth = 7;
+  context.strokeStyle = '#030303';
+  context.strokeRect(5, 5, CANVAS_WIDTH - 10, CANVAS_HEIGHT - 10);
+
+  const outerGradient = context.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  outerGradient.addColorStop(0, '#2b2d2e');
+  outerGradient.addColorStop(0.52, '#202223');
+  outerGradient.addColorStop(1, '#121415');
+  context.fillStyle = outerGradient;
+  drawRoundRectPath(context, 62, 54, 1764, 2516, 6);
+  context.fill();
+  context.lineWidth = 6;
+  context.strokeStyle = '#030303';
+  context.stroke();
+
+  context.fillStyle = '#f3e6cf';
+  drawRoundRectPath(context, 160, 126, 1568, 2310, 4);
+  context.fill();
+  context.lineWidth = 12;
+  context.strokeStyle = '#000000';
+  context.stroke();
+
+  const paperGradient = context.createRadialGradient(944, 1440, 150, 944, 1440, 1200);
+  paperGradient.addColorStop(0, 'rgba(255,248,230,0.65)');
+  paperGradient.addColorStop(0.62, 'rgba(244,222,188,0.18)');
+  paperGradient.addColorStop(1, 'rgba(197,126,48,0.12)');
+  context.fillStyle = paperGradient;
+  context.fillRect(168, 770, 1552, 1658);
+
+  context.globalAlpha = 0.16;
+  context.fillStyle = accent;
+  for (let i = 0; i < 120; i++) {
+    const px = 180 + ((i * 157) % 1500);
+    const py = 790 + ((i * 283) % 1600);
+    context.fillRect(px, py, 2, 2);
+  }
+  context.restore();
+};
+
+const drawHeaderImageContainer = (
+  context,
+  headerImage,
+  cardName,
+  accent,
+  weaponIconImg = null,
+  elementIconImg = null,
+) => {
+  const x = 170;
+  const y = 136;
+  const width = 1548;
+  const height = 638;
+  context.save();
+  drawRoundRectPath(context, x, y, width, height, 2);
+  context.clip();
+  if (headerImage) {
+    drawCoverImage(context, headerImage, x, y, width, height);
+  } else {
+    drawGeneratedHeaderBackdrop(context, x, y, width, height, accent);
+  }
+
+  const bottomShade = context.createLinearGradient(x, y + height * 0.34, x, y + height);
+  bottomShade.addColorStop(0, 'rgba(0,0,0,0.08)');
+  bottomShade.addColorStop(0.7, 'rgba(0,0,0,0.62)');
+  bottomShade.addColorStop(1, 'rgba(0,0,0,0.78)');
+  context.fillStyle = bottomShade;
+  context.fillRect(x, y, width, height);
+  context.restore();
+
+  context.save();
+  context.lineWidth = 12;
+  context.strokeStyle = '#000000';
+  context.strokeRect(x, y, width, height);
+  context.fillStyle = accent;
+  context.fillRect(x, y + height - 14, width, 14);
+
+  const title = normalizeCardName(cardName).toUpperCase();
+  const titleSize = fitModularTitleFont(context, title, 1020);
+  context.font = `900 ${titleSize}px Lato, Arial, sans-serif`;
+  context.textAlign = 'left';
+  context.textBaseline = 'alphabetic';
+  context.shadowColor = 'rgba(0,0,0,0.78)';
+  context.shadowBlur = 16;
+  context.shadowOffsetX = 5;
+  context.shadowOffsetY = 6;
+  context.lineWidth = Math.max(6, Math.round(titleSize * 0.045));
+  context.strokeStyle = 'rgba(42,28,16,0.55)';
+  context.fillStyle = '#f4ead9';
+  const titleX = x + 82;
+  const titleY = y + height - 96;
+  context.strokeText(title, titleX, titleY);
+  context.fillText(title, titleX, titleY);
+
+  const sideIcon = elementIconImg || weaponIconImg;
+  if (sideIcon) {
+    const iconSize = 148;
+    const iconX = x + width - 210;
+    const iconY = y + 75;
+    context.globalAlpha = 0.92;
+    context.drawImage(sideIcon, iconX, iconY, iconSize, iconSize);
+  }
+  context.restore();
+};
+
+const drawSectionDiamond = (context, x, y, size, accent) => {
+  context.save();
+  context.translate(x, y);
+  context.rotate(Math.PI / 4);
+  context.fillStyle = accent;
+  context.fillRect(-size / 2, -size / 2, size, size);
+  context.restore();
+};
+
+const drawContainerDivider = (context, y, accent) => {
+  context.save();
+  context.strokeStyle = 'rgba(181,92,18,0.58)';
+  context.lineWidth = 3;
+  context.beginPath();
+  context.moveTo(314, y);
+  context.lineTo(902, y);
+  context.moveTo(986, y);
+  context.lineTo(1574, y);
+  context.stroke();
+  drawSectionDiamond(context, 944, y, 31, accent);
+  context.restore();
+};
+
+const drawContainerLabel = (context, label, y, accent) => {
+  context.save();
+  drawSectionDiamond(context, 262, y + 50, 34, accent);
+  context.font = '900 62px Lato, Arial, sans-serif';
+  context.textAlign = 'left';
+  context.textBaseline = 'middle';
+  context.fillStyle = '#1d2120';
+  context.fillText(label.toUpperCase(), 314, y + 50);
+  context.restore();
+};
+
+const drawModularRange = (context, y, selectedIndex, accent) => {
+  const labels = ['TOQUE', 'CERCANO', 'INTERMEDIO', 'LEJANO', 'EXTREMO'];
+  const startX = 382;
+  const endX = 1530;
+  const trackY = y + 205;
+  const step = (endX - startX) / 4;
+  context.save();
+  context.strokeStyle = '#252523';
+  context.lineWidth = 9;
+  context.lineCap = 'round';
+  context.beginPath();
+  context.moveTo(startX, trackY);
+  context.lineTo(endX, trackY);
+  context.stroke();
+
+  labels.forEach((label, index) => {
+    const cx = startX + step * index;
+    context.font = '900 36px Lato, Arial, sans-serif';
+    context.fillStyle = '#202321';
+    context.textAlign = 'center';
+    context.textBaseline = 'bottom';
+    context.fillText(label, cx, trackY - 58);
+
+    context.beginPath();
+    context.arc(cx, trackY, 41, 0, Math.PI * 2);
+    context.fillStyle = index === selectedIndex ? accent : '#f3e6cf';
+    context.fill();
+    context.lineWidth = 8;
+    context.strokeStyle = '#202321';
+    context.stroke();
+  });
+  context.restore();
+};
+
+const drawModularConsumption = (context, y, slots, resourceImages = {}, accent) => {
+  const filledSlots = slots.filter(Boolean).slice(0, 5);
+  const size = 104;
+  const gap = 54;
+  const totalWidth = filledSlots.length * size + Math.max(0, filledSlots.length - 1) * gap;
+  const startX = 944 - totalWidth / 2 + size / 2;
+  context.save();
+  if (filledSlots.length === 0) {
+    context.font = 'italic 44px Lato, Arial, sans-serif';
+    context.fillStyle = 'rgba(29,33,32,0.52)';
+    context.textAlign = 'left';
+    context.textBaseline = 'middle';
+    context.fillText('Sin consumo definido', 610, y + 54);
+  }
+  filledSlots.forEach((slot, index) => {
+    const cx = startX + index * (size + gap);
+    const cy = y + 56;
+    context.beginPath();
+    context.arc(cx, cy, size / 2, 0, Math.PI * 2);
+    context.fillStyle = 'rgba(244,230,207,0.68)';
+    context.fill();
+    context.lineWidth = 5;
+    context.strokeStyle = index === 0 ? accent : 'rgba(32,35,33,0.45)';
+    context.stroke();
+    const icon = resourceImages[`consumption:${slot}`];
+    if (icon) {
+      context.drawImage(icon, cx - 34, cy - 34, 68, 68);
+    }
+  });
+  context.restore();
+};
+
+const drawModularDamage = (context, y, diceIconImg, diceQty, diceType) => {
+  context.save();
+  const count = diceType === 'DX' ? 1 : Math.max(1, Math.min(9, diceQty));
+  const size = 96;
+  const gap = 24;
+  const totalWidth = count * size + (count - 1) * gap;
+  let x = 944 - totalWidth / 2;
+  for (let i = 0; i < count; i++) {
+    if (diceIconImg) {
+      context.drawImage(diceIconImg, x, y + 6, size, size);
+    } else {
+      context.font = '900 58px Lato, Arial, sans-serif';
+      context.fillStyle = '#202321';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText(diceType, x + size / 2, y + 54);
+    }
+    x += size + gap;
+  }
+  context.restore();
+};
+
+const drawModularTraits = (context, y, traits, visibleTraitRows, accent) => {
+  const labels = traits
+    .slice(0, Math.max(1, visibleTraitRows) * 2)
+    .map((trait) => (trait || '').trim())
+    .filter((trait) => trait && trait !== '-')
+    .slice(0, 6);
+  context.save();
+  if (labels.length === 0) {
+    context.font = 'italic 44px Lato, Arial, sans-serif';
+    context.fillStyle = 'rgba(29,33,32,0.52)';
+    context.textAlign = 'left';
+    context.textBaseline = 'middle';
+    context.fillText('Sin rasgos definidos', 610, y + 54);
+    context.restore();
+    return;
+  }
+
+  const badgeHeight = 78;
+  const badgeGap = 34;
+  const badgeWidth = Math.min(292, Math.max(210, (1100 - (labels.length - 1) * badgeGap) / labels.length));
+  const startX = 560 + (1100 - (labels.length * badgeWidth + (labels.length - 1) * badgeGap)) / 2;
+  labels.forEach((label, index) => {
+    const x = startX + index * (badgeWidth + badgeGap);
+    const bevel = 50;
+    context.beginPath();
+    context.moveTo(x, y + 15);
+    context.lineTo(x + badgeWidth - bevel, y + 15);
+    context.lineTo(x + badgeWidth, y + 15 + badgeHeight / 2);
+    context.lineTo(x + badgeWidth - bevel, y + 15 + badgeHeight);
+    context.lineTo(x, y + 15 + badgeHeight);
+    context.closePath();
+    context.fillStyle = 'rgba(244,230,207,0.18)';
+    context.fill();
+    context.lineWidth = 4;
+    context.strokeStyle = 'rgba(181,92,18,0.74)';
+    context.stroke();
+
+    context.font = '900 34px Lato, Arial, sans-serif';
+    context.fillStyle = '#202321';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(label.toUpperCase(), x + badgeWidth / 2 - 8, y + 15 + badgeHeight / 2 + 1);
+  });
+  context.restore();
+};
+
+const drawModularCombat = (context, y, weaponType, weaponIconImg) => {
+  context.save();
+  const iconSize = 112;
+  const iconX = 785;
+  const iconY = y - 5;
+  if (weaponIconImg) {
+    context.drawImage(weaponIconImg, iconX, iconY, iconSize, iconSize);
+  }
+  context.font = '900 58px Lato, Arial, sans-serif';
+  context.fillStyle = '#202321';
+  context.textAlign = 'left';
+  context.textBaseline = 'middle';
+  context.fillText((weaponType || 'Cuerpo a cuerpo').toUpperCase(), iconX + iconSize + 44, y + 52);
+  context.restore();
+};
+
+const drawModularDescription = (context, y, height, description, hyphenate, singleTextStyle, resourceImages) => {
+  const x = 314;
+  const maxWidth = 1260;
+  const top = y + 106;
+  const bottom = y + height - 30;
+  const text = description.trim() || DESCRIPTION_PREVIEW_TEXT;
+  const isPreview = !description.trim();
+  const fontSize = singleTextStyle === 'principal' ? 48 : 45;
+  const lineHeight = singleTextStyle === 'principal' ? 63 : 61;
+
+  context.save();
+  context.font = `${singleTextStyle === 'narrative' ? 'italic ' : ''}400 ${fontSize}px Lato, Arial, sans-serif`;
+  context.textAlign = 'left';
+  context.textBaseline = 'top';
+  context.fillStyle = isPreview ? 'rgba(29,33,32,0.42)' : '#171a19';
+  const items = getDescriptionFlowItems(context, text, maxWidth, lineHeight, hyphenate);
+  let cursorY = top;
+
+  items.forEach((item) => {
+    if (cursorY + item.height > bottom) return;
+    if (item.type === 'separator') {
+      context.strokeStyle = 'rgba(181,92,18,0.45)';
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(x + 70, cursorY + lineHeight / 2);
+      context.lineTo(x + maxWidth - 70, cursorY + lineHeight / 2);
+      context.stroke();
+    } else if (item.line) {
+      if (item.isLore) {
+        context.font = `italic 700 ${Math.max(38, fontSize - 5)}px Lato, Arial, sans-serif`;
+        context.fillStyle = '#b55c12';
+        drawTextLineWithIcons(context, item.line, x, cursorY, maxWidth, 'center', resourceImages, true);
+      } else {
+        context.font = `${singleTextStyle === 'narrative' ? 'italic ' : ''}${item.line.includes('**') ? '700' : '400'} ${fontSize}px Lato, Arial, sans-serif`;
+        context.fillStyle = isPreview ? 'rgba(29,33,32,0.42)' : '#171a19';
+        drawTextLineWithIcons(context, item.line, x, cursorY, maxWidth, false, resourceImages, item.isLore);
+      }
+    }
+    cursorY += item.height;
+  });
+  context.restore();
+};
+
+const getModularContainerHeight = (blockId, remainingHeight, isLast) => {
+  if (blockId === 'range') return 315;
+  if (blockId === 'consumption') return 190;
+  if (blockId === 'damage') return 180;
+  if (blockId === 'traits') return 190;
+  if (blockId === 'combat') return 185;
+  if (blockId === 'description') return Math.max(360, isLast ? remainingHeight : Math.min(remainingHeight, 575));
+  return 180;
+};
+
 const drawCardCanvas = (
   canvas,
   image,
@@ -2022,6 +2495,8 @@ const drawCardCanvas = (
   renderScale = 1,
   actionCenterMode = 'dado',
   actionAttributeImg = null,
+  headerImageImg = null,
+  cardContainers = getDefaultCardContainers(cardType),
 ) => {
   const targetWidth = Math.max(1, Math.round(CANVAS_WIDTH * renderScale));
   const targetHeight = Math.max(1, Math.round(CANVAS_HEIGHT * renderScale));
@@ -2034,215 +2509,60 @@ const drawCardCanvas = (
   context.imageSmoothingQuality = renderScale < 1 ? 'medium' : 'high';
 
   context.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  context.drawImage(image, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-  if (customColorActive && customColor) {
-    context.save();
-    context.beginPath();
-    const rx = 125;
-    const ry = 410;
-    const rw = 1630;
-    const rh = 2100;
-    const radius = 50; // Beautifully rounded corners to match the frame
-
-    if (context.roundRect) {
-      context.roundRect(rx, ry, rw, rh, radius);
-    } else {
-      // Fallback path drawing rounded rect for backward compatibility
-      context.moveTo(rx + radius, ry);
-      context.lineTo(rx + rw - radius, ry);
-      context.quadraticCurveTo(rx + rw, ry, rx + rw, ry + radius);
-      context.lineTo(rx + rw, ry + rh - radius);
-      context.quadraticCurveTo(rx + rw, ry + rh, rx + rw - radius, ry + rh);
-      context.lineTo(rx + radius, ry + rh);
-      context.quadraticCurveTo(rx, ry + rh, rx, ry + rh - radius);
-      context.lineTo(rx, ry + radius);
-      context.quadraticCurveTo(rx, ry, rx + radius, ry);
-    }
-    context.closePath();
-
-    context.globalCompositeOperation = 'color';
-    context.fillStyle = customColor;
-    context.fill();
-    context.restore();
-  }
-
-
-  const title = normalizeCardName(cardName).toUpperCase();
-  const titleFont = fitTitleFont(context, title);
+  const accent = customColorActive && customColor ? customColor : '#c46f1f';
+  const edgeGradient = context.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  edgeGradient.addColorStop(0, '#202223');
+  edgeGradient.addColorStop(0.52, '#17191a');
+  edgeGradient.addColorStop(1, '#0d0f10');
+  context.fillStyle = edgeGradient;
+  context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
   context.save();
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.shadowColor = 'rgba(255,255,255,0.38)';
-  context.shadowBlur = 10;
-  context.fillStyle = 'rgba(245,245,245,0.95)';
-  context.font = `900 ${titleFont.size}px Cinzel, Georgia, serif`;
-  if ('fontKerning' in context) {
-    context.fontKerning = 'normal';
-  }
-  if ('letterSpacing' in context) {
-    context.letterSpacing = '0px';
-  }
-  drawCenteredSpacedText(
-    context,
-    title,
-    TITLE_HEADER_CENTER_X,
-    TITLE_HEADER_CENTER_Y,
-    titleFont.letterSpacing,
-  );
+  applyReferenceCardLayoutScale(context);
+  drawModularFrame(context, accent);
+  drawHeaderImageContainer(context, headerImageImg, cardName, accent, weaponIconImg, elementIconImg);
+
+  const blockLabels = CARD_CONTAINER_TYPES.reduce((labels, block) => ({
+    ...labels,
+    [block.id]: block.label,
+  }), {});
+  const blocks = cardContainers.length > 0 ? cardContainers : getDefaultCardContainers(cardType);
+  const contentBottom = 2386;
+  let y = 835;
+
+  blocks.forEach((blockId, index) => {
+    if (y >= contentBottom - 120) return;
+    const remainingHeight = contentBottom - y;
+    const blockHeight = Math.min(
+      remainingHeight,
+      getModularContainerHeight(blockId, remainingHeight, index === blocks.length - 1),
+    );
+    const label = blockLabels[blockId] || blockId;
+
+    drawContainerLabel(context, label, y, accent);
+
+    if (blockId === 'range') {
+      drawModularRange(context, y, alcance, accent);
+    } else if (blockId === 'consumption') {
+      drawModularConsumption(context, y + 50, consumptionSlots, resourceImages, accent);
+    } else if (blockId === 'damage') {
+      drawModularDamage(context, y + 46, diceIconImg, diceQty, diceType);
+    } else if (blockId === 'traits') {
+      drawModularTraits(context, y + 42, showTraits ? traits : [], visibleTraitRows, accent);
+    } else if (blockId === 'combat') {
+      drawModularCombat(context, y + 42, weaponType, weaponIconImg);
+    } else if (blockId === 'description') {
+      drawModularDescription(context, y, blockHeight, description, hyphenate, singleTextStyle, resourceImages);
+    }
+
+    const dividerY = y + blockHeight - 14;
+    if (dividerY < contentBottom - 18) {
+      drawContainerDivider(context, dividerY, accent);
+    }
+    y += blockHeight;
+  });
   context.restore();
-
-  const drawChargeResources = () => {
-    if (resourceMode === RESOURCE_MODE_NONE) {
-      return;
-    }
-    if (resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY) {
-      drawActionConsumptionRail(context, consumptionSlots, resourceImages);
-      return;
-    }
-    if (resourceMode === RESOURCE_MODE_CHARGE_ONLY) {
-      drawCenteredChargeRail(context, chargeSlots, resourceImages);
-      return;
-    }
-
-    drawWeaponResourceRails(context, chargeSlots, consumptionSlots, resourceImages);
-  };
-
-  // Draw weapon interface if cardType is weapon or armor or action!
-  if (cardType === 'weapon' || cardType === 'skill') {
-    // 1. Draw Dice or Element Icon
-    if (cardType === 'weapon' && elementIconImg) {
-      context.save();
-      context.drawImage(elementIconImg, 290 - 200/2, 615 - 200/2, 200, 200);
-      context.restore();
-    } else if (diceIconImg) {
-      drawDiceIcon(context, 290, 615, 200, diceIconImg, diceQty, diceType !== 'DX');
-    }
-
-    // 2. Draw Ruler (width increased to 720, label lowered to 635)
-    drawRuler(context, CANVAS_WIDTH / 2, 512, 720, alcance, 635);
-
-    // 3. Draw Weapon Type Icon
-    if (weaponIconImg) {
-      drawWeaponTypeIcon(context, 1598, 615, 200, weaponIconImg);
-    }
-
-    drawChargeResources();
-    if (cardType === 'skill') {
-      drawMinionAttributes(context, minionAttributes, resourceImages);
-    }
-  } else if (cardType === 'armor' || cardType === 'trap') {
-    drawChargeResources();
-  } else if (cardType === 'action') {
-    if (actionCenterMode !== 'dado' && actionAttributeImg) {
-      context.save();
-      // Trazar máscara con bordes redondeados para la ventana de ilustración
-      context.beginPath();
-      const rx = 125;
-      const ry = 410;
-      const rw = 1630;
-      const rh = 2100;
-      const radius = 50;
-      if (context.roundRect) {
-        context.roundRect(rx, ry, rw, rh, radius);
-      } else {
-        context.moveTo(rx + radius, ry);
-        context.lineTo(rx + rw - radius, ry);
-        context.quadraticCurveTo(rx + rw, ry, rx + rw, ry + radius);
-        context.lineTo(rx + rw, ry + rh - radius);
-        context.quadraticCurveTo(rx + rw, ry + rh, rx + rw - radius, ry + rh);
-        context.lineTo(rx + radius, ry + rh);
-        context.quadraticCurveTo(rx, ry + rh, rx, ry + rh - radius);
-        context.lineTo(rx, ry + radius);
-        context.quadraticCurveTo(rx, ry, rx + radius, ry);
-      }
-      context.closePath();
-      context.clip();
-
-      // Definir la caja de origen (usando la imagen completa con sus márgenes naturales)
-      const sx = 0;
-      const sy = 0;
-      const sw = actionAttributeImg.width;
-      const sh = actionAttributeImg.height;
-
-      // Escalado proporcional para ajustar (fit/contain) dentro de la ventana de ilustración
-      const scale = Math.min(rw / sw, rh / sh);
-      const dw = sw * scale;
-      const dh = sh * scale;
-      const dx = rx + (rw - dw) / 2;
-      const dy = ry + (rh - dh) / 2;
-
-      context.drawImage(actionAttributeImg, sx, sy, sw, sh, dx, dy, dw, dh);
-      context.restore();
-    } else {
-      if (diceIconImg) {
-        const positions = getActionDicePositions(diceQty);
-        positions.forEach((pos) => {
-          context.save();
-          context.drawImage(diceIconImg, pos.x - pos.size / 2, pos.y - pos.size / 2, pos.size, pos.size);
-          context.restore();
-        });
-      }
-      drawActionConsumptionRail(context, consumptionSlots, resourceImages);
-    }
-  } else if (cardType === 'status') {
-    if (elementIconImg) {
-      context.save();
-      const cx = CANVAS_WIDTH / 2;
-      const cy = 1120;
-      const size = 600;
-      context.drawImage(elementIconImg, cx - size / 2, cy - size / 2, size, size);
-      context.restore();
-    }
-  }
-
-  const typeConfig = CARD_TYPES.find((type) => type.id === cardType) || CARD_TYPES[0];
-  if (showTraits && typeConfig.maxTraits > 0) {
-    const activeRows = typeConfig.maxTraits > 2 ? Math.min(visibleTraitRows, typeConfig.maxTraits / 2) : 1;
-    const activeTraitsCount = typeConfig.maxTraits > 2 ? activeRows * 2 : typeConfig.maxTraits;
-    const slotLabels = traits.slice(0, activeTraitsCount);
-    const traitSlots = cardType === 'skill'
-      ? getTraitSlots(typeConfig.layout).slice(2, 2 + activeTraitsCount)
-      : getTraitSlots(typeConfig.layout).slice(0, activeTraitsCount);
-
-    if (typeConfig.maxTraits > 2) {
-      for (let r = 0; r < activeRows; r++) {
-        const leftIndex = r * 2;
-        const rightIndex = r * 2 + 1;
-        const leftVal = (slotLabels[leftIndex] || '').trim();
-        const rightVal = (slotLabels[rightIndex] || '').trim();
-        const leftSlot = traitSlots[leftIndex];
-        const rightSlot = traitSlots[rightIndex];
-
-        const leftHasContent = leftVal && leftVal !== '-';
-        const rightHasContent = rightVal && rightVal !== '-';
-
-        if (leftHasContent && !rightHasContent) {
-          // Draw left trait centered in the card
-          const centeredSlot = { x: 574, y: leftSlot.y, width: 740, height: leftSlot.height };
-          drawTraitBadge(context, centeredSlot, leftVal);
-        } else if (!leftHasContent && rightHasContent) {
-          // Draw right trait centered in the card
-          const centeredSlot = { x: 574, y: rightSlot.y, width: 740, height: rightSlot.height };
-          drawTraitBadge(context, centeredSlot, rightVal);
-        } else {
-          // Draw both normally (even if empty or "-")
-          if (leftSlot) drawTraitBadge(context, leftSlot, leftVal);
-          if (rightSlot) drawTraitBadge(context, rightSlot, rightVal);
-        }
-      }
-    } else {
-      // For cards with 1 max trait (trap/status)
-      traitSlots.forEach((slot, index) => {
-        drawTraitBadge(context, slot, slotLabels[index] || '');
-      });
-    }
-  }
-
-  if (cardType !== 'action') {
-    drawDescription(context, description, flavorText, typeConfig, showTraits, hyphenate, singleTextStyle, resourceImages, visibleTraitRows);
-  }
 };
 
 const getDeckAccessForViewer = (deck, viewerId) => {
@@ -2292,6 +2612,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const imageCacheRef = useRef(new Map());
   const imageLoadCacheRef = useRef(new Map());
   const activeImageRef = useRef(null);
+  const headerImageInputRef = useRef(null);
   const fontLoadPromiseRef = useRef(null);
   const drawSequenceRef = useRef(0);
   const drawTimerRef = useRef(null);
@@ -2307,6 +2628,8 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const [visibleTraitRows, setVisibleTraitRows] = useState(3);
   const [traits, setTraits] = useState(DEFAULT_TRAITS);
   const [selectedBackground, setSelectedBackground] = useState('Gris.webp');
+  const [headerImageSrc, setHeaderImageSrc] = useState('');
+  const [cardContainers, setCardContainers] = useState(getDefaultCardContainers('weapon'));
   const [imageStatus, setImageStatus] = useState('loading');
   const [selectedElement, setSelectedElement] = useState('Ninguno');
   const [customColorActive, setCustomColorActive] = useState(false);
@@ -2495,7 +2818,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
 
   const drawCard = useCallback(async (targetCanvas = canvasRef.current, renderScale = getPreviewRenderScale(), updateStatus = true) => {
     const canvas = targetCanvas;
-    if (!canvas || !activeBackground) return undefined;
+    if (!canvas) return undefined;
     const drawId = drawSequenceRef.current + 1;
     if (updateStatus) {
       drawSequenceRef.current = drawId;
@@ -2513,23 +2836,24 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     }
     if (updateStatus && drawId !== drawSequenceRef.current) return undefined;
 
-    // 1. Load Background Image
-    let backgroundImage = null;
-    try {
-      backgroundImage = await loadCachedImage(activeBackground.src);
-    } catch (e) {
-      console.error("Could not load background image:", e);
-        if (updateStatus) setImageStatus('error');
-      return undefined;
+    let headerImageImg = null;
+    if (headerImageSrc) {
+      try {
+        headerImageImg = await loadCachedImage(headerImageSrc);
+      } catch (e) {
+        console.error("Could not load header image:", e);
+      }
     }
 
-    if (updateStatus && drawId !== drawSequenceRef.current) return undefined;
-
-    // Load Weapon Type Image if cardType is weapon-like
     let weaponIconImg = null;
     let diceIconImg = null;
     const resourceImages = {};
-    if (cardType === 'weapon' || cardType === 'skill') {
+    const usesCombatContainer = cardContainers.includes('combat');
+    const usesDamageContainer = cardContainers.includes('damage');
+    const usesConsumptionContainer = cardContainers.includes('consumption');
+    const usesTraitsContainer = cardContainers.includes('traits');
+
+    if (usesCombatContainer || cardType === 'weapon' || cardType === 'skill') {
       const iconSrc = getWeaponTypeIconSrc(weaponType);
       try {
         weaponIconImg = await loadCachedImage(iconSrc);
@@ -2548,7 +2872,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       }
     }
 
-    if (cardType === 'weapon' || (cardType === 'action' && actionCenterMode === 'dado') || cardType === 'skill') {
+    if (usesDamageContainer) {
       // Load Dice Icon Image
       const diceSrc = `${process.env.PUBLIC_URL || ''}/dados/cartas/${diceType}.webp`;
       try {
@@ -2558,13 +2882,13 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       }
     }
 
-    const loadsChargeResources = RESOURCE_CARD_TYPES.has(cardType) && (
+    const loadsChargeResources = usesConsumptionContainer && RESOURCE_CARD_TYPES.has(cardType) && (
       resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CHARGE_ONLY
     );
-    const loadsConsumptionResources = (cardType === 'action' && actionCenterMode === 'dado') || (
+    const loadsConsumptionResources = usesConsumptionContainer && ((cardType === 'action' && actionCenterMode === 'dado') || (
       RESOURCE_CARD_TYPES.has(cardType) && (resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY)
-    );
-    const loadsMinionAttributes = cardType === 'skill';
+    ) || cardType === 'status');
+    const loadsMinionAttributes = usesTraitsContainer && cardType === 'skill';
 
     if (loadsChargeResources || loadsConsumptionResources || loadsMinionAttributes) {
       const resourceOptions = [
@@ -2601,7 +2925,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     }
 
     let elementIconImg = null;
-    if ((cardType === 'status' || cardType === 'weapon') && selectedElement !== 'Ninguno') {
+    if (selectedElement !== 'Ninguno') {
       const suffix = cardType === 'weapon' ? '_p' : '';
       const elementSrc = `${process.env.PUBLIC_URL || ''}/elementos/${selectedElement}${suffix}.webp`;
       try {
@@ -2636,7 +2960,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     // 2. Draw the card canvas.
     drawCardCanvas(
       canvas,
-      backgroundImage,
+      null,
       cardName,
       cardType,
       traits,
@@ -2663,11 +2987,13 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       renderScale,
       actionCenterMode,
       actionAttributeImg,
+      headerImageImg,
+      cardContainers,
     );
 
     if (updateStatus) setImageStatus('ready');
     return undefined;
-  }, [activeBackground, cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode]);
+  }, [cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode, headerImageSrc, cardContainers]);
 
   useEffect(() => {
     let disposed = false;
@@ -2746,10 +3072,12 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     setFlavorText(DEFAULT_FLAVOR_TEXT);
     setHyphenate(true);
     setCardType('weapon');
+    setCardContainers(getDefaultCardContainers('weapon'));
     setShowTraits(true);
     setVisibleTraitRows(3);
     setTraits(DEFAULT_TRAITS);
     setSelectedBackground('Gris.webp');
+    setHeaderImageSrc('');
     setWeaponType('Cuerpo a cuerpo');
     setAlcance(0);
     setDiceType('D6');
@@ -2803,8 +3131,42 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     setDiceQty(Math.min(maxQty, Math.max(1, value)));
   };
 
+  const handleHeaderImageChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setHeaderImageSrc(typeof reader.result === 'string' ? reader.result : '');
+      setImageStatus('loading');
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  };
+
+  const addCardContainer = (containerId) => {
+    setCardContainers((current) => (
+      current.includes(containerId) ? current : [...current, containerId]
+    ));
+  };
+
+  const removeCardContainer = (containerId) => {
+    setCardContainers((current) => current.filter((id) => id !== containerId));
+  };
+
+  const moveCardContainer = (containerId, direction) => {
+    setCardContainers((current) => {
+      const index = current.indexOf(containerId);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) return current;
+      const next = [...current];
+      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+      return next;
+    });
+  };
+
   const handleTypeChange = (typeId) => {
     setCardType(typeId);
+    setCardContainers(getDefaultCardContainers(typeId));
     
     if (typeId !== 'trap') {
       setResourceMode(RESOURCE_MODE_BOTH);
@@ -3317,10 +3679,11 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     }
   };
 
-  const usesChargeResources = RESOURCE_CARD_TYPES.has(cardType);
-  const usesConsumptionResources = (cardType === 'action' && actionCenterMode === 'dado') || cardType === 'status' || (
+  const hasContainer = (containerId) => cardContainers.includes(containerId);
+  const usesChargeResources = hasContainer('consumption') && RESOURCE_CARD_TYPES.has(cardType);
+  const usesConsumptionResources = hasContainer('consumption') && ((cardType === 'action' && actionCenterMode === 'dado') || cardType === 'status' || (
     usesChargeResources && (resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY)
-  );
+  ));
 
   return (
     <div className="h-screen max-h-screen overflow-y-auto bg-[#09090b] text-[#e2e8f0] font-['Lato'] selection:bg-[#c8aa6e]/30 selection:text-[#f0e6d2] custom-scrollbar">
@@ -3450,7 +3813,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
             <div className="space-y-3">
               <div className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
                 <Tag className="h-4 w-4" />
-                Tipo
+                Categoría
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {CARD_TYPES.map((type) => (
@@ -3469,23 +3832,130 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
               </div>
             </div>
 
+            <div className="space-y-3 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
+              <div className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
+                <ImageIcon className="h-4 w-4" />
+                Imagen superior
+              </div>
+              <input
+                ref={headerImageInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleHeaderImageChange}
+                className="hidden"
+              />
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <button
+                  type="button"
+                  onClick={() => headerImageInputRef.current?.click()}
+                  className="inline-flex items-center justify-center gap-2 border border-[#c8aa6e]/25 bg-[#0b1120]/80 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#f0e6d2] transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
+                >
+                  <UploadCloud className="h-3.5 w-3.5" />
+                  Subir imagen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHeaderImageSrc('')}
+                  disabled={!headerImageSrc}
+                  className="inline-flex h-9 w-9 items-center justify-center border border-slate-800 bg-[#09090b]/70 text-slate-400 transition hover:border-red-400/50 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
+                  title="Quitar imagen"
+                  aria-label="Quitar imagen"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="overflow-hidden border border-[#c8aa6e]/15 bg-black/40" style={{ aspectRatio: '1548/638' }}>
+                {headerImageSrc ? (
+                  <img src={headerImageSrc} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full items-center justify-center px-4 text-center text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                    Se generará una cabecera oscura si no subes imagen
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-3 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
+              <div className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
+                <Plus className="h-4 w-4" />
+                Contenedores
+              </div>
+              <div className="space-y-2">
+                {cardContainers.length === 0 ? (
+                  <div className="border border-slate-800 bg-[#09090b]/60 px-3 py-3 text-xs uppercase tracking-[0.16em] text-slate-500">
+                    Solo se mostrará imagen y título.
+                  </div>
+                ) : cardContainers.map((containerId, index) => {
+                  const container = CARD_CONTAINER_TYPES.find((item) => item.id === containerId);
+                  return (
+                    <div
+                      key={containerId}
+                      className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-1 border border-slate-800 bg-[#0b1120]/70 px-2 py-1.5"
+                    >
+                      <span className="truncate text-[11px] font-black uppercase tracking-[0.14em] text-[#f0e6d2]">
+                        {container?.label || containerId}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => moveCardContainer(containerId, -1)}
+                        disabled={index === 0}
+                        className="inline-flex h-7 w-7 items-center justify-center border border-slate-800 text-slate-400 transition hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e] disabled:cursor-not-allowed disabled:opacity-30"
+                        title="Subir"
+                        aria-label={`Subir ${container?.label || containerId}`}
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveCardContainer(containerId, 1)}
+                        disabled={index === cardContainers.length - 1}
+                        className="inline-flex h-7 w-7 items-center justify-center border border-slate-800 text-slate-400 transition hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e] disabled:cursor-not-allowed disabled:opacity-30"
+                        title="Bajar"
+                        aria-label={`Bajar ${container?.label || containerId}`}
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeCardContainer(containerId)}
+                        className="inline-flex h-7 w-7 items-center justify-center border border-slate-800 text-slate-400 transition hover:border-red-400/50 hover:text-red-300"
+                        title="Quitar"
+                        aria-label={`Quitar ${container?.label || containerId}`}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {CARD_CONTAINER_TYPES.filter((container) => !cardContainers.includes(container.id)).map((container) => (
+                  <button
+                    key={container.id}
+                    type="button"
+                    onClick={() => addCardContainer(container.id)}
+                    className="inline-flex items-center justify-center gap-1 border border-slate-800 bg-[#09090b]/60 px-2 py-2 text-[9px] font-black uppercase tracking-[0.1em] text-slate-400 transition hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]"
+                  >
+                    <Plus className="h-3 w-3" />
+                    {container.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {(cardType === 'weapon' || cardType === 'armor' || cardType === 'trap' || cardType === 'action' || cardType === 'skill' || cardType === 'status') && (
               <div className="space-y-4 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
                 <div className="font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
-                  {cardType === 'weapon' ? 'Propiedades del Arma' : 
-                   cardType === 'armor' ? 'Propiedades de la Armadura' : 
-                   cardType === 'trap' ? 'Propiedades de la Trampa' :
-                   cardType === 'action' ? 'Propiedades de la Acción' : 
-                   cardType === 'skill' ? 'Propiedades del Minion' :
-                   'Propiedades del Estado'}
+                  Datos de contenedores
                 </div>
                 
-                {(cardType === 'weapon' || cardType === 'skill') && (
+                {(hasContainer('combat') || hasContainer('range')) && (
                   <>
                     {/* 1. Tipo de Arma */}
+                    {hasContainer('combat') && (
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        Tipo de Arma
+                        Tipo de combate
                       </label>
                       <select
                         value={weaponType}
@@ -3499,8 +3969,10 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                         ))}
                       </select>
                     </div>
+                    )}
 
                     {/* 2. Alcance */}
+                    {hasContainer('range') && (
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                         Alcance
@@ -3522,10 +3994,11 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                         ))}
                       </div>
                     </div>
-                    {cardType === 'weapon' && (
+                    )}
+                    {(cardType === 'weapon' || cardType === 'status') && (
                       <div className="space-y-1.5">
                         <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                          Elemento / Estado
+                          Icono de cabecera
                         </label>
                         <select
                           value={selectedElement}
@@ -3563,11 +4036,11 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                   </div>
                 )}
 
-                {(cardType === 'weapon' || (cardType === 'action' && actionCenterMode === 'dado') || cardType === 'skill') && (cardType !== 'weapon' || selectedElement === 'Ninguno') && (
+                {hasContainer('damage') && (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        {cardType === 'weapon' ? 'Dado de Daño' : cardType === 'skill' ? 'Dado del Minion' : 'Dado de Acción'}
+                        Dado de Daño
                       </label>
                       <select
                         value={diceType}
@@ -3879,7 +4352,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
               </div>
             )}
 
-            {activeType.id !== 'action' && (
+            {hasContainer('description') && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3 pb-1">
                   <label className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
@@ -3951,6 +4424,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
               </div>
             )}
 
+            {hasContainer('traits') && (
             <div className="space-y-3 border-t border-[#c8aa6e]/10 pt-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
@@ -4022,42 +4496,12 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                 </div>
               )}
             </div>
+            )}
 
             <div className="space-y-3">
               <div className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
                 <Palette className="h-4 w-4" />
-                Fondo
-              </div>
-
-              <div className="grid grid-cols-3 gap-3 pr-1 sm:grid-cols-5 lg:max-h-[56vh] lg:grid-cols-3 lg:overflow-y-auto lg:custom-scrollbar">
-                {CARD_BACKGROUNDS.map((background) => {
-                  const isSelected = background.file === selectedBackground;
-
-                  return (
-                    <button
-                      key={background.file}
-                      type="button"
-                      onClick={() => setSelectedBackground(background.file)}
-                      className={`group relative aspect-[1888/2624] overflow-hidden border bg-[#09090b] transition-all ${isSelected
-                        ? 'border-[#c8aa6e] shadow-[0_0_20px_rgba(200,170,110,0.28)]'
-                        : 'border-slate-700/70 hover:border-[#c8aa6e]/60'
-                        }`}
-                      title={background.name}
-                      aria-label={`Fondo ${background.name}`}
-                      aria-pressed={isSelected}
-                    >
-                      <img
-                        src={background.src}
-                        alt=""
-                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                        loading="lazy"
-                      />
-                      <span className="absolute inset-x-0 bottom-0 bg-black/70 px-1 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-200">
-                        {background.name}
-                      </span>
-                    </button>
-                  );
-                })}
+                Acento
               </div>
 
               {/* Custom background color overlay controls */}
@@ -4075,14 +4519,14 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                       }}
                       className="h-4 w-4 accent-[#c8aa6e]"
                     />
-                    Personalizar color
+                    Personalizar acento
                   </label>
                 </div>
                 {customColorActive && (
                   <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-2.5">
                     <HexColorInput value={customColor} onChange={setCustomColor} />
                     <p className="text-[10px] italic leading-normal text-slate-400">
-                      * Se recomienda usar el fondo <strong>Gris</strong> como base para obtener colores puros.
+                      Cambia la línea bajo la imagen, los rombos y los indicadores activos.
                     </p>
                   </div>
                 )}
@@ -4102,8 +4546,11 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
             <div className="pointer-events-none absolute inset-0 bg-[#05070d]/50" />
             <div className="relative flex h-full w-full max-w-full items-center justify-center lg:sticky lg:top-12 lg:self-start lg:h-fit lg:w-full lg:items-start">
               <div 
-                className="relative w-full max-w-[380px] sm:max-w-[460px] lg:max-w-[520px] lg:max-h-[calc(100vh-220px)] shrink-0 select-none"
-                style={{ aspectRatio: '1888/2624' }}
+                className="relative w-full max-w-[380px] shrink-0 select-none sm:max-w-[460px] lg:max-w-[520px]"
+                style={{
+                  aspectRatio: '1888/2624',
+                  width: 'min(100%, 520px, calc((100vh - 220px) * 1888 / 2624))',
+                }}
               >
                 {/* Luz ambiental suave detrás de la previsualización, sin cortes visibles. */}
                 <div
