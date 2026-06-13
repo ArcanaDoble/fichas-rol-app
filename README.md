@@ -183,7 +183,13 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.7.0**
+> **Versión actual: 2.7.1**
+
+**Resumen de cambios v2.7.1:**
+
+- **Botones de Estilo Individuales para Contenedores de Descripción**:
+  - Reemplazamos los botones globales de estilo de texto del pie de página por selectores individuales e independientes para cada contenedor de descripción.
+  - Ahora cada bloque de descripción dispone de su propio par de botones interactivos ("Narrativo" / "Principal") colocados en su cabecera dentro del editor lateral. Esto permite tener, por ejemplo, una descripción principal y otra de lore/narrativa coexistiendo y configuradas de manera independiente dentro de la misma carta.
 
 **Resumen de cambios v2.7.0:**
 

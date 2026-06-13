@@ -3617,6 +3617,7 @@ const drawCardCanvas = (
   containerDescriptionSizes = {},
   containerDamage = {},
   containerConsumptions = {},
+  containerDescriptionStyles = {},
   stardustImg = null,
   diceIconImages = {},
 ) => {
@@ -3686,7 +3687,7 @@ const drawCardCanvas = (
 
     if (blockId !== 'consumption' && blockId !== 'range' && blockId !== 'description') {
       drawContainerLabel(context, label, blockCenterY, accent);
-    } else if (blockId === 'description' && singleTextStyle !== 'narrative') {
+    } else if (blockId === 'description' && (containerDescriptionStyles[blockKey] || singleTextStyle || 'principal') !== 'narrative') {
       drawContainerLabel(context, label, y + 50, accent);
     }
 
@@ -3727,7 +3728,7 @@ const drawCardCanvas = (
         blockHeight,
         containerDescriptions[blockKey] ?? description,
         hyphenate,
-        singleTextStyle,
+        containerDescriptionStyles[blockKey] || singleTextStyle || 'principal',
         resourceImages,
         accent,
       );
@@ -3817,6 +3818,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const [containerTraits, setContainerTraits] = useState({});
   const [containerDescriptions, setContainerDescriptions] = useState({});
   const [containerDescriptionSizes, setContainerDescriptionSizes] = useState({});
+  const [containerDescriptionStyles, setContainerDescriptionStyles] = useState({});
   const [containerDamage, setContainerDamage] = useState({});
   const [containerConsumptions, setContainerConsumptions] = useState({});
   const [selectedBackground, setSelectedBackground] = useState('Gris.webp');
@@ -4179,13 +4181,14 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       containerDescriptionSizes,
       containerDamage,
       containerConsumptions,
+      containerDescriptionStyles,
       stardustImg,
       diceIconImages,
     );
 
     if (updateStatus) setImageStatus('ready');
     return undefined;
-  }, [cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode, headerImageSrc, cardContainers, containerTraits, containerDescriptions, containerDescriptionSizes, containerDamage, containerConsumptions]);
+  }, [cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode, headerImageSrc, cardContainers, containerTraits, containerDescriptions, containerDescriptionSizes, containerDamage, containerConsumptions, containerDescriptionStyles]);
 
   useEffect(() => {
     let disposed = false;
@@ -4299,6 +4302,17 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       return changed ? nextSizes : currentSizes;
     });
 
+    setContainerDescriptionStyles((currentStyles) => {
+      let changed = false;
+      const nextStyles = {};
+      descriptionKeys.forEach((key) => {
+        nextStyles[key] = currentStyles[key] || 'principal';
+        if (!currentStyles[key]) changed = true;
+      });
+      if (Object.keys(currentStyles).some((key) => !descriptionKeys.has(key))) changed = true;
+      return changed ? nextStyles : currentStyles;
+    });
+
     setContainerDamage((currentDamage) => {
       let changed = false;
       const nextDamage = {};
@@ -4327,6 +4341,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     setDescription(DEFAULT_DESCRIPTION);
     setContainerDescriptions({});
     setContainerDescriptionSizes({});
+    setContainerDescriptionStyles({});
     setContainerDamage({});
     setContainerConsumptions({});
     setFlavorText(DEFAULT_FLAVOR_TEXT);
@@ -4391,6 +4406,13 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     setContainerDescriptionSizes((currentSizes) => ({
       ...currentSizes,
       [containerKey]: nextValue,
+    }));
+  };
+
+  const handleContainerDescriptionStyleChange = (containerKey, value) => {
+    setContainerDescriptionStyles((currentStyles) => ({
+      ...currentStyles,
+      [containerKey]: value,
     }));
   };
 
@@ -5912,6 +5934,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                 {descriptionContainers.map((container, descriptionIndex) => {
                   const maxUnitsForContainer = getAvailableDescriptionUnits(container.key);
                   const selectedUnits = Math.min(containerDescriptionSizes[container.key] || 1, maxUnitsForContainer);
+                  const selectedStyle = containerDescriptionStyles[container.key] || 'principal';
 
                   return (
                     <div
@@ -5937,7 +5960,25 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                           </select>
                         </label>
                       </div>
-                      {singleTextStyle === 'principal' && renderContainerDescriptionToolbar(container.key, descriptionIndex)}
+
+                      <div className="flex gap-1.5 pb-1">
+                        {['narrative', 'principal'].map((styleOpt) => (
+                          <button
+                            key={`${container.key}-style-${styleOpt}`}
+                            type="button"
+                            onClick={() => handleContainerDescriptionStyleChange(container.key, styleOpt)}
+                            className={`cursor-pointer border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] transition ${
+                              selectedStyle === styleOpt
+                                ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                                : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                            }`}
+                          >
+                            {styleOpt === 'narrative' ? 'Narrativo' : 'Principal'}
+                          </button>
+                        ))}
+                      </div>
+
+                      {selectedStyle === 'principal' && renderContainerDescriptionToolbar(container.key, descriptionIndex)}
                       <textarea
                         ref={(node) => {
                           if (node) {
@@ -5961,30 +6002,13 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                         rows={5}
                         maxLength={descriptionMaxLength}
                         className={`min-h-[112px] w-full resize-y border border-[#c8aa6e]/25 bg-[#09090b]/80 px-4 py-3 text-base font-semibold leading-relaxed text-[#f0e6d2] outline-none transition placeholder:text-slate-600 focus:border-[#c8aa6e]/70 focus:shadow-[0_4px_12px_rgba(200,170,110,0.06),_4px_0_12px_rgba(200,170,110,0.06),_-4px_0_12px_rgba(200,170,110,0.06)] ${
-                          singleTextStyle === 'principal' ? 'rounded-b-md border-t-0' : 'rounded-md'
+                          selectedStyle === 'principal' ? 'rounded-b-md border-t-0' : 'rounded-md'
                         }`}
                         placeholder="Texto descriptivo de la carta"
                       />
                     </div>
                   );
                 })}
-
-                <div className="flex justify-center gap-1.5 pt-1.5">
-                  {['narrative', 'principal'].map((styleOpt) => (
-                    <button
-                      key={styleOpt}
-                      type="button"
-                      onClick={() => setSingleTextStyle(styleOpt)}
-                      className={`cursor-pointer border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] transition ${
-                        singleTextStyle === styleOpt
-                          ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
-                          : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
-                      }`}
-                    >
-                      {styleOpt === 'narrative' ? 'Narrativo' : 'Principal'}
-                    </button>
-                  ))}
-                </div>
               </div>
             )}
 
