@@ -183,7 +183,16 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.6.6**
+> **Versión actual: 2.6.7**
+
+**Resumen de cambios v2.6.7:**
+
+- **Alineación de Estilo de Cargas Modulares y Renderizado en Negro**:
+  - Modificamos `drawModularChargeFooter` para usar el mismo grosor de línea (`lineWidth = 3`) y color (`rgba(181,92,18,0.58)`) de los divisores estándar del cuerpo de la carta (`drawContainerDivider`).
+  - Rediseñamos los rombos del pie de cargas para que utilicen `drawSectionDiamond` con el relleno `accent` y sin bordes negros redundantes.
+  - Ajustamos los tamaños de los rombos: el central conserva su escala destacada (`70px`), mientras que los otros cuatro se adaptan al estándar del cuerpo (`31px`).
+  - Cambiamos la carga de recursos para usar los nuevos iconos de consumo (`/interfaz/consumo_new/...`) en lugar de los de cargas antiguos.
+  - Implementamos la función `drawBlackIcon` y actualizamos `drawSlotIcon` para pintar las siluetas de los iconos de consumo en negro sólido tanto en el pie como en los carriles.
 
 **Resumen de cambios v2.6.6:**
 

@@ -196,9 +196,9 @@ const DEFAULT_MINION_ATTRIBUTES = {
 };
 
 const CHARGE_TYPES = [
-  { id: 'Hambre', label: 'Hambre', src: '/interfaz/cargas/Hambre.webp' },
-  { id: 'Cuerpo', label: 'Cuerpo', src: '/interfaz/cargas/Cuerpo.webp' },
-  { id: 'Mente', label: 'Mente', src: '/interfaz/cargas/Mente.webp' },
+  { id: 'Hambre', label: 'Hambre', src: '/interfaz/consumo_new/Hambre.webp' },
+  { id: 'Cuerpo', label: 'Cuerpo', src: '/interfaz/consumo_new/Cuerpo.webp' },
+  { id: 'Mente', label: 'Mente', src: '/interfaz/consumo_new/Mente.webp' },
 ];
 
 const CONSUMPTION_TYPES = [
@@ -654,12 +654,39 @@ const drawEmptyCircleSlot = (context, x, y, size) => {
   context.restore();
 };
 
-const drawSlotIcon = (context, iconImage, x, y, size, shape) => {
+const drawBlackIcon = (context, iconImage, x, y, size) => {
+  if (!iconImage) return;
+  context.save();
+  try {
+    const buffer = document.createElement('canvas');
+    buffer.width = size;
+    buffer.height = size;
+    const bufferCtx = buffer.getContext('2d');
+    if (bufferCtx) {
+      bufferCtx.drawImage(iconImage, 0, 0, size, size);
+      bufferCtx.globalCompositeOperation = 'source-in';
+      bufferCtx.fillStyle = '#000000';
+      bufferCtx.fillRect(0, 0, size, size);
+      context.drawImage(buffer, x - size / 2, y - size / 2);
+    } else {
+      context.drawImage(iconImage, x - size / 2, y - size / 2, size, size);
+    }
+  } catch (e) {
+    context.drawImage(iconImage, x - size / 2, y - size / 2, size, size);
+  }
+  context.restore();
+};
+
+const drawSlotIcon = (context, iconImage, x, y, size, shape, forceBlack = false) => {
   if (!iconImage) return;
   context.save();
   // Dibujamos el icono completo a 0.98 del tamaño para lucir su propio contorno nativo sin recortes ni bordes superpuestos
   const iconSize = size * 0.98;
-  context.drawImage(iconImage, x - iconSize / 2, y - iconSize / 2, iconSize, iconSize);
+  if (forceBlack) {
+    drawBlackIcon(context, iconImage, x, y, iconSize);
+  } else {
+    context.drawImage(iconImage, x - iconSize / 2, y - iconSize / 2, iconSize, iconSize);
+  }
   context.restore();
 };
 
@@ -741,7 +768,7 @@ const drawWeaponResourceRails = (context, chargeSlots, consumptionSlots, resourc
     const x = chargeStartX + index * (slotSize + slotGap);
     const slotY = chargeRail.y + chargeRail.height / 2;
     drawEmptyDiamondSlot(context, x, slotY, slotSize);
-    drawSlotIcon(context, resourceImages[`charge:${slot}`], x, slotY, slotSize, 'diamond');
+    drawSlotIcon(context, resourceImages[`charge:${slot}`], x, slotY, slotSize, 'diamond', true);
   });
 
   const displayConsumptionSlots = [...consumptionSlots].reverse();
@@ -770,7 +797,7 @@ const drawCenteredChargeRail = (context, chargeSlots, resourceImages) => {
   chargeSlots.forEach((slot, index) => {
     const x = chargeStartX + index * (slotSize + slotGap);
     drawEmptyDiamondSlot(context, x, slotY, slotSize);
-    drawSlotIcon(context, resourceImages[`charge:${slot}`], x, slotY, slotSize, 'diamond');
+    drawSlotIcon(context, resourceImages[`charge:${slot}`], x, slotY, slotSize, 'diamond', true);
   });
 };
 
@@ -2665,36 +2692,31 @@ const drawModularChargeFooter = (context, chargeSlots, resourceImages = {}, acce
   const y = CHARGE_FOOTER_LINE_Y;
   const centerX = 944;
   const centers = [centerX - 180, centerX - 90, centerX, centerX + 90, centerX + 180];
-  const sizes = [46, 46, 70, 46, 46];
+  const sizes = [31, 31, 70, 31, 31];
 
   context.save();
-  context.strokeStyle = 'rgba(181,92,18,0.72)';
-  context.lineWidth = 9;
+  context.strokeStyle = 'rgba(181,92,18,0.58)';
+  context.lineWidth = 3;
   context.beginPath();
   context.moveTo(314, y);
-  context.lineTo(704, y);
-  context.moveTo(1184, y);
+  context.lineTo(722, y);
+  context.moveTo(1166, y);
   context.lineTo(1574, y);
   context.stroke();
 
   slots.forEach((slot, index) => {
     const x = centers[index];
     const size = sizes[index];
-    const slotStyle = CHARGE_STYLES[slot] || { stroke: '#171a19', fill: accent };
-    traceDiamondPath(context, x, y, size);
-    context.fillStyle = slotStyle.fill;
-    context.strokeStyle = '#050505';
-    context.lineWidth = 5;
-    context.fill();
-    context.stroke();
+    
+    // Draw the diamond shape matching the style of the body diamonds
+    drawSectionDiamond(context, x, y, size, accent);
 
-    const iconImage = slot ? resourceImages[`charge:${slot}`] : null;
-    if (iconImage) {
-      const iconSize = size * 0.48;
-      context.save();
-      context.globalAlpha = 0.9;
-      context.drawImage(iconImage, x - iconSize / 2, y - iconSize / 2, iconSize, iconSize);
-      context.restore();
+    if (slot && slot !== EMPTY_SLOT) {
+      const iconImage = resourceImages[`charge:${slot}`];
+      if (iconImage) {
+        const iconSize = size * 0.48;
+        drawBlackIcon(context, iconImage, x, y, iconSize);
+      }
     }
   });
   context.restore();
