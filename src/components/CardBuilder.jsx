@@ -2692,15 +2692,15 @@ const drawModularChargeFooter = (context, chargeSlots, resourceImages = {}, acce
   const y = CHARGE_FOOTER_LINE_Y;
   const centerX = 944;
   const centers = [centerX - 180, centerX - 90, centerX, centerX + 90, centerX + 180];
-  const sizes = [31, 31, 70, 31, 31];
+  const sizes = [35, 35, 70, 35, 35];
 
   context.save();
   context.strokeStyle = 'rgba(181,92,18,0.58)';
   context.lineWidth = 3;
   context.beginPath();
   context.moveTo(314, y);
-  context.lineTo(722, y);
-  context.moveTo(1166, y);
+  context.lineTo(720, y);
+  context.moveTo(1168, y);
   context.lineTo(1574, y);
   context.stroke();
 
@@ -2708,16 +2708,14 @@ const drawModularChargeFooter = (context, chargeSlots, resourceImages = {}, acce
     const x = centers[index];
     const size = sizes[index];
     
-    // Draw the diamond shape matching the style of the body diamonds
-    drawSectionDiamond(context, x, y, size, accent);
-
-    if (slot && slot !== EMPTY_SLOT) {
-      const iconImage = resourceImages[`charge:${slot}`];
-      if (iconImage) {
-        const iconSize = size * 0.48;
-        drawBlackIcon(context, iconImage, x, y, iconSize);
-      }
-    }
+    // Determine the color corresponding to each charge
+    const slotColor = slot === 'Hambre' ? '#3d7d45'
+                    : slot === 'Cuerpo' ? '#a93832'
+                    : slot === 'Mente' ? '#2f6fb3'
+                    : accent;
+                    
+    // Draw the diamond shape matching the style of the body diamonds but colored
+    drawSectionDiamond(context, x, y, size, slotColor);
   });
   context.restore();
 };
