@@ -65,7 +65,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Panel de detalle interactivo** al pulsar una clase, con pestañas de Resumen, Inspiración (Hitos), Nivel de Campeón, Reglas y Equipación.
 - **Acceso directo** desde el menú Máster mediante la nueva opción «Lista de Clases».
 - **Constructor de cartas**: la antigua pestaña «Tienda» de la ficha pasa a ser «Cartas» y abre un canvas para previsualizar una carta con textos guía, escribir su nombre, descripción y texto narrativo, subir una imagen de cabecera, definir rasgos y configurar dados, alcance, tipo de combate, cargas y consumos con ranuras táctiles; sus iconos propios cargan en WebP optimizado y el Máster también dispone de acceso directo desde su menú principal.
-- **Constructor de cartas por contenedores**: el diseño de carta deja de depender de fondos completos por tipo y pasa a usar una plantilla generada en canvas cuyo marco ocupa todo el tamaño exportable, con cabecera de imagen/título, zona beige con textura de papel y contenedores reordenables para alcance, consumo, daño, rasgos, tipo de combate y descripción; carga y consumo usan cuatro slots fijos con estados vacíos visibles e iconos vectoriales dibujados en canvas para tiempo, mente, cuerpo, hambre, armadura, recurso y variable.
+- **Constructor de cartas por contenedores**: el diseño de carta deja de depender de fondos completos por tipo y pasa a usar una plantilla generada en canvas cuyo marco ocupa todo el tamaño exportable, con cabecera de imagen/título, zona beige con textura de papel y contenedores reordenables para alcance, consumo, daño, rasgos, tipo de combate y descripción; carga y consumo usan cuatro slots fijos con estados vacíos visibles, nuevos iconos de consumo tintados por tipo de recurso y `Variable` dibujado en canvas. El menú de categoría actúa como acceso rápido para añadir contenedores, con un máximo de seis por carta, alcance y tipo limitados a una instancia, y consumo, daño, rasgos y descripción repetibles. El contenedor de alcance usa la regla centrada sin título, alineando `Intermedio` con el rombo divisor, y las filas modulares equilibran su padding vertical para centrar mejor cada contenido.
 - **Tipos de arma simplificados en cartas**: el constructor de cartas usa solo tres iconos WebP para `Cuerpo a cuerpo`, `Distancia` y `Magia`, reemplazando el catálogo anterior de iconos de armas específicas.
 - **Recursos en trampas y minions**: las cartas de `Trampa` y `Minion` pueden usar cargas y consumos como armas y armaduras, con un modo de solo carga que centra el raíl de cargas en el canvas.
 - **Dado Variable y Elementos en Armas**:
@@ -183,7 +183,31 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.6.0**
+> **Versión actual: 2.6.3**
+
+**Resumen de cambios v2.6.3:**
+
+- **Rediseño del Icono de Mente (Cerebro) Blanco y Detallado**:
+  - Implementamos el color **blanco sólido (`#ffffff`)** en todos los lóbulos del cerebro de Mente para asegurar que el icono se vea predominantemente blanco y claro.
+  - Evitamos el empastado/oscurecimiento del icono reduciendo el trazo interno de las arrugas a un grosor fino (0.8px en pantalla).
+  - Extrajimos y aplicamos el trazo exterior grueso reglamentario (6px en pantalla) de manera exclusiva sobre las siluetas exteriores (sin agujeros internos) de los hemisferios izquierdo y derecho, preservando la nitidez de los surcos internos.
+
+**Resumen de cambios v2.6.2:**
+
+- **Integración y Ajuste del Icono de Mente SVG**: Integramos el nuevo diseño vectorial personalizado para el recurso **Mente** utilizando los caminos vectoriales de `mente.svg` (un cerebro detallado visto desde arriba).
+  - **Estilo Sincronizado Homogéneo**: Se adaptó el renderizado de forma uniforme para todos los caminos del SVG (hemisferios y surcos internos), rellenándolos con `iconFill` (color translúcido de fondo) y contorneándolos con `tint` (color de contorno del tema), sin aplicar tintados parciales selectivos.
+  - **Resolución de Errores de Sintaxis**: Corregimos los delimitadores de cadenas (errores de comillas y acentos graves) en el canvas del constructor de cartas (`CardBuilder.jsx`).
+
+**Resumen de cambios v2.6.1:**
+
+- **Rediseño de los Iconos Vectoriales de Consumo**: Rediseñamos y actualizamos visualmente todos los iconos vectoriales dibujados en el canvas de la carta en `CardBuilder.jsx` para ofrecer una estética premium y semánticamente alineada a cada recurso:
+  - **Mente**: Rediseñado para soportar el renderizado dinámico de caminos vectoriales complejos.
+  - **Cuerpo**: Sustituido el monigote de palo por un corazón estilizado con un destello decorativo de luz.
+  - **Hambre**: Sustituido el letrero/estómago por un muslo de carne/hueso de alta calidad (drumstick) con marcas de parrilla.
+  - **Armadura**: Escudo reducido de 100px a 68px de alto y refinado internamente para un encaje perfecto en la ranura.
+  - **Recurso**: Reemplazada la caja 3D abstracta por un saco de monedas con un lazo superior, nudos y una moneda con grabado rúnico.
+  - **Variable**: Signo de interrogación ajustado a 64px y removido el círculo interno redundante para una diagramación más limpia.
+  - **Tiempo**: Reloj de arena enriquecido con depósitos de arena arriba y abajo y un chorro cayendo por el centro.
 
 **Resumen de cambios v2.6.0:**
 
