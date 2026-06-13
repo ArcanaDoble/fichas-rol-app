@@ -65,7 +65,7 @@ const CARD_TYPES = [
   { id: 'armor', label: 'Consumo', containerId: 'consumption', maxTraits: 8, layout: 'armor' },
   { id: 'trap', label: 'Rasgos', containerId: 'traits', maxTraits: 1, layout: 'trap' },
   { id: 'action', label: 'Regla', containerId: 'range', maxTraits: 0, layout: 'none' },
-  { id: 'skill', label: 'Tipo', containerId: 'combat', maxTraits: 4, layout: 'weapon' },
+  { id: 'skill', label: 'Minion', containerId: 'minion', maxTraits: 4, layout: 'weapon' },
   { id: 'status', label: 'Descripción', containerId: 'description', maxTraits: 1, layout: 'trap' },
 ];
 
@@ -74,25 +74,47 @@ const CARD_CONTAINER_TYPES = [
   { id: 'consumption', label: 'Consumo' },
   { id: 'damage', label: 'Daño' },
   { id: 'traits', label: 'Rasgos' },
-  { id: 'combat', label: 'Tipo' },
+  { id: 'minion', label: 'Minion' },
   { id: 'description', label: 'Descripción' },
 ];
 
 const DEFAULT_CARD_CONTAINERS_BY_TYPE = {
-  weapon: ['range', 'consumption', 'damage', 'traits', 'combat', 'description'],
+  weapon: ['range', 'consumption', 'damage', 'traits', 'description'],
   armor: ['consumption', 'traits', 'description'],
   trap: ['range', 'consumption', 'traits', 'description'],
   action: ['consumption', 'damage', 'description'],
-  skill: ['range', 'damage', 'traits', 'combat', 'description'],
+  skill: ['range', 'damage', 'traits', 'minion', 'description'],
   status: ['description'],
 };
 
+const MAX_CARD_CONTAINERS = 6;
+const MAX_TRAITS_PER_CONTAINER = 3;
+const SINGLE_INSTANCE_CARD_CONTAINERS = new Set(['range', 'minion']);
+
+const createCardContainer = (id) => ({
+  id,
+  key: `${id}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+});
+
+const normalizeCardContainer = (container, fallbackIndex = 0) => {
+  if (typeof container === 'string') {
+    return { id: container, key: `${container}-legacy-${fallbackIndex}` };
+  }
+  return {
+    id: container?.id || 'description',
+    key: container?.key || `${container?.id || 'description'}-legacy-${fallbackIndex}`,
+  };
+};
+
+const getContainerId = (container, fallbackIndex = 0) => normalizeCardContainer(container, fallbackIndex).id;
+const getContainerKey = (container, fallbackIndex = 0) => normalizeCardContainer(container, fallbackIndex).key;
+
 const getDefaultCardContainers = (typeId) => (
   DEFAULT_CARD_CONTAINERS_BY_TYPE[typeId] || DEFAULT_CARD_CONTAINERS_BY_TYPE.weapon
-);
+).map((id) => createCardContainer(id));
 
-const MAX_CARD_CONTAINERS = 6;
-const SINGLE_INSTANCE_CARD_CONTAINERS = new Set(['range', 'combat']);
+const DESCRIPTION_SPACE_UNITS = [1, 2, 3, 4, 5, 6];
+const MODULAR_DESCRIPTION_UNIT_HEIGHT = 240;
 
 export const ELEMENT_TYPES = [
   { id: 'Ninguno', label: 'Ninguno' },
@@ -105,6 +127,53 @@ export const ELEMENT_TYPES = [
   { id: 'Tierra', label: 'Tierra' },
   { id: 'Veneno', label: 'Veneno' },
   { id: 'Viento', label: 'Viento' }
+];
+
+const HEADER_ICON_SOURCES = {
+  Agua: '/cabecera/agua.webp',
+  Fuego: '/cabecera/fuego.webp',
+  Hielo: '/cabecera/hielo.webp',
+  Luz: '/cabecera/luz.webp',
+  Oscuridad: '/cabecera/oscuridad.webp',
+  Rayo: '/cabecera/rayo.webp',
+  Tierra: '/cabecera/tierra.webp',
+  Veneno: '/cabecera/veneno.webp',
+  Viento: '/cabecera/viento.webp',
+};
+
+const ELEMENT_CONSUMPTION_ICON_SOURCES = {
+  Agua: '/elementos_new/agua.webp',
+  Fuego: '/elementos_new/fuego.webp',
+  Hielo: '/elementos_new/hielo.webp',
+  Luz: '/elementos_new/luz.webp',
+  Oscuridad: '/elementos_new/oscuridad.webp',
+  Rayo: '/elementos_new/rayo.webp',
+  Tierra: '/elementos_new/tierra.webp',
+  Veneno: '/elementos_new/veneno.webp',
+  Viento: '/elementos_new/viento.webp',
+};
+
+const ELEMENT_CONSUMPTION_STYLES = {
+  Agua: { stroke: '#3f7f9f', fill: 'rgba(63,127,159,0.15)' },
+  Fuego: { stroke: '#c46f1f', fill: 'rgba(196,111,31,0.15)' },
+  Hielo: { stroke: '#79a6b5', fill: 'rgba(121,166,181,0.16)' },
+  Luz: { stroke: '#b99a55', fill: 'rgba(185,154,85,0.15)' },
+  Oscuridad: { stroke: '#5f5873', fill: 'rgba(95,88,115,0.16)' },
+  Rayo: { stroke: '#b1832f', fill: 'rgba(177,131,47,0.15)' },
+  Tierra: { stroke: '#827044', fill: 'rgba(130,112,68,0.15)' },
+  Veneno: { stroke: '#668f4f', fill: 'rgba(102,143,79,0.15)' },
+  Viento: { stroke: '#6d958a', fill: 'rgba(109,149,138,0.15)' },
+};
+
+const CARD_ACCENT_PRESETS = [
+  { id: 'base', label: 'Normal', value: '#c46f1f' },
+  { id: 'gold', label: 'Dorado', value: '#c8aa6e' },
+  { id: 'red', label: 'Rojo', value: '#ad5134' },
+  { id: 'green', label: 'Verde', value: '#73824f' },
+  { id: 'blue', label: 'Azul', value: '#52758a' },
+  { id: 'purple', label: 'Morado', value: '#765d86' },
+  { id: 'ashen', label: 'Ceniza', value: '#747168' },
+  { id: 'bone', label: 'Hueso', value: '#b69463' },
 ];
 
 const DEFAULT_TRAITS = ['-', '-', '-', '-', '-', '-', '-', '-'];
@@ -134,6 +203,12 @@ const CONSUMPTION_TYPES = [
 const RESOURCE_SLOT_COUNT = 4;
 const DEFAULT_CHARGE_SLOTS = ['Hambre', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
 const DEFAULT_CONSUMPTION_SLOTS = ['Tiempo', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
+const DEFAULT_CONTAINER_DAMAGE = { diceType: 'D6', diceQty: 1 };
+const DEFAULT_CONTAINER_CONSUMPTION_TYPES = Array.from({ length: RESOURCE_SLOT_COUNT }, () => 'consumption');
+const createDefaultContainerConsumption = () => ({
+  slots: [...DEFAULT_CONSUMPTION_SLOTS],
+  slotTypes: [...DEFAULT_CONTAINER_CONSUMPTION_TYPES],
+});
 const RESOURCE_MODE_BOTH = 'charge-consumption';
 const RESOURCE_MODE_CHARGE_ONLY = 'charge-only';
 const RESOURCE_MODE_CONSUMPTION_ONLY = 'consumption-only';
@@ -2083,12 +2158,14 @@ const drawGeneratedHeaderBackdrop = (context, x, y, width, height) => {
   context.restore();
 };
 
-const fitModularTitleFont = (context, title, maxWidth) => {
+const fitModularTitleFont = (context, title, hasHeaderIcon = false) => {
   let size = 176;
   context.save();
   while (size > 58) {
     context.font = `900 ${size}px Lato, Arial, sans-serif`;
-    if (context.measureText(title).width <= maxWidth) break;
+    const titleWidth = context.measureText(title).width;
+    const neededSpace = titleWidth + (hasHeaderIcon ? size + 40 : 0);
+    if (neededSpace <= 1340) break;
     size -= 4;
   }
   context.restore();
@@ -2339,8 +2416,9 @@ const drawHeaderImageContainer = (
   context.fillStyle = accent;
   context.fillRect(x, y + height - 14, width, 14);
 
+  const headerIconImg = elementIconImg;
   const title = normalizeCardName(cardName).toUpperCase();
-  const titleSize = fitModularTitleFont(context, title, 1020);
+  const titleSize = fitModularTitleFont(context, title, Boolean(headerIconImg));
   context.font = `900 ${titleSize}px Lato, Arial, sans-serif`;
   context.textAlign = 'left';
   context.textBaseline = 'alphabetic';
@@ -2356,13 +2434,13 @@ const drawHeaderImageContainer = (
   context.strokeText(title, titleX, titleY);
   context.fillText(title, titleX, titleY);
 
-  const sideIcon = elementIconImg || weaponIconImg;
-  if (sideIcon) {
-    const iconSize = 148;
-    const iconX = x + width - 210;
-    const iconY = y + 75;
-    context.globalAlpha = 0.92;
-    context.drawImage(sideIcon, iconX, iconY, iconSize, iconSize);
+  if (headerIconImg) {
+    const iconSize = titleSize * 1.12;
+    const titleWidth = context.measureText(title).width;
+    const iconX = Math.min(titleX + titleWidth + 40, x + width - 82 - iconSize);
+    const iconY = titleY - iconSize + titleSize * 0.12;
+    context.globalAlpha = 0.94;
+    context.drawImage(headerIconImg, iconX, iconY, iconSize, iconSize);
   }
   context.restore();
 };
@@ -2405,6 +2483,20 @@ const drawContainerLabel = (context, label, centerY, accent) => {
   context.textBaseline = 'middle';
   context.fillStyle = '#1d2120';
   context.fillText(label.toUpperCase(), 314, centerY);
+  context.restore();
+};
+
+const drawEmptyContainersMessage = (context) => {
+  context.save();
+  const bodyCenterY = MODULAR_CONTENT_TOP + (2386 - MODULAR_CONTENT_TOP) / 2;
+  context.font = '900 46px Lato, Arial, sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillStyle = 'rgba(29,33,32,0.42)';
+  context.fillText('SIN CONTENEDORES HABILITADOS', 944, bodyCenterY);
+  context.font = 'italic 34px Lato, Arial, sans-serif';
+  context.fillStyle = 'rgba(29,33,32,0.32)';
+  context.fillText('Añade contenedores desde el panel lateral', 944, bodyCenterY + 62);
   context.restore();
 };
 
@@ -2461,6 +2553,7 @@ const drawModularConsumption = (context, centerY, slots, resourceImages = {}, ac
     Hambre: { stroke: '#3d7d45', fill: 'rgba(61,125,69,0.14)' },
     Recurso: { stroke: '#6f716c', fill: 'rgba(111,113,108,0.14)' },
     Armadura_1: { stroke: '#60798f', fill: 'rgba(96,121,143,0.15)' },
+    ...ELEMENT_CONSUMPTION_STYLES,
   };
   const getSlotStyle = (slot) => slotStyles[slot] || {
     stroke: 'rgba(32,35,33,0.56)',
@@ -3043,10 +3136,10 @@ const drawModularDamage = (context, centerY, diceIconImg, diceQty, diceType) => 
 
 const drawModularTraits = (context, centerY, traits, visibleTraitRows, accent) => {
   const labels = traits
-    .slice(0, Math.max(1, visibleTraitRows) * 2)
+    .slice(0, MAX_TRAITS_PER_CONTAINER)
     .map((trait) => (trait || '').trim())
     .filter((trait) => trait && trait !== '-')
-    .slice(0, 6);
+    .slice(0, MAX_TRAITS_PER_CONTAINER);
   context.save();
   if (labels.length === 0) {
     context.font = 'italic 44px Lato, Arial, sans-serif';
@@ -3059,9 +3152,12 @@ const drawModularTraits = (context, centerY, traits, visibleTraitRows, accent) =
   }
 
   const badgeHeight = 78;
-  const badgeGap = 34;
-  const badgeWidth = Math.min(292, Math.max(210, (1100 - (labels.length - 1) * badgeGap) / labels.length));
-  const startX = 560 + (1100 - (labels.length * badgeWidth + (labels.length - 1) * badgeGap)) / 2;
+  const badgeGap = labels.length === 1 ? 0 : 34;
+  const badgeWidth = labels.length === 1 ? 310 : 292;
+  const totalWidth = labels.length * badgeWidth + (labels.length - 1) * badgeGap;
+  const startX = labels.length === 3
+    ? 944 - (2 * badgeWidth + badgeGap) / 2
+    : 944 - totalWidth / 2;
   const y = centerY - badgeHeight / 2;
   labels.forEach((label, index) => {
     const x = startX + index * (badgeWidth + badgeGap);
@@ -3177,14 +3273,42 @@ const drawModularDescription = (context, y, height, description, hyphenate, sing
   context.restore();
 };
 
-const getModularContainerHeight = (blockId, remainingHeight, isLast) => {
+const getModularContainerHeight = (blockId, remainingHeight, isLast, descriptionUnits = 1) => {
   if (blockId === 'range') return 285;
   if (blockId === 'consumption') return 190;
   if (blockId === 'damage') return 180;
   if (blockId === 'traits') return 190;
-  if (blockId === 'combat') return 185;
-  if (blockId === 'description') return isLast ? Math.max(360, remainingHeight) : 240;
+  if (blockId === 'minion') return 0;
+  if (blockId === 'description') {
+    return Math.max(MODULAR_DESCRIPTION_UNIT_HEIGHT, MODULAR_DESCRIPTION_UNIT_HEIGHT * descriptionUnits);
+  }
   return 180;
+};
+
+const getRenderableCardContainers = (containers) => (
+  containers
+    .map((container, index) => normalizeCardContainer(container, index))
+    .filter((block) => block.id !== 'minion')
+);
+
+const getDescriptionUnitBudget = (containers, cardType = 'weapon') => {
+  const blocks = getRenderableCardContainers(containers, cardType);
+  const descriptionCount = blocks.filter((block) => block.id === 'description').length;
+  if (descriptionCount === 0) return 0;
+
+  const fixedHeight = blocks.reduce((total, block) => {
+    if (block.id === 'description') return total;
+    return total + getModularContainerHeight(block.id, 0, false);
+  }, 0);
+  const availableHeight = Math.max(0, 2386 - MODULAR_CONTENT_TOP - fixedHeight);
+  return Math.max(descriptionCount, Math.min(descriptionCount * 6, Math.floor(availableHeight / MODULAR_DESCRIPTION_UNIT_HEIGHT)));
+};
+
+const clampDescriptionUnits = (requestedUnits, usedUnits, remainingDescriptions, totalBudget) => {
+  const parsedUnits = parseInt(requestedUnits, 10);
+  const desiredUnits = DESCRIPTION_SPACE_UNITS.includes(parsedUnits) ? parsedUnits : 1;
+  const maxUnits = Math.max(1, totalBudget - usedUnits - remainingDescriptions);
+  return Math.min(desiredUnits, maxUnits);
 };
 
 const drawCardCanvas = (
@@ -3218,7 +3342,13 @@ const drawCardCanvas = (
   actionAttributeImg = null,
   headerImageImg = null,
   cardContainers = getDefaultCardContainers(cardType),
+  containerTraits = {},
+  containerDescriptions = {},
+  containerDescriptionSizes = {},
+  containerDamage = {},
+  containerConsumptions = {},
   stardustImg = null,
+  diceIconImages = {},
 ) => {
   const targetWidth = Math.max(1, Math.round(CANVAS_WIDTH * renderScale));
   const targetHeight = Math.max(1, Math.round(CANVAS_HEIGHT * renderScale));
@@ -3249,16 +3379,35 @@ const drawCardCanvas = (
     ...labels,
     [block.id]: block.label,
   }), {});
-  const blocks = cardContainers.length > 0 ? cardContainers : getDefaultCardContainers(cardType);
+  const blocks = getRenderableCardContainers(cardContainers, cardType);
+  if (blocks.length === 0) {
+    drawEmptyContainersMessage(context);
+    context.restore();
+    return;
+  }
+
+  const descriptionUnitBudget = getDescriptionUnitBudget(cardContainers, cardType);
+  let usedDescriptionUnits = 0;
   const contentBottom = 2386;
   let y = MODULAR_CONTENT_TOP;
 
-  blocks.forEach((blockId, index) => {
+  blocks.forEach((block, index) => {
+    const blockId = block.id;
+    const blockKey = block.key;
+    const remainingDescriptionCount = blocks.slice(index + 1).filter((nextBlock) => nextBlock.id === 'description').length;
+    const descriptionUnits = blockId === 'description'
+      ? clampDescriptionUnits(
+        containerDescriptionSizes[blockKey] || 1,
+        usedDescriptionUnits,
+        remainingDescriptionCount,
+        descriptionUnitBudget,
+      )
+      : 1;
     if (y >= contentBottom - 120) return;
     const remainingHeight = contentBottom - y;
     const blockHeight = Math.min(
       remainingHeight,
-      getModularContainerHeight(blockId, remainingHeight, index === blocks.length - 1),
+      getModularContainerHeight(blockId, remainingHeight, index === blocks.length - 1, descriptionUnits),
     );
     const label = blockLabels[blockId] || blockId;
     const blockCenterY = getModularBlockCenterY(y, blockHeight);
@@ -3272,15 +3421,43 @@ const drawCardCanvas = (
     if (blockId === 'range') {
       drawModularRange(context, y, blockHeight, alcance, accent);
     } else if (blockId === 'consumption') {
-      drawModularConsumption(context, blockCenterY, consumptionSlots, resourceImages, accent);
+      drawModularConsumption(
+        context,
+        blockCenterY,
+        containerConsumptions[blockKey]?.slots || DEFAULT_CONSUMPTION_SLOTS,
+        resourceImages,
+        accent,
+      );
     } else if (blockId === 'damage') {
-      drawModularDamage(context, blockCenterY, diceIconImg, diceQty, diceType);
+      const damageConfig = containerDamage[blockKey] || DEFAULT_CONTAINER_DAMAGE;
+      const damageDiceType = damageConfig.diceType || DEFAULT_CONTAINER_DAMAGE.diceType;
+      drawModularDamage(
+        context,
+        blockCenterY,
+        diceIconImages[damageDiceType] || diceIconImg,
+        damageConfig.diceQty || DEFAULT_CONTAINER_DAMAGE.diceQty,
+        damageDiceType,
+      );
     } else if (blockId === 'traits') {
-      drawModularTraits(context, blockCenterY, showTraits ? traits : [], visibleTraitRows, accent);
-    } else if (blockId === 'combat') {
-      drawModularCombat(context, blockCenterY, weaponType, weaponIconImg);
+      drawModularTraits(
+        context,
+        blockCenterY,
+        showTraits ? (containerTraits[blockKey] || traits).slice(0, MAX_TRAITS_PER_CONTAINER) : [],
+        1,
+        accent,
+      );
+    } else if (blockId === 'minion') {
+      // Placeholder: se gestiona desde el menú, pero todavía no se renderiza.
     } else if (blockId === 'description') {
-      drawModularDescription(context, y, blockHeight, description, hyphenate, singleTextStyle, resourceImages);
+      drawModularDescription(
+        context,
+        y,
+        blockHeight,
+        containerDescriptions[blockKey] ?? description,
+        hyphenate,
+        singleTextStyle,
+        resourceImages,
+      );
     }
 
     const dividerY = y + blockHeight - 14;
@@ -3288,6 +3465,9 @@ const drawCardCanvas = (
       drawContainerDivider(context, dividerY, accent);
     }
     y += blockHeight;
+    if (blockId === 'description') {
+      usedDescriptionUnits += descriptionUnits;
+    }
   });
   context.restore();
 };
@@ -3354,6 +3534,11 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const [showTraits, setShowTraits] = useState(true);
   const [visibleTraitRows, setVisibleTraitRows] = useState(3);
   const [traits, setTraits] = useState(DEFAULT_TRAITS);
+  const [containerTraits, setContainerTraits] = useState({});
+  const [containerDescriptions, setContainerDescriptions] = useState({});
+  const [containerDescriptionSizes, setContainerDescriptionSizes] = useState({});
+  const [containerDamage, setContainerDamage] = useState({});
+  const [containerConsumptions, setContainerConsumptions] = useState({});
   const [selectedBackground, setSelectedBackground] = useState('Gris.webp');
   const [headerImageSrc, setHeaderImageSrc] = useState('');
   const [cardContainers, setCardContainers] = useState(getDefaultCardContainers('weapon'));
@@ -3361,6 +3546,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const [selectedElement, setSelectedElement] = useState('Ninguno');
   const [customColorActive, setCustomColorActive] = useState(false);
   const [customColor, setCustomColor] = useState('#c8aa6e');
+  const [accentMode, setAccentMode] = useState('base');
   const [isUploadingCharacterCard, setIsUploadingCharacterCard] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
 
@@ -3373,7 +3559,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const [consumptionSlots, setConsumptionSlots] = useState(DEFAULT_CONSUMPTION_SLOTS);
   const [resourceMode, setResourceMode] = useState(RESOURCE_MODE_BOTH);
   const [consumptionSlotTypes, setConsumptionSlotTypes] = useState(
-    Array.from({ length: RESOURCE_SLOT_COUNT }, () => 'consumption'),
+    DEFAULT_CONTAINER_CONSUMPTION_TYPES,
   );
   const [minionAttributes, setMinionAttributes] = useState(DEFAULT_MINION_ATTRIBUTES);
   const [actionCenterMode, setActionCenterMode] = useState('dado'); // 'dado' | 'Mente' | 'Cuerpo' | 'Hambre'
@@ -3587,13 +3773,14 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
 
     let weaponIconImg = null;
     let diceIconImg = null;
+    const diceIconImages = {};
     const resourceImages = {};
-    const usesCombatContainer = cardContainers.includes('combat');
-    const usesDamageContainer = cardContainers.includes('damage');
-    const usesConsumptionContainer = cardContainers.includes('consumption');
-    const usesTraitsContainer = cardContainers.includes('traits');
+    const normalizedContainers = cardContainers.map((container, index) => normalizeCardContainer(container, index));
+    const usesDamageContainer = normalizedContainers.some((container) => container.id === 'damage');
+    const usesConsumptionContainer = normalizedContainers.some((container) => container.id === 'consumption');
+    const usesTraitsContainer = normalizedContainers.some((container) => container.id === 'traits');
 
-    if (usesCombatContainer || cardType === 'weapon' || cardType === 'skill') {
+    if (cardType === 'weapon' || cardType === 'skill') {
       const iconSrc = getWeaponTypeIconSrc(weaponType);
       try {
         weaponIconImg = await loadCachedImage(iconSrc);
@@ -3613,13 +3800,22 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     }
 
     if (usesDamageContainer) {
-      // Load Dice Icon Image
-      const diceSrc = `${process.env.PUBLIC_URL || ''}/dados/cartas/${diceType}.webp`;
-      try {
-        diceIconImg = await loadCachedImage(diceSrc);
-      } catch (e) {
-        console.error("Could not load dice icon image:", e);
-      }
+      const damageDiceTypes = Array.from(new Set([
+        diceType,
+        ...normalizedContainers
+          .filter((container) => container.id === 'damage')
+          .map((container) => containerDamage[container.key]?.diceType || DEFAULT_CONTAINER_DAMAGE.diceType),
+      ]));
+      await Promise.all(damageDiceTypes.map(async (type) => {
+        const diceSrc = `${process.env.PUBLIC_URL || ''}/dados/cartas/${type}.webp`;
+        try {
+          const loadedDice = await loadCachedImage(diceSrc);
+          diceIconImages[type] = loadedDice;
+          if (type === diceType) diceIconImg = loadedDice;
+        } catch (e) {
+          console.error("Could not load dice icon image:", e);
+        }
+      }));
     }
 
     const loadsChargeResources = usesConsumptionContainer && RESOURCE_CARD_TYPES.has(cardType) && (
@@ -3638,14 +3834,20 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
         ...ELEMENT_TYPES.filter((option) => option.id !== 'Ninguno').map((option) => ({
           id: option.id,
           label: option.label,
-          src: `/elementos/${option.id}.webp`,
+          src: ELEMENT_CONSUMPTION_ICON_SOURCES[option.id] || `/elementos/${option.id}.webp`,
           cacheKey: `consumption:${option.id}`,
         })),
+      ];
+      const allConsumptionSlots = [
+        ...consumptionSlots,
+        ...normalizedContainers
+          .filter((container) => container.id === 'consumption')
+          .flatMap((container) => containerConsumptions[container.key]?.slots || DEFAULT_CONSUMPTION_SLOTS),
       ];
       const requiredResourceOptions = resourceOptions.filter((option) => (
         loadsChargeResources && chargeSlots.includes(option.id) && option.cacheKey.startsWith('charge:')
       ) || (
-        loadsConsumptionResources && consumptionSlots.includes(option.id) && option.cacheKey.startsWith('consumption:')
+        loadsConsumptionResources && allConsumptionSlots.includes(option.id) && option.cacheKey.startsWith('consumption:')
       ) || (
         loadsConsumptionResources && option.id === 'Tiempo' && option.cacheKey === 'consumption:Tiempo'
       ) || (
@@ -3668,8 +3870,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
 
     let elementIconImg = null;
     if (selectedElement !== 'Ninguno') {
-      const suffix = cardType === 'weapon' ? '_p' : '';
-      const elementSrc = `${process.env.PUBLIC_URL || ''}/elementos/${selectedElement}${suffix}.webp`;
+      const elementSrc = `${process.env.PUBLIC_URL || ''}${HEADER_ICON_SOURCES[selectedElement] || `/cabecera/${selectedElement.toLowerCase()}.webp`}`;
       try {
         elementIconImg = await loadCachedImage(elementSrc);
       } catch (e) {
@@ -3731,12 +3932,18 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       actionAttributeImg,
       headerImageImg,
       cardContainers,
+      containerTraits,
+      containerDescriptions,
+      containerDescriptionSizes,
+      containerDamage,
+      containerConsumptions,
       stardustImg,
+      diceIconImages,
     );
 
     if (updateStatus) setImageStatus('ready');
     return undefined;
-  }, [cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode, headerImageSrc, cardContainers]);
+  }, [cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode, headerImageSrc, cardContainers, containerTraits, containerDescriptions, containerDescriptionSizes, containerDamage, containerConsumptions]);
 
   useEffect(() => {
     let disposed = false;
@@ -3810,9 +4017,76 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     });
   }, [loadCachedImage]);
 
+  useEffect(() => {
+    const normalizedContainers = cardContainers.map((container, index) => normalizeCardContainer(container, index));
+    const traitKeys = new Set(normalizedContainers.filter((container) => container.id === 'traits').map((container) => container.key));
+    const descriptionKeys = new Set(normalizedContainers.filter((container) => container.id === 'description').map((container) => container.key));
+    const damageKeys = new Set(normalizedContainers.filter((container) => container.id === 'damage').map((container) => container.key));
+    const consumptionKeys = new Set(normalizedContainers.filter((container) => container.id === 'consumption').map((container) => container.key));
+
+    setContainerTraits((currentTraits) => {
+      let changed = false;
+      const nextTraits = {};
+      traitKeys.forEach((key) => {
+        nextTraits[key] = currentTraits[key] || Array.from({ length: MAX_TRAITS_PER_CONTAINER }, () => '-');
+        if (!currentTraits[key]) changed = true;
+      });
+      if (Object.keys(currentTraits).some((key) => !traitKeys.has(key))) changed = true;
+      return changed ? nextTraits : currentTraits;
+    });
+
+    setContainerDescriptions((currentDescriptions) => {
+      let changed = false;
+      const nextDescriptions = {};
+      descriptionKeys.forEach((key) => {
+        nextDescriptions[key] = currentDescriptions[key] ?? '';
+        if (!Object.prototype.hasOwnProperty.call(currentDescriptions, key)) changed = true;
+      });
+      if (Object.keys(currentDescriptions).some((key) => !descriptionKeys.has(key))) changed = true;
+      return changed ? nextDescriptions : currentDescriptions;
+    });
+
+    setContainerDescriptionSizes((currentSizes) => {
+      let changed = false;
+      const nextSizes = {};
+      descriptionKeys.forEach((key) => {
+        nextSizes[key] = currentSizes[key] || 1;
+        if (!currentSizes[key]) changed = true;
+      });
+      if (Object.keys(currentSizes).some((key) => !descriptionKeys.has(key))) changed = true;
+      return changed ? nextSizes : currentSizes;
+    });
+
+    setContainerDamage((currentDamage) => {
+      let changed = false;
+      const nextDamage = {};
+      damageKeys.forEach((key) => {
+        nextDamage[key] = currentDamage[key] || { ...DEFAULT_CONTAINER_DAMAGE };
+        if (!currentDamage[key]) changed = true;
+      });
+      if (Object.keys(currentDamage).some((key) => !damageKeys.has(key))) changed = true;
+      return changed ? nextDamage : currentDamage;
+    });
+
+    setContainerConsumptions((currentConsumptions) => {
+      let changed = false;
+      const nextConsumptions = {};
+      consumptionKeys.forEach((key) => {
+        nextConsumptions[key] = currentConsumptions[key] || createDefaultContainerConsumption();
+        if (!currentConsumptions[key]) changed = true;
+      });
+      if (Object.keys(currentConsumptions).some((key) => !consumptionKeys.has(key))) changed = true;
+      return changed ? nextConsumptions : currentConsumptions;
+    });
+  }, [cardContainers]);
+
   const handleReset = () => {
     setCardName('Gris');
     setDescription(DEFAULT_DESCRIPTION);
+    setContainerDescriptions({});
+    setContainerDescriptionSizes({});
+    setContainerDamage({});
+    setContainerConsumptions({});
     setFlavorText(DEFAULT_FLAVOR_TEXT);
     setHyphenate(true);
     setCardType('weapon');
@@ -3820,6 +4094,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     setShowTraits(true);
     setVisibleTraitRows(3);
     setTraits(DEFAULT_TRAITS);
+    setContainerTraits({});
     setSelectedBackground('Gris.webp');
     setHeaderImageSrc('');
     setWeaponType('Cuerpo a cuerpo');
@@ -3829,11 +4104,12 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     setChargeSlots(DEFAULT_CHARGE_SLOTS);
     setConsumptionSlots(DEFAULT_CONSUMPTION_SLOTS);
     setResourceMode(RESOURCE_MODE_BOTH);
-    setConsumptionSlotTypes(Array.from({ length: RESOURCE_SLOT_COUNT }, () => 'consumption'));
+    setConsumptionSlotTypes(DEFAULT_CONTAINER_CONSUMPTION_TYPES);
     setMinionAttributes(DEFAULT_MINION_ATTRIBUTES);
     setSelectedElement('Ninguno');
     setCustomColorActive(false);
     setCustomColor('#c8aa6e');
+    setAccentMode('base');
     setActionCenterMode('dado');
   };
 
@@ -3843,6 +4119,34 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       nextTraits[index] = value;
       return nextTraits;
     });
+  };
+
+  const handleContainerTraitChange = (containerKey, index, value) => {
+    setContainerTraits((currentTraits) => {
+      const nextTraits = [...(currentTraits[containerKey] || Array.from({ length: MAX_TRAITS_PER_CONTAINER }, () => '-'))]
+        .slice(0, MAX_TRAITS_PER_CONTAINER);
+      nextTraits[index] = value;
+      return {
+        ...currentTraits,
+        [containerKey]: nextTraits,
+      };
+    });
+  };
+
+  const handleContainerDescriptionChange = (containerKey, value) => {
+    setContainerDescriptions((currentDescriptions) => ({
+      ...currentDescriptions,
+      [containerKey]: value,
+    }));
+  };
+
+  const handleContainerDescriptionSizeChange = (containerKey, value) => {
+    const parsed = parseInt(value, 10);
+    const nextValue = DESCRIPTION_SPACE_UNITS.includes(parsed) ? parsed : 1;
+    setContainerDescriptionSizes((currentSizes) => ({
+      ...currentSizes,
+      [containerKey]: nextValue,
+    }));
   };
 
   const handleChargeSlotChange = (index, value) => {
@@ -3858,6 +4162,62 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       const nextSlots = [...currentSlots].slice(0, RESOURCE_SLOT_COUNT);
       nextSlots[index] = value;
       return nextSlots;
+    });
+  };
+
+  const handleContainerDamageChange = (containerKey, updates) => {
+    setContainerDamage((currentDamage) => {
+      const currentConfig = currentDamage[containerKey] || { ...DEFAULT_CONTAINER_DAMAGE };
+      const nextConfig = {
+        ...currentConfig,
+        ...updates,
+      };
+      if (updates.diceQty !== undefined) {
+        const parsedQty = parseInt(updates.diceQty, 10);
+        const maxQty = cardType === 'action' ? 6 : 9;
+        nextConfig.diceQty = Number.isFinite(parsedQty) ? Math.min(maxQty, Math.max(1, parsedQty)) : 1;
+      }
+      return {
+        ...currentDamage,
+        [containerKey]: nextConfig,
+      };
+    });
+  };
+
+  const handleContainerConsumptionSlotChange = (containerKey, index, value) => {
+    setContainerConsumptions((currentConsumptions) => {
+      const currentConfig = currentConsumptions[containerKey] || createDefaultContainerConsumption();
+      const nextSlots = [...currentConfig.slots].slice(0, RESOURCE_SLOT_COUNT);
+      while (nextSlots.length < RESOURCE_SLOT_COUNT) nextSlots.push(EMPTY_SLOT);
+      nextSlots[index] = value;
+      return {
+        ...currentConsumptions,
+        [containerKey]: {
+          ...currentConfig,
+          slots: nextSlots,
+        },
+      };
+    });
+  };
+
+  const handleContainerConsumptionSlotTypeToggle = (containerKey, index) => {
+    setContainerConsumptions((currentConsumptions) => {
+      const currentConfig = currentConsumptions[containerKey] || createDefaultContainerConsumption();
+      const nextTypes = [...(currentConfig.slotTypes || DEFAULT_CONTAINER_CONSUMPTION_TYPES)].slice(0, RESOURCE_SLOT_COUNT);
+      while (nextTypes.length < RESOURCE_SLOT_COUNT) nextTypes.push('consumption');
+      const currentType = nextTypes[index] || 'consumption';
+      nextTypes[index] = currentType === 'consumption' ? 'element' : 'consumption';
+      const nextSlots = [...(currentConfig.slots || DEFAULT_CONSUMPTION_SLOTS)].slice(0, RESOURCE_SLOT_COUNT);
+      while (nextSlots.length < RESOURCE_SLOT_COUNT) nextSlots.push(EMPTY_SLOT);
+      nextSlots[index] = EMPTY_SLOT;
+      return {
+        ...currentConsumptions,
+        [containerKey]: {
+          ...currentConfig,
+          slots: nextSlots,
+          slotTypes: nextTypes,
+        },
+      };
     });
   };
 
@@ -3890,10 +4250,13 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const addCardContainer = (containerId) => {
     setCardContainers((current) => {
       if (current.length >= MAX_CARD_CONTAINERS) return current;
-      if (SINGLE_INSTANCE_CARD_CONTAINERS.has(containerId) && current.includes(containerId)) {
+      if (
+        SINGLE_INSTANCE_CARD_CONTAINERS.has(containerId)
+        && current.some((container, index) => getContainerId(container, index) === containerId)
+      ) {
         return current;
       }
-      return [...current, containerId];
+      return [...current, createCardContainer(containerId)];
     });
   };
 
@@ -4417,11 +4780,43 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     }
   };
 
-  const hasContainer = (containerId) => cardContainers.includes(containerId);
+  const hasContainer = (containerId) => cardContainers.some((container, index) => getContainerId(container, index) === containerId);
   const usesChargeResources = hasContainer('consumption') && RESOURCE_CARD_TYPES.has(cardType);
   const usesConsumptionResources = hasContainer('consumption') && ((cardType === 'action' && actionCenterMode === 'dado') || cardType === 'status' || (
     usesChargeResources && (resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY)
   ));
+  const normalizedCardContainers = useMemo(
+    () => cardContainers.map((containerEntry, index) => normalizeCardContainer(containerEntry, index)),
+    [cardContainers],
+  );
+  const descriptionContainers = useMemo(
+    () => normalizedCardContainers.filter((container) => container.id === 'description'),
+    [normalizedCardContainers],
+  );
+  const damageContainers = useMemo(
+    () => normalizedCardContainers.filter((container) => container.id === 'damage'),
+    [normalizedCardContainers],
+  );
+  const consumptionContainers = useMemo(
+    () => normalizedCardContainers.filter((container) => container.id === 'consumption'),
+    [normalizedCardContainers],
+  );
+  const traitContainers = useMemo(
+    () => normalizedCardContainers.filter((container) => container.id === 'traits'),
+    [normalizedCardContainers],
+  );
+  const descriptionUnitBudget = useMemo(
+    () => getDescriptionUnitBudget(cardContainers, cardType),
+    [cardContainers, cardType],
+  );
+  const getAvailableDescriptionUnits = (containerKey) => {
+    const otherUsedUnits = descriptionContainers.reduce((total, container) => {
+      if (container.key === containerKey) return total;
+      const parsedUnits = parseInt(containerDescriptionSizes[container.key], 10);
+      return total + (DESCRIPTION_SPACE_UNITS.includes(parsedUnits) ? parsedUnits : 1);
+    }, 0);
+    return Math.max(1, Math.min(6, descriptionUnitBudget - otherUsedUnits));
+  };
 
   return (
     <div className="h-screen max-h-screen overflow-y-auto bg-[#09090b] text-[#e2e8f0] font-['Lato'] selection:bg-[#c8aa6e]/30 selection:text-[#f0e6d2] custom-scrollbar">
@@ -4548,33 +4943,6 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
               />
             </div>
 
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
-                <Tag className="h-4 w-4" />
-                Categoría
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {CARD_TYPES.map((type) => (
-                  (() => {
-                    const isFull = cardContainers.length >= MAX_CARD_CONTAINERS;
-                    const isSingletonTaken = SINGLE_INSTANCE_CARD_CONTAINERS.has(type.containerId) && cardContainers.includes(type.containerId);
-                    const disabled = isFull || isSingletonTaken;
-                    return (
-                  <button
-                    key={type.id}
-                    type="button"
-                    onClick={() => addCardContainer(type.containerId)}
-                    disabled={disabled}
-                    className="border border-slate-700 bg-[#09090b]/60 px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-400 transition hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e] disabled:cursor-not-allowed disabled:opacity-35"
-                  >
-                    {type.label}
-                  </button>
-                    );
-                  })()
-                ))}
-              </div>
-            </div>
-
             <div className="space-y-3 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
               <div className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
                 <ImageIcon className="h-4 w-4" />
@@ -4621,6 +4989,22 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                   </div>
                 )}
               </div>
+              <div className="space-y-1.5 border-t border-[#c8aa6e]/10 pt-3">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Icono de cabecera
+                </label>
+                <select
+                  value={selectedElement}
+                  onChange={(event) => setSelectedElement(event.target.value)}
+                  className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
+                >
+                  {ELEMENT_TYPES.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="space-y-3 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
@@ -4633,11 +5017,13 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                   <div className="border border-slate-800 bg-[#09090b]/60 px-3 py-3 text-xs uppercase tracking-[0.16em] text-slate-500">
                     Solo se mostrará imagen y título.
                   </div>
-                ) : cardContainers.map((containerId, index) => {
+                ) : cardContainers.map((containerEntry, index) => {
+                  const containerId = getContainerId(containerEntry, index);
+                  const containerKey = getContainerKey(containerEntry, index);
                   const container = CARD_CONTAINER_TYPES.find((item) => item.id === containerId);
                   return (
                     <div
-                      key={`${containerId}-${index}`}
+                      key={containerKey}
                       className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-1 border border-slate-800 bg-[#0b1120]/70 px-2 py-1.5"
                     >
                       <span className="truncate text-[11px] font-black uppercase tracking-[0.14em] text-[#f0e6d2]">
@@ -4679,7 +5065,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
               <div className="grid grid-cols-2 gap-2">
                 {CARD_CONTAINER_TYPES.map((container) => {
                   const isFull = cardContainers.length >= MAX_CARD_CONTAINERS;
-                  const isSingletonTaken = SINGLE_INSTANCE_CARD_CONTAINERS.has(container.id) && cardContainers.includes(container.id);
+                  const isSingletonTaken = SINGLE_INSTANCE_CARD_CONTAINERS.has(container.id) && hasContainer(container.id);
                   const disabled = isFull || isSingletonTaken;
                   return (
                     <button
@@ -4703,30 +5089,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                   Datos de contenedores
                 </div>
                 
-                {(hasContainer('combat') || hasContainer('range')) && (
-                  <>
-                    {/* 1. Tipo de Arma */}
-                    {hasContainer('combat') && (
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        Tipo
-                      </label>
-                      <select
-                        value={weaponType}
-                        onChange={(event) => setWeaponType(event.target.value)}
-                        className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
-                      >
-                        {WEAPON_TYPES.map((type) => (
-                          <option key={type} value={type}>
-                            {type}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    )}
-
-                    {/* 2. Alcance */}
-                    {hasContainer('range') && (
+                {hasContainer('range') && (
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                         Alcance
@@ -4748,26 +5111,6 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                         ))}
                       </div>
                     </div>
-                    )}
-                    {(cardType === 'weapon' || cardType === 'status') && (
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                          Icono de cabecera
-                        </label>
-                        <select
-                          value={selectedElement}
-                          onChange={(event) => setSelectedElement(event.target.value)}
-                          className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
-                        >
-                          {ELEMENT_TYPES.map((type) => (
-                            <option key={type.id} value={type.id}>
-                              {type.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </>
                 )}
 
                 {cardType === 'action' && (
@@ -4790,64 +5133,88 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                   </div>
                 )}
 
-                {hasContainer('damage') && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        Dado de Daño
-                      </label>
-                      <select
-                        value={diceType}
-                        onChange={(event) => setDiceType(event.target.value)}
-                        className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
-                      >
-                        {['D4', 'D6', 'D8', 'D10', 'D12', 'DX'].map((type) => (
-                          <option key={type} value={type}>
-                            {type}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        Cantidad de Dados
-                      </label>
-                      {diceType === 'DX' ? (
-                        <div className="flex items-center justify-center h-[38px] border border-slate-800 bg-[#09090b]/60 px-2 text-[9px] sm:text-[10px] uppercase tracking-[0.12em] text-slate-500 text-center leading-tight">
-                          Dado variable. Depende de otros factores.
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-[2.5rem_1fr_2.5rem] h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80">
-                          <button
-                            type="button"
-                            onClick={() => handleDiceQtyChange(diceQty - 1)}
-                            className="flex items-center justify-center border-r border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10 h-full cursor-pointer"
-                            aria-label="Reducir cantidad de dados"
+                {damageContainers.map((container, damageIndex) => {
+                  const damageConfig = containerDamage[container.key] || DEFAULT_CONTAINER_DAMAGE;
+                  const activeDiceType = damageConfig.diceType || DEFAULT_CONTAINER_DAMAGE.diceType;
+                  const activeDiceQty = damageConfig.diceQty || DEFAULT_CONTAINER_DAMAGE.diceQty;
+                  return (
+                    <div key={`damage-editor-${container.key}`} className="space-y-3 rounded border border-[#c8aa6e]/15 bg-[#09090b]/35 p-3">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        Daño {damageIndex + 1}
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                            Dado
+                          </label>
+                          <select
+                            value={activeDiceType}
+                            onChange={(event) => {
+                              if (damageIndex === 0) setDiceType(event.target.value);
+                              handleContainerDamageChange(container.key, { diceType: event.target.value });
+                            }}
+                            className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
                           >
-                            -
-                          </button>
-                          <input
-                            type="number"
-                            min={1}
-                            max={cardType === 'action' ? 6 : 9}
-                            value={diceQty}
-                            onChange={(event) => handleDiceQtyChange(parseInt(event.target.value, 10) || 1)}
-                            className="w-full h-full bg-transparent px-2 text-center text-sm font-bold text-[#f0e6d2] outline-none"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleDiceQtyChange(diceQty + 1)}
-                            className="flex items-center justify-center border-l border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10 h-full cursor-pointer"
-                            aria-label="Aumentar cantidad de dados"
-                          >
-                            +
-                          </button>
+                            {['D4', 'D6', 'D8', 'D10', 'D12', 'DX'].map((type) => (
+                              <option key={type} value={type}>
+                                {type}
+                              </option>
+                            ))}
+                          </select>
                         </div>
-                      )}
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                            Cantidad
+                          </label>
+                          {activeDiceType === 'DX' ? (
+                            <div className="flex items-center justify-center h-[38px] border border-slate-800 bg-[#09090b]/60 px-2 text-[10px] uppercase tracking-[0.12em] text-slate-500">
+                              Variable
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-[2.5rem_1fr_2.5rem] h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextQty = activeDiceQty - 1;
+                                  if (damageIndex === 0) handleDiceQtyChange(nextQty);
+                                  handleContainerDamageChange(container.key, { diceQty: nextQty });
+                                }}
+                                className="flex items-center justify-center border-r border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10 h-full cursor-pointer"
+                                aria-label={`Reducir cantidad de dados de daño ${damageIndex + 1}`}
+                              >
+                                -
+                              </button>
+                              <input
+                                type="number"
+                                min={1}
+                                max={cardType === 'action' ? 6 : 9}
+                                value={activeDiceQty}
+                                onChange={(event) => {
+                                  const nextQty = parseInt(event.target.value, 10) || 1;
+                                  if (damageIndex === 0) handleDiceQtyChange(nextQty);
+                                  handleContainerDamageChange(container.key, { diceQty: nextQty });
+                                }}
+                                className="w-full h-full bg-transparent px-2 text-center text-sm font-bold text-[#f0e6d2] outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextQty = activeDiceQty + 1;
+                                  if (damageIndex === 0) handleDiceQtyChange(nextQty);
+                                  handleContainerDamageChange(container.key, { diceQty: nextQty });
+                                }}
+                                className="flex items-center justify-center border-l border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10 h-full cursor-pointer"
+                                aria-label={`Aumentar cantidad de dados de daño ${damageIndex + 1}`}
+                              >
+                                +
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })}
 
                 {cardType === 'skill' && (
                   <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-3">
@@ -4882,258 +5249,176 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                   </div>
                 )}
 
-                {usesChargeResources && (
-                  <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-3">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                      Recursos
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setResourceMode(RESOURCE_MODE_BOTH)}
-                        className={`border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition ${resourceMode === RESOURCE_MODE_BOTH
-                          ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
-                          : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
-                          }`}
-                      >
-                        Carga + consumo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setResourceMode(RESOURCE_MODE_CHARGE_ONLY)}
-                        className={`border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition ${resourceMode === RESOURCE_MODE_CHARGE_ONLY
-                          ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
-                          : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
-                          }`}
-                      >
-                        Solo carga
-                      </button>
-                      {cardType === 'trap' && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => setResourceMode(RESOURCE_MODE_CONSUMPTION_ONLY)}
-                            className={`border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition ${resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY
-                              ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
-                              : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
-                              }`}
-                          >
-                            Solo consumo
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setResourceMode(RESOURCE_MODE_NONE)}
-                            className={`border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition ${resourceMode === RESOURCE_MODE_NONE
-                              ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
-                              : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
-                              }`}
-                          >
-                            Sin recursos
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {usesChargeResources && (resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CHARGE_ONLY) && (
-                  <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-3">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                      Carga
-                    </label>
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      {chargeSlots.slice(0, RESOURCE_SLOT_COUNT).map((slot, index) => (
-                        <label
-                          key={`charge-slot-${index}`}
-                          className="grid grid-cols-[1.75rem_1fr] items-center border border-[#c8aa6e]/20 bg-[#09090b]/80"
-                        >
-                          <span className="border-r border-[#c8aa6e]/15 py-2 text-center text-[10px] font-black text-[#c8aa6e]">
-                            {index + 1}
-                          </span>
-                          <select
-                            value={slot}
-                            onChange={(event) => handleChargeSlotChange(index, event.target.value)}
-                            className="min-w-0 bg-transparent px-2 py-2 text-xs font-bold uppercase text-[#f0e6d2] outline-none"
-                            aria-label={`Carga ${index + 1}`}
-                          >
-                            <option value="">Vacío</option>
-                            {CHARGE_TYPES.map((option) => (
-                              <option key={option.id} value={option.id}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
+                {consumptionContainers.map((container, consumptionIndex) => {
+                  const consumptionConfig = containerConsumptions[container.key] || createDefaultContainerConsumption();
+                  const activeSlots = [...(consumptionConfig.slots || DEFAULT_CONSUMPTION_SLOTS)].slice(0, RESOURCE_SLOT_COUNT);
+                  const activeSlotTypes = [...(consumptionConfig.slotTypes || DEFAULT_CONTAINER_CONSUMPTION_TYPES)].slice(0, RESOURCE_SLOT_COUNT);
+                  while (activeSlots.length < RESOURCE_SLOT_COUNT) activeSlots.push(EMPTY_SLOT);
+                  while (activeSlotTypes.length < RESOURCE_SLOT_COUNT) activeSlotTypes.push('consumption');
+                  return (
+                    <div key={`consumption-editor-${container.key}`} className="space-y-3 rounded border border-[#c8aa6e]/15 bg-[#09090b]/35 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          Consumo {consumptionIndex + 1}
                         </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {usesConsumptionResources && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        {cardType === 'weapon' ? 'Consumo' : cardType === 'armor' ? 'Armadura' : 'Consumo'}
-                      </label>
-                      <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
-                        4 slots
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {consumptionSlots.slice(0, RESOURCE_SLOT_COUNT).map((slot, index) => (
-                      <div
-                        key={`consumption-slot-${index}`}
-                        className={`grid items-center border border-[#c8aa6e]/20 bg-[#09090b]/80 ${
-                          cardType === 'armor' ? 'grid-cols-[1.75rem_minmax(0,1fr)]' : 'grid-cols-[1.5rem_minmax(0,1fr)_2.25rem]'
-                        }`}
-                      >
-                        <span className="border-r border-[#c8aa6e]/15 py-2 text-center text-[10px] font-black text-[#c8aa6e]">
-                          {index + 1}
+                        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                          4 slots
                         </span>
-                        <select
-                          value={slot}
-                          onChange={(event) => handleConsumptionSlotChange(index, event.target.value)}
-                          className={`min-w-0 bg-transparent py-2 font-bold uppercase text-[#f0e6d2] outline-none cursor-pointer h-full ${
-                            cardType !== 'armor' && slot === 'Armadura_1'
-                              ? 'px-1 text-[10px] tracking-normal'
-                              : 'px-2 text-xs'
-                          }`}
-                          aria-label={cardType === 'weapon' ? `Consumo ${index + 1}` : cardType === 'armor' ? `Armadura ${index + 1}` : `Consumo ${index + 1}`}
-                        >
-                          <option value="">Vacío</option>
-                          {cardType === 'armor'
-                            ? CONSUMPTION_TYPES.filter((option) => option.id === 'Armadura_1').map((option) => (
-                                <option key={option.id} value={option.id}>
-                                  {option.label}
-                                </option>
-                              ))
-                            : (consumptionSlotTypes[index] || 'consumption') === 'consumption'
-                            ? CONSUMPTION_TYPES.map((option) => (
-                                <option key={option.id} value={option.id}>
-                                  {option.label}
-                                </option>
-                              ))
-                            : ELEMENT_TYPES.filter((type) => type.id !== 'Ninguno').map((type) => (
-                                <option key={type.id} value={type.id}>
-                                  {type.label}
-                                </option>
-                              ))}
-                        </select>
-                        {cardType !== 'armor' && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const nextTypes = [...consumptionSlotTypes].slice(0, RESOURCE_SLOT_COUNT);
-                              const currentType = nextTypes[index] || 'consumption';
-                              nextTypes[index] = currentType === 'consumption' ? 'element' : 'consumption';
-                              setConsumptionSlotTypes(nextTypes);
-                              handleConsumptionSlotChange(index, '');
-                            }}
-                            className={`h-full border-l border-[#c8aa6e]/15 text-[9px] sm:text-[10px] font-bold uppercase transition flex items-center justify-center cursor-pointer select-none ${
-                              (consumptionSlotTypes[index] || 'consumption') === 'consumption'
-                                ? 'text-[#c8aa6e] bg-[#c8aa6e]/5 hover:bg-[#c8aa6e]/15'
-                                : 'text-teal-400 bg-teal-500/10 hover:bg-teal-500/20'
-                            }`}
-                            title={(consumptionSlotTypes[index] || 'consumption') === 'consumption' ? "Cambiar a Elemento" : "Cambiar a Consumo"}
-                          >
-                            {(consumptionSlotTypes[index] || 'consumption') === 'consumption' ? 'CON' : 'ELE'}
-                          </button>
-                        )}
                       </div>
-                    ))}
-                  </div>
-                </div>
-                )}
-                {cardType === 'status' && (
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                      Elemento / Estado
-                    </label>
-                    <select
-                      value={selectedElement}
-                      onChange={(event) => setSelectedElement(event.target.value)}
-                      className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
-                    >
-                      {ELEMENT_TYPES.map((type) => (
-                        <option key={type.id} value={type.id}>
-                          {type.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {activeSlots.map((slot, index) => (
+                          <div
+                            key={`${container.key}-consumption-slot-${index}`}
+                            className={`grid items-center border border-[#c8aa6e]/20 bg-[#09090b]/80 ${
+                              cardType === 'armor' ? 'grid-cols-[1.75rem_minmax(0,1fr)]' : 'grid-cols-[1.5rem_minmax(0,1fr)_2.25rem]'
+                            }`}
+                          >
+                            <span className="border-r border-[#c8aa6e]/15 py-2 text-center text-[10px] font-black text-[#c8aa6e]">
+                              {index + 1}
+                            </span>
+                            <select
+                              value={slot}
+                              onChange={(event) => {
+                                if (consumptionIndex === 0) handleConsumptionSlotChange(index, event.target.value);
+                                handleContainerConsumptionSlotChange(container.key, index, event.target.value);
+                              }}
+                              className={`min-w-0 bg-transparent py-2 font-bold uppercase text-[#f0e6d2] outline-none cursor-pointer h-full ${
+                                cardType !== 'armor' && slot === 'Armadura_1'
+                                  ? 'px-1 text-[10px] tracking-normal'
+                                  : 'px-2 text-xs'
+                              }`}
+                              aria-label={`Consumo ${consumptionIndex + 1} slot ${index + 1}`}
+                            >
+                              <option value="">Vacío</option>
+                              {cardType === 'armor'
+                                ? CONSUMPTION_TYPES.filter((option) => option.id === 'Armadura_1').map((option) => (
+                                    <option key={option.id} value={option.id}>
+                                      {option.label}
+                                    </option>
+                                  ))
+                                : (activeSlotTypes[index] || 'consumption') === 'consumption'
+                                ? CONSUMPTION_TYPES.map((option) => (
+                                    <option key={option.id} value={option.id}>
+                                      {option.label}
+                                    </option>
+                                  ))
+                                : ELEMENT_TYPES.filter((type) => type.id !== 'Ninguno').map((type) => (
+                                    <option key={type.id} value={type.id}>
+                                      {type.label}
+                                    </option>
+                                  ))}
+                            </select>
+                            {cardType !== 'armor' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (consumptionIndex === 0) {
+                                    const nextTypes = [...consumptionSlotTypes].slice(0, RESOURCE_SLOT_COUNT);
+                                    const currentType = nextTypes[index] || 'consumption';
+                                    nextTypes[index] = currentType === 'consumption' ? 'element' : 'consumption';
+                                    setConsumptionSlotTypes(nextTypes);
+                                    handleConsumptionSlotChange(index, '');
+                                  }
+                                  handleContainerConsumptionSlotTypeToggle(container.key, index);
+                                }}
+                                className={`h-full border-l border-[#c8aa6e]/15 text-[9px] sm:text-[10px] font-bold uppercase transition flex items-center justify-center cursor-pointer select-none ${
+                                  (activeSlotTypes[index] || 'consumption') === 'consumption'
+                                    ? 'text-[#c8aa6e] bg-[#c8aa6e]/5 hover:bg-[#c8aa6e]/15'
+                                    : 'text-teal-400 bg-teal-500/10 hover:bg-teal-500/20'
+                                }`}
+                                title={(activeSlotTypes[index] || 'consumption') === 'consumption' ? "Cambiar a Elemento" : "Cambiar a Consumo"}
+                              >
+                                {(activeSlotTypes[index] || 'consumption') === 'consumption' ? 'CON' : 'ELE'}
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
             {hasContainer('description') && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3 pb-1">
                   <label className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
                     <Type className="h-4 w-4" />
-                    {hasSplitDescription ? 'Texto principal' : 'Descripción'}
+                    Descripciones
                   </label>
-                  <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 cursor-pointer">
+                  <label className="flex cursor-pointer items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
                     <input
                       type="checkbox"
                       checked={hyphenate}
                       onChange={(event) => setHyphenate(event.target.checked)}
-                      className="h-4 w-4 accent-[#c8aa6e] cursor-pointer"
+                      className="h-4 w-4 cursor-pointer accent-[#c8aa6e]"
                     />
                     Guionizar
                   </label>
                 </div>
-                {renderToolbar(descriptionRef, 'description')}
-                <textarea
-                  ref={descriptionRef}
-                  value={description}
-                  onChange={(event) => handleDescriptionChange(event.target.value)}
-                  onKeyDown={(event) => handleTextareaKeyDown(event, descriptionRef, setDescription, descriptionHistoryRef, description)}
-                  onFocus={() => setFocusedField('description')}
-                  onBlur={() => setFocusedField(null)}
-                  rows={hasSplitDescription ? 4 : 5}
-                  maxLength={hasSplitDescription ? 360 : descriptionMaxLength}
-                  className="min-h-[112px] w-full resize-y border border-t-0 border-[#c8aa6e]/25 bg-[#09090b]/80 px-4 py-3 text-base font-semibold leading-relaxed text-[#f0e6d2] outline-none transition placeholder:text-slate-600 focus:border-[#c8aa6e]/70 focus:shadow-[0_4px_12px_rgba(200,170,110,0.06),_4px_0_12px_rgba(200,170,110,0.06),_-4px_0_12px_rgba(200,170,110,0.06)] rounded-b-md"
-                  placeholder={hasSplitDescription ? 'Descripción de la carta' : 'Texto descriptivo de la carta'}
-                />
-                {!hasSplitDescription && (
-                  <div className="flex justify-center gap-1.5 pt-1.5">
-                    {['narrative', 'principal'].map((styleOpt) => (
-                      <button
-                        key={styleOpt}
-                        type="button"
-                        onClick={() => setSingleTextStyle(styleOpt)}
-                        className={`border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] transition cursor-pointer ${
-                          singleTextStyle === styleOpt
-                            ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
-                            : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
-                        }`}
-                      >
-                        {styleOpt === 'narrative' ? 'Narrativo' : 'Principal'}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {hasSplitDescription && (
-                  <div className="space-y-2 pt-2">
-                    <label className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e] pb-1">
-                      <Type className="h-4 w-4" />
-                      Texto narrativo
-                    </label>
-                    {renderToolbar(flavorTextRef, 'flavorText')}
-                    <textarea
-                      ref={flavorTextRef}
-                      value={flavorText}
-                      onChange={(event) => handleFlavorTextChange(event.target.value)}
-                      onKeyDown={(event) => handleTextareaKeyDown(event, flavorTextRef, setFlavorText, flavorTextHistoryRef, flavorText)}
-                      onFocus={() => setFocusedField('flavorText')}
-                      onBlur={() => setFocusedField(null)}
-                      rows={5}
-                      maxLength={560}
-                      className="min-h-[132px] w-full resize-y border border-t-0 border-[#c8aa6e]/25 bg-[#09090b]/80 px-4 py-3 text-base font-semibold italic leading-relaxed text-[#f0e6d2] outline-none transition placeholder:text-slate-600 focus:border-[#c8aa6e]/70 focus:shadow-[0_4px_12px_rgba(200,170,110,0.06),_4px_0_12px_rgba(200,170,110,0.06),_-4px_0_12px_rgba(200,170,110,0.06)] rounded-b-md"
-                      placeholder="Texto descriptivo de la carta"
-                    />
-                  </div>
-                )}
+
+                {descriptionContainers.map((container, descriptionIndex) => {
+                  const maxUnitsForContainer = getAvailableDescriptionUnits(container.key);
+                  const selectedUnits = Math.min(containerDescriptionSizes[container.key] || 1, maxUnitsForContainer);
+
+                  return (
+                    <div
+                      key={`description-editor-${container.key}`}
+                      className="space-y-2 rounded border border-[#c8aa6e]/15 bg-[#09090b]/35 p-3"
+                    >
+                      <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+                        <label className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-300">
+                          Descripción {descriptionIndex + 1}
+                        </label>
+                        <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                          Espacio
+                          <select
+                            value={selectedUnits}
+                            onChange={(event) => handleContainerDescriptionSizeChange(container.key, Number(event.target.value))}
+                            className="h-8 border border-[#c8aa6e]/20 bg-[#09090b]/90 px-2 text-xs font-bold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70"
+                          >
+                            {DESCRIPTION_SPACE_UNITS.filter((unit) => unit <= maxUnitsForContainer).map((unit) => (
+                              <option key={`${container.key}-description-unit-${unit}`} value={unit}>
+                                {unit}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                      <textarea
+                        value={containerDescriptions[container.key] ?? (descriptionIndex === 0 ? description : '')}
+                        onChange={(event) => {
+                          if (descriptionIndex === 0) {
+                            handleDescriptionChange(event.target.value);
+                          }
+                          handleContainerDescriptionChange(container.key, event.target.value);
+                        }}
+                        rows={5}
+                        maxLength={descriptionMaxLength}
+                        className="min-h-[112px] w-full resize-y rounded-b-md border border-t-0 border-[#c8aa6e]/25 bg-[#09090b]/80 px-4 py-3 text-base font-semibold leading-relaxed text-[#f0e6d2] outline-none transition placeholder:text-slate-600 focus:border-[#c8aa6e]/70 focus:shadow-[0_4px_12px_rgba(200,170,110,0.06),_4px_0_12px_rgba(200,170,110,0.06),_-4px_0_12px_rgba(200,170,110,0.06)]"
+                        placeholder="Texto descriptivo de la carta"
+                      />
+                    </div>
+                  );
+                })}
+
+                <div className="flex justify-center gap-1.5 pt-1.5">
+                  {['narrative', 'principal'].map((styleOpt) => (
+                    <button
+                      key={styleOpt}
+                      type="button"
+                      onClick={() => setSingleTextStyle(styleOpt)}
+                      className={`cursor-pointer border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] transition ${
+                        singleTextStyle === styleOpt
+                          ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                          : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                      }`}
+                    >
+                      {styleOpt === 'narrative' ? 'Narrativo' : 'Principal'}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -5157,51 +5442,39 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                 )}
               </div>
 
-              {activeType.maxTraits === 0 ? (
-                <div className="border border-slate-800 bg-[#09090b]/60 px-3 py-3 text-xs uppercase tracking-[0.16em] text-slate-500">
-                  Este tipo no usa rasgos.
-                </div>
-              ) : showTraits ? (
+              {showTraits ? (
                 <div className="space-y-3">
-                  {activeType.maxTraits > 2 && (
-                    <div className="flex items-center justify-between gap-2 border-b border-[#c8aa6e]/10 pb-3">
-                      <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                        Filas / Pares visibles
+                  {traitContainers.map((container, traitsIndex) => {
+                    const traitValues = (containerTraits[container.key] || (traitsIndex === 0 ? traits : DEFAULT_TRAITS)).slice(0, MAX_TRAITS_PER_CONTAINER);
+
+                    return (
+                      <div
+                        key={`traits-editor-${container.key}`}
+                        className="space-y-2 rounded border border-[#c8aa6e]/15 bg-[#09090b]/35 p-3"
+                      >
+                        <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-300">
+                          Rasgos {traitsIndex + 1} · Máximo 3
+                        </div>
+                        <div className="grid grid-cols-1 gap-2">
+                          {Array.from({ length: MAX_TRAITS_PER_CONTAINER }).map((_, index) => (
+                            <input
+                              key={`${container.key}-trait-${index}`}
+                              value={traitValues[index] || ''}
+                              onChange={(event) => {
+                                if (traitsIndex === 0) {
+                                  handleTraitChange(index, event.target.value);
+                                }
+                                handleContainerTraitChange(container.key, index, event.target.value);
+                              }}
+                              maxLength={22}
+                              className="w-full border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 py-2 text-sm font-bold uppercase tracking-[0.08em] text-[#f0e6d2] outline-none transition placeholder:text-slate-700 focus:border-[#c8aa6e]/70"
+                              placeholder={`Rasgo ${index + 1}`}
+                            />
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex gap-1">
-                        {Array.from({ length: activeType.maxTraits / 2 }).map((_, i) => {
-                          const rowVal = i + 1;
-                          const isSelected = visibleTraitRows === rowVal;
-                          return (
-                            <button
-                              key={`visible-rows-${rowVal}`}
-                              type="button"
-                              onClick={() => setVisibleTraitRows(rowVal)}
-                              className={`h-7 w-10 border text-[10px] font-bold transition cursor-pointer flex items-center justify-center ${
-                                isSelected
-                                  ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
-                                  : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
-                              }`}
-                            >
-                              {rowVal}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1">
-                    {Array.from({ length: activeType.maxTraits > 2 ? Math.min(visibleTraitRows, activeType.maxTraits / 2) * 2 : activeType.maxTraits }).map((_, index) => (
-                      <input
-                        key={`${cardType}-trait-${index}`}
-                        value={traits[index] || ''}
-                        onChange={(event) => handleTraitChange(index, event.target.value)}
-                        maxLength={22}
-                        className="w-full border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 py-2 text-sm font-bold uppercase tracking-[0.08em] text-[#f0e6d2] outline-none transition placeholder:text-slate-700 focus:border-[#c8aa6e]/70"
-                        placeholder={cardType === 'trap' ? 'TRAMPA' : `Rasgo ${index + 1}`}
-                      />
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="border border-slate-800 bg-[#09090b]/60 px-3 py-3 text-xs uppercase tracking-[0.16em] text-slate-500">
@@ -5217,27 +5490,70 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                 Acento
               </div>
 
-              {/* Custom background color overlay controls */}
-              <div className="mt-3 space-y-2.5 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
-                <div className="flex items-center justify-between gap-3">
-                  <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-300">
-                    <input
-                      type="checkbox"
-                      checked={customColorActive}
-                      onChange={(event) => {
-                        setCustomColorActive(event.target.checked);
-                        if (event.target.checked) {
-                          setSelectedBackground('Gris.webp');
-                        }
+              <div className="mt-3 space-y-3 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
+                <div className="grid grid-cols-3 gap-1.5">
+                  {CARD_ACCENT_PRESETS.map((preset) => {
+                    const isSelected = accentMode === preset.id;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          setAccentMode(preset.id);
+                          setCustomColorActive(preset.id !== 'base');
+                          setCustomColor(preset.value);
+                          if (preset.id !== 'base') {
+                            setSelectedBackground('Gris.webp');
+                          }
+                        }}
+                        className={`group flex h-12 flex-col items-center justify-center gap-1 border px-1.5 text-[8.5px] font-black uppercase tracking-[0.1em] transition ${
+                          isSelected
+                            ? 'border-[#c8aa6e] bg-[#c8aa6e]/12 text-[#f0e6d2] shadow-[0_0_16px_rgba(200,170,110,0.08)]'
+                            : 'border-slate-800 bg-[#09090b]/55 text-slate-500 hover:border-[#c8aa6e]/50 hover:text-[#d8c391]'
+                        }`}
+                        title={preset.label}
+                      >
+                        <span
+                          className="h-4 w-8 shrink-0 border border-black/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]"
+                          style={{
+                            background: `linear-gradient(135deg, ${preset.value} 0%, ${preset.value}cc 48%, #1b1a17 100%)`,
+                          }}
+                        />
+                        <span className="min-w-0 max-w-full truncate">{preset.label}</span>
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccentMode('custom');
+                      setCustomColorActive(true);
+                      setSelectedBackground('Gris.webp');
+                    }}
+                    className={`flex h-12 flex-col items-center justify-center gap-1 border px-1.5 text-[8.5px] font-black uppercase tracking-[0.1em] transition ${
+                      accentMode === 'custom'
+                        ? 'border-[#c8aa6e] bg-[#c8aa6e]/12 text-[#f0e6d2] shadow-[0_0_16px_rgba(200,170,110,0.08)]'
+                        : 'border-slate-800 bg-[#09090b]/55 text-slate-500 hover:border-[#c8aa6e]/50 hover:text-[#d8c391]'
+                    }`}
+                  >
+                    <span
+                      className="h-4 w-8 shrink-0 border border-black/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]"
+                      style={{
+                        background: `linear-gradient(135deg, ${customColor || '#c8aa6e'} 0%, ${customColor || '#c8aa6e'}cc 48%, #1b1a17 100%)`,
                       }}
-                      className="h-4 w-4 accent-[#c8aa6e]"
                     />
-                    Personalizar acento
-                  </label>
+                    <span>Hex</span>
+                  </button>
                 </div>
-                {customColorActive && (
+                {accentMode === 'custom' && (
                   <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-2.5">
-                    <HexColorInput value={customColor} onChange={setCustomColor} />
+                    <HexColorInput
+                      value={customColor}
+                      onChange={(value) => {
+                        setCustomColor(value);
+                        setCustomColorActive(true);
+                      }}
+                    />
                     <p className="text-[10px] italic leading-normal text-slate-400">
                       Cambia la línea bajo la imagen, los rombos y los indicadores activos.
                     </p>
