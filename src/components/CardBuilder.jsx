@@ -2692,15 +2692,15 @@ const drawModularChargeFooter = (context, chargeSlots, resourceImages = {}, acce
   const y = CHARGE_FOOTER_LINE_Y;
   const centerX = 944;
   const centers = [centerX - 180, centerX - 90, centerX, centerX + 90, centerX + 180];
-  const sizes = [35, 35, 70, 35, 35];
+  const sizes = [50, 50, 70, 50, 50];
 
   context.save();
   context.strokeStyle = 'rgba(181,92,18,0.58)';
   context.lineWidth = 3;
   context.beginPath();
   context.moveTo(314, y);
-  context.lineTo(720, y);
-  context.moveTo(1168, y);
+  context.lineTo(712, y);
+  context.moveTo(1176, y);
   context.lineTo(1574, y);
   context.stroke();
 
