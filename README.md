@@ -183,7 +183,14 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.6.5**
+> **Versión actual: 2.6.6**
+
+**Resumen de cambios v2.6.6:**
+
+- **Iconos de Cabecera Dinámicos a Escala del Título**:
+  - Los iconos de tipo de arma y de elemento de la cabecera se escalan de forma dinámica para coincidir exactamente con el tamaño de fuente calculado para el título de la carta (`iconSize = titleSize`).
+  - Habilitamos que se rendericen tanto el icono del elemento (`elementIconImg`) como el del tipo de arma (`weaponIconImg`) de forma contigua en la esquina superior derecha si ambos están presentes, organizándose de derecha a izquierda.
+  - El algoritmo de ajuste del ancho del título (`fitModularTitleFont`) se ha refinado para contemplar el espacio ocupado por ambos iconos a su escala correspondiente, previniendo cualquier desbordamiento visual.
 
 **Resumen de cambios v2.6.5:**
 

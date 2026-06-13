@@ -75,21 +75,22 @@ const CARD_CONTAINER_TYPES = [
   { id: 'damage', label: 'Daño' },
   { id: 'traits', label: 'Rasgos' },
   { id: 'minion', label: 'Minion' },
+  { id: 'charge', label: 'Carga' },
   { id: 'description', label: 'Descripción' },
 ];
 
 const DEFAULT_CARD_CONTAINERS_BY_TYPE = {
-  weapon: ['range', 'consumption', 'damage', 'traits', 'description'],
-  armor: ['consumption', 'traits', 'description'],
-  trap: ['range', 'consumption', 'traits', 'description'],
-  action: ['consumption', 'damage', 'description'],
-  skill: ['range', 'damage', 'traits', 'minion', 'description'],
-  status: ['description'],
+  weapon: ['range', 'consumption', 'damage', 'traits', 'description', 'charge'],
+  armor: ['consumption', 'traits', 'description', 'charge'],
+  trap: ['range', 'consumption', 'traits', 'description', 'charge'],
+  action: ['consumption', 'damage', 'description', 'charge'],
+  skill: ['range', 'damage', 'traits', 'minion', 'description', 'charge'],
+  status: ['description', 'charge'],
 };
 
 const MAX_CARD_CONTAINERS = 6;
 const MAX_TRAITS_PER_CONTAINER = 3;
-const SINGLE_INSTANCE_CARD_CONTAINERS = new Set(['range', 'minion']);
+const SINGLE_INSTANCE_CARD_CONTAINERS = new Set(['range', 'minion', 'charge']);
 
 const createCardContainer = (id) => ({
   id,
@@ -211,7 +212,8 @@ const CONSUMPTION_TYPES = [
 ];
 
 const RESOURCE_SLOT_COUNT = 4;
-const DEFAULT_CHARGE_SLOTS = ['Hambre', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
+const CHARGE_SLOT_COUNT = 5;
+const DEFAULT_CHARGE_SLOTS = Array.from({ length: CHARGE_SLOT_COUNT }, () => EMPTY_SLOT);
 const DEFAULT_CONSUMPTION_SLOTS = ['Tiempo', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
 const MAX_DAMAGE_DICE_QTY = 7;
 const DEFAULT_CONTAINER_DAMAGE = { diceType: 'D6', diceQty: 1 };
@@ -2641,6 +2643,63 @@ const drawContainerDivider = (context, y, accent) => {
   context.restore();
 };
 
+const traceDiamondPath = (context, x, y, size) => {
+  context.beginPath();
+  context.moveTo(x, y - size / 2);
+  context.lineTo(x + size / 2, y);
+  context.lineTo(x, y + size / 2);
+  context.lineTo(x - size / 2, y);
+  context.closePath();
+};
+
+const CHARGE_FOOTER_LINE_Y = 2328;
+const CHARGE_FOOTER_RESERVED_HEIGHT = 170;
+const CHARGE_STYLES = {
+  Hambre: { stroke: '#3d7d45', fill: 'rgba(61,125,69,0.88)' },
+  Cuerpo: { stroke: '#a93832', fill: 'rgba(169,56,50,0.88)' },
+  Mente: { stroke: '#2f6fb3', fill: 'rgba(47,111,179,0.88)' },
+};
+
+const drawModularChargeFooter = (context, chargeSlots, resourceImages = {}, accent = '#c46f1f') => {
+  const slots = Array.from({ length: CHARGE_SLOT_COUNT }, (_, index) => chargeSlots[index] || EMPTY_SLOT);
+  const y = CHARGE_FOOTER_LINE_Y;
+  const centerX = 944;
+  const centers = [centerX - 180, centerX - 90, centerX, centerX + 90, centerX + 180];
+  const sizes = [46, 46, 70, 46, 46];
+
+  context.save();
+  context.strokeStyle = 'rgba(181,92,18,0.72)';
+  context.lineWidth = 9;
+  context.beginPath();
+  context.moveTo(314, y);
+  context.lineTo(704, y);
+  context.moveTo(1184, y);
+  context.lineTo(1574, y);
+  context.stroke();
+
+  slots.forEach((slot, index) => {
+    const x = centers[index];
+    const size = sizes[index];
+    const slotStyle = CHARGE_STYLES[slot] || { stroke: '#171a19', fill: accent };
+    traceDiamondPath(context, x, y, size);
+    context.fillStyle = slotStyle.fill;
+    context.strokeStyle = '#050505';
+    context.lineWidth = 5;
+    context.fill();
+    context.stroke();
+
+    const iconImage = slot ? resourceImages[`charge:${slot}`] : null;
+    if (iconImage) {
+      const iconSize = size * 0.48;
+      context.save();
+      context.globalAlpha = 0.9;
+      context.drawImage(iconImage, x - iconSize / 2, y - iconSize / 2, iconSize, iconSize);
+      context.restore();
+    }
+  });
+  context.restore();
+};
+
 const drawContainerLabel = (context, label, centerY, accent) => {
   context.save();
   drawSectionDiamond(context, 262, centerY, 34, accent);
@@ -3461,6 +3520,7 @@ const getModularContainerHeight = (blockId, remainingHeight, isLast, description
   if (blockId === 'damage') return 180;
   if (blockId === 'traits') return 190;
   if (blockId === 'minion') return 0;
+  if (blockId === 'charge') return 0;
   if (blockId === 'description') {
     return Math.max(MODULAR_DESCRIPTION_UNIT_HEIGHT, MODULAR_DESCRIPTION_UNIT_HEIGHT * descriptionUnits);
   }
@@ -3470,7 +3530,7 @@ const getModularContainerHeight = (blockId, remainingHeight, isLast, description
 const getRenderableCardContainers = (containers) => (
   containers
     .map((container, index) => normalizeCardContainer(container, index))
-    .filter((block) => block.id !== 'minion')
+    .filter((block) => block.id !== 'minion' && block.id !== 'charge')
 );
 
 const getDescriptionUnitBudget = (containers, cardType = 'weapon') => {
@@ -3482,7 +3542,9 @@ const getDescriptionUnitBudget = (containers, cardType = 'weapon') => {
     if (block.id === 'description') return total;
     return total + getModularContainerHeight(block.id, 0, false);
   }, 0);
-  const availableHeight = Math.max(0, 2386 - MODULAR_CONTENT_TOP - fixedHeight);
+  const hasChargeFooter = containers.some((container, index) => getContainerId(container, index) === 'charge');
+  const footerHeight = hasChargeFooter ? CHARGE_FOOTER_RESERVED_HEIGHT : 0;
+  const availableHeight = Math.max(0, 2386 - MODULAR_CONTENT_TOP - fixedHeight - footerHeight);
   return Math.max(descriptionCount, Math.min(descriptionCount * 6, Math.floor(availableHeight / MODULAR_DESCRIPTION_UNIT_HEIGHT)));
 };
 
@@ -3561,8 +3623,10 @@ const drawCardCanvas = (
     ...labels,
     [block.id]: block.label,
   }), {});
+  const normalizedBlocks = cardContainers.map((container, index) => normalizeCardContainer(container, index));
+  const hasChargeFooter = normalizedBlocks.some((block) => block.id === 'charge');
   const blocks = getRenderableCardContainers(cardContainers, cardType);
-  if (blocks.length === 0) {
+  if (blocks.length === 0 && !hasChargeFooter) {
     drawEmptyContainersMessage(context);
     context.restore();
     return;
@@ -3570,7 +3634,7 @@ const drawCardCanvas = (
 
   const descriptionUnitBudget = getDescriptionUnitBudget(cardContainers, cardType);
   let usedDescriptionUnits = 0;
-  const contentBottom = 2386;
+  const contentBottom = hasChargeFooter ? 2386 - CHARGE_FOOTER_RESERVED_HEIGHT : 2386;
   let y = MODULAR_CONTENT_TOP;
 
   blocks.forEach((block, index) => {
@@ -3652,6 +3716,9 @@ const drawCardCanvas = (
       usedDescriptionUnits += descriptionUnits;
     }
   });
+  if (hasChargeFooter) {
+    drawModularChargeFooter(context, chargeSlots, resourceImages, accent);
+  }
   context.restore();
 };
 
@@ -3965,6 +4032,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     const usesDamageContainer = normalizedContainers.some((container) => container.id === 'damage');
     const usesConsumptionContainer = normalizedContainers.some((container) => container.id === 'consumption');
     const usesTraitsContainer = normalizedContainers.some((container) => container.id === 'traits');
+    const usesChargeContainer = normalizedContainers.some((container) => container.id === 'charge');
 
     if (cardType === 'weapon' || cardType === 'skill') {
       const iconSrc = getWeaponTypeIconSrc(weaponType);
@@ -4004,9 +4072,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       }));
     }
 
-    const loadsChargeResources = usesConsumptionContainer && RESOURCE_CARD_TYPES.has(cardType) && (
-      resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CHARGE_ONLY
-    );
+    const loadsChargeResources = usesChargeContainer;
     const loadsConsumptionResources = usesConsumptionContainer && ((cardType === 'action' && actionCenterMode === 'dado') || (
       RESOURCE_CARD_TYPES.has(cardType) && (resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY)
     ) || cardType === 'status');
@@ -4342,7 +4408,8 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
 
   const handleChargeSlotChange = (index, value) => {
     setChargeSlots((currentSlots) => {
-      const nextSlots = [...currentSlots].slice(0, RESOURCE_SLOT_COUNT);
+      const nextSlots = [...currentSlots].slice(0, CHARGE_SLOT_COUNT);
+      while (nextSlots.length < CHARGE_SLOT_COUNT) nextSlots.push(EMPTY_SLOT);
       nextSlots[index] = value;
       return nextSlots;
     });
@@ -4445,7 +4512,19 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       ) {
         return current;
       }
-      return [...current, createCardContainer(containerId)];
+      const nextContainer = createCardContainer(containerId);
+      if (containerId === 'charge') {
+        return [...current, nextContainer];
+      }
+      const chargeIndex = current.findIndex((container, index) => getContainerId(container, index) === 'charge');
+      if (chargeIndex === -1) {
+        return [...current, nextContainer];
+      }
+      return [
+        ...current.slice(0, chargeIndex),
+        nextContainer,
+        ...current.slice(chargeIndex),
+      ];
     });
   };
 
@@ -4458,6 +4537,8 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       const index = containerIndex;
       const nextIndex = index + direction;
       if (index < 0 || nextIndex < 0 || nextIndex >= current.length) return current;
+      if (getContainerId(current[index], index) === 'charge') return current;
+      if (getContainerId(current[nextIndex], nextIndex) === 'charge') return current;
       const next = [...current];
       [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
       return next;
@@ -5152,6 +5233,10 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     () => normalizedCardContainers.filter((container) => container.id === 'consumption'),
     [normalizedCardContainers],
   );
+  const chargeContainers = useMemo(
+    () => normalizedCardContainers.filter((container) => container.id === 'charge'),
+    [normalizedCardContainers],
+  );
   const traitContainers = useMemo(
     () => normalizedCardContainers.filter((container) => container.id === 'traits'),
     [normalizedCardContainers],
@@ -5390,6 +5475,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                   const containerId = getContainerId(containerEntry, index);
                   const containerKey = getContainerKey(containerEntry, index);
                   const container = CARD_CONTAINER_TYPES.find((item) => item.id === containerId);
+                  const isFixedFooterContainer = containerId === 'charge';
                   return (
                     <div
                       key={containerKey}
@@ -5401,7 +5487,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                       <button
                         type="button"
                         onClick={() => moveCardContainer(index, -1)}
-                        disabled={index === 0}
+                        disabled={index === 0 || isFixedFooterContainer}
                         className="inline-flex h-7 w-7 items-center justify-center border border-slate-800 text-slate-400 transition hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e] disabled:cursor-not-allowed disabled:opacity-30"
                         title="Subir"
                         aria-label={`Subir ${container?.label || containerId}`}
@@ -5411,7 +5497,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                       <button
                         type="button"
                         onClick={() => moveCardContainer(index, 1)}
-                        disabled={index === cardContainers.length - 1}
+                        disabled={index === cardContainers.length - 1 || isFixedFooterContainer || getContainerId(cardContainers[index + 1], index + 1) === 'charge'}
                         className="inline-flex h-7 w-7 items-center justify-center border border-slate-800 text-slate-400 transition hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e] disabled:cursor-not-allowed disabled:opacity-30"
                         title="Bajar"
                         aria-label={`Bajar ${container?.label || containerId}`}
@@ -5501,6 +5587,48 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                     </div>
                   </div>
                 )}
+
+                {chargeContainers.map((container) => {
+                  const activeChargeSlots = [...chargeSlots].slice(0, CHARGE_SLOT_COUNT);
+                  while (activeChargeSlots.length < CHARGE_SLOT_COUNT) activeChargeSlots.push(EMPTY_SLOT);
+                  return (
+                    <div key={`charge-editor-${container.key}`} className="space-y-3 rounded border border-[#c8aa6e]/15 bg-[#09090b]/35 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          Carga
+                        </label>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                          5 rombos
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-5 gap-1.5">
+                        {activeChargeSlots.map((slot, index) => (
+                          <label
+                            key={`${container.key}-charge-slot-${index}`}
+                            className="space-y-1"
+                          >
+                            <span className="block text-center text-[9px] font-black uppercase tracking-[0.1em] text-slate-500">
+                              {index + 1}
+                            </span>
+                            <select
+                              value={slot}
+                              onChange={(event) => handleChargeSlotChange(index, event.target.value)}
+                              className="h-8 w-full min-w-0 border border-[#c8aa6e]/20 bg-[#09090b]/80 px-1 text-[10px] font-bold uppercase text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70"
+                              aria-label={`Carga slot ${index + 1}`}
+                            >
+                              <option value="">Vacío</option>
+                              {CHARGE_TYPES.map((option) => (
+                                <option key={`${container.key}-charge-${index}-${option.id}`} value={option.id}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
 
                 {damageContainers.map((container, damageIndex) => {
                   const damageConfig = containerDamage[container.key] || DEFAULT_CONTAINER_DAMAGE;
