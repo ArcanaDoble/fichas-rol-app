@@ -165,6 +165,16 @@ const ELEMENT_CONSUMPTION_STYLES = {
   Viento: { stroke: '#6d958a', fill: 'rgba(109,149,138,0.15)' },
 };
 
+const DESCRIPTION_ICON_STYLES = {
+  Tiempo: { stroke: '#c46f1f', fill: 'rgba(196,111,31,0.14)' },
+  Mente: { stroke: '#2f6fb3', fill: 'rgba(47,111,179,0.14)' },
+  Cuerpo: { stroke: '#a93832', fill: 'rgba(169,56,50,0.14)' },
+  Hambre: { stroke: '#3d7d45', fill: 'rgba(61,125,69,0.14)' },
+  Recurso: { stroke: '#6f716c', fill: 'rgba(111,113,108,0.14)' },
+  Armadura: { stroke: '#60798f', fill: 'rgba(96,121,143,0.15)' },
+  ...ELEMENT_CONSUMPTION_STYLES,
+};
+
 const ACCENT_PRESET_COLORS = [
   { id: 'default', label: 'Base', value: '#c46f1f' },
   { id: 'gold', label: 'Dorado', value: '#c8aa6e' },
@@ -172,8 +182,8 @@ const ACCENT_PRESET_COLORS = [
   { id: 'green', label: 'Verde', value: '#73824f' },
   { id: 'blue', label: 'Azul', value: '#52758a' },
   { id: 'purple', label: 'Morado', value: '#765d86' },
+  { id: 'bone', label: 'Hueso', value: '#d8d0bd' },
   { id: 'ashen', label: 'Ceniza', value: '#747168' },
-  { id: 'bone', label: 'Hueso', value: '#b69463' },
 ];
 
 const DEFAULT_TRAITS = ['-', '-', '-', '-', '-', '-', '-', '-'];
@@ -203,6 +213,7 @@ const CONSUMPTION_TYPES = [
 const RESOURCE_SLOT_COUNT = 4;
 const DEFAULT_CHARGE_SLOTS = ['Hambre', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
 const DEFAULT_CONSUMPTION_SLOTS = ['Tiempo', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
+const MAX_DAMAGE_DICE_QTY = 7;
 const DEFAULT_CONTAINER_DAMAGE = { diceType: 'D6', diceQty: 1 };
 const DEFAULT_CONTAINER_CONSUMPTION_TYPES = Array.from({ length: RESOURCE_SLOT_COUNT }, () => 'consumption');
 const createDefaultContainerConsumption = () => ({
@@ -650,6 +661,64 @@ const drawSlotIcon = (context, iconImage, x, y, size, shape) => {
   context.restore();
 };
 
+const VISIBLE_IMAGE_BOUNDS_CACHE = new WeakMap();
+
+const getVisibleImageBounds = (image) => {
+  if (!image) return null;
+  const imageWidth = image.naturalWidth || image.width || 0;
+  const imageHeight = image.naturalHeight || image.height || 0;
+  if (!imageWidth || !imageHeight) return null;
+  if (VISIBLE_IMAGE_BOUNDS_CACHE.has(image)) {
+    return VISIBLE_IMAGE_BOUNDS_CACHE.get(image);
+  }
+
+  const fallbackBounds = { sx: 0, sy: 0, sw: imageWidth, sh: imageHeight };
+  if (typeof document === 'undefined') return fallbackBounds;
+
+  try {
+    const buffer = document.createElement('canvas');
+    buffer.width = imageWidth;
+    buffer.height = imageHeight;
+    const bufferContext = buffer.getContext('2d', { willReadFrequently: true });
+    bufferContext.drawImage(image, 0, 0);
+    const pixels = bufferContext.getImageData(0, 0, imageWidth, imageHeight).data;
+    let minX = imageWidth;
+    let minY = imageHeight;
+    let maxX = -1;
+    let maxY = -1;
+
+    for (let py = 0; py < imageHeight; py += 1) {
+      for (let px = 0; px < imageWidth; px += 1) {
+        const alpha = pixels[(py * imageWidth + px) * 4 + 3];
+        if (alpha > 10) {
+          minX = Math.min(minX, px);
+          minY = Math.min(minY, py);
+          maxX = Math.max(maxX, px);
+          maxY = Math.max(maxY, py);
+        }
+      }
+    }
+
+    if (maxX < minX || maxY < minY) {
+      VISIBLE_IMAGE_BOUNDS_CACHE.set(image, fallbackBounds);
+      return fallbackBounds;
+    }
+
+    const padding = 2;
+    const bounds = {
+      sx: Math.max(0, minX - padding),
+      sy: Math.max(0, minY - padding),
+      sw: Math.min(imageWidth, maxX + padding + 1) - Math.max(0, minX - padding),
+      sh: Math.min(imageHeight, maxY + padding + 1) - Math.max(0, minY - padding),
+    };
+    VISIBLE_IMAGE_BOUNDS_CACHE.set(image, bounds);
+    return bounds;
+  } catch (error) {
+    VISIBLE_IMAGE_BOUNDS_CACHE.set(image, fallbackBounds);
+    return fallbackBounds;
+  }
+};
+
 const drawWeaponResourceRails = (context, chargeSlots, consumptionSlots, resourceImages) => {
   const y = 2356;
   const height = 156;
@@ -1063,44 +1132,55 @@ const getSyllables = (word) => {
   return syllables;
 };
 
-const KEYWORD_ICONS = {
-  'Tiempo': '/interfaz/consumos/Tiempo.webp',
-  'Mente': '/interfaz/consumos/Mente.webp',
-  'Cuerpo': '/interfaz/consumos/Cuerpo.webp',
-  'Hambre': '/interfaz/consumos/Hambre.webp',
-  'Armadura': '/interfaz/consumos/Armadura_1.webp',
-  'Recurso': '/interfaz/consumos/Recurso.webp',
-  'Variable': '/interfaz/consumos/Variable.webp',
-  'Agua': '/elementos/Agua.webp',
-  'Fuego': '/elementos/Fuego.webp',
-  'Hielo': '/elementos/Hielo.webp',
-  'Luz': '/elementos/Luz.webp',
-  'Oscuridad': '/elementos/Oscuridad.webp',
-  'Rayo': '/elementos/Rayo.webp',
-  'Tierra': '/elementos/Tierra.webp',
-  'Veneno': '/elementos/Veneno.webp',
-  'Viento': '/elementos/Viento.webp',
-  'Cuerpo a cuerpo': '/tipo/Cuerpo a cuerpo.webp',
-  'Distancia': '/tipo/Distancia.webp',
-  'Magia': '/tipo/Magia.webp',
-  'D4': '/dados/cartas/D4.webp',
-  'D6': '/dados/cartas/D6.webp',
-  'D8': '/dados/cartas/D8.webp',
-  'D10': '/dados/cartas/D10.webp',
-  'D12': '/dados/cartas/D12.webp',
-  'DX': '/dados/cartas/DX.webp',
-  'Dado': '/dados/cartas/DX.webp',
-};
+const DESCRIPTION_ICON_LIBRARY = [
+  { id: 'Tiempo', label: 'Tiempo', src: '/interfaz/consumo_new/Tiempo.webp' },
+  { id: 'Mente', label: 'Mente', src: '/interfaz/consumo_new/Mente.webp' },
+  { id: 'Cuerpo', label: 'Cuerpo', src: '/interfaz/consumo_new/Cuerpo.webp' },
+  { id: 'Hambre', label: 'Hambre', src: '/interfaz/consumo_new/Hambre.webp' },
+  { id: 'Armadura', label: 'Armadura', src: '/interfaz/consumo_new/Armadura.png' },
+  { id: 'Recurso', label: 'Recurso', src: '/interfaz/consumo_new/Recurso.webp' },
+  { id: 'Agua', label: 'Agua', src: '/elementos_new/agua.webp' },
+  { id: 'Fuego', label: 'Fuego', src: '/elementos_new/fuego.webp' },
+  { id: 'Hielo', label: 'Hielo', src: '/elementos_new/hielo.webp' },
+  { id: 'Luz', label: 'Luz', src: '/elementos_new/luz.webp' },
+  { id: 'Oscuridad', label: 'Oscuridad', src: '/elementos_new/oscuridad.webp' },
+  { id: 'Rayo', label: 'Rayo', src: '/elementos_new/rayo.webp' },
+  { id: 'Tierra', label: 'Tierra', src: '/elementos_new/tierra.webp' },
+  { id: 'Veneno', label: 'Veneno', src: '/elementos_new/veneno.webp' },
+  { id: 'Viento', label: 'Viento', src: '/elementos_new/viento.webp' },
+];
 
-const KEYWORD_REGEX = new RegExp(
-  '\\b(' + 
-  Object.keys(KEYWORD_ICONS)
-    .sort((a, b) => b.length - a.length)
-    .map(kw => kw.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'))
-    .join('|') + 
-  ')\\b',
-  'gi'
+const KEYWORD_ICONS = Object.fromEntries(
+  DESCRIPTION_ICON_LIBRARY.map((icon) => [icon.id, icon.src]),
 );
+
+const DESCRIPTION_ICON_LOOKUP = Object.fromEntries(
+  DESCRIPTION_ICON_LIBRARY.map((icon) => [icon.id.toLowerCase(), icon.id]),
+);
+
+const DESCRIPTION_ICON_TOKEN_REGEX = /\[icon:([^\]\r\n]+)\]/gi;
+
+const normalizeDescriptionIconId = (value = '') => (
+  DESCRIPTION_ICON_LOOKUP[value.trim().toLowerCase()] || null
+);
+
+const createDescriptionIconToken = (iconId) => `[icon:${iconId}]`;
+
+const extractDescriptionIconIds = (text = '') => {
+  const ids = [];
+  const seen = new Set();
+  DESCRIPTION_ICON_TOKEN_REGEX.lastIndex = 0;
+  let match = DESCRIPTION_ICON_TOKEN_REGEX.exec(text);
+  while (match) {
+    const iconId = normalizeDescriptionIconId(match[1]);
+    if (iconId && !seen.has(iconId)) {
+      seen.add(iconId);
+      ids.push(iconId);
+    }
+    match = DESCRIPTION_ICON_TOKEN_REGEX.exec(text);
+  }
+  return ids;
+};
 
 const getActiveFontSize = (context) => {
   const fontStr = context.font;
@@ -1108,16 +1188,70 @@ const getActiveFontSize = (context) => {
   return match ? parseInt(match[1], 10) : 60;
 };
 
-const measureTextWithIcons = (context, text, ignoreIcons = false) => {
-  const baseWidth = context.measureText(text).width;
-  if (!text || ignoreIcons) return baseWidth;
-  KEYWORD_REGEX.lastIndex = 0;
-  const matches = text.match(KEYWORD_REGEX);
-  if (!matches) return baseWidth;
-  
+const getInlineIconMetrics = (context) => {
   const fontSize = getActiveFontSize(context);
-  const extraWidthPerMatch = fontSize * 1.20; // 0.9 * size for icon + 0.15 * size * 2 for padding
-  return baseWidth + matches.length * extraWidthPerMatch;
+  return {
+    fontSize,
+    iconSize: fontSize,
+    iconPadding: fontSize * 0.12,
+  };
+};
+
+const drawInlineDescriptionIcon = (context, iconImage, iconId, x, y, size) => {
+  if (!iconImage) return;
+
+  const imageWidth = iconImage.naturalWidth || iconImage.width || 0;
+  const imageHeight = iconImage.naturalHeight || iconImage.height || 0;
+  if (!imageWidth || !imageHeight || typeof document === 'undefined') {
+    context.drawImage(iconImage, x, y, size, size);
+    return;
+  }
+
+  const bounds = getVisibleImageBounds(iconImage) || { sx: 0, sy: 0, sw: imageWidth, sh: imageHeight };
+  const scale = Math.min(size / bounds.sw, size / bounds.sh);
+  const drawWidth = bounds.sw * scale;
+  const drawHeight = bounds.sh * scale;
+  const drawX = x + (size - drawWidth) / 2;
+  const drawY = y + (size - drawHeight) / 2;
+  const buffer = document.createElement('canvas');
+  buffer.width = Math.max(1, Math.ceil(drawWidth));
+  buffer.height = Math.max(1, Math.ceil(drawHeight));
+  const bufferContext = buffer.getContext('2d');
+  if (!bufferContext) {
+    context.drawImage(iconImage, drawX, drawY, drawWidth, drawHeight);
+    return;
+  }
+
+  bufferContext.imageSmoothingEnabled = true;
+  bufferContext.imageSmoothingQuality = 'high';
+  bufferContext.drawImage(
+    iconImage,
+    bounds.sx,
+    bounds.sy,
+    bounds.sw,
+    bounds.sh,
+    0,
+    0,
+    buffer.width,
+    buffer.height,
+  );
+  bufferContext.globalCompositeOperation = 'source-in';
+  bufferContext.fillStyle = DESCRIPTION_ICON_STYLES[iconId]?.stroke || '#c46f1f';
+  bufferContext.fillRect(0, 0, buffer.width, buffer.height);
+
+  context.drawImage(buffer, drawX, drawY, drawWidth, drawHeight);
+};
+
+const measureTextWithIcons = (context, text, ignoreIcons = false) => {
+  if (!text) return 0;
+  if (ignoreIcons) return context.measureText(text).width;
+
+  const { iconSize, iconPadding } = getInlineIconMetrics(context);
+  const iconWidth = iconSize + iconPadding * 2;
+  return parseLineSegments(text).reduce((width, segment) => {
+    if (segment.isKeyword) return width + iconWidth;
+    return width + context.measureText(segment.text).width;
+  }, 0);
 };
 
 const DESCRIPTION_SEPARATOR_REGEX = /^\s*-{3,}\s*$/;
@@ -1280,9 +1414,9 @@ const measureStyledText = (context, text, layoutFontInfo = {}, ignoreIcons = fal
   return totalWidth;
 };
 
-const measureTextWidth = (context, text) => {
+const measureTextWidth = (context, text, ignoreIcons = false) => {
   const fontInfo = getFontInfoFromContext(context);
-  return measureStyledText(context, text, fontInfo);
+  return measureStyledText(context, text, fontInfo, ignoreIcons);
 };
 
 const getStyledWordsOfLine = (line) => {
@@ -1322,9 +1456,7 @@ const drawSingleStyledWord = (context, word, x, y, resourceImages = {}, ignoreIc
   context.save();
   applySegmentStyle(context, word, fontInfo);
   
-  const fontSize = getActiveFontSize(context);
-  const iconSize = fontSize * 0.9;
-  const iconPadding = fontSize * 0.15;
+  const { fontSize, iconSize, iconPadding } = getInlineIconMetrics(context);
   
   if (ignoreIcons) {
     context.fillText(word.text, x, y);
@@ -1333,17 +1465,17 @@ const drawSingleStyledWord = (context, word, x, y, resourceImages = {}, ignoreIc
     let cursorX = x;
     
     kwSegments.forEach((seg) => {
-      context.fillText(seg.text, cursorX, y);
-      const textWidth = context.measureText(seg.text).width;
-      cursorX += textWidth;
+      if (!seg.isKeyword) {
+        context.fillText(seg.text, cursorX, y);
+        cursorX += context.measureText(seg.text).width;
+      }
       
       if (seg.isKeyword) {
-        const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
-        const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
+        const iconImg = resourceImages[`keyword:${seg.iconId}`] || null;
         
         if (iconImg) {
           const iconY = y + (fontSize - iconSize) / 2;
-          context.drawImage(iconImg, cursorX + iconPadding, iconY, iconSize, iconSize);
+          drawInlineDescriptionIcon(context, iconImg, seg.iconId, cursorX + iconPadding, iconY, iconSize);
         }
         cursorX += iconSize + iconPadding * 2;
       }
@@ -1367,17 +1499,33 @@ const measureStyledWordWidth = (context, word, ignoreIcons = false) => {
 
 const parseLineSegments = (line) => {
   if (!line) return [];
-  KEYWORD_REGEX.lastIndex = 0;
-  const parts = line.split(KEYWORD_REGEX);
-  return parts.map((part) => {
-    const isKeyword = Object.keys(KEYWORD_ICONS).some(
-      (kw) => kw.toLowerCase() === part.toLowerCase() || (part.toLowerCase() === 'dado' && kw === 'Dado')
-    );
-    return {
-      text: part,
-      isKeyword,
-    };
-  }).filter((segment) => segment.text !== '');
+
+  const segments = [];
+  let cursor = 0;
+  DESCRIPTION_ICON_TOKEN_REGEX.lastIndex = 0;
+  let match = DESCRIPTION_ICON_TOKEN_REGEX.exec(line);
+
+  while (match) {
+    if (match.index > cursor) {
+      segments.push({ text: line.slice(cursor, match.index), isKeyword: false });
+    }
+
+    const iconId = normalizeDescriptionIconId(match[1]);
+    if (iconId) {
+      segments.push({ text: match[0], iconId, isKeyword: true });
+    } else {
+      segments.push({ text: match[0], isKeyword: false });
+    }
+
+    cursor = DESCRIPTION_ICON_TOKEN_REGEX.lastIndex;
+    match = DESCRIPTION_ICON_TOKEN_REGEX.exec(line);
+  }
+
+  if (cursor < line.length) {
+    segments.push({ text: line.slice(cursor), isKeyword: false });
+  }
+
+  return segments.filter((segment) => segment.text !== '');
 };
 
 const tokenizeParagraph = (paragraph) => {
@@ -1399,9 +1547,7 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
     styleSegments.forEach((styleSeg) => {
       applySegmentStyle(context, styleSeg, fontInfo);
       
-      const fontSize = getActiveFontSize(context);
-      const iconSize = fontSize * 0.9;
-      const iconPadding = fontSize * 0.15;
+      const { fontSize, iconSize, iconPadding } = getInlineIconMetrics(context);
       
       if (ignoreIcons) {
         context.fillText(styleSeg.text, cursorX, y);
@@ -1409,17 +1555,17 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
       } else {
         const kwSegments = parseLineSegments(styleSeg.text);
         kwSegments.forEach((seg) => {
-          context.fillText(seg.text, cursorX, y);
-          const textWidth = context.measureText(seg.text).width;
-          cursorX += textWidth;
+          if (!seg.isKeyword) {
+            context.fillText(seg.text, cursorX, y);
+            cursorX += context.measureText(seg.text).width;
+          }
           
           if (seg.isKeyword) {
-            const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
-            const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
+            const iconImg = resourceImages[`keyword:${seg.iconId}`] || null;
             
             if (iconImg) {
               const iconY = y + (fontSize - iconSize) / 2;
-              context.drawImage(iconImg, cursorX + iconPadding, iconY, iconSize, iconSize);
+              drawInlineDescriptionIcon(context, iconImg, seg.iconId, cursorX + iconPadding, iconY, iconSize);
             }
             cursorX += iconSize + iconPadding * 2;
           }
@@ -1442,9 +1588,7 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
     styleSegments.forEach((styleSeg) => {
       applySegmentStyle(context, styleSeg, fontInfo);
       
-      const fontSize = getActiveFontSize(context);
-      const iconSize = fontSize * 0.9;
-      const iconPadding = fontSize * 0.15;
+      const { fontSize, iconSize, iconPadding } = getInlineIconMetrics(context);
       
       if (ignoreIcons) {
         context.fillText(styleSeg.text, cursorX, y);
@@ -1452,17 +1596,17 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
       } else {
         const kwSegments = parseLineSegments(styleSeg.text);
         kwSegments.forEach((seg) => {
-          context.fillText(seg.text, cursorX, y);
-          const textWidth = context.measureText(seg.text).width;
-          cursorX += textWidth;
+          if (!seg.isKeyword) {
+            context.fillText(seg.text, cursorX, y);
+            cursorX += context.measureText(seg.text).width;
+          }
           
           if (seg.isKeyword) {
-            const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
-            const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
+            const iconImg = resourceImages[`keyword:${seg.iconId}`] || null;
             
             if (iconImg) {
               const iconY = y + (fontSize - iconSize) / 2;
-              context.drawImage(iconImg, cursorX + iconPadding, iconY, iconSize, iconSize);
+              drawInlineDescriptionIcon(context, iconImg, seg.iconId, cursorX + iconPadding, iconY, iconSize);
             }
             cursorX += iconSize + iconPadding * 2;
           }
@@ -1554,7 +1698,7 @@ const serializeTokens = (tokens) => {
   return result;
 };
 
-const wrapDescriptionText = (context, text, maxWidth, hyphenate = false, isLore = false) => {
+const wrapDescriptionText = (context, text, maxWidth, hyphenate = false, isLore = false, ignoreIcons = false) => {
   const paragraphs = text
     .trim()
     .split(/\n+/)
@@ -1587,7 +1731,7 @@ const wrapDescriptionText = (context, text, maxWidth, hyphenate = false, isLore 
             bold: seg.bold,
             italic: seg.italic,
             color: seg.color,
-          }, isLore);
+          }, isLore || ignoreIcons);
 
           if (wordWidth <= maxWidth) {
             tokens.push({
@@ -1606,7 +1750,7 @@ const wrapDescriptionText = (context, text, maxWidth, hyphenate = false, isLore 
                 bold: seg.bold,
                 italic: seg.italic,
                 color: seg.color,
-              }, isLore);
+              }, isLore || ignoreIcons);
               if (nextWidth <= maxWidth || !chunk) {
                 chunk = nextChunk;
               } else {
@@ -1648,7 +1792,7 @@ const wrapDescriptionText = (context, text, maxWidth, hyphenate = false, isLore 
       const testTokens = [...currentLineTokens, token];
       const testString = serializeTokens(testTokens);
 
-      if (measureTextWidth(context, testString) <= maxWidth || currentLineTokens.length === 0) {
+      if (measureTextWidth(context, testString, ignoreIcons) <= maxWidth || currentLineTokens.length === 0) {
         currentLineTokens.push(token);
         continue;
       }
@@ -1678,7 +1822,7 @@ const wrapDescriptionText = (context, text, maxWidth, hyphenate = false, isLore 
                 const testTokensWithHyphen = [...currentLineTokens, prefixToken];
                 const testStringWithHyphen = serializeTokens(testTokensWithHyphen);
 
-                if (measureTextWidth(context, testStringWithHyphen) <= maxWidth) {
+                if (measureTextWidth(context, testStringWithHyphen, ignoreIcons) <= maxWidth) {
                   currentLineTokens.push(prefixToken);
                   while (currentLineTokens.length > 0 && currentLineTokens[currentLineTokens.length - 1].isSpace) {
                     currentLineTokens.pop();
@@ -1720,7 +1864,11 @@ const wrapDescriptionText = (context, text, maxWidth, hyphenate = false, isLore 
   return lines;
 };
 
-const getDescriptionFlowItems = (context, text, maxWidth, lineHeight, hyphenate = false) => {
+const getDescriptionFlowItems = (context, text, maxWidth, lineHeight, hyphenate = false, options = {}) => {
+  const {
+    ignoreIcons = false,
+    paragraphGapScale = 0.55,
+  } = options;
   const lines = text.trim().split(/\n/);
   const items = [];
   let paragraph = '';
@@ -1734,7 +1882,7 @@ const getDescriptionFlowItems = (context, text, maxWidth, lineHeight, hyphenate 
       return;
     }
 
-    const wrappedLines = wrapDescriptionText(context, cleanParagraph, maxWidth, hyphenate, paragraphIsLore);
+    const wrappedLines = wrapDescriptionText(context, cleanParagraph, maxWidth, hyphenate, paragraphIsLore, ignoreIcons);
     wrappedLines.forEach((line, lineIdx) => {
       items.push({
         type: 'text',
@@ -1759,7 +1907,7 @@ const getDescriptionFlowItems = (context, text, maxWidth, lineHeight, hyphenate 
     const { segments } = loreResult;
     if (segments.length === 0) {
       flushParagraph();
-      items.push({ type: 'gap', height: Math.round(lineHeight * 0.55) });
+      items.push({ type: 'gap', height: Math.round(lineHeight * paragraphGapScale) });
       return;
     }
 
@@ -2164,7 +2312,7 @@ const fitModularTitleFont = (context, title, hasHeaderIcon = false) => {
   while (size > 58) {
     context.font = `900 ${size}px Lato, Arial, sans-serif`;
     const titleWidth = context.measureText(title).width;
-    const neededSpace = titleWidth + (hasHeaderIcon ? size + 40 : 0);
+    const neededSpace = titleWidth + (hasHeaderIcon ? size * 0.98 + 34 : 0);
     if (neededSpace <= 1340) break;
     size -= 4;
   }
@@ -2435,12 +2583,30 @@ const drawHeaderImageContainer = (
   context.fillText(title, titleX, titleY);
 
   if (headerIconImg) {
-    const iconSize = titleSize * 1.12;
-    const titleWidth = context.measureText(title).width;
-    const iconX = Math.min(titleX + titleWidth + 40, x + width - 82 - iconSize);
-    const iconY = titleY - iconSize + titleSize * 0.12;
+    const titleMetrics = context.measureText(title);
+    const iconBounds = getVisibleImageBounds(headerIconImg);
+    const iconVisibleHeight = titleSize * 1.12;
+    const iconVisibleWidth = iconVisibleHeight * ((iconBounds?.sw || 1) / (iconBounds?.sh || 1));
+    const iconGap = titleSize * 0.14;
+    const iconX = Math.min(titleX + titleMetrics.width + iconGap, x + width - 82 - iconVisibleWidth);
+    const titleBottom = titleY + Math.max(0, titleMetrics.actualBoundingBoxDescent || titleSize * 0.04);
+    const iconY = titleBottom - iconVisibleHeight + titleSize * 0.11;
     context.globalAlpha = 0.94;
-    context.drawImage(headerIconImg, iconX, iconY, iconSize, iconSize);
+    if (iconBounds) {
+      context.drawImage(
+        headerIconImg,
+        iconBounds.sx,
+        iconBounds.sy,
+        iconBounds.sw,
+        iconBounds.sh,
+        iconX,
+        iconY,
+        iconVisibleWidth,
+        iconVisibleHeight,
+      );
+    } else {
+      context.drawImage(headerIconImg, iconX, iconY, iconVisibleWidth, iconVisibleHeight);
+    }
   }
   context.restore();
 };
@@ -3113,7 +3279,7 @@ const drawModularConsumption = (context, centerY, slots, resourceImages = {}, ac
 
 const drawModularDamage = (context, centerY, diceIconImg, diceQty, diceType) => {
   context.save();
-  const count = diceType === 'DX' ? 1 : Math.max(1, Math.min(9, diceQty));
+  const count = diceType === 'DX' ? 1 : Math.max(1, Math.min(MAX_DAMAGE_DICE_QTY, diceQty));
   const size = 96;
   const gap = 24;
   const totalWidth = count * size + (count - 1) * gap;
@@ -3230,23 +3396,30 @@ const drawModularCombat = (context, centerY, weaponType, weaponIconImg) => {
   context.restore();
 };
 
-const drawModularDescription = (context, y, height, description, hyphenate, singleTextStyle, resourceImages) => {
+const drawModularDescription = (context, y, height, description, hyphenate, singleTextStyle, resourceImages, accent = '#c46f1f') => {
   const x = 314;
   const maxWidth = 1260;
-  const top = y + 106;
-  const bottom = y + height - 30;
   const text = description.trim() || DESCRIPTION_PREVIEW_TEXT;
   const isPreview = !description.trim();
-  const fontSize = singleTextStyle === 'principal' ? 48 : 45;
-  const lineHeight = singleTextStyle === 'principal' ? 63 : 61;
+  const isNarrativeStyle = singleTextStyle === 'narrative';
+  const fontSize = isNarrativeStyle ? 50 : 45;
+  const lineHeight = isNarrativeStyle ? 66 : 61;
+  const top = isNarrativeStyle ? y + 36 : y + 106;
+  const bottom = isNarrativeStyle ? y + height - 58 : y + height - 30;
 
   context.save();
-  context.font = `${singleTextStyle === 'narrative' ? 'italic ' : ''}400 ${fontSize}px Lato, Arial, sans-serif`;
+  context.font = `${isNarrativeStyle ? 'italic ' : 'italic '}400 ${fontSize}px Lato, Arial, sans-serif`;
   context.textAlign = 'left';
   context.textBaseline = 'top';
   context.fillStyle = isPreview ? 'rgba(29,33,32,0.42)' : '#171a19';
-  const items = getDescriptionFlowItems(context, text, maxWidth, lineHeight, hyphenate);
-  let cursorY = top;
+  const items = getDescriptionFlowItems(context, text, maxWidth, lineHeight, hyphenate, {
+    ignoreIcons: isNarrativeStyle,
+    paragraphGapScale: 0.12,
+  });
+  const totalTextHeight = items.reduce((total, item) => total + item.height, 0);
+  let cursorY = isNarrativeStyle
+    ? top + Math.max(0, (bottom - top - totalTextHeight) / 2)
+    : top;
 
   items.forEach((item) => {
     if (cursorY + item.height > bottom) return;
@@ -3260,12 +3433,21 @@ const drawModularDescription = (context, y, height, description, hyphenate, sing
     } else if (item.line) {
       if (item.isLore) {
         context.font = `italic 700 ${Math.max(38, fontSize - 5)}px Lato, Arial, sans-serif`;
-        context.fillStyle = '#b55c12';
+        context.fillStyle = accent;
         drawTextLineWithIcons(context, item.line, x, cursorY, maxWidth, 'center', resourceImages, true);
       } else {
-        context.font = `${singleTextStyle === 'narrative' ? 'italic ' : ''}${item.line.includes('**') ? '700' : '400'} ${fontSize}px Lato, Arial, sans-serif`;
-        context.fillStyle = isPreview ? 'rgba(29,33,32,0.42)' : '#171a19';
-        drawTextLineWithIcons(context, item.line, x, cursorY, maxWidth, false, resourceImages, item.isLore);
+        context.font = `${isNarrativeStyle ? 'italic ' : 'italic '}${isNarrativeStyle ? '700' : '400'} ${fontSize}px Lato, Arial, sans-serif`;
+        context.fillStyle = isPreview ? 'rgba(29,33,32,0.42)' : (isNarrativeStyle ? accent : '#171a19');
+        drawTextLineWithIcons(
+          context,
+          item.line,
+          x,
+          cursorY,
+          maxWidth,
+          isNarrativeStyle ? 'center' : false,
+          resourceImages,
+          isNarrativeStyle || item.isLore,
+        );
       }
     }
     cursorY += item.height;
@@ -3414,7 +3596,7 @@ const drawCardCanvas = (
 
     if (blockId !== 'consumption' && blockId !== 'range' && blockId !== 'description') {
       drawContainerLabel(context, label, blockCenterY, accent);
-    } else if (blockId === 'description') {
+    } else if (blockId === 'description' && singleTextStyle !== 'narrative') {
       drawContainerLabel(context, label, y + 50, accent);
     }
 
@@ -3457,6 +3639,7 @@ const drawCardCanvas = (
         hyphenate,
         singleTextStyle,
         resourceImages,
+        accent,
       );
     }
 
@@ -3516,6 +3699,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const canvasRef = useRef(null);
   const descriptionRef = useRef(null);
   const flavorTextRef = useRef(null);
+  const containerDescriptionRefs = useRef({});
   const imageCacheRef = useRef(new Map());
   const imageLoadCacheRef = useRef(new Map());
   const activeImageRef = useRef(null);
@@ -3528,8 +3712,10 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const [description, setDescription] = useState(DEFAULT_DESCRIPTION);
   const [flavorText, setFlavorText] = useState(DEFAULT_FLAVOR_TEXT);
   const [focusedField, setFocusedField] = useState(null);
+  const [activeDescriptionKey, setActiveDescriptionKey] = useState(null);
+  const [focusedDescriptionKey, setFocusedDescriptionKey] = useState(null);
   const [hyphenate, setHyphenate] = useState(true);
-  const [singleTextStyle, setSingleTextStyle] = useState('narrative'); // 'narrative' or 'principal'
+  const [singleTextStyle, setSingleTextStyle] = useState('principal'); // 'narrative' or 'principal'
   const [cardType, setCardType] = useState('weapon');
   const [showTraits, setShowTraits] = useState(true);
   const [visibleTraitRows, setVisibleTraitRows] = useState(3);
@@ -3546,6 +3732,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const [selectedElement, setSelectedElement] = useState('Ninguno');
   const [customColorActive, setCustomColorActive] = useState(false);
   const [customColor, setCustomColor] = useState('#c8aa6e');
+  const [descriptionFormatColor, setDescriptionFormatColor] = useState('#ffffff');
   const [isUploadingCharacterCard, setIsUploadingCharacterCard] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
 
@@ -3877,22 +4064,24 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       }
     }
 
-    // 1.5 Load Keyword Icon Images if mentioned in text
-    const textToScan = `${description} ${flavorText}`;
-    const matchedKeywords = Array.from(new Set(textToScan.match(KEYWORD_REGEX) || []));
+    // 1.5 Load explicit description icon tokens inserted from the icon compendium.
+    const textToScan = [
+      description,
+      flavorText,
+      ...Object.values(containerDescriptions),
+    ].join(' ');
+    const matchedKeywords = extractDescriptionIconIds(textToScan);
     if (matchedKeywords.length > 0) {
-      await Promise.all(matchedKeywords.map(async (kwMatch) => {
-        const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === kwMatch.toLowerCase());
-        if (!matchedKw) return;
-        const src = `${process.env.PUBLIC_URL || ''}${KEYWORD_ICONS[matchedKw]}`;
+      await Promise.all(matchedKeywords.map(async (iconId) => {
+        const src = `${process.env.PUBLIC_URL || ''}${KEYWORD_ICONS[iconId]}`;
         let icon = null;
         try {
           icon = await loadCachedImage(src);
         } catch (e) {
-          console.error(`Could not load keyword icon: ${matchedKw}`, e);
+          console.error(`Could not load description icon: ${iconId}`, e);
         }
         if (icon) {
-          resourceImages[`keyword:${matchedKw}`] = icon;
+          resourceImages[`keyword:${iconId}`] = icon;
         }
       }));
     }
@@ -4108,7 +4297,11 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     setSelectedElement('Ninguno');
     setCustomColorActive(false);
     setCustomColor('#c8aa6e');
+    setDescriptionFormatColor('#ffffff');
     setActionCenterMode('dado');
+    setSingleTextStyle('principal');
+    setActiveDescriptionKey(null);
+    setFocusedDescriptionKey(null);
   };
 
   const handleTraitChange = (index, value) => {
@@ -4172,8 +4365,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       };
       if (updates.diceQty !== undefined) {
         const parsedQty = parseInt(updates.diceQty, 10);
-        const maxQty = cardType === 'action' ? 6 : 9;
-        nextConfig.diceQty = Number.isFinite(parsedQty) ? Math.min(maxQty, Math.max(1, parsedQty)) : 1;
+        nextConfig.diceQty = Number.isFinite(parsedQty) ? Math.min(MAX_DAMAGE_DICE_QTY, Math.max(1, parsedQty)) : 1;
       }
       return {
         ...currentDamage,
@@ -4229,8 +4421,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   };
 
   const handleDiceQtyChange = (value) => {
-    const maxQty = cardType === 'action' ? 6 : 9;
-    setDiceQty(Math.min(maxQty, Math.max(1, value)));
+    setDiceQty(Math.min(MAX_DAMAGE_DICE_QTY, Math.max(1, value)));
   };
 
   const handleHeaderImageChange = (event) => {
@@ -4326,7 +4517,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       });
     } else if (typeId === 'action') {
       setVisibleTraitRows(0);
-      setDiceQty((qty) => Math.min(6, qty));
+      setDiceQty((qty) => Math.min(MAX_DAMAGE_DICE_QTY, qty));
       setConsumptionSlots((currentSlots) => {
         const nextSlots = [...currentSlots].slice(0, RESOURCE_SLOT_COUNT);
         nextSlots[0] = 'Tiempo';
@@ -4526,6 +4717,168 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       textarea.focus();
       textarea.setSelectionRange(newStart + selectionOffsetStart, newStart + selectionOffsetEnd);
     }, 0);
+  };
+
+  const applyContainerDescriptionFormat = (containerKey, descriptionIndex, formatType, colorVal = '') => {
+    const textarea = containerDescriptionRefs.current[containerKey];
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    const selectedText = text.substring(start, end);
+
+    let formatted = selectedText;
+    let newStart = start;
+    let newEnd = end;
+    let selectionOffsetStart = 0;
+    let selectionOffsetEnd = 0;
+
+    if (formatType === 'bold') {
+      if (selectedText.startsWith('**') && selectedText.endsWith('**')) {
+        formatted = selectedText.slice(2, -2);
+        selectionOffsetStart = 0;
+        selectionOffsetEnd = formatted.length;
+      } else {
+        const match = selectedText.match(/^(\s*)(.*?)(\s*)$/);
+        const leadingSpace = match ? match[1] : '';
+        const trimmedText = match ? match[2] : selectedText;
+        const trailingSpace = match ? match[3] : '';
+        formatted = `${leadingSpace}**${trimmedText}**${trailingSpace}`;
+        selectionOffsetStart = selectedText.length === 0 ? 2 : leadingSpace.length;
+        selectionOffsetEnd = selectedText.length === 0 ? 2 : leadingSpace.length + trimmedText.length + 4;
+      }
+    } else if (formatType === 'italic') {
+      if (selectedText.startsWith('*') && !selectedText.startsWith('**') && selectedText.endsWith('*') && !selectedText.endsWith('**')) {
+        formatted = selectedText.slice(1, -1);
+        selectionOffsetStart = 0;
+        selectionOffsetEnd = formatted.length;
+      } else {
+        const match = selectedText.match(/^(\s*)(.*?)(\s*)$/);
+        const leadingSpace = match ? match[1] : '';
+        const trimmedText = match ? match[2] : selectedText;
+        const trailingSpace = match ? match[3] : '';
+        formatted = `${leadingSpace}*${trimmedText}*${trailingSpace}`;
+        selectionOffsetStart = selectedText.length === 0 ? 1 : leadingSpace.length;
+        selectionOffsetEnd = selectedText.length === 0 ? 1 : leadingSpace.length + trimmedText.length + 2;
+      }
+    } else if (formatType === 'color') {
+      const anyColorMatch = selectedText.match(/^\[color:(#[0-9a-fA-F]{6})\]\{(.*)\}$/);
+      if (anyColorMatch) {
+        const existingColor = anyColorMatch[1];
+        const innerText = anyColorMatch[2];
+        if (existingColor === colorVal) {
+          formatted = innerText;
+          selectionOffsetStart = 0;
+          selectionOffsetEnd = formatted.length;
+        } else {
+          formatted = `[color:${colorVal}]{${innerText}}`;
+          selectionOffsetStart = 0;
+          selectionOffsetEnd = formatted.length;
+        }
+      } else {
+        const enclosing = findAnyEnclosingColorTag(text, start, end);
+        if (enclosing.found) {
+          if (enclosing.color === colorVal) {
+            formatted = enclosing.innerText;
+            newStart = enclosing.startIdx;
+            newEnd = enclosing.endIdx;
+            selectionOffsetStart = 0;
+            selectionOffsetEnd = formatted.length;
+          } else {
+            formatted = `[color:${colorVal}]{${enclosing.innerText}}`;
+            newStart = enclosing.startIdx;
+            newEnd = enclosing.endIdx;
+            selectionOffsetStart = 0;
+            selectionOffsetEnd = formatted.length;
+          }
+        } else {
+          formatted = `[color:${colorVal}]{${selectedText}}`;
+          selectionOffsetStart = selectedText.length === 0 ? 17 : 0;
+          selectionOffsetEnd = selectedText.length === 0 ? 17 : formatted.length;
+        }
+      }
+    }
+
+    const newText = text.substring(0, newStart) + formatted + text.substring(newEnd);
+    if (descriptionIndex === 0) {
+      handleDescriptionChange(newText);
+    }
+    handleContainerDescriptionChange(containerKey, newText);
+    setActiveDescriptionKey(containerKey);
+
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(newStart + selectionOffsetStart, newStart + selectionOffsetEnd);
+    }, 0);
+  };
+
+  const renderContainerDescriptionToolbar = (containerKey, descriptionIndex) => {
+    const presetColors = [
+      { name: 'Dorado', value: '#c8aa6e' },
+      { name: 'Rojo', value: '#ff4d4d' },
+      { name: 'Verde', value: '#5cd65c' },
+      { name: 'Azul', value: '#33adff' },
+      { name: 'Morado', value: '#b366ff' },
+    ];
+    const isFocused = focusedDescriptionKey === containerKey;
+    const borderClass = isFocused
+      ? 'border-[#c8aa6e]/70 shadow-[0_-4px_12px_rgba(200,170,110,0.06),_4px_0_12px_rgba(200,170,110,0.06),_-4px_0_12px_rgba(200,170,110,0.06)]'
+      : 'border-[#c8aa6e]/25';
+
+    return (
+      <div className={`flex flex-wrap items-center justify-between gap-2 rounded-t-md border border-b-0 bg-[#09090b]/90 px-3 py-2 transition-all duration-200 ${borderClass}`}>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => applyContainerDescriptionFormat(containerKey, descriptionIndex, 'bold')}
+            className="flex h-7 w-9 items-center justify-center border border-slate-800 bg-[#09090b]/50 text-[10px] font-black uppercase tracking-wider text-slate-300 transition hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]"
+            title="Negrita"
+            aria-label={`Negrita descripción ${descriptionIndex + 1}`}
+          >
+            B
+          </button>
+          <button
+            type="button"
+            onClick={() => applyContainerDescriptionFormat(containerKey, descriptionIndex, 'italic')}
+            className="flex h-7 w-9 items-center justify-center border border-slate-800 bg-[#09090b]/50 text-[10px] font-black italic uppercase tracking-wider text-slate-300 transition hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]"
+            title="Cursiva"
+            aria-label={`Cursiva descripción ${descriptionIndex + 1}`}
+          >
+            I
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          {presetColors.map((color) => (
+            <button
+              key={`${containerKey}-description-color-${color.value}`}
+              type="button"
+              onClick={() => applyContainerDescriptionFormat(containerKey, descriptionIndex, 'color', color.value)}
+              className="h-5 w-5 rounded-full border border-black/50 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.24)] transition hover:scale-110 hover:border-[#f0e6d2]"
+              style={{ backgroundColor: color.value }}
+              title={color.name}
+              aria-label={`Color ${color.name} descripción ${descriptionIndex + 1}`}
+            />
+          ))}
+          <label
+            className="relative h-5 w-5 cursor-pointer rounded-full border border-black/50 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.24)] transition hover:scale-110 hover:border-[#f0e6d2]"
+            style={{ backgroundColor: descriptionFormatColor }}
+            title="Color personalizado"
+            aria-label={`Color personalizado descripción ${descriptionIndex + 1}`}
+          >
+            <input
+              type="color"
+              value={descriptionFormatColor}
+              onChange={(event) => {
+                setDescriptionFormatColor(event.target.value);
+                applyContainerDescriptionFormat(containerKey, descriptionIndex, 'color', event.target.value);
+              }}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            />
+          </label>
+        </div>
+      </div>
+    );
   };
 
   const renderToolbar = (ref, fieldId) => {
@@ -4814,6 +5167,24 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       return total + (DESCRIPTION_SPACE_UNITS.includes(parsedUnits) ? parsedUnits : 1);
     }, 0);
     return Math.max(1, Math.min(6, descriptionUnitBudget - otherUsedUnits));
+  };
+  const insertDescriptionIcon = (iconId) => {
+    const targetContainer = (
+      descriptionContainers.find((container) => container.key === activeDescriptionKey)
+      || descriptionContainers[0]
+    );
+    if (!targetContainer) return;
+
+    const targetIndex = descriptionContainers.findIndex((container) => container.key === targetContainer.key);
+    const currentText = containerDescriptions[targetContainer.key] ?? (targetIndex === 0 ? description : '');
+    const token = createDescriptionIconToken(iconId);
+    const nextText = currentText.trim().length > 0 ? `${currentText} ${token}` : token;
+
+    if (targetIndex === 0) {
+      handleDescriptionChange(nextText);
+    }
+    handleContainerDescriptionChange(targetContainer.key, nextText);
+    setActiveDescriptionKey(targetContainer.key);
   };
 
   return (
@@ -5185,7 +5556,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                               <input
                                 type="number"
                                 min={1}
-                                max={cardType === 'action' ? 6 : 9}
+                                max={MAX_DAMAGE_DICE_QTY}
                                 value={activeDiceQty}
                                 onChange={(event) => {
                                   const nextQty = parseInt(event.target.value, 10) || 1;
@@ -5356,6 +5727,41 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                   </label>
                 </div>
 
+                <div className="space-y-2 rounded border border-[#c8aa6e]/15 bg-[#09090b]/35 p-3">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                    Compendio visual
+                  </div>
+                  <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-6">
+                    {DESCRIPTION_ICON_LIBRARY.map((icon) => (
+                      <button
+                        key={`description-icon-${icon.id}`}
+                        type="button"
+                        onClick={() => insertDescriptionIcon(icon.id)}
+                        className="group flex h-16 flex-col items-center justify-center gap-1.5 border border-slate-800 bg-[#09090b]/55 px-1 text-[8px] font-black uppercase tracking-[0.08em] text-slate-500 transition hover:border-[#c8aa6e]/55 hover:bg-[#c8aa6e]/10 hover:text-[#d8c391]"
+                        title={`Insertar ${icon.label}`}
+                        aria-label={`Insertar icono ${icon.label}`}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="h-8 w-8 opacity-90 transition group-hover:opacity-100"
+                          style={{
+                            backgroundColor: DESCRIPTION_ICON_STYLES[icon.id]?.stroke || '#c46f1f',
+                            WebkitMaskImage: `url("${process.env.PUBLIC_URL || ''}${icon.src}")`,
+                            maskImage: `url("${process.env.PUBLIC_URL || ''}${icon.src}")`,
+                            WebkitMaskRepeat: 'no-repeat',
+                            maskRepeat: 'no-repeat',
+                            WebkitMaskPosition: 'center',
+                            maskPosition: 'center',
+                            WebkitMaskSize: 'contain',
+                            maskSize: 'contain',
+                          }}
+                        />
+                        <span className="max-w-full truncate">{icon.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {descriptionContainers.map((container, descriptionIndex) => {
                   const maxUnitsForContainer = getAvailableDescriptionUnits(container.key);
                   const selectedUnits = Math.min(containerDescriptionSizes[container.key] || 1, maxUnitsForContainer);
@@ -5384,7 +5790,15 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                           </select>
                         </label>
                       </div>
+                      {singleTextStyle === 'principal' && renderContainerDescriptionToolbar(container.key, descriptionIndex)}
                       <textarea
+                        ref={(node) => {
+                          if (node) {
+                            containerDescriptionRefs.current[container.key] = node;
+                          } else {
+                            delete containerDescriptionRefs.current[container.key];
+                          }
+                        }}
                         value={containerDescriptions[container.key] ?? (descriptionIndex === 0 ? description : '')}
                         onChange={(event) => {
                           if (descriptionIndex === 0) {
@@ -5392,9 +5806,16 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                           }
                           handleContainerDescriptionChange(container.key, event.target.value);
                         }}
+                        onFocus={() => {
+                          setActiveDescriptionKey(container.key);
+                          setFocusedDescriptionKey(container.key);
+                        }}
+                        onBlur={() => setFocusedDescriptionKey(null)}
                         rows={5}
                         maxLength={descriptionMaxLength}
-                        className="min-h-[112px] w-full resize-y rounded-b-md border border-t-0 border-[#c8aa6e]/25 bg-[#09090b]/80 px-4 py-3 text-base font-semibold leading-relaxed text-[#f0e6d2] outline-none transition placeholder:text-slate-600 focus:border-[#c8aa6e]/70 focus:shadow-[0_4px_12px_rgba(200,170,110,0.06),_4px_0_12px_rgba(200,170,110,0.06),_-4px_0_12px_rgba(200,170,110,0.06)]"
+                        className={`min-h-[112px] w-full resize-y border border-[#c8aa6e]/25 bg-[#09090b]/80 px-4 py-3 text-base font-semibold leading-relaxed text-[#f0e6d2] outline-none transition placeholder:text-slate-600 focus:border-[#c8aa6e]/70 focus:shadow-[0_4px_12px_rgba(200,170,110,0.06),_4px_0_12px_rgba(200,170,110,0.06),_-4px_0_12px_rgba(200,170,110,0.06)] ${
+                          singleTextStyle === 'principal' ? 'rounded-b-md border-t-0' : 'rounded-md'
+                        }`}
                         placeholder="Texto descriptivo de la carta"
                       />
                     </div>
