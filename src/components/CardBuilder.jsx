@@ -2108,66 +2108,154 @@ const applyReferenceCardLayoutScale = (context) => {
   context.scale(scale, scale);
 };
 
-const drawPaperTexture = (context, x, y, width, height, accent = '#c46f1f') => {
+const drawPaperTexture = (context, x, y, width, height, accent = '#c46f1f', stardustImg = null) => {
   context.save();
   context.beginPath();
   context.rect(x, y, width, height);
   context.clip();
 
-  const warmWash = context.createRadialGradient(
-    x + width * 0.5,
-    y + height * 0.42,
-    60,
-    x + width * 0.5,
-    y + height * 0.42,
-    width * 0.65,
-  );
-  warmWash.addColorStop(0, 'rgba(255,255,240,0.18)');
-  warmWash.addColorStop(0.52, 'rgba(213,156,82,0.07)');
-  warmWash.addColorStop(1, 'rgba(111,71,31,0.08)');
-  context.fillStyle = warmWash;
-  context.fillRect(x, y, width, height);
+  // Deterministic pseudo-random number generator to keep the stardust layout identical between renders
+  const pseudoRandom = (s) => {
+    const mask = 0xffffffff;
+    let w = (123456789 + s) & mask;
+    let z = (987654321 - s) & mask;
+    return () => {
+      z = (36969 * (z & 65535) + (z >> 16)) & mask;
+      w = (18000 * (w & 65535) + (w >> 16)) & mask;
+      return (((z << 16) + w) >>> 0) / 4294967296;
+    };
+  };
 
-  for (let i = 0; i < 190; i += 1) {
-    const t = i + 11;
-    const px = x + ((Math.sin(t * 12.9898) + 1) / 2) * width;
-    const py = y + ((Math.sin(t * 78.233) + 1) / 2) * height;
-    const lineWidth = 32 + ((Math.sin(t * 37.719) + 1) / 2) * 140;
-    const alpha = 0.025 + ((Math.sin(t * 19.19) + 1) / 2) * 0.05;
-    context.strokeStyle = `rgba(91,61,32,${alpha})`;
-    context.lineWidth = 1.4;
+  const random = pseudoRandom(2026); // Fixed seed for stardust layout
+
+  // 1. Soft radial washes to give an organic aged depth/mottling to the background
+  for (let i = 0; i < 5; i++) {
+    const cx = x + random() * width;
+    const cy = y + random() * height;
+    const radius = 300 + random() * 400;
+    const gradient = context.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    gradient.addColorStop(0, 'rgba(139, 94, 26, 0.05)');
+    gradient.addColorStop(0.6, 'rgba(215, 172, 115, 0.02)');
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    context.fillStyle = gradient;
     context.beginPath();
-    context.moveTo(px - lineWidth / 2, py);
-    context.lineTo(px + lineWidth / 2, py + Math.sin(t * 2.3) * 7);
-    context.stroke();
+    context.arc(cx, cy, radius, 0, Math.PI * 2);
+    context.fill();
   }
 
-  for (let i = 0; i < 150; i += 1) {
-    const t = i + 23;
-    const px = x + ((Math.sin(t * 41.43) + 1) / 2) * width;
-    const py = y + ((Math.sin(t * 17.17) + 1) / 2) * height;
-    const size = 1 + ((Math.sin(t * 7.91) + 1) / 2) * 2.2;
-    context.fillStyle = i % 3 === 0 ? 'rgba(116,72,33,0.08)' : 'rgba(255,255,245,0.09)';
-    context.fillRect(px, py, size, size);
+  // 2. Draw stardust image pattern if loaded
+  if (stardustImg) {
+    context.save();
+    const pattern = context.createPattern(stardustImg, 'repeat');
+    if (pattern) {
+      context.fillStyle = pattern;
+      context.globalAlpha = 0.45; // Subtle but noticeable shimmery specs
+      context.fillRect(x, y, width, height);
+    }
+    context.restore();
   }
 
-  context.strokeStyle = 'rgba(255,252,232,0.12)';
-  context.lineWidth = 2;
-  for (let i = 0; i < 28; i += 1) {
-    const py = y + 22 + i * (height - 44) / 27;
+  // 3. Fine organic noise particles (procedural dark/light dust specs)
+  // We draw 600 micro-particles
+  for (let i = 0; i < 600; i++) {
+    const px = x + random() * width;
+    const py = y + random() * height;
+    const alpha = 0.02 + random() * 0.04;
+    if (random() > 0.4) {
+      // Dark organic paper dust specs (noticeable but very subtle)
+      context.fillStyle = `rgba(70, 55, 40, ${alpha * 1.5})`;
+      context.fillRect(px, py, 1.2, 1.2);
+    } else {
+      // Light particles
+      context.fillStyle = `rgba(255, 255, 240, ${alpha})`;
+      context.fillRect(px, py, 1.2, 1.2);
+    }
+  }
+
+  // 4. Medium-sized stardust particles (dust specs)
+  // We draw 150 medium particles (1.0px to 3.0px) for depth
+  for (let i = 0; i < 150; i++) {
+    const px = x + random() * width;
+    const py = y + random() * height;
+    const size = 1.0 + random() * 2.0;
+    const alpha = 0.02 + random() * 0.04;
+
+    if (random() > 0.4) {
+      // Dark particles
+      context.fillStyle = `rgba(80, 65, 50, ${alpha * 1.5})`;
+    } else {
+      // Light particles
+      context.fillStyle = `rgba(255, 253, 240, ${alpha})`;
+    }
+
     context.beginPath();
-    context.moveTo(x + 20, py);
-    context.lineTo(x + width - 20, py + Math.sin(i * 1.7) * 3);
-    context.stroke();
+    context.arc(px, py, size / 2, 0, Math.PI * 2);
+    context.fill();
   }
 
-  context.globalAlpha = 0.04;
+  // 5. Soft hazy/blurry stardust clouds
+  // We draw 18 larger blurry glow particles for depth
+  for (let i = 0; i < 18; i++) {
+    const px = x + random() * width;
+    const py = y + random() * height;
+    const radius = 3 + random() * 6;
+    const alpha = 0.01 + random() * 0.02;
+
+    const g = context.createRadialGradient(px, py, 0, px, py, radius);
+    if (random() > 0.5) {
+      g.addColorStop(0, `rgba(255, 253, 230, ${alpha * 1.5})`);
+      g.addColorStop(1, 'rgba(255, 253, 230, 0)');
+    } else {
+      g.addColorStop(0, `rgba(130, 95, 65, ${alpha})`);
+      g.addColorStop(1, 'rgba(130, 95, 65, 0)');
+    }
+
+    context.fillStyle = g;
+    context.beginPath();
+    context.arc(px, py, radius, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  // 6. Aged vignette border overlay
+  const vignette = 80;
+  
+  // Left Edge
+  const lGrad = context.createLinearGradient(x, y, x + vignette, y);
+  lGrad.addColorStop(0, 'rgba(130, 95, 60, 0.04)');
+  lGrad.addColorStop(1, 'rgba(0,0,0,0)');
+  context.fillStyle = lGrad;
+  context.fillRect(x, y, vignette, height);
+
+  // Right Edge
+  const rGrad = context.createLinearGradient(x + width - vignette, y, x + width, y);
+  rGrad.addColorStop(0, 'rgba(0,0,0,0)');
+  rGrad.addColorStop(1, 'rgba(130, 95, 60, 0.04)');
+  context.fillStyle = rGrad;
+  context.fillRect(x + width - vignette, y, vignette, height);
+
+  // Top Edge
+  const tGrad = context.createLinearGradient(x, y, x, y + vignette);
+  tGrad.addColorStop(0, 'rgba(130, 95, 60, 0.04)');
+  tGrad.addColorStop(1, 'rgba(0,0,0,0)');
+  context.fillStyle = tGrad;
+  context.fillRect(x, y, width, vignette);
+
+  // Bottom Edge
+  const bGrad = context.createLinearGradient(x, y + height - vignette, x, y + height);
+  bGrad.addColorStop(0, 'rgba(0,0,0,0)');
+  bGrad.addColorStop(1, 'rgba(130, 95, 60, 0.04)');
+  context.fillStyle = bGrad;
+  context.fillRect(x, y + height - vignette, width, vignette);
+
+  // 7. Accent color soft overlay wash
+  context.globalAlpha = 0.03;
   context.fillStyle = accent;
   context.fillRect(x, y, width, height);
+
   context.restore();
 };
 
-const drawModularFrame = (context, accent = '#c46f1f') => {
+const drawModularFrame = (context, accent = '#c46f1f', stardustImg = null) => {
   context.save();
   const cardEdgeGradient = context.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   cardEdgeGradient.addColorStop(0, '#202223');
@@ -2203,14 +2291,14 @@ const drawModularFrame = (context, accent = '#c46f1f') => {
   paperGradient.addColorStop(1, 'rgba(197,126,48,0.12)');
   context.fillStyle = paperGradient;
   context.fillRect(168, 770, 1552, 1658);
-  drawPaperTexture(context, 168, 770, 1552, 1658, accent);
+  drawPaperTexture(context, 168, 770, 1552, 1658, accent, stardustImg);
 
-  context.globalAlpha = 0.16;
+  context.globalAlpha = 0.04;
   context.fillStyle = accent;
   for (let i = 0; i < 120; i++) {
     const px = 180 + ((i * 157) % 1500);
     const py = 790 + ((i * 283) % 1600);
-    context.fillRect(px, py, 2, 2);
+    context.fillRect(px, py, 1.2, 1.2);
   }
   context.restore();
 };
@@ -3111,6 +3199,7 @@ const drawCardCanvas = (
   actionAttributeImg = null,
   headerImageImg = null,
   cardContainers = getDefaultCardContainers(cardType),
+  stardustImg = null,
 ) => {
   const targetWidth = Math.max(1, Math.round(CANVAS_WIDTH * renderScale));
   const targetHeight = Math.max(1, Math.round(CANVAS_HEIGHT * renderScale));
@@ -3134,7 +3223,7 @@ const drawCardCanvas = (
 
   context.save();
   applyReferenceCardLayoutScale(context);
-  drawModularFrame(context, accent);
+  drawModularFrame(context, accent, stardustImg);
   drawHeaderImageContainer(context, headerImageImg, cardName, accent, weaponIconImg, elementIconImg);
 
   const blockLabels = CARD_CONTAINER_TYPES.reduce((labels, block) => ({
@@ -3470,6 +3559,13 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       }
     }
 
+    let stardustImg = null;
+    try {
+      stardustImg = await loadCachedImage(`${process.env.PUBLIC_URL || ''}/interfaz/stardust.png`);
+    } catch (e) {
+      console.error("Could not load stardust image:", e);
+    }
+
     let weaponIconImg = null;
     let diceIconImg = null;
     const resourceImages = {};
@@ -3616,6 +3712,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       actionAttributeImg,
       headerImageImg,
       cardContainers,
+      stardustImg,
     );
 
     if (updateStatus) setImageStatus('ready');
@@ -3649,6 +3746,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   useEffect(() => {
     const preload = () => {
       const commonSources = [
+        `${process.env.PUBLIC_URL || ''}/interfaz/stardust.png`,
         ...WEAPON_TYPES.map((type) => getWeaponTypeIconSrc(type)),
         ...['D4', 'D6', 'D8', 'D10', 'D12', 'DX'].map((type) => `${process.env.PUBLIC_URL || ''}/dados/cartas/${type}.webp`),
         ...CHARGE_TYPES.map((option) => `${process.env.PUBLIC_URL || ''}${option.src}`),
@@ -4461,7 +4559,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
             <div className="space-y-3 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
               <div className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
                 <ImageIcon className="h-4 w-4" />
-                Imagen superior
+                Imagen portada
               </div>
               <input
                 ref={headerImageInputRef}
@@ -4470,32 +4568,37 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                 onChange={handleHeaderImageChange}
                 className="hidden"
               />
-              <div className="grid grid-cols-[1fr_auto] gap-2">
-                <button
-                  type="button"
-                  onClick={() => headerImageInputRef.current?.click()}
-                  className="inline-flex items-center justify-center gap-2 border border-[#c8aa6e]/25 bg-[#0b1120]/80 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#f0e6d2] transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
-                >
-                  <UploadCloud className="h-3.5 w-3.5" />
-                  Subir imagen
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setHeaderImageSrc('')}
-                  disabled={!headerImageSrc}
-                  className="inline-flex h-9 w-9 items-center justify-center border border-slate-800 bg-[#09090b]/70 text-slate-400 transition hover:border-red-400/50 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
-                  title="Quitar imagen"
-                  aria-label="Quitar imagen"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-              <div className="overflow-hidden border border-[#c8aa6e]/15 bg-black/40" style={{ aspectRatio: '1548/638' }}>
+              <div 
+                onClick={() => headerImageInputRef.current?.click()}
+                className="relative overflow-hidden border border-[#c8aa6e]/15 bg-black/40 cursor-pointer group transition hover:border-[#c8aa6e]/50" 
+                style={{ aspectRatio: '1548/638' }}
+              >
                 {headerImageSrc ? (
-                  <img src={headerImageSrc} alt="" className="h-full w-full object-cover" />
+                  <>
+                    <img src={headerImageSrc} alt="" className="h-full w-full object-cover" />
+                    <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-[10px] font-bold uppercase tracking-[0.14em] text-[#f0e6d2] pointer-events-none">
+                      Cambiar imagen
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setHeaderImageSrc('');
+                      }}
+                      className="absolute top-1.5 right-1.5 z-10 inline-flex h-6 w-6 items-center justify-center border border-slate-800/30 bg-[#09090b]/50 text-slate-500 transition hover:border-red-500/30 hover:bg-[#09090b]/90 hover:text-red-400 shadow-md"
+                      title="Quitar imagen"
+                      aria-label="Quitar imagen"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </>
                 ) : (
-                  <div className="flex h-full items-center justify-center px-4 text-center text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                    Se generará una cabecera oscura si no subes imagen
+                  <div className="flex h-full flex-col items-center justify-center gap-1.5 px-4 text-center text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 group-hover:text-[#c8aa6e] transition">
+                    <UploadCloud className="h-5 w-5 text-slate-500 group-hover:text-[#c8aa6e] transition mb-1" />
+                    <span>Haga clic para subir imagen</span>
+                    <span className="text-[8px] tracking-[0.12em] opacity-60 font-medium text-slate-500 block mt-1 normal-case">
+                      Se generará una cabecera oscura si no subes imagen
+                    </span>
                   </div>
                 )}
               </div>

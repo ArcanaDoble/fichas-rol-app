@@ -183,7 +183,15 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.6.3**
+> **Versión actual: 2.6.4**
+
+**Resumen de cambios v2.6.4:**
+
+- **Refinamiento de la Textura de Polvo y Partículas (Stardust)**:
+  - Incorporamos la carga local y asíncrona de `stardust.png` (ubicado en `public/interfaz/stardust.png`) para integrarla como un patrón repetitivo en el canvas sin tildar el origen, permitiendo exportar las cartas como PNG de forma segura.
+  - Fusionamos el patrón de stardust con partículas procedimentales optimizadas: motas oscivas/cálidas (`rgba(70, 55, 40)`) y brillantes con opacidades y tamaños calibrados para que la textura sea visible pero extremadamente sutil y elegante.
+- **Atenuación Extrema de Puntos de Acento**:
+  - Redujimos el tamaño de los 120 puntos de la cuadrícula del color de acento a `1.2px` con una opacidad de tan solo el `4%` (antes `16%`) para que se fundan delicadamente con el fondo rústico sin simular ruido digital.
 
 **Resumen de cambios v2.6.3:**
 
@@ -191,6 +199,18 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
   - Implementamos el color **blanco sólido (`#ffffff`)** en todos los lóbulos del cerebro de Mente para asegurar que el icono se vea predominantemente blanco y claro.
   - Evitamos el empastado/oscurecimiento del icono reduciendo el trazo interno de las arrugas a un grosor fino (0.8px en pantalla).
   - Extrajimos y aplicamos el trazo exterior grueso reglamentario (6px en pantalla) de manera exclusiva sobre las siluetas exteriores (sin agujeros internos) de los hemisferios izquierdo y derecho, preservando la nitidez de los surcos internos.
+- **Alineación de Precisión en Tipos de Combate**:
+  - Ajustamos la alineación de las etiquetas de tipo de combate respecto al rombo central del divisor (`x = 944`):
+    - *Cuerpo a cuerpo*: El centro de la letra **"A"** se alinea exactamente en el rombo.
+    - *Distancia*: El centro de la **primera letra "A"** (izquierda) se alinea en el rombo.
+    - *Magia*: El límite divisorio **entre la "A" y la "G"** se sitúa exactamente en el rombo.
+- **Rediseño del Flujo de Carga de Imagen de Portada**:
+  - Eliminamos la barra de botones externos de carga y borrado para compactar y limpiar el formulario lateral, renombrando la sección como **"Imagen portada"**.
+  - Habilitamos que el propio recuadro de la imagen (tanto con imagen cargada como con el marcador de posición) responda al click para abrir el selector de archivos locales.
+  - Añadimos la opción de eliminar la imagen mediante un botón flotante sutil de cruz ("X") en la esquina superior derecha (`h-6 w-6`), de tono gris atenuado (`text-slate-500`) por defecto para mezclarse con el fondo, y que se resalta vívidamente en rojo al pasar el cursor, deteniendo la propagación del click.
+- **Textura de Polvo y Partículas de Estrellas (Stardust)**:
+  - Reemplazamos la textura plana o de papiro por un algoritmo procedimental de polvo de estrellas y partículas de stardust (con semilla determinista `2026`).
+  - Dibuja 1800 micro-partículas de ruido fino, 600 partículas medianas simulando motas y 80 partículas grandes y difuminadas tipo glow sobre el fondo beige de los contenedores, logrando una estética rica en partículas similar al stardust del panel de resumen de clases.
 
 **Resumen de cambios v2.6.2:**
 
