@@ -183,7 +183,17 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.6.4**
+> **Versión actual: 2.6.5**
+
+**Resumen de cambios v2.6.5:**
+
+- **Restauración del Alineamiento de Precisión de Combate**:
+  - Implementamos la medición de sub-cadenas mediante `measureText` usando la fuente activa para determinar el desplazamiento X necesario.
+  - Esto asegura la alineación horizontal de cada tipo de combate con el rombo divisor central (`x = 944`):
+    - *Cuerpo a cuerpo*: Centra la letra **"A"** intermedia en el rombo.
+    - *Distancia*: Centra la **primera letra "A"** (izquierda) en el rombo.
+    - *Magia*: Alinea el límite de división **entre las letras "A" y "G"** en el rombo.
+  - Mantiene el espaciado correcto de `34px` hacia el icono de arma.
 
 **Resumen de cambios v2.6.4:**
 

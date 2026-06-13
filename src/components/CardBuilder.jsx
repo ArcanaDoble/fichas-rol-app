@@ -3101,12 +3101,31 @@ const drawModularCombat = (context, centerY, weaponType, weaponIconImg) => {
   }
   const textWidth = context.measureText(label).width;
   const gap = 34;
-  const totalWidth = textWidth + gap + iconSize;
-  const textX = centerX - totalWidth / 2 + textWidth;
-  const iconX = textX + gap;
+
+  let textX = 0;
+  if (label === 'CUERPO A CUERPO') {
+    const part1 = context.measureText('CUERPO ').width;
+    const part2 = context.measureText('A').width;
+    const offset = part1 + part2 / 2;
+    textX = centerX - offset;
+  } else if (label === 'DISTANCIA') {
+    const part1 = context.measureText('DIST').width;
+    const part2 = context.measureText('A').width;
+    const offset = part1 + part2 / 2;
+    textX = centerX - offset;
+  } else if (label === 'MAGIA') {
+    const offset = context.measureText('MA').width;
+    textX = centerX - offset;
+  } else {
+    const totalWidth = textWidth + gap + iconSize;
+    textX = centerX - totalWidth / 2;
+  }
+
+  const iconX = textX + textWidth + gap;
   const iconY = centerY - iconSize / 2;
+
   context.fillStyle = '#202321';
-  context.textAlign = 'right';
+  context.textAlign = 'left';
   context.textBaseline = 'middle';
   context.fillText(label, textX, centerY);
   if (weaponIconImg) {
