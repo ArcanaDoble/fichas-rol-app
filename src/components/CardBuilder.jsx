@@ -128,8 +128,9 @@ const CONSUMPTION_TYPES = [
   { id: 'Variable', label: 'Variable', src: '/interfaz/consumos/Variable.webp' },
 ];
 
-const DEFAULT_CHARGE_SLOTS = ['Hambre', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
-const DEFAULT_CONSUMPTION_SLOTS = ['Tiempo', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
+const RESOURCE_SLOT_COUNT = 4;
+const DEFAULT_CHARGE_SLOTS = ['Hambre', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
+const DEFAULT_CONSUMPTION_SLOTS = ['Tiempo', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
 const RESOURCE_MODE_BOTH = 'charge-consumption';
 const RESOURCE_MODE_CHARGE_ONLY = 'charge-only';
 const RESOURCE_MODE_CONSUMPTION_ONLY = 'consumption-only';
@@ -2118,6 +2119,65 @@ const applyReferenceCardLayoutScale = (context) => {
   context.scale(scale, scale);
 };
 
+const drawPaperTexture = (context, x, y, width, height, accent = '#c46f1f') => {
+  context.save();
+  context.beginPath();
+  context.rect(x, y, width, height);
+  context.clip();
+
+  const warmWash = context.createRadialGradient(
+    x + width * 0.5,
+    y + height * 0.42,
+    60,
+    x + width * 0.5,
+    y + height * 0.42,
+    width * 0.65,
+  );
+  warmWash.addColorStop(0, 'rgba(255,255,240,0.18)');
+  warmWash.addColorStop(0.52, 'rgba(213,156,82,0.07)');
+  warmWash.addColorStop(1, 'rgba(111,71,31,0.08)');
+  context.fillStyle = warmWash;
+  context.fillRect(x, y, width, height);
+
+  for (let i = 0; i < 190; i += 1) {
+    const t = i + 11;
+    const px = x + ((Math.sin(t * 12.9898) + 1) / 2) * width;
+    const py = y + ((Math.sin(t * 78.233) + 1) / 2) * height;
+    const lineWidth = 32 + ((Math.sin(t * 37.719) + 1) / 2) * 140;
+    const alpha = 0.025 + ((Math.sin(t * 19.19) + 1) / 2) * 0.05;
+    context.strokeStyle = `rgba(91,61,32,${alpha})`;
+    context.lineWidth = 1.4;
+    context.beginPath();
+    context.moveTo(px - lineWidth / 2, py);
+    context.lineTo(px + lineWidth / 2, py + Math.sin(t * 2.3) * 7);
+    context.stroke();
+  }
+
+  for (let i = 0; i < 150; i += 1) {
+    const t = i + 23;
+    const px = x + ((Math.sin(t * 41.43) + 1) / 2) * width;
+    const py = y + ((Math.sin(t * 17.17) + 1) / 2) * height;
+    const size = 1 + ((Math.sin(t * 7.91) + 1) / 2) * 2.2;
+    context.fillStyle = i % 3 === 0 ? 'rgba(116,72,33,0.08)' : 'rgba(255,255,245,0.09)';
+    context.fillRect(px, py, size, size);
+  }
+
+  context.strokeStyle = 'rgba(255,252,232,0.12)';
+  context.lineWidth = 2;
+  for (let i = 0; i < 28; i += 1) {
+    const py = y + 22 + i * (height - 44) / 27;
+    context.beginPath();
+    context.moveTo(x + 20, py);
+    context.lineTo(x + width - 20, py + Math.sin(i * 1.7) * 3);
+    context.stroke();
+  }
+
+  context.globalAlpha = 0.04;
+  context.fillStyle = accent;
+  context.fillRect(x, y, width, height);
+  context.restore();
+};
+
 const drawModularFrame = (context, accent = '#c46f1f') => {
   context.save();
   const cardEdgeGradient = context.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -2154,6 +2214,7 @@ const drawModularFrame = (context, accent = '#c46f1f') => {
   paperGradient.addColorStop(1, 'rgba(197,126,48,0.12)');
   context.fillStyle = paperGradient;
   context.fillRect(168, 770, 1552, 1658);
+  drawPaperTexture(context, 168, 770, 1552, 1658, accent);
 
   context.globalAlpha = 0.16;
   context.fillStyle = accent;
@@ -2297,33 +2358,337 @@ const drawModularRange = (context, y, selectedIndex, accent) => {
   context.restore();
 };
 
-const drawModularConsumption = (context, y, slots, resourceImages = {}, accent) => {
-  const filledSlots = slots.filter(Boolean).slice(0, 5);
-  const size = 104;
-  const gap = 54;
-  const totalWidth = filledSlots.length * size + Math.max(0, filledSlots.length - 1) * gap;
+const drawModularConsumption = (context, y, slots, _resourceImages = {}, accent) => {
+  const visibleSlots = Array.from({ length: 4 }, (_, index) => slots[index] || EMPTY_SLOT);
+  const size = 136;
+  const gap = 58;
+  const totalWidth = visibleSlots.length * size + Math.max(0, visibleSlots.length - 1) * gap;
   const startX = 944 - totalWidth / 2 + size / 2;
-  context.save();
-  if (filledSlots.length === 0) {
-    context.font = 'italic 44px Lato, Arial, sans-serif';
-    context.fillStyle = 'rgba(29,33,32,0.52)';
-    context.textAlign = 'left';
+  const cy = y + 86;
+
+  const iconStroke = 'rgba(32,35,33,0.78)';
+  const iconFill = 'rgba(32,35,33,0.1)';
+
+  const drawHourglassIcon = (cx, tint = iconStroke, alpha = 1) => {
+    context.save();
+    context.globalAlpha = alpha;
+    context.strokeStyle = tint;
+    context.lineWidth = 6;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.beginPath();
+    context.moveTo(cx - 24, cy - 34);
+    context.lineTo(cx + 24, cy - 34);
+    context.moveTo(cx - 24, cy + 34);
+    context.lineTo(cx + 24, cy + 34);
+    context.moveTo(cx - 16, cy - 24);
+    context.bezierCurveTo(cx - 12, cy - 5, cx + 12, cy - 5, cx + 16, cy - 24);
+    context.moveTo(cx - 16, cy + 24);
+    context.bezierCurveTo(cx - 10, cy + 5, cx + 10, cy + 5, cx + 16, cy + 24);
+    context.stroke();
+    context.restore();
+  };
+
+  const drawMindIcon = (cx) => {
+    context.save();
+    context.strokeStyle = iconStroke;
+    context.fillStyle = iconFill;
+    context.lineWidth = 6;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.beginPath();
+    context.moveTo(cx - 30, cy + 26);
+    context.bezierCurveTo(cx - 54, cy + 10, cx - 44, cy - 36, cx - 8, cy - 38);
+    context.bezierCurveTo(cx + 7, cy - 58, cx + 42, cy - 44, cx + 40, cy - 13);
+    context.bezierCurveTo(cx + 56, cy + 1, cx + 41, cy + 34, cx + 12, cy + 28);
+    context.bezierCurveTo(cx + 2, cy + 42, cx - 20, cy + 42, cx - 30, cy + 26);
+    context.closePath();
+    context.fill();
+    context.stroke();
+    context.beginPath();
+    context.moveTo(cx - 24, cy - 2);
+    context.bezierCurveTo(cx - 4, cy - 18, cx + 3, cy + 1, cx - 4, cy + 22);
+    context.moveTo(cx + 8, cy - 28);
+    context.bezierCurveTo(cx + 15, cy - 7, cx + 37, cy - 13, cx + 38, cy + 6);
+    context.moveTo(cx - 3, cy - 40);
+    context.bezierCurveTo(cx - 13, cy - 19, cx + 14, cy - 22, cx + 8, cy - 2);
+    context.stroke();
+    context.restore();
+  };
+
+  const drawBodyIcon = (cx) => {
+    context.save();
+    context.strokeStyle = iconStroke;
+    context.fillStyle = iconFill;
+    context.lineWidth = 7;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.beginPath();
+    context.arc(cx, cy - 35, 15, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+    context.beginPath();
+    context.moveTo(cx, cy - 18);
+    context.lineTo(cx, cy + 18);
+    context.moveTo(cx - 38, cy - 1);
+    context.bezierCurveTo(cx - 18, cy - 15, cx + 18, cy - 15, cx + 38, cy - 1);
+    context.moveTo(cx - 19, cy + 48);
+    context.lineTo(cx, cy + 18);
+    context.lineTo(cx + 19, cy + 48);
+    context.stroke();
+    context.beginPath();
+    context.moveTo(cx - 28, cy + 2);
+    context.bezierCurveTo(cx - 17, cy + 31, cx + 17, cy + 31, cx + 28, cy + 2);
+    context.stroke();
+    context.restore();
+  };
+
+  const drawHungerIcon = (cx) => {
+    context.save();
+    context.strokeStyle = iconStroke;
+    context.fillStyle = iconFill;
+    context.lineWidth = 6;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.beginPath();
+    context.moveTo(cx - 36, cy - 6);
+    context.bezierCurveTo(cx - 33, cy - 47, cx + 33, cy - 47, cx + 36, cy - 6);
+    context.bezierCurveTo(cx + 42, cy + 42, cx - 42, cy + 42, cx - 36, cy - 6);
+    context.closePath();
+    context.fill();
+    context.stroke();
+    context.beginPath();
+    context.moveTo(cx - 18, cy - 28);
+    context.bezierCurveTo(cx - 8, cy - 12, cx + 8, cy - 12, cx + 18, cy - 28);
+    context.moveTo(cx - 23, cy + 2);
+    context.bezierCurveTo(cx - 8, cy + 15, cx + 8, cy + 15, cx + 23, cy + 2);
+    context.stroke();
+    context.restore();
+  };
+
+  const drawArmorIcon = (cx) => {
+    context.save();
+    context.strokeStyle = iconStroke;
+    context.fillStyle = iconFill;
+    context.lineWidth = 6;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.beginPath();
+    context.moveTo(cx, cy - 49);
+    context.lineTo(cx + 39, cy - 31);
+    context.lineTo(cx + 31, cy + 15);
+    context.bezierCurveTo(cx + 20, cy + 36, cx + 4, cy + 48, cx, cy + 51);
+    context.bezierCurveTo(cx - 4, cy + 48, cx - 20, cy + 36, cx - 31, cy + 15);
+    context.lineTo(cx - 39, cy - 31);
+    context.closePath();
+    context.fill();
+    context.stroke();
+    context.beginPath();
+    context.moveTo(cx, cy - 36);
+    context.lineTo(cx, cy + 35);
+    context.moveTo(cx - 23, cy - 8);
+    context.lineTo(cx + 23, cy - 8);
+    context.stroke();
+    context.restore();
+  };
+
+  const drawResourceIcon = (cx) => {
+    context.save();
+    context.strokeStyle = iconStroke;
+    context.fillStyle = iconFill;
+    context.lineWidth = 6;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.beginPath();
+    context.moveTo(cx, cy - 48);
+    context.lineTo(cx + 42, cy - 24);
+    context.lineTo(cx + 42, cy + 24);
+    context.lineTo(cx, cy + 48);
+    context.lineTo(cx - 42, cy + 24);
+    context.lineTo(cx - 42, cy - 24);
+    context.closePath();
+    context.fill();
+    context.stroke();
+    context.beginPath();
+    context.moveTo(cx - 42, cy - 24);
+    context.lineTo(cx, cy);
+    context.lineTo(cx + 42, cy - 24);
+    context.moveTo(cx, cy);
+    context.lineTo(cx, cy + 48);
+    context.stroke();
+    context.restore();
+  };
+
+  const drawVariableIcon = (cx) => {
+    context.save();
+    context.strokeStyle = iconStroke;
+    context.fillStyle = 'rgba(32,35,33,0.82)';
+    context.lineWidth = 6;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.beginPath();
+    context.arc(cx, cy, 42, 0, Math.PI * 2);
+    context.stroke();
+    context.font = '900 74px Lato, Arial, sans-serif';
+    context.textAlign = 'center';
     context.textBaseline = 'middle';
-    context.fillText('Sin consumo definido', 610, y + 54);
-  }
-  filledSlots.forEach((slot, index) => {
+    context.fillText('?', cx, cy - 2);
+    context.restore();
+  };
+
+  const drawElementIcon = (slot, cx) => {
+    const shape = {
+      Agua: 'drop',
+      Fuego: 'flame',
+      Hielo: 'snow',
+      Luz: 'sun',
+      Oscuridad: 'moon',
+      Rayo: 'bolt',
+      Tierra: 'mountain',
+      Veneno: 'venom',
+      Viento: 'wind',
+    }[slot];
+    context.save();
+    context.strokeStyle = iconStroke;
+    context.fillStyle = iconFill;
+    context.lineWidth = 6;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    if (shape === 'drop') {
+      context.beginPath();
+      context.moveTo(cx, cy - 48);
+      context.bezierCurveTo(cx + 36, cy - 5, cx + 38, cy + 38, cx, cy + 43);
+      context.bezierCurveTo(cx - 38, cy + 38, cx - 36, cy - 5, cx, cy - 48);
+      context.fill();
+      context.stroke();
+    } else if (shape === 'flame') {
+      context.beginPath();
+      context.moveTo(cx, cy - 52);
+      context.bezierCurveTo(cx + 38, cy - 12, cx + 33, cy + 35, cx, cy + 45);
+      context.bezierCurveTo(cx - 32, cy + 27, cx - 31, cy - 2, cx - 6, cy - 22);
+      context.bezierCurveTo(cx - 5, cy - 7, cx + 8, cy + 2, cx + 1, cy + 18);
+      context.bezierCurveTo(cx + 20, cy + 2, cx + 15, cy - 26, cx, cy - 52);
+      context.fill();
+      context.stroke();
+    } else if (shape === 'snow') {
+      [-Math.PI / 2, -Math.PI / 6, Math.PI / 6].forEach((angle) => {
+        context.beginPath();
+        context.moveTo(cx + Math.cos(angle) * 46, cy + Math.sin(angle) * 46);
+        context.lineTo(cx - Math.cos(angle) * 46, cy - Math.sin(angle) * 46);
+        context.stroke();
+      });
+      context.beginPath();
+      context.arc(cx, cy, 10, 0, Math.PI * 2);
+      context.fill();
+    } else if (shape === 'sun') {
+      context.beginPath();
+      context.arc(cx, cy, 25, 0, Math.PI * 2);
+      context.fill();
+      context.stroke();
+      for (let i = 0; i < 8; i += 1) {
+        const angle = (Math.PI * 2 * i) / 8;
+        context.beginPath();
+        context.moveTo(cx + Math.cos(angle) * 38, cy + Math.sin(angle) * 38);
+        context.lineTo(cx + Math.cos(angle) * 51, cy + Math.sin(angle) * 51);
+        context.stroke();
+      }
+    } else if (shape === 'moon') {
+      context.beginPath();
+      context.arc(cx - 6, cy, 38, Math.PI * 0.35, Math.PI * 1.65);
+      context.bezierCurveTo(cx + 17, cy + 22, cx + 17, cy - 22, cx - 6, cy - 38);
+      context.fill();
+      context.stroke();
+    } else if (shape === 'bolt') {
+      context.beginPath();
+      context.moveTo(cx + 9, cy - 50);
+      context.lineTo(cx - 26, cy + 4);
+      context.lineTo(cx + 1, cy + 4);
+      context.lineTo(cx - 9, cy + 50);
+      context.lineTo(cx + 31, cy - 8);
+      context.lineTo(cx + 4, cy - 8);
+      context.closePath();
+      context.fill();
+      context.stroke();
+    } else if (shape === 'mountain') {
+      context.beginPath();
+      context.moveTo(cx - 46, cy + 40);
+      context.lineTo(cx - 9, cy - 42);
+      context.lineTo(cx + 11, cy - 5);
+      context.lineTo(cx + 28, cy - 29);
+      context.lineTo(cx + 50, cy + 40);
+      context.closePath();
+      context.fill();
+      context.stroke();
+    } else if (shape === 'venom') {
+      context.beginPath();
+      context.arc(cx, cy - 8, 34, 0, Math.PI * 2);
+      context.fill();
+      context.stroke();
+      context.beginPath();
+      context.moveTo(cx - 14, cy + 25);
+      context.lineTo(cx - 22, cy + 49);
+      context.moveTo(cx + 14, cy + 25);
+      context.lineTo(cx + 22, cy + 49);
+      context.moveTo(cx - 14, cy - 7);
+      context.lineTo(cx - 4, cy - 7);
+      context.moveTo(cx + 4, cy - 7);
+      context.lineTo(cx + 14, cy - 7);
+      context.stroke();
+    } else if (shape === 'wind') {
+      context.beginPath();
+      context.moveTo(cx - 46, cy - 18);
+      context.bezierCurveTo(cx - 12, cy - 42, cx + 32, cy - 30, cx + 28, cy - 4);
+      context.moveTo(cx - 48, cy + 8);
+      context.lineTo(cx + 45, cy + 8);
+      context.moveTo(cx - 26, cy + 33);
+      context.bezierCurveTo(cx + 0, cy + 48, cx + 34, cy + 40, cx + 29, cy + 20);
+      context.stroke();
+    } else {
+      context.font = '900 38px Lato, Arial, sans-serif';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillStyle = '#202321';
+      context.fillText(slot.slice(0, 2).toUpperCase(), cx, cy + 2);
+    }
+    context.restore();
+  };
+
+  const drawFilledIcon = (slot, cx) => {
+    if (slot === 'Tiempo') {
+      drawHourglassIcon(cx, iconStroke, 1);
+    } else if (slot === 'Mente') {
+      drawMindIcon(cx);
+    } else if (slot === 'Cuerpo') {
+      drawBodyIcon(cx);
+    } else if (slot === 'Hambre') {
+      drawHungerIcon(cx);
+    } else if (slot === 'Armadura_1') {
+      drawArmorIcon(cx);
+    } else if (slot === 'Recurso') {
+      drawResourceIcon(cx);
+    } else if (slot === 'Variable') {
+      drawVariableIcon(cx);
+    } else {
+      drawElementIcon(slot, cx);
+    }
+  };
+
+  context.save();
+  visibleSlots.forEach((slot, index) => {
+    const isFilled = Boolean(slot && slot !== EMPTY_SLOT);
     const cx = startX + index * (size + gap);
-    const cy = y + 56;
     context.beginPath();
     context.arc(cx, cy, size / 2, 0, Math.PI * 2);
-    context.fillStyle = 'rgba(244,230,207,0.68)';
+    context.fillStyle = isFilled ? 'rgba(244,230,207,0.78)' : 'rgba(32,35,33,0.08)';
     context.fill();
-    context.lineWidth = 5;
-    context.strokeStyle = index === 0 ? accent : 'rgba(32,35,33,0.45)';
+    context.lineWidth = isFilled ? 6 : 5;
+    context.strokeStyle = isFilled ? 'rgba(32,35,33,0.56)' : 'rgba(32,35,33,0.45)';
     context.stroke();
-    const icon = resourceImages[`consumption:${slot}`];
-    if (icon) {
-      context.drawImage(icon, cx - 34, cy - 34, 68, 68);
+
+    if (isFilled) {
+      drawFilledIcon(slot, cx);
+    } else {
+      drawHourglassIcon(cx, 'rgba(32,35,33,0.48)', 1);
     }
   });
   context.restore();
@@ -2540,12 +2905,14 @@ const drawCardCanvas = (
     );
     const label = blockLabels[blockId] || blockId;
 
-    drawContainerLabel(context, label, y, accent);
+    if (blockId !== 'consumption') {
+      drawContainerLabel(context, label, y, accent);
+    }
 
     if (blockId === 'range') {
       drawModularRange(context, y, alcance, accent);
     } else if (blockId === 'consumption') {
-      drawModularConsumption(context, y + 50, consumptionSlots, resourceImages, accent);
+      drawModularConsumption(context, y, consumptionSlots, resourceImages, accent);
     } else if (blockId === 'damage') {
       drawModularDamage(context, y + 46, diceIconImg, diceQty, diceType);
     } else if (blockId === 'traits') {
@@ -2645,7 +3012,9 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const [chargeSlots, setChargeSlots] = useState(DEFAULT_CHARGE_SLOTS);
   const [consumptionSlots, setConsumptionSlots] = useState(DEFAULT_CONSUMPTION_SLOTS);
   const [resourceMode, setResourceMode] = useState(RESOURCE_MODE_BOTH);
-  const [consumptionSlotTypes, setConsumptionSlotTypes] = useState(['consumption', 'consumption', 'consumption', 'consumption', 'consumption']);
+  const [consumptionSlotTypes, setConsumptionSlotTypes] = useState(
+    Array.from({ length: RESOURCE_SLOT_COUNT }, () => 'consumption'),
+  );
   const [minionAttributes, setMinionAttributes] = useState(DEFAULT_MINION_ATTRIBUTES);
   const [actionCenterMode, setActionCenterMode] = useState('dado'); // 'dado' | 'Mente' | 'Cuerpo' | 'Hambre'
 
@@ -2710,9 +3079,13 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   // Auto-detect if slot contains an element to sync UI dropdown toggle state
   useEffect(() => {
     setConsumptionSlotTypes((prev) => {
-      const next = [...prev];
+      const next = [...prev].slice(0, RESOURCE_SLOT_COUNT);
       let changed = false;
-      consumptionSlots.forEach((slot, index) => {
+      while (next.length < RESOURCE_SLOT_COUNT) {
+        next.push('consumption');
+        changed = true;
+      }
+      consumptionSlots.slice(0, RESOURCE_SLOT_COUNT).forEach((slot, index) => {
         const isElement = ELEMENT_TYPES.some((el) => el.id !== 'Ninguno' && el.id === slot);
         const expectedType = isElement ? 'element' : 'consumption';
         if (next[index] !== expectedType && slot !== '') {
@@ -3085,7 +3458,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     setChargeSlots(DEFAULT_CHARGE_SLOTS);
     setConsumptionSlots(DEFAULT_CONSUMPTION_SLOTS);
     setResourceMode(RESOURCE_MODE_BOTH);
-    setConsumptionSlotTypes(['consumption', 'consumption', 'consumption', 'consumption', 'consumption']);
+    setConsumptionSlotTypes(Array.from({ length: RESOURCE_SLOT_COUNT }, () => 'consumption'));
     setMinionAttributes(DEFAULT_MINION_ATTRIBUTES);
     setSelectedElement('Ninguno');
     setCustomColorActive(false);
@@ -3103,7 +3476,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
 
   const handleChargeSlotChange = (index, value) => {
     setChargeSlots((currentSlots) => {
-      const nextSlots = [...currentSlots];
+      const nextSlots = [...currentSlots].slice(0, RESOURCE_SLOT_COUNT);
       nextSlots[index] = value;
       return nextSlots;
     });
@@ -3111,7 +3484,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
 
   const handleConsumptionSlotChange = (index, value) => {
     setConsumptionSlots((currentSlots) => {
-      const nextSlots = [...currentSlots];
+      const nextSlots = [...currentSlots].slice(0, RESOURCE_SLOT_COUNT);
       nextSlots[index] = value;
       return nextSlots;
     });
@@ -3172,30 +3545,20 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       setResourceMode(RESOURCE_MODE_BOTH);
     }
     
-    // Ensure consumption slots are reset to length 5 if switching away from 'action'
+    // Ensure resource slots stay capped to the card layout count when switching type.
     if (typeId !== 'action') {
       setActionCenterMode('dado');
       setConsumptionSlots((currentSlots) => {
-        const nextSlots = [...currentSlots];
-        if (nextSlots.length !== 5) {
-          nextSlots.length = 5;
-          for (let i = 0; i < 5; i++) {
-            if (nextSlots[i] === undefined) {
-              nextSlots[i] = EMPTY_SLOT;
-            }
-          }
+        const nextSlots = [...currentSlots].slice(0, RESOURCE_SLOT_COUNT);
+        while (nextSlots.length < RESOURCE_SLOT_COUNT) {
+          nextSlots.push(EMPTY_SLOT);
         }
         return nextSlots;
       });
       setConsumptionSlotTypes((prevTypes) => {
-        const nextTypes = [...prevTypes];
-        if (nextTypes.length !== 5) {
-          nextTypes.length = 5;
-          for (let i = 0; i < 5; i++) {
-            if (nextTypes[i] === undefined) {
-              nextTypes[i] = 'consumption';
-            }
-          }
+        const nextTypes = [...prevTypes].slice(0, RESOURCE_SLOT_COUNT);
+        while (nextTypes.length < RESOURCE_SLOT_COUNT) {
+          nextTypes.push('consumption');
         }
         return nextTypes;
       });
@@ -3221,7 +3584,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     } else if (typeId === 'armor') {
       setVisibleTraitRows(4);
       setConsumptionSlots((currentSlots) => {
-        return currentSlots.map((slot, index) => (
+        return currentSlots.slice(0, RESOURCE_SLOT_COUNT).map((slot, index) => (
           index === 0 ? 'Armadura_1' : slot === 'Armadura_1' ? slot : EMPTY_SLOT
         ));
       });
@@ -3229,14 +3592,14 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       setVisibleTraitRows(0);
       setDiceQty((qty) => Math.min(6, qty));
       setConsumptionSlots((currentSlots) => {
-        const nextSlots = [...currentSlots];
+        const nextSlots = [...currentSlots].slice(0, RESOURCE_SLOT_COUNT);
         nextSlots[0] = 'Tiempo';
         return nextSlots;
       });
     } else if (typeId === 'weapon') {
       setVisibleTraitRows(3);
       setConsumptionSlots((currentSlots) => {
-        const nextSlots = [...currentSlots];
+        const nextSlots = [...currentSlots].slice(0, RESOURCE_SLOT_COUNT);
         nextSlots[0] = 'Tiempo';
         return nextSlots;
       });
@@ -4188,7 +4551,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                       Carga
                     </label>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      {chargeSlots.map((slot, index) => (
+                      {chargeSlots.slice(0, RESOURCE_SLOT_COUNT).map((slot, index) => (
                         <label
                           key={`charge-slot-${index}`}
                           className="grid grid-cols-[1.75rem_1fr] items-center border border-[#c8aa6e]/20 bg-[#09090b]/80"
@@ -4217,57 +4580,16 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
 
                 {usesConsumptionResources && (
                   <div className="space-y-3">
-                    <div className={`flex items-center justify-between gap-2 ${(cardType === 'action' || (cardType === 'trap' && resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY)) ? 'border-b border-[#c8aa6e]/10 pb-3' : ''}`}>
+                    <div className="flex items-center justify-between gap-2">
                       <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                         {cardType === 'weapon' ? 'Consumo' : cardType === 'armor' ? 'Armadura' : 'Consumo'}
                       </label>
-                      {(cardType === 'action' || (cardType === 'trap' && resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY)) && (
-                        <div className="flex gap-1">
-                          {[5, 6, 7].map((num) => {
-                            const isSelected = consumptionSlots.length === num;
-                            return (
-                              <button
-                                key={`action-slots-count-${num}`}
-                                type="button"
-                                onClick={() => {
-                                  setConsumptionSlots((currentSlots) => {
-                                    const nextSlots = [...currentSlots];
-                                    if (nextSlots.length < num) {
-                                      while (nextSlots.length < num) {
-                                        nextSlots.push(EMPTY_SLOT);
-                                      }
-                                    } else if (nextSlots.length > num) {
-                                      nextSlots.length = num;
-                                    }
-                                    return nextSlots;
-                                  });
-                                  setConsumptionSlotTypes((prevTypes) => {
-                                    const nextTypes = [...prevTypes];
-                                    if (nextTypes.length < num) {
-                                      while (nextTypes.length < num) {
-                                        nextTypes.push('consumption');
-                                      }
-                                    } else if (nextTypes.length > num) {
-                                      nextTypes.length = num;
-                                    }
-                                    return nextTypes;
-                                  });
-                                }}
-                                className={`h-7 w-10 border text-[10px] font-bold transition cursor-pointer flex items-center justify-center ${
-                                  isSelected
-                                    ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
-                                    : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
-                                }`}
-                              >
-                                {num}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
+                      <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                        4 slots
+                      </span>
                     </div>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {consumptionSlots.map((slot, index) => (
+                    {consumptionSlots.slice(0, RESOURCE_SLOT_COUNT).map((slot, index) => (
                       <div
                         key={`consumption-slot-${index}`}
                         className={`grid items-center border border-[#c8aa6e]/20 bg-[#09090b]/80 ${
@@ -4310,7 +4632,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                           <button
                             type="button"
                             onClick={() => {
-                              const nextTypes = [...consumptionSlotTypes];
+                              const nextTypes = [...consumptionSlotTypes].slice(0, RESOURCE_SLOT_COUNT);
                               const currentType = nextTypes[index] || 'consumption';
                               nextTypes[index] = currentType === 'consumption' ? 'element' : 'consumption';
                               setConsumptionSlotTypes(nextTypes);

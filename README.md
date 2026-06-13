@@ -65,7 +65,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Panel de detalle interactivo** al pulsar una clase, con pestañas de Resumen, Inspiración (Hitos), Nivel de Campeón, Reglas y Equipación.
 - **Acceso directo** desde el menú Máster mediante la nueva opción «Lista de Clases».
 - **Constructor de cartas**: la antigua pestaña «Tienda» de la ficha pasa a ser «Cartas» y abre un canvas para previsualizar una carta con textos guía, escribir su nombre, descripción y texto narrativo, subir una imagen de cabecera, definir rasgos y configurar dados, alcance, tipo de combate, cargas y consumos con ranuras táctiles; sus iconos propios cargan en WebP optimizado y el Máster también dispone de acceso directo desde su menú principal.
-- **Constructor de cartas por contenedores**: el diseño de carta deja de depender de fondos completos por tipo y pasa a usar una plantilla generada en canvas cuyo marco ocupa todo el tamaño exportable, con cabecera de imagen/título y contenedores reordenables para alcance, consumo, daño, rasgos, tipo de combate y descripción.
+- **Constructor de cartas por contenedores**: el diseño de carta deja de depender de fondos completos por tipo y pasa a usar una plantilla generada en canvas cuyo marco ocupa todo el tamaño exportable, con cabecera de imagen/título, zona beige con textura de papel y contenedores reordenables para alcance, consumo, daño, rasgos, tipo de combate y descripción; carga y consumo usan cuatro slots fijos con estados vacíos visibles e iconos vectoriales dibujados en canvas para tiempo, mente, cuerpo, hambre, armadura, recurso y variable.
 - **Tipos de arma simplificados en cartas**: el constructor de cartas usa solo tres iconos WebP para `Cuerpo a cuerpo`, `Distancia` y `Magia`, reemplazando el catálogo anterior de iconos de armas específicas.
 - **Recursos en trampas y minions**: las cartas de `Trampa` y `Minion` pueden usar cargas y consumos como armas y armaduras, con un modo de solo carga que centra el raíl de cargas en el canvas.
 - **Dado Variable y Elementos en Armas**:
@@ -2316,6 +2316,13 @@ Guía rápida: ver `docs/Minimapa.md`.
   - **Esquina superior derecha**: Se reemplazó el icono y estilo de la papelera clásica por un botón de cierre limpio (`FiX`) del mismo tamaño exacto y diseño circular translúcido, unificándolo con la línea estética general del resto de la aplicación.
   - **Limpieza del Canvas**: Se eliminaron las barras de herramientas y etiquetas inferiores de la carta, permitiendo que la ilustración base y los textos ocupen todo el espacio visible sin recuadros redundantes.
 - **Desactivación inteligente de Tilt**: El efecto de rotación 3D se deshabilita temporalmente sobre la tarjeta que se está arrastrando en ese instante, previniendo distorsiones angulares mientras se desplaza bajo el cursor.
+
+## Novedades: Centrado y Alineación de la Regla de Alcance en el Constructor de Cartas (v2.4.50)
+
+- **Eliminación del título redundante**: Se quitó la etiqueta del contenedor de alcance (el título "ALCANCE") en el canvas de previsualización para despejar el espacio superior.
+- **Reducción del padding superior inicial**: Se ajustó la coordenada inicial de renderizado de los contenedores (`y`) a `805` (antes `835`), eliminando el exceso de espacio vacío entre la cabecera de la carta y el primer contenedor.
+- **Optimización de altura y márgenes del bloque**: Se estableció la altura del contenedor de alcance en `290px` (y la regla a `trackY = y + 130`), dejando suficiente espacio libre arriba y abajo para que las líneas divisorias respiren y no queden demasiado pegadas al contenido.
+- **Alineación horizontal simétrica**: Se desplazaron las coordenadas del raíl (`startX` a `370` y `endX` a `1518`), centrando la regla en el eje `X = 944` para que el círculo de "Intermedio" se alinee de manera idéntica con los rombos/diamantes de las líneas divisorias.
 
 
 
