@@ -2707,8 +2707,9 @@ const drawModularChargeFooter = (context, chargeSlots, resourceImages = {}, acce
     const x = centers[index];
     const size = sizes[index];
     
-    // Determine the color corresponding to each charge
-    const slotColor = slot === 'Hambre' ? '#3d7d45'
+    // Determine the color corresponding to each charge (slot 3 is always the accent decorator)
+    const slotColor = index === 2 ? accent
+                    : slot === 'Hambre' ? '#3d7d45'
                     : slot === 'Cuerpo' ? '#a93832'
                     : slot === 'Mente' ? '#2f6fb3'
                     : accent;
@@ -5621,29 +5622,38 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                         </span>
                       </div>
                       <div className="grid grid-cols-5 gap-1.5">
-                        {activeChargeSlots.map((slot, index) => (
-                          <label
-                            key={`${container.key}-charge-slot-${index}`}
-                            className="space-y-1"
-                          >
-                            <span className="block text-center text-[9px] font-black uppercase tracking-[0.1em] text-slate-500">
-                              {index + 1}
-                            </span>
-                            <select
-                              value={slot}
-                              onChange={(event) => handleChargeSlotChange(index, event.target.value)}
-                              className="h-8 w-full min-w-0 border border-[#c8aa6e]/20 bg-[#09090b]/80 px-1 text-[10px] font-bold uppercase text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70"
-                              aria-label={`Carga slot ${index + 1}`}
+                        {activeChargeSlots.map((slot, index) => {
+                          const isSeparator = index === 2;
+                          return (
+                            <div
+                              key={`${container.key}-charge-slot-${index}`}
+                              className="space-y-1"
                             >
-                              <option value="">Vacío</option>
-                              {CHARGE_TYPES.map((option) => (
-                                <option key={`${container.key}-charge-${index}-${option.id}`} value={option.id}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        ))}
+                              <span className="block text-center text-[9px] font-black uppercase tracking-[0.1em] text-slate-500">
+                                {index + 1}
+                              </span>
+                              {isSeparator ? (
+                                <div className="h-8 w-full flex items-center justify-center border border-dashed border-[#c8aa6e]/15 bg-[#09090b]/40 px-1 text-[9px] font-bold uppercase text-slate-500 rounded select-none">
+                                  Divisor
+                                </div>
+                              ) : (
+                                <select
+                                  value={slot}
+                                  onChange={(event) => handleChargeSlotChange(index, event.target.value)}
+                                  className="h-8 w-full min-w-0 border border-[#c8aa6e]/20 bg-[#09090b]/80 px-1 text-[10px] font-bold uppercase text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70"
+                                  aria-label={`Carga slot ${index + 1}`}
+                                >
+                                  <option value="">Vacío</option>
+                                  {CHARGE_TYPES.map((option) => (
+                                    <option key={`${container.key}-charge-${index}-${option.id}`} value={option.id}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );
