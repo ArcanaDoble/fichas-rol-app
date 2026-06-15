@@ -2425,6 +2425,11 @@ Guía rápida: ver `docs/Minimapa.md`.
 - **Optimización de altura y márgenes del bloque**: Se estableció la altura del contenedor de alcance en `290px` (y la regla a `trackY = y + 130`), dejando suficiente espacio libre arriba y abajo para que las líneas divisorias respiren y no queden demasiado pegadas al contenido.
 - **Alineación horizontal simétrica**: Se desplazaron las coordenadas del raíl (`startX` a `370` y `endX` a `1518`), centrando la regla en el eje `X = 944` para que el círculo de "Intermedio" se alinee de manera idéntica con los rombos/diamantes de las líneas divisorias.
 
+## Novedades: Cartas de Acciones en el Constructor
 
+- **Tipos simplificados**: El constructor queda reducido a dos tipos de carta: `General` y `Acciones`.
+- **Diseño dedicado**: `General` mantiene el canvas modular editable y `Acciones` usa la plantilla visual específica de acciones.
+- **Acciones rápidas a pesadas**: El diseño dedicado añade controles para `Rápida`, `Ligera`, `Estándar` y `Pesada`, generando automáticamente cartas de coste `1` a `4`.
+- **Plantilla visual dedicada**: La plantilla de acciones recrea el estilo de referencia con marco negro, pergamino envejecido, líneas y rombos de acento, número central, relojes de arena proporcionales al coste y texto inferior editable.
 
 

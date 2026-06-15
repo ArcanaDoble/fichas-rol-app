@@ -43,6 +43,7 @@ import { uploadFile } from '../utils/storage';
 
 // Card categories mapping
 const CARD_TYPES = [
+    { id: 'general', label: 'General', color: 'text-[#c8aa6e] bg-[#c8aa6e]/10 border-[#c8aa6e]/35', icon: FiLayers },
     { id: 'action', label: 'Acción', color: 'text-red-400 bg-red-950/40 border-red-800/40', icon: Sword },
     { id: 'attribute', label: 'Atributo', color: 'text-amber-400 bg-amber-950/40 border-amber-800/40', icon: Heart },
     { id: 'trap', label: 'Trampa', color: 'text-purple-400 bg-purple-950/40 border-purple-800/40', icon: Skull },
