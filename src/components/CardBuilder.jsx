@@ -3620,7 +3620,7 @@ const drawActionCostAssets = (context, cost, numberImg, hourglassImg) => {
   const centerY = 1240;
   const numberHeight = 874;
   const numberWidth = numberHeight * ((numberImg.naturalWidth || numberImg.width) / (numberImg.naturalHeight || numberImg.height));
-  const hourglassHeight = (cost === 1 || cost === 2) ? 702 : cost === 3 ? 500 : 400;
+  const hourglassHeight = (cost === 1 || cost === 2) ? 702 : cost === 3 ? 520 : 420;
   const hourglassWidth = hourglassHeight * ((hourglassImg.naturalWidth || hourglassImg.width) / (hourglassImg.naturalHeight || hourglassImg.height));
   const hourglassGap = cost === 1 ? 0 : -100;
   const numberHourglassGap = -120;
@@ -3634,8 +3634,7 @@ const drawActionCostAssets = (context, cost, numberImg, hourglassImg) => {
   context.drawImage(numberImg, startX, centerY - numberHeight / 2, numberWidth, numberHeight);
   for (let index = 0; index < cost; index += 1) {
     const x = hourglassStartX + index * (hourglassWidth + hourglassGap);
-    // Align all clocks on the same bottom line (y = 1637)
-    const yOffset = 1637 - centerY - hourglassHeight / 2;
+    const yOffset = 46;
     context.drawImage(hourglassImg, x, centerY - hourglassHeight / 2 + yOffset, hourglassWidth, hourglassHeight);
   }
   context.restore();
