@@ -2451,6 +2451,8 @@ Guía rápida: ver `docs/Minimapa.md`.
   - Acción Pesada (Coste 4) -> `4.webp`
   - Acción Rápida (Coste 1) -> Mantiene el uso de `numero.webp`.
 - **Estandarización de posición del número**: Todos los números de coste (`1`, `2`, `3`, `4`) se dibujan en la misma posición horizontal absoluta (`startX = 400`), previniendo desvíos o saltos del dígito principal.
-- **Alineación y escalado de relojes**: El primer reloj para todas las velocidades se posiciona exactamente en el mismo sitio relativo al número (`numberHourglassGap = -120`). El tamaño de los relojes se mantiene similar al de coste 2 (`702`), siendo ligeramente inferior en coste 3 (`520`) y un poco más en coste 4 (`420`) para que quepan perfectamente en una sola línea horizontal con un solapamiento uniforme (`hourglassGap = -100`), estando todos los relojes alineados en el mismo centro vertical absoluto (`yOffset = 46`) que las velocidades de coste 1 y 2.
+- **Alineación y escalado de relojes**:
+  - **Eje horizontal y solapamiento**: Para costes 1, 2 y 3, el primer reloj se mantiene a un gap relativo al número de `numberHourglassGap = -120`. Para coste 4, el grupo se desplaza un poco a la derecha (`numberHourglassGap = -90`). Todos los relojes mantienen un gap de solapamiento uniforme de `-100` entre sí.
+  - **Eje vertical y tamaño**: Los relojes tienen un tamaño proporcional al de coste 2 (`702`): en coste 3 miden `520` de alto y en coste 4 miden `420`. Todos se centran verticalmente en `yOffset = 46`, a excepción de coste 3, donde se elevan un poco (`yOffset = 20`) según lo requerido.
 - **Pre-carga optimizada**: Se añadieron los recursos `2.webp`, `3.webp` y `4.webp` al sistema de preloading asíncrono en segundo plano, evitando cualquier parpadeo de carga visual al alternar dinámicamente entre las distintas velocidades de acción.
 

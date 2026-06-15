@@ -3623,7 +3623,7 @@ const drawActionCostAssets = (context, cost, numberImg, hourglassImg) => {
   const hourglassHeight = (cost === 1 || cost === 2) ? 702 : cost === 3 ? 520 : 420;
   const hourglassWidth = hourglassHeight * ((hourglassImg.naturalWidth || hourglassImg.width) / (hourglassImg.naturalHeight || hourglassImg.height));
   const hourglassGap = cost === 1 ? 0 : -100;
-  const numberHourglassGap = -120;
+  const numberHourglassGap = cost === 4 ? -90 : -120;
 
   const startX = 400;
   const hourglassStartX = startX + numberWidth + numberHourglassGap;
@@ -3634,7 +3634,7 @@ const drawActionCostAssets = (context, cost, numberImg, hourglassImg) => {
   context.drawImage(numberImg, startX, centerY - numberHeight / 2, numberWidth, numberHeight);
   for (let index = 0; index < cost; index += 1) {
     const x = hourglassStartX + index * (hourglassWidth + hourglassGap);
-    const yOffset = 46;
+    const yOffset = cost === 3 ? 20 : 46;
     context.drawImage(hourglassImg, x, centerY - hourglassHeight / 2 + yOffset, hourglassWidth, hourglassHeight);
   }
   context.restore();
