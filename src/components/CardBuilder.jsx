@@ -3565,10 +3565,10 @@ const drawModularDescription = (context, y, height, description, hyphenate, sing
 };
 
 const fitActionTitleFont = (context, title) => {
-  let size = 156;
+  let size = 168;
   context.save();
   while (size > 84) {
-    context.font = `900 ${size}px "Arial Narrow", Impact, Lato, Arial, sans-serif`;
+    context.font = `400 ${size}px "Bebas Neue", "Arial Narrow", Impact, Lato, Arial, sans-serif`;
     if (context.measureText(title).width <= 1200) break;
     size -= 4;
   }
@@ -3614,6 +3614,32 @@ const drawActionBaseImage = (context, actionBaseImg) => {
   );
 };
 
+const drawActionCostAssets = (context, cost, numberImg, hourglassImg) => {
+  if (!numberImg || !hourglassImg) return;
+
+  const centerY = 1240;
+  const numberHeight = 760;
+  const numberWidth = numberHeight * ((numberImg.naturalWidth || numberImg.width) / (numberImg.naturalHeight || numberImg.height));
+  const hourglassHeight = cost === 1 ? 390 : cost === 2 ? 310 : 250;
+  const hourglassWidth = hourglassHeight * ((hourglassImg.naturalWidth || hourglassImg.width) / (hourglassImg.naturalHeight || hourglassImg.height));
+  const hourglassGap = cost === 1 ? 0 : 28;
+  const numberHourglassGap = cost === 1 ? 100 : 76;
+  const hourglassGroupWidth = cost * hourglassWidth + (cost - 1) * hourglassGap;
+  const totalWidth = numberWidth + numberHourglassGap + hourglassGroupWidth;
+  const startX = 944 - totalWidth / 2;
+  const hourglassStartX = startX + numberWidth + numberHourglassGap;
+
+  context.save();
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(numberImg, startX, centerY - numberHeight / 2, numberWidth, numberHeight);
+  for (let index = 0; index < cost; index += 1) {
+    const x = hourglassStartX + index * (hourglassWidth + hourglassGap);
+    context.drawImage(hourglassImg, x, centerY - hourglassHeight / 2, hourglassWidth, hourglassHeight);
+  }
+  context.restore();
+};
+
 const drawActionTimingCard = (
   context,
   actionSpeedId,
@@ -3621,6 +3647,8 @@ const drawActionTimingCard = (
   customColorActive,
   customColor,
   actionBaseImg = null,
+  actionNumberImg = null,
+  actionHourglassImg = null,
 ) => {
   const speed = ACTION_SPEED_OPTIONS.find((option) => option.id === actionSpeedId) || ACTION_SPEED_OPTIONS[0];
   const accent = customColorActive && customColor ? customColor : '#c46f1f';
@@ -3659,47 +3687,36 @@ const drawActionTimingCard = (
   const titleSize = fitActionTitleFont(context, speed.title);
   context.save();
   if ('letterSpacing' in context) context.letterSpacing = '0px';
-  context.font = `900 ${titleSize}px "Arial Narrow", Impact, Lato, Arial, sans-serif`;
+  context.font = `400 ${titleSize}px "Bebas Neue", "Arial Narrow", Impact, Lato, Arial, sans-serif`;
   context.textAlign = 'center';
   context.textBaseline = 'middle';
-  context.lineWidth = Math.max(3, titleSize * 0.018);
-  context.strokeStyle = 'rgba(32,35,33,0.42)';
   context.fillStyle = '#202321';
   context.shadowColor = 'rgba(32,35,33,0.16)';
   context.shadowBlur = 3;
-  context.strokeText(speed.title, 944, 520);
   context.fillText(speed.title, 944, 520);
   context.restore();
 
   drawActionOrnamentLine(context, 944, 690, 1280, accent, 30);
-  context.save();
-  context.strokeStyle = accent;
-  context.lineWidth = 4;
-  context.beginPath();
-  context.moveTo(902, 690);
-  context.quadraticCurveTo(936, 690, 944, 746);
-  context.quadraticCurveTo(952, 690, 986, 690);
-  context.stroke();
-  context.restore();
+
+  drawActionCostAssets(context, speed.cost, actionNumberImg, actionHourglassImg);
 
   drawActionOrnamentLine(context, 944, 1990, 1140, accent, 30);
 
   context.save();
-  context.font = '400 64px Lato, Arial, sans-serif';
+  context.font = '700 72px "Oswald", Lato, Arial, sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillStyle = '#202321';
+  context.fillText(`${speed.cost} ${speed.cost === 1 ? 'TIEMPO' : 'TIEMPOS'}`, 944, 1880);
+  context.restore();
+
+  context.save();
+  context.font = '400 64px "Roboto Condensed", Lato, Arial, sans-serif';
   context.textAlign = 'center';
   context.textBaseline = 'middle';
   context.fillStyle = '#202321';
   const bodyText = description.trim() || speed.description;
   context.fillText(bodyText, 944, 2152, 1240);
-  context.restore();
-
-  context.save();
-  context.translate(944, 2355);
-  drawSectionDiamond(context, 0, 0, 82, accent);
-  context.strokeStyle = '#f3e6cf';
-  context.lineWidth = 10;
-  context.strokeRect(-24, -24, 48, 48);
-  drawSectionDiamond(context, 0, 0, 28, '#f3e6cf');
   context.restore();
 
   context.restore();
@@ -3791,6 +3808,8 @@ const drawCardCanvas = (
   diceIconImages = {},
   actionSpeedId = 'rapida',
   actionBaseImg = null,
+  actionNumberImg = null,
+  actionHourglassImg = null,
 ) => {
   const targetWidth = Math.max(1, Math.round(CANVAS_WIDTH * renderScale));
   const targetHeight = Math.max(1, Math.round(CANVAS_HEIGHT * renderScale));
@@ -3822,6 +3841,8 @@ const drawCardCanvas = (
       customColorActive,
       customColor,
       actionBaseImg,
+      actionNumberImg,
+      actionHourglassImg,
     );
     context.restore();
     return;
@@ -4177,7 +4198,12 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     if (document.fonts?.load) {
       try {
         if (!fontLoadPromiseRef.current) {
-          fontLoadPromiseRef.current = document.fonts.load('700 96px Cinzel');
+          fontLoadPromiseRef.current = Promise.all([
+            document.fonts.load('700 96px Cinzel'),
+            document.fonts.load('400 168px "Bebas Neue"'),
+            document.fonts.load('700 72px Oswald'),
+            document.fonts.load('400 64px "Roboto Condensed"'),
+          ]);
         }
         await fontLoadPromiseRef.current;
       } catch {
@@ -4203,11 +4229,18 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     }
 
     let actionBaseImg = null;
+    let actionNumberImg = null;
+    let actionHourglassImg = null;
     if (cardType === 'actions') {
       try {
-        actionBaseImg = await loadCachedImage(`${process.env.PUBLIC_URL || ''}/interfaz/base.png`);
+        const actionAssetBase = `${process.env.PUBLIC_URL || ''}/interfaz/acciones`;
+        [actionBaseImg, actionNumberImg, actionHourglassImg] = await Promise.all([
+          loadCachedImage(`${process.env.PUBLIC_URL || ''}/interfaz/base.png`),
+          loadCachedImage(`${actionAssetBase}/numero.webp`),
+          loadCachedImage(`${actionAssetBase}/reloj.webp`),
+        ]);
       } catch (e) {
-        console.error("Could not load action base image:", e);
+        console.error("Could not load action card assets:", e);
       }
     }
 
@@ -4383,6 +4416,8 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       diceIconImages,
       actionSpeedId,
       actionBaseImg,
+      actionNumberImg,
+      actionHourglassImg,
     );
 
     if (updateStatus) setImageStatus('ready');
@@ -4418,6 +4453,8 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       const commonSources = [
         `${process.env.PUBLIC_URL || ''}/interfaz/stardust.png`,
         `${process.env.PUBLIC_URL || ''}/interfaz/base.png`,
+        `${process.env.PUBLIC_URL || ''}/interfaz/acciones/numero.webp`,
+        `${process.env.PUBLIC_URL || ''}/interfaz/acciones/reloj.webp`,
         ...WEAPON_TYPES.map((type) => getWeaponTypeIconSrc(type)),
         ...['D4', 'D6', 'D8', 'D10', 'D12', 'DX'].map((type) => `${process.env.PUBLIC_URL || ''}/dados/cartas/${type}.webp`),
         ...CHARGE_TYPES.map((option) => `${process.env.PUBLIC_URL || ''}${option.src}`),
@@ -5466,7 +5503,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     <div className="h-screen max-h-screen overflow-y-auto bg-[#09090b] text-[#e2e8f0] font-['Lato'] selection:bg-[#c8aa6e]/30 selection:text-[#f0e6d2] custom-scrollbar">
       <style>
         {`
-          @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700;1,900&display=swap');
+          @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cinzel:wght@400;600;700;900&family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700;1,900&family=Oswald:wght@700&family=Roboto+Condensed:wght@400&display=swap');
           
           /* Hide browser native up/down number input spinner arrows */
           input[type="number"]::-webkit-outer-spin-button,

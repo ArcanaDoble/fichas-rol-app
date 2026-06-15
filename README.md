@@ -2432,3 +2432,5 @@ Guía rápida: ver `docs/Minimapa.md`.
 - **Acciones rápidas a pesadas**: El diseño dedicado añade controles para `Rápida`, `Ligera`, `Estándar` y `Pesada`, generando automáticamente cartas de coste `1` a `4`.
 - **Plantilla visual dedicada**: La plantilla de acciones usa una base completa con marco negro y pergamino envejecido, manteniendo por código el título, las líneas y rombos de acento, el selector de tipo de acción y el texto inferior editable.
 - **Base integrada para acciones**: Las cartas de `Acciones` usan `public/interfaz/base.png` como fondo completo, ajustado al rectángulo visible real del canvas (`1888x2624`), equivalente al ratio de las cartas exportadas (`737x1024`).
+- **Tipografías de acciones**: El título usa `Bebas Neue Regular`, el texto de tiempo usa `Oswald Bold` y el texto inferior usa `Roboto Condensed Regular`.
+- **Coste visual de acciones**: El coste central usa `public/interfaz/acciones/numero.webp` y `public/interfaz/acciones/reloj.webp`, escalados y agrupados según el coste de la acción.
