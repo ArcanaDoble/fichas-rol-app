@@ -3620,20 +3620,12 @@ const drawActionCostAssets = (context, cost, numberImg, hourglassImg) => {
   const centerY = 1240;
   const numberHeight = 874;
   const numberWidth = numberHeight * ((numberImg.naturalWidth || numberImg.width) / (numberImg.naturalHeight || numberImg.height));
-  const hourglassHeight = (cost === 1 || cost === 2) ? 702 : 288;
+  const hourglassHeight = (cost === 1 || cost === 2) ? 702 : 230;
   const hourglassWidth = hourglassHeight * ((hourglassImg.naturalWidth || hourglassImg.width) / (hourglassImg.naturalHeight || hourglassImg.height));
-  const hourglassGap = cost === 1 ? 0 : cost === 2 ? -100 : 28;
-  const numberHourglassGap = (cost === 1 || cost === 2) ? -120 : 87;
+  const hourglassGap = cost === 1 ? 0 : cost === 2 ? -100 : cost === 3 ? -20 : -30;
+  const numberHourglassGap = (cost === 1 || cost === 2) ? -120 : -50;
 
-  let startX;
-  if (cost === 1 || cost === 2) {
-    startX = 400;
-  } else {
-    const hourglassGroupWidth = cost * hourglassWidth + (cost - 1) * hourglassGap;
-    const totalWidth = numberWidth + numberHourglassGap + hourglassGroupWidth;
-    startX = 944 - totalWidth / 2;
-  }
-
+  const startX = 400;
   const hourglassStartX = startX + numberWidth + numberHourglassGap;
 
   context.save();
@@ -3642,7 +3634,8 @@ const drawActionCostAssets = (context, cost, numberImg, hourglassImg) => {
   context.drawImage(numberImg, startX, centerY - numberHeight / 2, numberWidth, numberHeight);
   for (let index = 0; index < cost; index += 1) {
     const x = hourglassStartX + index * (hourglassWidth + hourglassGap);
-    const yOffset = (cost === 1 || cost === 2) ? 46 : 0;
+    // Align all clocks on the same bottom line (y = 1637)
+    const yOffset = 1637 - centerY - hourglassHeight / 2;
     context.drawImage(hourglassImg, x, centerY - hourglassHeight / 2 + yOffset, hourglassWidth, hourglassHeight);
   }
   context.restore();

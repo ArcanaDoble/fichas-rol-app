@@ -2450,5 +2450,7 @@ Guía rápida: ver `docs/Minimapa.md`.
   - Acción Estándar (Coste 3) -> `3.webp`
   - Acción Pesada (Coste 4) -> `4.webp`
   - Acción Rápida (Coste 1) -> Mantiene el uso de `numero.webp`.
+- **Estandarización de posición del número**: Todos los números de coste (`1`, `2`, `3`, `4`) se dibujan en la misma posición horizontal absoluta (`startX = 400`), previniendo desvíos o saltos del dígito principal.
+- **Alineación y escalado de relojes**: Para velocidades Estándar (coste 3) y Pesada (coste 4), la altura de los relojes de arena se reduce a 230 unidades y se alinean con precisión matemática en la misma base visual (`y = 1637`) que los de coste 1 y 2, ordenándose de forma compacta y sin riesgo de desbordamiento lateral.
 - **Pre-carga optimizada**: Se añadieron los recursos `2.webp`, `3.webp` y `4.webp` al sistema de preloading asíncrono en segundo plano, evitando cualquier parpadeo de carga visual al alternar dinámicamente entre las distintas velocidades de acción.
 
