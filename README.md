@@ -2442,3 +2442,13 @@ Guía rápida: ver `docs/Minimapa.md`.
 - **Línea del título más corta**: Se recortó la longitud de la línea divisora inferior del título (a 1015 de ancho), haciéndola coincidir simétricamente con el tamaño de la línea superior del indicador de tiempo.
 - **Centrado del indicador de tiempo**: El texto de tiempo (`X TIEMPO`) y sus chevrons se desplazaron verticalmente a `y = 1875`, quedando exactamente equidistantes y centrados entre la línea divisora superior (`y = 1760`) y la inferior (`y = 1990`).
 - **Punteros hacia dentro**: Se invirtieron las direcciones de los chevrons laterales del indicador de tiempo para que apunten hacia dentro (`> X TIEMPOS <`) en lugar de hacia fuera.
+
+## Novedades: Números de Coste Dinámicos en Cartas de Acción (v2.4.51)
+
+- **Números de coste dedicados**: Se sustituyó el número estático por el renderizado dinámico de los dígitos correspondientes para cada tipo de acción:
+  - Acción Ligera (Coste 2) -> `2.webp`
+  - Acción Estándar (Coste 3) -> `3.webp`
+  - Acción Pesada (Coste 4) -> `4.webp`
+  - Acción Rápida (Coste 1) -> Mantiene el uso de `numero.webp`.
+- **Pre-carga optimizada**: Se añadieron los recursos `2.webp`, `3.webp` y `4.webp` al sistema de preloading asíncrono en segundo plano, evitando cualquier parpadeo de carga visual al alternar dinámicamente entre las distintas velocidades de acción.
+

@@ -4269,10 +4269,16 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     let actionHourglassImg = null;
     if (cardType === 'actions') {
       try {
+        const speed = ACTION_SPEED_OPTIONS.find((option) => option.id === actionSpeedId) || ACTION_SPEED_OPTIONS[0];
+        let numberImgName = 'numero.webp';
+        if (speed.cost === 2) numberImgName = '2.webp';
+        else if (speed.cost === 3) numberImgName = '3.webp';
+        else if (speed.cost === 4) numberImgName = '4.webp';
+
         const actionAssetBase = `${process.env.PUBLIC_URL || ''}/interfaz/acciones`;
         [actionBaseImg, actionNumberImg, actionHourglassImg] = await Promise.all([
           loadCachedImage(`${process.env.PUBLIC_URL || ''}/interfaz/base.png`),
-          loadCachedImage(`${actionAssetBase}/numero.webp`),
+          loadCachedImage(`${actionAssetBase}/${numberImgName}`),
           loadCachedImage(`${actionAssetBase}/reloj.webp`),
         ]);
       } catch (e) {
@@ -4490,6 +4496,9 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
         `${process.env.PUBLIC_URL || ''}/interfaz/stardust.png`,
         `${process.env.PUBLIC_URL || ''}/interfaz/base.png`,
         `${process.env.PUBLIC_URL || ''}/interfaz/acciones/numero.webp`,
+        `${process.env.PUBLIC_URL || ''}/interfaz/acciones/2.webp`,
+        `${process.env.PUBLIC_URL || ''}/interfaz/acciones/3.webp`,
+        `${process.env.PUBLIC_URL || ''}/interfaz/acciones/4.webp`,
         `${process.env.PUBLIC_URL || ''}/interfaz/acciones/reloj.webp`,
         ...WEAPON_TYPES.map((type) => getWeaponTypeIconSrc(type)),
         ...['D4', 'D6', 'D8', 'D10', 'D12', 'DX'].map((type) => `${process.env.PUBLIC_URL || ''}/dados/cartas/${type}.webp`),
