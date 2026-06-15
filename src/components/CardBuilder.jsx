@@ -3565,7 +3565,7 @@ const drawModularDescription = (context, y, height, description, hyphenate, sing
 };
 
 const fitActionTitleFont = (context, title) => {
-  let size = 168;
+  let size = 200;
   context.save();
   while (size > 84) {
     context.font = `400 ${size}px "Bebas Neue", "Arial Narrow", Impact, Lato, Arial, sans-serif`;
@@ -3618,15 +3618,22 @@ const drawActionCostAssets = (context, cost, numberImg, hourglassImg) => {
   if (!numberImg || !hourglassImg) return;
 
   const centerY = 1240;
-  const numberHeight = 760;
+  const numberHeight = 874;
   const numberWidth = numberHeight * ((numberImg.naturalWidth || numberImg.width) / (numberImg.naturalHeight || numberImg.height));
-  const hourglassHeight = cost === 1 ? 390 : cost === 2 ? 310 : 250;
+  const hourglassHeight = (cost === 1 || cost === 2) ? 702 : 288;
   const hourglassWidth = hourglassHeight * ((hourglassImg.naturalWidth || hourglassImg.width) / (hourglassImg.naturalHeight || hourglassImg.height));
-  const hourglassGap = cost === 1 ? 0 : 28;
-  const numberHourglassGap = cost === 1 ? 100 : 76;
-  const hourglassGroupWidth = cost * hourglassWidth + (cost - 1) * hourglassGap;
-  const totalWidth = numberWidth + numberHourglassGap + hourglassGroupWidth;
-  const startX = 944 - totalWidth / 2;
+  const hourglassGap = cost === 1 ? 0 : cost === 2 ? -100 : 28;
+  const numberHourglassGap = (cost === 1 || cost === 2) ? -120 : 87;
+
+  let startX;
+  if (cost === 1 || cost === 2) {
+    startX = 400;
+  } else {
+    const hourglassGroupWidth = cost * hourglassWidth + (cost - 1) * hourglassGap;
+    const totalWidth = numberWidth + numberHourglassGap + hourglassGroupWidth;
+    startX = 944 - totalWidth / 2;
+  }
+
   const hourglassStartX = startX + numberWidth + numberHourglassGap;
 
   context.save();
@@ -3635,8 +3642,28 @@ const drawActionCostAssets = (context, cost, numberImg, hourglassImg) => {
   context.drawImage(numberImg, startX, centerY - numberHeight / 2, numberWidth, numberHeight);
   for (let index = 0; index < cost; index += 1) {
     const x = hourglassStartX + index * (hourglassWidth + hourglassGap);
-    context.drawImage(hourglassImg, x, centerY - hourglassHeight / 2, hourglassWidth, hourglassHeight);
+    const yOffset = (cost === 1 || cost === 2) ? 46 : 0;
+    context.drawImage(hourglassImg, x, centerY - hourglassHeight / 2 + yOffset, hourglassWidth, hourglassHeight);
   }
+  context.restore();
+};
+
+const drawActionTimeChevrons = (context, centerX, centerY, accent, textWidth = 500) => {
+  context.save();
+  context.fillStyle = accent;
+  const drawChevron = (x, direction = 1) => {
+    context.beginPath();
+    context.moveTo(x, centerY);
+    context.lineTo(x + direction * 34, centerY - 34);
+    context.lineTo(x + direction * 20, centerY);
+    context.lineTo(x + direction * 34, centerY + 34);
+    context.closePath();
+    context.fill();
+  };
+  const halfWidth = textWidth / 2;
+  const padding = 50;
+  drawChevron(centerX - halfWidth - padding, -1);
+  drawChevron(centerX + halfWidth + padding, 1);
   context.restore();
 };
 
@@ -3682,7 +3709,7 @@ const drawActionTimingCard = (
     context.fill();
   }
 
-  drawActionOrnamentLine(context, 944, 330, 1280, accent, 42);
+  drawActionOrnamentLine(context, 944, 330, 1280, accent, 30);
 
   const titleSize = fitActionTitleFont(context, speed.title);
   context.save();
@@ -3693,13 +3720,14 @@ const drawActionTimingCard = (
   context.fillStyle = '#202321';
   context.shadowColor = 'rgba(32,35,33,0.16)';
   context.shadowBlur = 3;
-  context.fillText(speed.title, 944, 520);
+  context.fillText(speed.title, 944, 540);
   context.restore();
 
-  drawActionOrnamentLine(context, 944, 690, 1280, accent, 30);
+  drawActionOrnamentLine(context, 944, 690, 1015, accent, 30);
 
   drawActionCostAssets(context, speed.cost, actionNumberImg, actionHourglassImg);
 
+  drawActionOrnamentLine(context, 944, 1760, 1015, accent, 30);
   drawActionOrnamentLine(context, 944, 1990, 1140, accent, 30);
 
   context.save();
@@ -3707,8 +3735,16 @@ const drawActionTimingCard = (
   context.textAlign = 'center';
   context.textBaseline = 'middle';
   context.fillStyle = '#202321';
-  context.fillText(`${speed.cost} ${speed.cost === 1 ? 'TIEMPO' : 'TIEMPOS'}`, 944, 1880);
+  const timeText = `${speed.cost} ${speed.cost === 1 ? 'TIEMPO' : 'TIEMPOS'}`;
+  context.fillText(timeText, 944, 1880);
   context.restore();
+
+  context.save();
+  context.font = '700 72px "Oswald", Lato, Arial, sans-serif';
+  const timeTextWidth = context.measureText(timeText).width;
+  context.restore();
+
+  drawActionTimeChevrons(context, 944, 1875, accent, timeTextWidth);
 
   context.save();
   context.font = '400 64px "Roboto Condensed", Lato, Arial, sans-serif';

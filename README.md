@@ -2434,3 +2434,11 @@ Guía rápida: ver `docs/Minimapa.md`.
 - **Base integrada para acciones**: Las cartas de `Acciones` usan `public/interfaz/base.png` como fondo completo, ajustado al rectángulo visible real del canvas (`1888x2624`), equivalente al ratio de las cartas exportadas (`737x1024`).
 - **Tipografías de acciones**: El título usa `Bebas Neue Regular`, el texto de tiempo usa `Oswald Bold` y el texto inferior usa `Roboto Condensed Regular`.
 - **Coste visual de acciones**: El coste central usa `public/interfaz/acciones/numero.webp` y `public/interfaz/acciones/reloj.webp`, escalados y agrupados según el coste de la acción.
+
+## Novedades: Ajuste de Proporción, Alineación y Ornamentos en Cartas de Acción
+
+- **Proporción y alineación de coste**: Se ajustó la altura del reloj de arena (`reloj.webp`) a 610 unidades para una relación de aspecto del 67.5% con el número "1", con un gap de -104 y offset vertical de 40 para alineación perfecta por la base.
+- **Rombos uniformes**: Se estandarizó el tamaño del rombo (`diamondSize`) a 30 en todas las líneas divisoras del canvas para mantener una coherencia visual impecable.
+- **Línea del título más corta**: Se recortó la longitud de la línea divisora inferior del título (a 1015 de ancho), haciéndola coincidir simétricamente con el tamaño de la línea superior del indicador de tiempo.
+- **Centrado del indicador de tiempo**: El texto de tiempo (`X TIEMPO`) y sus chevrons se desplazaron verticalmente a `y = 1875`, quedando exactamente equidistantes y centrados entre la línea divisora superior (`y = 1760`) y la inferior (`y = 1990`).
+- **Punteros hacia dentro**: Se invirtieron las direcciones de los chevrons laterales del indicador de tiempo para que apunten hacia dentro (`> X TIEMPOS <`) en lugar de hacia fuera.
