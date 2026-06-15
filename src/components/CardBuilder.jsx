@@ -2383,6 +2383,13 @@ const MODULAR_CARD_OUTER_BOUNDS = {
   width: 1764,
   height: 2516,
 };
+const GENERAL_BASE_SOURCE_CROP = { left: 14, top: 18, right: 18, bottom: 14 };
+const GENERAL_HEADER_BOUNDS = {
+  x: 152.46,
+  y: 153.2,
+  width: 1579.73,
+  height: 587.2,
+};
 
 const applyReferenceCardLayoutScale = (context) => {
   const scale = CANVAS_WIDTH / MODULAR_CARD_OUTER_BOUNDS.width;
@@ -2537,8 +2544,41 @@ const drawPaperTexture = (context, x, y, width, height, accent = '#c46f1f', star
   context.restore();
 };
 
-const drawModularFrame = (context, accent = '#c46f1f', stardustImg = null) => {
+const drawGeneralBaseImage = (context, generalBaseImg) => {
+  const sourceCrop = GENERAL_BASE_SOURCE_CROP;
+  const scale = CANVAS_WIDTH / MODULAR_CARD_OUTER_BOUNDS.width;
+  const visibleCardHeight = CANVAS_HEIGHT / scale;
+  const imageWidth = generalBaseImg.naturalWidth || generalBaseImg.width || MODULAR_CARD_OUTER_BOUNDS.width;
+  const imageHeight = generalBaseImg.naturalHeight || generalBaseImg.height || visibleCardHeight;
+  const sourceX = Math.min(sourceCrop.left, imageWidth - 1);
+  const sourceY = Math.min(sourceCrop.top, imageHeight - 1);
+  const sourceWidth = Math.max(1, imageWidth - sourceCrop.left - sourceCrop.right);
+  const sourceHeight = Math.max(1, imageHeight - sourceCrop.top - sourceCrop.bottom);
   context.save();
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(
+    generalBaseImg,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    MODULAR_CARD_OUTER_BOUNDS.x,
+    MODULAR_CARD_OUTER_BOUNDS.y,
+    MODULAR_CARD_OUTER_BOUNDS.width,
+    visibleCardHeight,
+  );
+  context.restore();
+};
+
+const drawModularFrame = (context, accent = '#c46f1f', stardustImg = null, generalBaseImg = null) => {
+  context.save();
+  if (generalBaseImg) {
+    drawGeneralBaseImage(context, generalBaseImg);
+    context.restore();
+    return;
+  }
+
   const cardEdgeGradient = context.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   cardEdgeGradient.addColorStop(0, '#202223');
   cardEdgeGradient.addColorStop(0.52, '#17191a');
@@ -2592,34 +2632,44 @@ const drawHeaderImageContainer = (
   accent,
   weaponIconImg = null,
   elementIconImg = null,
+  skipGeneratedBackdrop = false,
 ) => {
-  const x = 170;
-  const y = 136;
-  const width = 1548;
-  const height = 638;
+  const headerBounds = skipGeneratedBackdrop
+    ? GENERAL_HEADER_BOUNDS
+    : { x: 170, y: 136, width: 1548, height: 638 };
+  const { x, y, width, height } = headerBounds;
   context.save();
-  drawRoundRectPath(context, x, y, width, height, 2);
+  if (skipGeneratedBackdrop) {
+    context.beginPath();
+    context.rect(x, y, width, height);
+  } else {
+    drawRoundRectPath(context, x, y, width, height, 2);
+  }
   context.clip();
   if (headerImage) {
     drawCoverImage(context, headerImage, x, y, width, height);
-  } else {
+  } else if (!skipGeneratedBackdrop) {
     drawGeneratedHeaderBackdrop(context, x, y, width, height);
   }
 
-  const bottomShade = context.createLinearGradient(x, y + height * 0.34, x, y + height);
-  bottomShade.addColorStop(0, 'rgba(0,0,0,0.08)');
-  bottomShade.addColorStop(0.7, 'rgba(0,0,0,0.62)');
-  bottomShade.addColorStop(1, 'rgba(0,0,0,0.78)');
-  context.fillStyle = bottomShade;
-  context.fillRect(x, y, width, height);
+  if (headerImage || !skipGeneratedBackdrop) {
+    const bottomShade = context.createLinearGradient(x, y + height * 0.34, x, y + height);
+    bottomShade.addColorStop(0, 'rgba(0,0,0,0.08)');
+    bottomShade.addColorStop(0.7, 'rgba(0,0,0,0.62)');
+    bottomShade.addColorStop(1, 'rgba(0,0,0,0.78)');
+    context.fillStyle = bottomShade;
+    context.fillRect(x, y, width, height);
+  }
   context.restore();
 
   context.save();
-  context.lineWidth = 12;
-  context.strokeStyle = '#000000';
-  context.strokeRect(x, y, width, height);
+  if (!skipGeneratedBackdrop) {
+    context.lineWidth = 12;
+    context.strokeStyle = '#000000';
+    context.strokeRect(x, y, width, height);
+  }
   context.fillStyle = accent;
-  context.fillRect(x, y + height - 14, width, 14);
+  context.fillRect(x, y + height - 8, width, 8);
 
   const headerIconImg = elementIconImg;
   const title = normalizeCardName(cardName).toUpperCase();
@@ -3838,6 +3888,7 @@ const drawCardCanvas = (
   actionBaseImg = null,
   actionNumberImg = null,
   actionHourglassImg = null,
+  generalBaseImg = null,
 ) => {
   const targetWidth = Math.max(1, Math.round(CANVAS_WIDTH * renderScale));
   const targetHeight = Math.max(1, Math.round(CANVAS_HEIGHT * renderScale));
@@ -3876,8 +3927,9 @@ const drawCardCanvas = (
     return;
   }
 
-  drawModularFrame(context, accent, stardustImg);
-  drawHeaderImageContainer(context, headerImageImg, cardName, accent, weaponIconImg, elementIconImg);
+  const usesGeneralBase = cardType === 'general' && Boolean(generalBaseImg);
+  drawModularFrame(context, accent, stardustImg, usesGeneralBase ? generalBaseImg : null);
+  drawHeaderImageContainer(context, headerImageImg, cardName, accent, weaponIconImg, elementIconImg, usesGeneralBase);
 
   const blockLabels = CARD_CONTAINER_TYPES.reduce((labels, block) => ({
     ...labels,
@@ -4259,6 +4311,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     let actionBaseImg = null;
     let actionNumberImg = null;
     let actionHourglassImg = null;
+    let generalBaseImg = null;
     if (cardType === 'actions') {
       try {
         const speed = ACTION_SPEED_OPTIONS.find((option) => option.id === actionSpeedId) || ACTION_SPEED_OPTIONS[0];
@@ -4275,6 +4328,12 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
         ]);
       } catch (e) {
         console.error("Could not load action card assets:", e);
+      }
+    } else if (cardType === 'general') {
+      try {
+        generalBaseImg = await loadCachedImage(`${process.env.PUBLIC_URL || ''}/interfaz/general.png`);
+      } catch (e) {
+        console.error("Could not load general card base:", e);
       }
     }
 
@@ -4452,6 +4511,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       actionBaseImg,
       actionNumberImg,
       actionHourglassImg,
+      generalBaseImg,
     );
 
     if (updateStatus) setImageStatus('ready');
@@ -4487,6 +4547,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       const commonSources = [
         `${process.env.PUBLIC_URL || ''}/interfaz/stardust.png`,
         `${process.env.PUBLIC_URL || ''}/interfaz/base.png`,
+        `${process.env.PUBLIC_URL || ''}/interfaz/general.png`,
         `${process.env.PUBLIC_URL || ''}/interfaz/acciones/numero.webp`,
         `${process.env.PUBLIC_URL || ''}/interfaz/acciones/2.webp`,
         `${process.env.PUBLIC_URL || ''}/interfaz/acciones/3.webp`,
