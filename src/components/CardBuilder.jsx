@@ -3620,10 +3620,10 @@ const drawActionCostAssets = (context, cost, numberImg, hourglassImg) => {
   const centerY = 1240;
   const numberHeight = 874;
   const numberWidth = numberHeight * ((numberImg.naturalWidth || numberImg.width) / (numberImg.naturalHeight || numberImg.height));
-  const hourglassHeight = (cost === 1 || cost === 2) ? 702 : 230;
+  const hourglassHeight = (cost === 1 || cost === 2) ? 702 : cost === 3 ? 500 : 400;
   const hourglassWidth = hourglassHeight * ((hourglassImg.naturalWidth || hourglassImg.width) / (hourglassImg.naturalHeight || hourglassImg.height));
-  const hourglassGap = cost === 1 ? 0 : cost === 2 ? -100 : cost === 3 ? -20 : -30;
-  const numberHourglassGap = (cost === 1 || cost === 2) ? -120 : -50;
+  const hourglassGap = cost === 1 ? 0 : -100;
+  const numberHourglassGap = -120;
 
   const startX = 400;
   const hourglassStartX = startX + numberWidth + numberHourglassGap;
