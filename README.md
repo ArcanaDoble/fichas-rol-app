@@ -2430,6 +2430,5 @@ Guía rápida: ver `docs/Minimapa.md`.
 - **Tipos simplificados**: El constructor queda reducido a dos tipos de carta: `General` y `Acciones`.
 - **Diseño dedicado**: `General` mantiene el canvas modular editable y `Acciones` usa la plantilla visual específica de acciones.
 - **Acciones rápidas a pesadas**: El diseño dedicado añade controles para `Rápida`, `Ligera`, `Estándar` y `Pesada`, generando automáticamente cartas de coste `1` a `4`.
-- **Plantilla visual dedicada**: La plantilla de acciones recrea el estilo de referencia con marco negro, pergamino envejecido, líneas y rombos de acento, número central, relojes de arena proporcionales al coste y texto inferior editable.
-
-
+- **Plantilla visual dedicada**: La plantilla de acciones usa una base completa con marco negro y pergamino envejecido, manteniendo por código el título, las líneas y rombos de acento, el selector de tipo de acción y el texto inferior editable.
+- **Base integrada para acciones**: Las cartas de `Acciones` usan `public/interfaz/base.png` como fondo completo, ajustado al rectángulo visible real del canvas (`1888x2624`), equivalente al ratio de las cartas exportadas (`737x1024`).

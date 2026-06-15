@@ -3591,79 +3591,27 @@ const drawActionOrnamentLine = (context, centerX, y, width, accent, diamondSize 
   context.restore();
 };
 
-const drawActionHourglassIcon = (context, x, y, size, accent = '#c46f1f') => {
-  const width = size * 0.62;
-  const height = size;
-  const left = x - width / 2;
-  const right = x + width / 2;
-  const top = y - height / 2;
-  const bottom = y + height / 2;
-  const neckY = y;
-
-  context.save();
-  context.lineCap = 'round';
-  context.lineJoin = 'round';
-  context.strokeStyle = '#202321';
-  context.fillStyle = 'rgba(32,35,33,0.04)';
-  context.lineWidth = Math.max(8, size * 0.045);
-
-  context.fillRect(left - width * 0.1, top - height * 0.08, width * 1.2, height * 0.1);
-  context.fillRect(left - width * 0.1, bottom - height * 0.02, width * 1.2, height * 0.1);
-  context.strokeRect(left - width * 0.1, top - height * 0.08, width * 1.2, height * 0.1);
-  context.strokeRect(left - width * 0.1, bottom - height * 0.02, width * 1.2, height * 0.1);
-
-  context.beginPath();
-  context.moveTo(left, top + height * 0.08);
-  context.bezierCurveTo(left, y - height * 0.2, x - width * 0.12, neckY - height * 0.05, x, neckY);
-  context.bezierCurveTo(x + width * 0.12, neckY + height * 0.05, right, y + height * 0.2, right, bottom - height * 0.08);
-  context.moveTo(right, top + height * 0.08);
-  context.bezierCurveTo(right, y - height * 0.2, x + width * 0.12, neckY - height * 0.05, x, neckY);
-  context.bezierCurveTo(x - width * 0.12, neckY + height * 0.05, left, y + height * 0.2, left, bottom - height * 0.08);
-  context.stroke();
-
-  context.fillStyle = accent;
-  context.globalAlpha = 0.92;
-  context.beginPath();
-  context.moveTo(left + width * 0.18, top + height * 0.27);
-  context.lineTo(right - width * 0.18, top + height * 0.27);
-  context.lineTo(x, neckY - height * 0.08);
-  context.closePath();
-  context.fill();
-
-  context.beginPath();
-  context.moveTo(x, neckY + height * 0.08);
-  context.lineTo(left + width * 0.18, bottom - height * 0.18);
-  context.lineTo(right - width * 0.18, bottom - height * 0.18);
-  context.closePath();
-  context.fill();
-
-  context.globalAlpha = 1;
-  context.restore();
-};
-
-const drawActionCorner = (context, x, y, flipX, flipY, accent) => {
-  const sx = flipX ? -1 : 1;
-  const sy = flipY ? -1 : 1;
-  context.save();
-  context.translate(x, y);
-  context.scale(sx, sy);
-  context.strokeStyle = accent;
-  context.lineWidth = 4;
-  context.beginPath();
-  context.moveTo(0, 78);
-  context.lineTo(0, 34);
-  context.quadraticCurveTo(0, 0, 34, 0);
-  context.lineTo(78, 0);
-  context.stroke();
-  context.strokeStyle = 'rgba(32,35,33,0.72)';
-  context.lineWidth = 2;
-  context.beginPath();
-  context.moveTo(16, 86);
-  context.lineTo(16, 42);
-  context.quadraticCurveTo(16, 16, 42, 16);
-  context.lineTo(86, 16);
-  context.stroke();
-  context.restore();
+const drawActionBaseImage = (context, actionBaseImg) => {
+  const sourceCrop = { left: 14, top: 22, right: 16, bottom: 13 };
+  const scale = CANVAS_WIDTH / MODULAR_CARD_OUTER_BOUNDS.width;
+  const visibleCardHeight = CANVAS_HEIGHT / scale;
+  const imageWidth = actionBaseImg.naturalWidth || actionBaseImg.width || MODULAR_CARD_OUTER_BOUNDS.width;
+  const imageHeight = actionBaseImg.naturalHeight || actionBaseImg.height || visibleCardHeight;
+  const sourceX = Math.min(sourceCrop.left, imageWidth - 1);
+  const sourceY = Math.min(sourceCrop.top, imageHeight - 1);
+  const sourceWidth = Math.max(1, imageWidth - sourceCrop.left - sourceCrop.right);
+  const sourceHeight = Math.max(1, imageHeight - sourceCrop.top - sourceCrop.bottom);
+  context.drawImage(
+    actionBaseImg,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    MODULAR_CARD_OUTER_BOUNDS.x,
+    MODULAR_CARD_OUTER_BOUNDS.y,
+    MODULAR_CARD_OUTER_BOUNDS.width,
+    visibleCardHeight,
+  );
 };
 
 const drawActionTimingCard = (
@@ -3672,62 +3620,39 @@ const drawActionTimingCard = (
   description,
   customColorActive,
   customColor,
-  stardustImg = null,
+  actionBaseImg = null,
 ) => {
   const speed = ACTION_SPEED_OPTIONS.find((option) => option.id === actionSpeedId) || ACTION_SPEED_OPTIONS[0];
   const accent = customColorActive && customColor ? customColor : '#c46f1f';
-  const paperX = 160;
-  const paperY = 126;
-  const paperW = 1568;
-  const paperH = 2310;
 
   context.save();
-  const cardEdgeGradient = context.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  cardEdgeGradient.addColorStop(0, '#202223');
-  cardEdgeGradient.addColorStop(0.52, '#17191a');
-  cardEdgeGradient.addColorStop(1, '#0d0f10');
-  context.fillStyle = cardEdgeGradient;
-  context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  context.lineWidth = 7;
-  context.strokeStyle = '#030303';
-  context.strokeRect(5, 5, CANVAS_WIDTH - 10, CANVAS_HEIGHT - 10);
+  if (actionBaseImg) {
+    drawActionBaseImage(context, actionBaseImg);
+  } else {
+    const cardEdgeGradient = context.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    cardEdgeGradient.addColorStop(0, '#202223');
+    cardEdgeGradient.addColorStop(0.52, '#17191a');
+    cardEdgeGradient.addColorStop(1, '#0d0f10');
+    context.fillStyle = cardEdgeGradient;
+    context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    context.lineWidth = 7;
+    context.strokeStyle = '#030303';
+    context.strokeRect(5, 5, CANVAS_WIDTH - 10, CANVAS_HEIGHT - 10);
 
-  const outerGradient = context.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  outerGradient.addColorStop(0, '#2b2d2e');
-  outerGradient.addColorStop(0.52, '#202223');
-  outerGradient.addColorStop(1, '#121415');
-  context.fillStyle = outerGradient;
-  drawRoundRectPath(context, 62, 54, 1764, 2516, 72);
-  context.fill();
-  context.lineWidth = 6;
-  context.strokeStyle = '#030303';
-  context.stroke();
-
-  context.fillStyle = '#f3e6cf';
-  drawRoundRectPath(context, paperX, paperY, paperW, paperH, 4);
-  context.fill();
-  drawPaperTexture(context, paperX + 8, paperY + 8, paperW - 16, paperH - 16, accent, stardustImg);
-
-  const glow = context.createRadialGradient(944, 1260, 80, 944, 1260, 760);
-  glow.addColorStop(0, 'rgba(255,249,229,0.48)');
-  glow.addColorStop(0.46, 'rgba(222,157,82,0.09)');
-  glow.addColorStop(1, 'rgba(255,255,255,0)');
-  context.fillStyle = glow;
-  context.fillRect(paperX + 8, paperY + 8, paperW - 16, paperH - 16);
-
-  context.lineWidth = 12;
-  context.strokeStyle = '#000000';
-  context.strokeRect(paperX, paperY, paperW, paperH);
-  context.lineWidth = 4;
-  context.strokeStyle = accent;
-  context.strokeRect(paperX + 28, paperY + 28, paperW - 56, paperH - 56);
-  context.lineWidth = 2;
-  context.strokeStyle = 'rgba(32,35,33,0.58)';
-  context.strokeRect(paperX + 40, paperY + 40, paperW - 80, paperH - 80);
-  drawActionCorner(context, paperX + 46, paperY + 46, false, false, accent);
-  drawActionCorner(context, paperX + paperW - 46, paperY + 46, true, false, accent);
-  drawActionCorner(context, paperX + 46, paperY + paperH - 46, false, true, accent);
-  drawActionCorner(context, paperX + paperW - 46, paperY + paperH - 46, true, true, accent);
+    const outerGradient = context.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    outerGradient.addColorStop(0, '#2b2d2e');
+    outerGradient.addColorStop(0.52, '#202223');
+    outerGradient.addColorStop(1, '#121415');
+    context.fillStyle = outerGradient;
+    drawRoundRectPath(context, 62, 54, 1764, 2516, 72);
+    context.fill();
+    context.lineWidth = 6;
+    context.strokeStyle = '#030303';
+    context.stroke();
+    context.fillStyle = '#f3e6cf';
+    drawRoundRectPath(context, 160, 126, 1568, 2310, 4);
+    context.fill();
+  }
 
   drawActionOrnamentLine(context, 944, 330, 1280, accent, 42);
 
@@ -3757,68 +3682,6 @@ const drawActionTimingCard = (
   context.stroke();
   context.restore();
 
-  context.save();
-  context.globalAlpha = 0.1;
-  context.strokeStyle = accent;
-  context.lineWidth = 2;
-  for (let i = 0; i < 28; i += 1) {
-    const angle = (Math.PI * 2 * i) / 28;
-    context.beginPath();
-    context.moveTo(944 + Math.cos(angle) * 76, 1242 + Math.sin(angle) * 76);
-    context.lineTo(944 + Math.cos(angle) * 640, 1242 + Math.sin(angle) * 640);
-    context.stroke();
-  }
-  context.restore();
-
-  context.save();
-  context.font = '900 650px Georgia, "Times New Roman", serif';
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.lineWidth = 8;
-  context.strokeStyle = 'rgba(32,35,33,0.2)';
-  context.fillStyle = '#202321';
-  const numberText = String(speed.cost);
-  const numberWidth = context.measureText(numberText).width;
-  const hourglassSize = speed.cost === 1 ? 360 : speed.cost === 2 ? 250 : 205;
-  const hourglassGap = speed.cost === 1 ? 0 : 30;
-  const hourglassTotalWidth = speed.cost * hourglassSize * 0.62 + (speed.cost - 1) * hourglassGap;
-  const groupGap = speed.cost === 1 ? 112 : 70;
-  const totalWidth = numberWidth + groupGap + hourglassTotalWidth;
-  const startX = 944 - totalWidth / 2;
-  const numberX = startX + numberWidth / 2;
-  context.strokeText(numberText, numberX, 1222);
-  context.fillText(numberText, numberX, 1222);
-
-  let iconX = startX + numberWidth + groupGap + (hourglassSize * 0.62) / 2;
-  for (let i = 0; i < speed.cost; i += 1) {
-    drawActionHourglassIcon(context, iconX, 1225, hourglassSize, accent);
-    iconX += hourglassSize * 0.62 + hourglassGap;
-  }
-  context.restore();
-
-  drawActionOrnamentLine(context, 944, 1760, 1015, accent, 34);
-  context.save();
-  context.font = '900 72px Lato, Arial, sans-serif';
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.fillStyle = '#202321';
-  context.fillText(`${speed.cost} ${speed.cost === 1 ? 'TIEMPO' : 'TIEMPOS'}`, 944, 1880);
-  context.fillStyle = accent;
-  context.beginPath();
-  context.moveTo(690, 1880);
-  context.lineTo(725, 1848);
-  context.lineTo(712, 1880);
-  context.lineTo(725, 1912);
-  context.closePath();
-  context.fill();
-  context.beginPath();
-  context.moveTo(1198, 1880);
-  context.lineTo(1163, 1848);
-  context.lineTo(1176, 1880);
-  context.lineTo(1163, 1912);
-  context.closePath();
-  context.fill();
-  context.restore();
   drawActionOrnamentLine(context, 944, 1990, 1140, accent, 30);
 
   context.save();
@@ -3927,6 +3790,7 @@ const drawCardCanvas = (
   stardustImg = null,
   diceIconImages = {},
   actionSpeedId = 'rapida',
+  actionBaseImg = null,
 ) => {
   const targetWidth = Math.max(1, Math.round(CANVAS_WIDTH * renderScale));
   const targetHeight = Math.max(1, Math.round(CANVAS_HEIGHT * renderScale));
@@ -3957,7 +3821,7 @@ const drawCardCanvas = (
       description,
       customColorActive,
       customColor,
-      stardustImg,
+      actionBaseImg,
     );
     context.restore();
     return;
@@ -4338,6 +4202,15 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       console.error("Could not load stardust image:", e);
     }
 
+    let actionBaseImg = null;
+    if (cardType === 'actions') {
+      try {
+        actionBaseImg = await loadCachedImage(`${process.env.PUBLIC_URL || ''}/interfaz/base.png`);
+      } catch (e) {
+        console.error("Could not load action base image:", e);
+      }
+    }
+
     let weaponIconImg = null;
     let diceIconImg = null;
     const diceIconImages = {};
@@ -4509,6 +4382,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       stardustImg,
       diceIconImages,
       actionSpeedId,
+      actionBaseImg,
     );
 
     if (updateStatus) setImageStatus('ready');
@@ -4543,6 +4417,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     const preload = () => {
       const commonSources = [
         `${process.env.PUBLIC_URL || ''}/interfaz/stardust.png`,
+        `${process.env.PUBLIC_URL || ''}/interfaz/base.png`,
         ...WEAPON_TYPES.map((type) => getWeaponTypeIconSrc(type)),
         ...['D4', 'D6', 'D8', 'D10', 'D12', 'DX'].map((type) => `${process.env.PUBLIC_URL || ''}/dados/cartas/${type}.webp`),
         ...CHARGE_TYPES.map((option) => `${process.env.PUBLIC_URL || ''}${option.src}`),
