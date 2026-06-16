@@ -177,13 +177,19 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Exploración compartida persistente** - Las casillas reveladas en el modo explorador se sincronizan al instante entre máster y jugadores y se conservan al recargar o cambiar de dispositivo
 - **Compartición instantánea de cuadrantes** - Al añadir o quitar jugadores compartidos desde el máster, los permisos se guardan automáticamente en Firebase y llegan al instante a los clientes autorizados
 - **Permisos entre jugadores** - Los jugadores pueden compartir cuadrantes guardados con otros jugadores disponibles (sin incluirse a sí mismos) y, al editar uno ajeno, siempre se muestra quién es el creador original
-- **Permisos de cuadrantes reforzados** - Los jugadores compartidos se almacenan normalizados en Firebase para que los navegadores de escritorio reciban los cuadrantes asignados sin inconsistencias
+- **Permisos de cuadrantes reforzados** - Los navegadores de escritorio reciben los cuadrantes asignados sin inconsistencias
 - **Anotaciones por cuadrante** - Cada cuadrante guarda sus notas con un identificador persistente en Firestore y las migraciones de datos antiguos se aplican automáticamente en memoria
 - **Panel maestro de notas** - Revisa y gestiona todas las anotaciones de un cuadrante desde un resumen consolidado
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.7.5**
+> **Versión actual: 2.7.6**
+
+**Resumen de cambios v2.7.6:**
+
+- **Máscara de recorte con esquinas cóncavas en Fondo cuerpo**:
+  - Se sustituyó el recorte de rectángulo redondeado por un trazado vectorial personalizado que replica de forma milimétrica las esquinas cóncavas decorativas (notched corners, radio `44`) del pergamino interior de la plantilla base.
+  - Se ajustaron los límites de coloración (de `y = 752` a `y = 2420`, y de `x = 168` a `x = 1720`) para alinearlos exactamente dentro de las líneas negras del marco, evitando pintar el divisor superior, el marco inferior de madera y las esquinas biseladas.
 
 **Resumen de cambios v2.7.5:**
 

@@ -2413,21 +2413,30 @@ const applyBodyColorFilter = (context, x, y, width, height, color) => {
 
   context.save();
   context.beginPath();
-  drawRoundRectPath(context, 160, 126, 1568, 2310, 4);
+  // Clip to the concave corner notched parchment path
+  // x = 168, y = 752, width = 1552, height = 1668 (ends at 2420), R = 44
+  const R = 44;
+  context.moveTo(168, 752);
+  context.lineTo(168 + 1552, 752);
+  context.lineTo(168 + 1552, 752 + 1668 - R);
+  context.arc(168 + 1552, 752 + 1668, R, 1.5 * Math.PI, Math.PI, true);
+  context.lineTo(168 + R, 752 + 1668);
+  context.arc(168, 752 + 1668, R, 0, 1.5 * Math.PI, true);
+  context.closePath();
   context.clip();
 
   context.save();
   context.globalCompositeOperation = 'color';
   context.fillStyle = color;
   context.globalAlpha = 0.42;
-  context.fillRect(x, y, width, height);
+  context.fillRect(168, 752, 1552, 1668);
   context.restore();
 
   context.save();
   context.globalCompositeOperation = 'multiply';
   context.fillStyle = color;
   context.globalAlpha = 0.08;
-  context.fillRect(x, y, width, height);
+  context.fillRect(168, 752, 1552, 1668);
   context.restore();
 
   context.restore();
@@ -2670,7 +2679,7 @@ const drawModularFrame = (context, accent = '#c46f1f', stardustImg = null, gener
   if (generalBaseImg) {
     drawGeneralBaseImage(context, generalBaseImg);
     if (bodyColor && bodyColor.toLowerCase() !== '#c46f1f') {
-      applyBodyColorFilter(context, 160, 740, 1568, 1700, bodyColor);
+      applyBodyColorFilter(context, 168, 752, 1552, 1668, bodyColor);
     }
     context.restore();
     return;
@@ -2706,7 +2715,15 @@ const drawModularFrame = (context, accent = '#c46f1f', stardustImg = null, gener
 
   context.save();
   context.beginPath();
-  drawRoundRectPath(context, 160, 126, 1568, 2310, 4);
+  // Clip to the concave corner notched parchment path
+  const R = 44;
+  context.moveTo(168, 752);
+  context.lineTo(168 + 1552, 752);
+  context.lineTo(168 + 1552, 752 + 1668 - R);
+  context.arc(168 + 1552, 752 + 1668, R, 1.5 * Math.PI, Math.PI, true);
+  context.lineTo(168 + R, 752 + 1668);
+  context.arc(168, 752 + 1668, R, 0, 1.5 * Math.PI, true);
+  context.closePath();
   context.clip();
 
   const paperGradient = context.createRadialGradient(944, 1440, 150, 944, 1440, 1200);
@@ -2714,8 +2731,8 @@ const drawModularFrame = (context, accent = '#c46f1f', stardustImg = null, gener
   paperGradient.addColorStop(0.62, 'rgba(244,222,188,0.18)');
   paperGradient.addColorStop(1, 'rgba(197,126,48,0.12)');
   context.fillStyle = paperGradient;
-  context.fillRect(160, 740, 1568, 1700);
-  drawPaperTexture(context, 160, 740, 1568, 1700, bodyColor, stardustImg);
+  context.fillRect(168, 752, 1552, 1668);
+  drawPaperTexture(context, 168, 752, 1552, 1668, bodyColor, stardustImg);
   context.restore();
 
   context.globalAlpha = 0.04;
