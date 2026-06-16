@@ -257,6 +257,9 @@ const RESOURCE_MODE_NONE = 'none';
 const RESOURCE_CARD_TYPES = new Set(['general', 'weapon', 'armor', 'trap', 'skill']);
 const COLLECTION_ACCESS_EDIT = 'edit';
 const COLLECTION_ACCESS_HIDDEN = 'hidden';
+const DEFAULT_HEADER_IMAGE_TRANSFORM = { zoom: 1, x: 0, y: 0 };
+
+const clampNumber = (value, min, max) => Math.min(max, Math.max(min, value));
 
 export const WEAPON_TYPES = [
   'Cuerpo a cuerpo',
@@ -2322,7 +2325,7 @@ const drawRoundRectPath = (context, x, y, width, height, radius) => {
   context.quadraticCurveTo(x, y, x + safeRadius, y);
 };
 
-const drawCoverImage = (context, image, x, y, width, height) => {
+const drawCoverImage = (context, image, x, y, width, height, transform = DEFAULT_HEADER_IMAGE_TRANSFORM) => {
   if (!image) return;
   const imageRatio = image.width / image.height;
   const frameRatio = width / height;
@@ -2338,6 +2341,26 @@ const drawCoverImage = (context, image, x, y, width, height) => {
     sourceHeight = image.width / frameRatio;
     sourceY = (image.height - sourceHeight) / 2;
   }
+
+  const zoom = clampNumber(Number(transform.zoom) || 1, 1, 2.5);
+  const panX = clampNumber(Number(transform.x) || 0, -100, 100);
+  const panY = clampNumber(Number(transform.y) || 0, -100, 100);
+  const zoomedSourceWidth = sourceWidth / zoom;
+  const zoomedSourceHeight = sourceHeight / zoom;
+  const maxOffsetX = Math.max(0, (sourceWidth - zoomedSourceWidth) / 2);
+  const maxOffsetY = Math.max(0, (sourceHeight - zoomedSourceHeight) / 2);
+  sourceX = clampNumber(
+    sourceX + maxOffsetX * (panX / 100),
+    0,
+    image.width - zoomedSourceWidth,
+  );
+  sourceY = clampNumber(
+    sourceY + maxOffsetY * (panY / 100),
+    0,
+    image.height - zoomedSourceHeight,
+  );
+  sourceWidth = zoomedSourceWidth;
+  sourceHeight = zoomedSourceHeight;
 
   context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
 };
@@ -2633,6 +2656,7 @@ const drawHeaderImageContainer = (
   weaponIconImg = null,
   elementIconImg = null,
   skipGeneratedBackdrop = false,
+  headerImageTransform = DEFAULT_HEADER_IMAGE_TRANSFORM,
 ) => {
   const headerBounds = skipGeneratedBackdrop
     ? GENERAL_HEADER_BOUNDS
@@ -2647,7 +2671,7 @@ const drawHeaderImageContainer = (
   }
   context.clip();
   if (headerImage) {
-    drawCoverImage(context, headerImage, x, y, width, height);
+    drawCoverImage(context, headerImage, x, y, width, height, headerImageTransform);
   } else if (!skipGeneratedBackdrop) {
     drawGeneratedHeaderBackdrop(context, x, y, width, height);
   }
@@ -3919,6 +3943,7 @@ const drawCardCanvas = (
   actionNumberImg = null,
   actionHourglassImg = null,
   generalBaseImg = null,
+  headerImageTransform = DEFAULT_HEADER_IMAGE_TRANSFORM,
 ) => {
   const targetWidth = Math.max(1, Math.round(CANVAS_WIDTH * renderScale));
   const targetHeight = Math.max(1, Math.round(CANVAS_HEIGHT * renderScale));
@@ -3959,7 +3984,16 @@ const drawCardCanvas = (
 
   const usesGeneralBase = cardType === 'general' && Boolean(generalBaseImg);
   drawModularFrame(context, accent, stardustImg, usesGeneralBase ? generalBaseImg : null);
-  drawHeaderImageContainer(context, headerImageImg, cardName, accent, weaponIconImg, elementIconImg, usesGeneralBase);
+  drawHeaderImageContainer(
+    context,
+    headerImageImg,
+    cardName,
+    accent,
+    weaponIconImg,
+    elementIconImg,
+    usesGeneralBase,
+    headerImageTransform,
+  );
 
   const blockLabels = CARD_CONTAINER_TYPES.reduce((labels, block) => ({
     ...labels,
@@ -4141,6 +4175,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const [containerConsumptions, setContainerConsumptions] = useState({});
   const [selectedBackground, setSelectedBackground] = useState('Gris.webp');
   const [headerImageSrc, setHeaderImageSrc] = useState('');
+  const [headerImageTransform, setHeaderImageTransform] = useState(DEFAULT_HEADER_IMAGE_TRANSFORM);
   const [cardContainers, setCardContainers] = useState(getDefaultCardContainers('general'));
   const [imageStatus, setImageStatus] = useState('loading');
   const [selectedElement, setSelectedElement] = useState('Ninguno');
@@ -4542,11 +4577,12 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       actionNumberImg,
       actionHourglassImg,
       generalBaseImg,
+      headerImageTransform,
     );
 
     if (updateStatus) setImageStatus('ready');
     return undefined;
-  }, [cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode, headerImageSrc, cardContainers, containerTraits, containerDescriptions, containerDescriptionSizes, containerDamage, containerConsumptions, containerDescriptionStyles, actionSpeedId]);
+  }, [cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode, headerImageSrc, headerImageTransform, cardContainers, containerTraits, containerDescriptions, containerDescriptionSizes, containerDamage, containerConsumptions, containerDescriptionStyles, actionSpeedId]);
 
   useEffect(() => {
     let disposed = false;
@@ -4719,6 +4755,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     setContainerTraits({});
     setSelectedBackground('Gris.webp');
     setHeaderImageSrc('');
+    setHeaderImageTransform(DEFAULT_HEADER_IMAGE_TRANSFORM);
     setWeaponType('Cuerpo a cuerpo');
     setAlcance(0);
     setDiceType('D6');
@@ -4880,10 +4917,30 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     const reader = new FileReader();
     reader.onload = () => {
       setHeaderImageSrc(typeof reader.result === 'string' ? reader.result : '');
+      setHeaderImageTransform(DEFAULT_HEADER_IMAGE_TRANSFORM);
       setImageStatus('loading');
     };
     reader.readAsDataURL(file);
     event.target.value = '';
+  };
+
+  const updateHeaderImageTransform = (updates) => {
+    setHeaderImageTransform((currentTransform) => ({
+      zoom: clampNumber(updates.zoom ?? currentTransform.zoom, 1, 2.5),
+      x: clampNumber(updates.x ?? currentTransform.x, -100, 100),
+      y: clampNumber(updates.y ?? currentTransform.y, -100, 100),
+    }));
+  };
+
+  const nudgeHeaderImage = (axis, amount) => {
+    setHeaderImageTransform((currentTransform) => ({
+      ...currentTransform,
+      [axis]: clampNumber((currentTransform[axis] || 0) + amount, -100, 100),
+    }));
+  };
+
+  const resetHeaderImageTransform = () => {
+    setHeaderImageTransform(DEFAULT_HEADER_IMAGE_TRANSFORM);
   };
 
   const addCardContainer = (containerId) => {
@@ -5827,7 +5884,15 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
               >
                 {headerImageSrc ? (
                   <>
-                    <img src={headerImageSrc} alt="" className="h-full w-full object-cover" />
+                    <img
+                      src={headerImageSrc}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      style={{
+                        transform: `translate(${-headerImageTransform.x * 0.25}%, ${-headerImageTransform.y * 0.25}%) scale(${headerImageTransform.zoom})`,
+                        transformOrigin: 'center',
+                      }}
+                    />
                     <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-[10px] font-bold uppercase tracking-[0.14em] text-[#f0e6d2] pointer-events-none">
                       Cambiar imagen
                     </div>
@@ -5836,6 +5901,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                       onClick={(e) => {
                         e.stopPropagation();
                         setHeaderImageSrc('');
+                        setHeaderImageTransform(DEFAULT_HEADER_IMAGE_TRANSFORM);
                       }}
                       className="absolute top-1.5 right-1.5 z-10 inline-flex h-6 w-6 items-center justify-center border border-slate-800/30 bg-[#09090b]/50 text-slate-500 transition hover:border-red-500/30 hover:bg-[#09090b]/90 hover:text-red-400 shadow-md"
                       title="Quitar imagen"
@@ -5854,6 +5920,115 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                   </div>
                 )}
               </div>
+              {headerImageSrc && (
+                <div className="space-y-3 border-t border-[#c8aa6e]/10 pt-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      Encuadre
+                    </span>
+                    <button
+                      type="button"
+                      onClick={resetHeaderImageTransform}
+                      className="inline-flex items-center gap-1.5 border border-[#c8aa6e]/25 bg-[#c8aa6e]/5 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#c8aa6e] transition hover:border-[#c8aa6e]/60 hover:bg-[#c8aa6e]/10"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      Reajustar
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => nudgeHeaderImage('y', -10)}
+                      className="col-start-2 flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
+                      title="Mover arriba"
+                    >
+                      <ArrowUp className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => nudgeHeaderImage('x', -10)}
+                      className="flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
+                      title="Mover izquierda"
+                    >
+                      <span className="text-base leading-none">←</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetHeaderImageTransform}
+                      className="flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
+                      title="Centrar"
+                    >
+                      0
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => nudgeHeaderImage('x', 10)}
+                      className="flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
+                      title="Mover derecha"
+                    >
+                      <span className="text-base leading-none">→</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => nudgeHeaderImage('y', 10)}
+                      className="col-start-2 flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
+                      title="Mover abajo"
+                    >
+                      <ArrowDown className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      <span>Zoom</span>
+                      <span className="text-[#c8aa6e]">{headerImageTransform.zoom.toFixed(2)}x</span>
+                    </label>
+                    <input
+                      type="range"
+                      min="1"
+                      max="2.5"
+                      step="0.01"
+                      value={headerImageTransform.zoom}
+                      onChange={(event) => updateHeaderImageTransform({ zoom: Number(event.target.value) })}
+                      className="w-full accent-[#c8aa6e]"
+                    />
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        <span>Horizontal</span>
+                        <span className="text-[#c8aa6e]">{headerImageTransform.x}</span>
+                      </label>
+                      <input
+                        type="range"
+                        min="-100"
+                        max="100"
+                        step="1"
+                        value={headerImageTransform.x}
+                        onChange={(event) => updateHeaderImageTransform({ x: Number(event.target.value) })}
+                        className="w-full accent-[#c8aa6e]"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        <span>Vertical</span>
+                        <span className="text-[#c8aa6e]">{headerImageTransform.y}</span>
+                      </label>
+                      <input
+                        type="range"
+                        min="-100"
+                        max="100"
+                        step="1"
+                        value={headerImageTransform.y}
+                        onChange={(event) => updateHeaderImageTransform({ y: Number(event.target.value) })}
+                        className="w-full accent-[#c8aa6e]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="space-y-1.5 border-t border-[#c8aa6e]/10 pt-3">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                   Icono de cabecera

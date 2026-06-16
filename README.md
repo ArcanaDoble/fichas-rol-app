@@ -2431,6 +2431,7 @@ Guía rápida: ver `docs/Minimapa.md`.
 - **Diseño dedicado**: `General` mantiene el canvas modular editable y `Acciones` usa la plantilla visual específica de acciones.
 - **Base integrada para General**: Las cartas `General` usan `public/interfaz/general.png` como fondo completo del marco modular, manteniendo encima las posiciones existentes de título, iconos y contenedores.
 - **Cabecera integrada en General**: Las imágenes personalizadas de la cabecera se recortan al recuadro real de `general.png` y reciben un difuminado oscuro interior para integrarse con el marco.
+- **Encuadre manual de cabecera**: Las imágenes personalizadas permiten ajustar zoom y desplazamiento horizontal/vertical con sliders y botones táctiles, además de volver al autoajuste con `Reajustar`.
 - **Acciones rápidas a pesadas**: El diseño dedicado añade controles para `Rápida`, `Ligera`, `Estándar` y `Pesada`, generando automáticamente cartas de coste `1` a `4`.
 - **Plantilla visual dedicada**: La plantilla de acciones usa una base completa con marco negro y pergamino envejecido, manteniendo por código el título, las líneas y rombos de acento, el selector de tipo de acción y el texto inferior editable.
 - **Base integrada para acciones**: Las cartas de `Acciones` usan `public/interfaz/base.png` como fondo completo, ajustado al rectángulo visible real del canvas (`1888x2624`), equivalente al ratio de las cartas exportadas (`737x1024`).
