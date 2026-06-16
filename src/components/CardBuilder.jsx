@@ -2391,19 +2391,27 @@ const rgbaFromHex = (hex, alpha) => {
 const applyHeaderColorFilter = (context, x, y, width, height, color) => {
   if (!color || color === DEFAULT_HEADER_BACKDROP_COLOR) return;
 
-  context.save();
   // 1. Color blend mode (tints the hue/sat while keeping light/dark detail)
+  context.save();
   context.globalCompositeOperation = 'color';
   context.fillStyle = color;
   context.globalAlpha = 0.55;
   context.fillRect(x, y, width, height);
   context.restore();
 
-  context.save();
   // 2. Multiply blend mode (adds richer shade depth)
+  context.save();
   context.globalCompositeOperation = 'multiply';
   context.fillStyle = color;
-  context.globalAlpha = 0.18;
+  context.globalAlpha = 0.20;
+  context.fillRect(x, y, width, height);
+  context.restore();
+
+  // 3. Normal (source-over) blend mode overlay (lays down direct pigment for neutral/black/grey/saturated tones)
+  context.save();
+  context.globalCompositeOperation = 'source-over';
+  context.fillStyle = color;
+  context.globalAlpha = 0.10;
   context.fillRect(x, y, width, height);
   context.restore();
 };
