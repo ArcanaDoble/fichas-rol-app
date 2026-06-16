@@ -2391,27 +2391,19 @@ const rgbaFromHex = (hex, alpha) => {
 const applyHeaderColorFilter = (context, x, y, width, height, color) => {
   if (!color || color === DEFAULT_HEADER_BACKDROP_COLOR) return;
 
-  // 1. Color blend mode (tints the hue/sat while keeping light/dark detail)
   context.save();
+  // 1. Color blend mode (tints the hue/sat while keeping light/dark detail)
   context.globalCompositeOperation = 'color';
   context.fillStyle = color;
   context.globalAlpha = 0.55;
   context.fillRect(x, y, width, height);
   context.restore();
 
-  // 2. Multiply blend mode (adds richer shade depth)
   context.save();
+  // 2. Multiply blend mode (adds richer shade depth)
   context.globalCompositeOperation = 'multiply';
   context.fillStyle = color;
-  context.globalAlpha = 0.20;
-  context.fillRect(x, y, width, height);
-  context.restore();
-
-  // 3. Normal (source-over) blend mode overlay (lays down direct pigment for neutral/black/grey/saturated tones)
-  context.save();
-  context.globalCompositeOperation = 'source-over';
-  context.fillStyle = color;
-  context.globalAlpha = 0.10;
+  context.globalAlpha = 0.18;
   context.fillRect(x, y, width, height);
   context.restore();
 };
@@ -2696,7 +2688,7 @@ const drawModularFrame = (context, accent = '#c46f1f', stardustImg = null, gener
   if (generalBaseImg) {
     drawGeneralBaseImage(context, generalBaseImg);
     if (bodyColor && bodyColor.toLowerCase() !== '#c46f1f') {
-      applyBodyColorFilter(context, 160, 752, 1568, 1668, bodyColor);
+      applyBodyColorFilter(context, 160, 752, 1576, 1668, bodyColor);
     }
     context.restore();
     return;
@@ -2735,9 +2727,9 @@ const drawModularFrame = (context, accent = '#c46f1f', stardustImg = null, gener
   // Clip to the concave corner notched parchment path
   const R = 52;
   context.moveTo(160, 752);
-  context.lineTo(160 + 1568, 752);
-  context.lineTo(160 + 1568, 752 + 1668 - R);
-  context.arc(160 + 1568, 752 + 1668, R, 1.5 * Math.PI, Math.PI, true);
+  context.lineTo(160 + 1576, 752);
+  context.lineTo(160 + 1576, 752 + 1668 - R);
+  context.arc(160 + 1576, 752 + 1668, R, 1.5 * Math.PI, Math.PI, true);
   context.lineTo(160 + R, 752 + 1668);
   context.arc(160, 752 + 1668, R, 0, 1.5 * Math.PI, true);
   context.closePath();
@@ -2748,8 +2740,8 @@ const drawModularFrame = (context, accent = '#c46f1f', stardustImg = null, gener
   paperGradient.addColorStop(0.62, 'rgba(244,222,188,0.18)');
   paperGradient.addColorStop(1, 'rgba(197,126,48,0.12)');
   context.fillStyle = paperGradient;
-  context.fillRect(160, 752, 1568, 1668);
-  drawPaperTexture(context, 160, 752, 1568, 1668, bodyColor, stardustImg);
+  context.fillRect(160, 752, 1576, 1668);
+  drawPaperTexture(context, 160, 752, 1576, 1668, bodyColor, stardustImg);
   context.restore();
 
   context.globalAlpha = 0.04;

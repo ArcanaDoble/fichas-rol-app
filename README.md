@@ -183,12 +183,18 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.7.9**
+> **Versión actual: 2.7.10**
+
+**Resumen de cambios v2.7.10:**
+
+- **Restauración de cabecera y corrección de límites del cuerpo**:
+  - Se revirtió el filtro de la cabecera (`applyHeaderColorFilter`) a su diseño original con opacidades originales y sin capa de mezcla normal (según preferencia del usuario).
+  - Se amplió el ancho horizontal del filtro del cuerpo de la carta (`applyBodyColorFilter` y texturizado procedimental) a `1576px` para que el color se extienda de forma óptima bajo el borde derecho y elimine cualquier holgura o franja sin pintar detectada.
 
 **Resumen de cambios v2.7.9:**
 
 - **Sincronización del filtro de color de la cabecera**:
-  - Se actualizó el filtro de color de la cabecera (`applyHeaderColorFilter`) para utilizar la misma fórmula de mezcla que el cuerpo (opacidades del `color` a `0.55`, `multiply` a `0.20`, y adición de la capa `source-over` al `10%`).
+  - Se actualizó el filtro de la cabecera (`applyHeaderColorFilter`) para utilizar la misma fórmula de mezcla que el cuerpo (opacidades del `color` a `0.55`, `multiply` a `0.20`, y adición de la capa `source-over` al `10%`).
   - Esto garantiza que tanto la cabecera como el cuerpo tengan la misma intensidad de coloración y respondan de forma idéntica a tonalidades neutras/negras/grises.
 
 **Resumen de cambios v2.7.8:**
