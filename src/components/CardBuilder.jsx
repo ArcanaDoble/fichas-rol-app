@@ -2688,7 +2688,7 @@ const drawModularFrame = (context, accent = '#c46f1f', stardustImg = null, gener
   if (generalBaseImg) {
     drawGeneralBaseImage(context, generalBaseImg);
     if (bodyColor && bodyColor.toLowerCase() !== '#c46f1f') {
-      applyBodyColorFilter(context, 160, 752, 1576, 1668, bodyColor);
+      applyBodyColorFilter(context, 152, 752, 1584, 1668, bodyColor);
     }
     context.restore();
     return;
@@ -2726,12 +2726,12 @@ const drawModularFrame = (context, accent = '#c46f1f', stardustImg = null, gener
   context.beginPath();
   // Clip to the concave corner notched parchment path
   const R = 52;
-  context.moveTo(160, 752);
-  context.lineTo(160 + 1576, 752);
-  context.lineTo(160 + 1576, 752 + 1668 - R);
-  context.arc(160 + 1576, 752 + 1668, R, 1.5 * Math.PI, Math.PI, true);
-  context.lineTo(160 + R, 752 + 1668);
-  context.arc(160, 752 + 1668, R, 0, 1.5 * Math.PI, true);
+  context.moveTo(152, 752);
+  context.lineTo(152 + 1584, 752);
+  context.lineTo(152 + 1584, 752 + 1668 - R);
+  context.arc(152 + 1584, 752 + 1668, R, 1.5 * Math.PI, Math.PI, true);
+  context.lineTo(152 + R, 752 + 1668);
+  context.arc(152, 752 + 1668, R, 0, 1.5 * Math.PI, true);
   context.closePath();
   context.clip();
 
@@ -2740,8 +2740,8 @@ const drawModularFrame = (context, accent = '#c46f1f', stardustImg = null, gener
   paperGradient.addColorStop(0.62, 'rgba(244,222,188,0.18)');
   paperGradient.addColorStop(1, 'rgba(197,126,48,0.12)');
   context.fillStyle = paperGradient;
-  context.fillRect(160, 752, 1576, 1668);
-  drawPaperTexture(context, 160, 752, 1576, 1668, bodyColor, stardustImg);
+  context.fillRect(152, 752, 1584, 1668);
+  drawPaperTexture(context, 152, 752, 1584, 1668, bodyColor, stardustImg);
   context.restore();
 
   context.globalAlpha = 0.04;
