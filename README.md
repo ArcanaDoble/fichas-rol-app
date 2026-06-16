@@ -2431,7 +2431,8 @@ Guía rápida: ver `docs/Minimapa.md`.
 - **Diseño dedicado**: `General` mantiene el canvas modular editable y `Acciones` usa la plantilla visual específica de acciones.
 - **Base integrada para General**: Las cartas `General` usan `public/interfaz/general.png` como fondo completo del marco modular, manteniendo encima las posiciones existentes de título, iconos y contenedores.
 - **Cabecera integrada en General**: Las imágenes personalizadas de la cabecera se recortan al recuadro real de `general.png` y reciben un difuminado oscuro interior para integrarse con el marco.
-- **Encuadre manual de cabecera**: Las imágenes personalizadas permiten ajustar zoom y desplazamiento horizontal/vertical con sliders y botones táctiles, además de volver al autoajuste con `Reajustar`.
+- **Encuadre manual de cabecera**: Las imágenes personalizadas permiten ajustar zoom y desplazamiento horizontal/vertical con sliders y botones táctiles, partiendo del mismo autoencuadre que usa la carta renderizada y con opción de volver al autoajuste con `Reajustar`.
+- **Color de fondo de cabecera**: Cuando una carta no tiene imagen de portada, el constructor permite elegir un color para el fondo generado de la cabecera con presets y valor hexadecimal independiente del acento.
 - **Acciones rápidas a pesadas**: El diseño dedicado añade controles para `Rápida`, `Ligera`, `Estándar` y `Pesada`, generando automáticamente cartas de coste `1` a `4`.
 - **Plantilla visual dedicada**: La plantilla de acciones usa una base completa con marco negro y pergamino envejecido, manteniendo por código el título, las líneas y rombos de acento, el selector de tipo de acción y el texto inferior editable.
 - **Base integrada para acciones**: Las cartas de `Acciones` usan `public/interfaz/base.png` como fondo completo, ajustado al rectángulo visible real del canvas (`1888x2624`), equivalente al ratio de las cartas exportadas (`737x1024`).
@@ -2458,4 +2459,11 @@ Guía rápida: ver `docs/Minimapa.md`.
   - **Eje horizontal y solapamiento**: Para costes 1, 2 y 3, el primer reloj se mantiene a un gap relativo al número de `numberHourglassGap = -120`. Para coste 4, el grupo se desplaza un poco a la derecha (`numberHourglassGap = -90`). Todos los relojes mantienen un gap de solapamiento uniforme de `-100` entre sí.
   - **Eje vertical y tamaño**: Los relojes tienen un tamaño proporcional al de coste 2 (`702`): en coste 3 miden `520` de alto y en coste 4 miden `420`. Todos se centran verticalmente en `yOffset = 46`, a excepción de coste 3, donde se elevan un poco (`yOffset = 20`) según lo requerido.
 - **Pre-carga optimizada**: Se añadieron los recursos `2.webp`, `3.webp` y `4.webp` al sistema de preloading asíncrono en segundo plano, evitando cualquier parpadeo de carga visual al alternar dinámicamente entre las distintas velocidades de acción.
+
+## Novedades: Filtros de Color y Texturas en la Cabecera de Cartas (v2.4.52)
+
+- **Unificación de diseño en controles**: Se rediseñó por completo el selector de "Fondo cabecera" en el panel lateral para tener la misma estructura, botones con texto, cuadrícula y gradientes estéticos que la sección de "Acento". Se reubicó "Base" como el primer botón de la rejilla y el panel se mantiene visible en todo momento.
+- **Filtros de color reales en imágenes**: El selector de color de cabecera ahora funciona como un verdadero filtro de color (mezcla de capas `color` y `multiply` en el canvas) que se aplica sobre la imagen de portada subida, mostrándose dinámicamente tanto en el canvas principal como en la previsualización del panel lateral.
+- **Backdrop generado con textura**: Cuando no hay imagen de portada, en lugar de incrustar una capa oscura degradada plana, el generador ahora renderiza la misma textura de pergamino envejecido y polvo de estrellas que el cuerpo del documento, tintado con el filtro del color seleccionado.
+
 

@@ -52,6 +52,8 @@ export const CARD_BACKGROUNDS = [
 const CANVAS_WIDTH = 1888;
 const CANVAS_HEIGHT = 2624;
 const MOBILE_PREVIEW_RENDER_SCALE = 0.25;
+const HEADER_IMAGE_PREVIEW_WIDTH = 1548;
+const HEADER_IMAGE_PREVIEW_HEIGHT = 638;
 const DEFAULT_CARD_NAME = 'NOMBRE DE CARTA';
 const DEFAULT_DESCRIPTION = '';
 const DEFAULT_FLAVOR_TEXT = '';
@@ -184,6 +186,8 @@ const ACCENT_PRESET_COLORS = [
   { id: 'bone', label: 'Hueso', value: '#d8d0bd' },
   { id: 'ashen', label: 'Ceniza', value: '#747168' },
 ];
+
+const DEFAULT_HEADER_BACKDROP_COLOR = '#2a251e';
 
 const DEFAULT_TRAITS = ['-', '-', '-', '-', '-', '-', '-', '-'];
 const MINION_ATTRIBUTE_TYPES = ['Hambre', 'Cuerpo', 'Mente'];
@@ -2347,15 +2351,17 @@ const drawCoverImage = (context, image, x, y, width, height, transform = DEFAULT
   const panY = clampNumber(Number(transform.y) || 0, -100, 100);
   const zoomedSourceWidth = sourceWidth / zoom;
   const zoomedSourceHeight = sourceHeight / zoom;
-  const maxOffsetX = Math.max(0, (sourceWidth - zoomedSourceWidth) / 2);
-  const maxOffsetY = Math.max(0, (sourceHeight - zoomedSourceHeight) / 2);
+  const centerX = image.width / 2;
+  const centerY = image.height / 2;
+  const maxCenterOffsetX = Math.max(0, (image.width - zoomedSourceWidth) / 2);
+  const maxCenterOffsetY = Math.max(0, (image.height - zoomedSourceHeight) / 2);
   sourceX = clampNumber(
-    sourceX + maxOffsetX * (panX / 100),
+    centerX + maxCenterOffsetX * (panX / 100) - zoomedSourceWidth / 2,
     0,
     image.width - zoomedSourceWidth,
   );
   sourceY = clampNumber(
-    sourceY + maxOffsetY * (panY / 100),
+    centerY + maxCenterOffsetY * (panY / 100) - zoomedSourceHeight / 2,
     0,
     image.height - zoomedSourceHeight,
   );
@@ -2365,24 +2371,59 @@ const drawCoverImage = (context, image, x, y, width, height, transform = DEFAULT
   context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
 };
 
-const drawGeneratedHeaderBackdrop = (context, x, y, width, height) => {
+const hexToRgb = (hex) => {
+  const normalized = typeof hex === 'string' ? hex.replace('#', '').trim() : '';
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return null;
+  return {
+    r: parseInt(normalized.slice(0, 2), 16),
+    g: parseInt(normalized.slice(2, 4), 16),
+    b: parseInt(normalized.slice(4, 6), 16),
+  };
+};
+
+const rgbaFromHex = (hex, alpha) => {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return `rgba(42,37,30,${alpha})`;
+  return `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`;
+};
+
+const applyHeaderColorFilter = (context, x, y, width, height, color) => {
+  if (!color || color === DEFAULT_HEADER_BACKDROP_COLOR) return;
+
   context.save();
-  const base = context.createLinearGradient(x, y, x + width, y + height);
-  base.addColorStop(0, '#171819');
-  base.addColorStop(0.42, '#2a251e');
-  base.addColorStop(1, '#111215');
-  context.fillStyle = base;
+  // 1. Color blend mode (tints the hue/sat while keeping light/dark detail)
+  context.globalCompositeOperation = 'color';
+  context.fillStyle = color;
+  context.globalAlpha = 0.55;
+  context.fillRect(x, y, width, height);
+  context.restore();
+
+  context.save();
+  // 2. Multiply blend mode (adds richer shade depth)
+  context.globalCompositeOperation = 'multiply';
+  context.fillStyle = color;
+  context.globalAlpha = 0.18;
+  context.fillRect(x, y, width, height);
+  context.restore();
+};
+
+const drawGeneratedHeaderBackdrop = (context, x, y, width, height, headerBackdropColor = DEFAULT_HEADER_BACKDROP_COLOR, stardustImg = null) => {
+  context.save();
+  // 1. Draw base paper color
+  context.fillStyle = '#f3e6cf';
   context.fillRect(x, y, width, height);
 
-  const smoke = context.createRadialGradient(x + width * 0.55, y + height * 0.36, 40, x + width * 0.55, y + height * 0.36, width * 0.58);
-  smoke.addColorStop(0, 'rgba(255,235,190,0.18)');
-  smoke.addColorStop(0.36, 'rgba(141,102,62,0.14)');
-  smoke.addColorStop(1, 'rgba(0,0,0,0)');
-  context.fillStyle = smoke;
-  context.fillRect(x, y, width, height);
+  // 2. Draw paper texture (noise, vignettes)
+  drawPaperTexture(context, x, y, width, height, headerBackdropColor, stardustImg);
 
-  context.fillStyle = 'rgba(0,0,0,0.38)';
-  context.fillRect(x, y, width, height);
+  // 3. Apply color filter if active
+  if (headerBackdropColor && headerBackdropColor !== DEFAULT_HEADER_BACKDROP_COLOR) {
+    applyHeaderColorFilter(context, x, y, width, height, headerBackdropColor);
+  } else {
+    // If base default, draw a dark wash to enhance title readability
+    context.fillStyle = 'rgba(0,0,0,0.38)';
+    context.fillRect(x, y, width, height);
+  }
   context.restore();
 };
 
@@ -2657,6 +2698,8 @@ const drawHeaderImageContainer = (
   elementIconImg = null,
   skipGeneratedBackdrop = false,
   headerImageTransform = DEFAULT_HEADER_IMAGE_TRANSFORM,
+  headerBackdropColor = DEFAULT_HEADER_BACKDROP_COLOR,
+  stardustImg = null,
 ) => {
   const headerBounds = skipGeneratedBackdrop
     ? GENERAL_HEADER_BOUNDS
@@ -2672,8 +2715,9 @@ const drawHeaderImageContainer = (
   context.clip();
   if (headerImage) {
     drawCoverImage(context, headerImage, x, y, width, height, headerImageTransform);
-  } else if (!skipGeneratedBackdrop) {
-    drawGeneratedHeaderBackdrop(context, x, y, width, height);
+    applyHeaderColorFilter(context, x, y, width, height, headerBackdropColor);
+  } else {
+    drawGeneratedHeaderBackdrop(context, x, y, width, height, headerBackdropColor, stardustImg);
   }
 
   if (headerImage && skipGeneratedBackdrop) {
@@ -3944,6 +3988,7 @@ const drawCardCanvas = (
   actionHourglassImg = null,
   generalBaseImg = null,
   headerImageTransform = DEFAULT_HEADER_IMAGE_TRANSFORM,
+  headerBackdropColor = DEFAULT_HEADER_BACKDROP_COLOR,
 ) => {
   const targetWidth = Math.max(1, Math.round(CANVAS_WIDTH * renderScale));
   const targetHeight = Math.max(1, Math.round(CANVAS_HEIGHT * renderScale));
@@ -3993,6 +4038,8 @@ const drawCardCanvas = (
     elementIconImg,
     usesGeneralBase,
     headerImageTransform,
+    headerBackdropColor,
+    stardustImg,
   );
 
   const blockLabels = CARD_CONTAINER_TYPES.reduce((labels, block) => ({
@@ -4151,6 +4198,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const imageLoadCacheRef = useRef(new Map());
   const activeImageRef = useRef(null);
   const headerImageInputRef = useRef(null);
+  const headerImagePreviewCanvasRef = useRef(null);
   const fontLoadPromiseRef = useRef(null);
   const drawSequenceRef = useRef(0);
   const drawTimerRef = useRef(null);
@@ -4181,6 +4229,8 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const [selectedElement, setSelectedElement] = useState('Ninguno');
   const [customColorActive, setCustomColorActive] = useState(false);
   const [customColor, setCustomColor] = useState('#c8aa6e');
+  const [headerColorActive, setHeaderColorActive] = useState(false);
+  const [headerColor, setHeaderColor] = useState(DEFAULT_HEADER_BACKDROP_COLOR);
   const [descriptionFormatColor, setDescriptionFormatColor] = useState('#ffffff');
   const [isUploadingCharacterCard, setIsUploadingCharacterCard] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
@@ -4331,6 +4381,49 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     imageLoadCacheRef.current.set(src, loadPromise);
     return loadPromise;
   }, []);
+
+  useEffect(() => {
+    const canvas = headerImagePreviewCanvasRef.current;
+    if (!canvas) return undefined;
+
+    const context = canvas.getContext('2d');
+    if (!context) return undefined;
+
+    let disposed = false;
+    canvas.width = HEADER_IMAGE_PREVIEW_WIDTH;
+    canvas.height = HEADER_IMAGE_PREVIEW_HEIGHT;
+    context.clearRect(0, 0, HEADER_IMAGE_PREVIEW_WIDTH, HEADER_IMAGE_PREVIEW_HEIGHT);
+    context.fillStyle = '#05070d';
+    context.fillRect(0, 0, HEADER_IMAGE_PREVIEW_WIDTH, HEADER_IMAGE_PREVIEW_HEIGHT);
+
+    if (!headerImageSrc) return undefined;
+
+    Promise.resolve(loadCachedImage(headerImageSrc)).then((image) => {
+      if (disposed || !image) return;
+      context.clearRect(0, 0, HEADER_IMAGE_PREVIEW_WIDTH, HEADER_IMAGE_PREVIEW_HEIGHT);
+      drawCoverImage(
+        context,
+        image,
+        0,
+        0,
+        HEADER_IMAGE_PREVIEW_WIDTH,
+        HEADER_IMAGE_PREVIEW_HEIGHT,
+        headerImageTransform,
+      );
+      if (headerColorActive && headerColor) {
+        applyHeaderColorFilter(context, 0, 0, HEADER_IMAGE_PREVIEW_WIDTH, HEADER_IMAGE_PREVIEW_HEIGHT, headerColor);
+      }
+    }).catch(() => {
+      if (disposed) return;
+      context.clearRect(0, 0, HEADER_IMAGE_PREVIEW_WIDTH, HEADER_IMAGE_PREVIEW_HEIGHT);
+      context.fillStyle = '#05070d';
+      context.fillRect(0, 0, HEADER_IMAGE_PREVIEW_WIDTH, HEADER_IMAGE_PREVIEW_HEIGHT);
+    });
+
+    return () => {
+      disposed = true;
+    };
+  }, [headerImageSrc, headerImageTransform, loadCachedImage, headerColorActive, headerColor]);
 
   const drawCard = useCallback(async (targetCanvas = canvasRef.current, renderScale = getPreviewRenderScale(), updateStatus = true) => {
     const canvas = targetCanvas;
@@ -4578,11 +4671,12 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       actionHourglassImg,
       generalBaseImg,
       headerImageTransform,
+      headerColorActive && headerColor ? headerColor : DEFAULT_HEADER_BACKDROP_COLOR,
     );
 
     if (updateStatus) setImageStatus('ready');
     return undefined;
-  }, [cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode, headerImageSrc, headerImageTransform, cardContainers, containerTraits, containerDescriptions, containerDescriptionSizes, containerDamage, containerConsumptions, containerDescriptionStyles, actionSpeedId]);
+  }, [cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, headerColorActive, headerColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode, headerImageSrc, headerImageTransform, cardContainers, containerTraits, containerDescriptions, containerDescriptionSizes, containerDamage, containerConsumptions, containerDescriptionStyles, actionSpeedId]);
 
   useEffect(() => {
     let disposed = false;
@@ -4768,6 +4862,8 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     setSelectedElement('Ninguno');
     setCustomColorActive(false);
     setCustomColor('#c8aa6e');
+    setHeaderColorActive(false);
+    setHeaderColor(DEFAULT_HEADER_BACKDROP_COLOR);
     setDescriptionFormatColor('#ffffff');
     setActionCenterMode('dado');
     setActionSpeedId('rapida');
@@ -4925,6 +5021,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   };
 
   const updateHeaderImageTransform = (updates) => {
+    setImageStatus('loading');
     setHeaderImageTransform((currentTransform) => ({
       zoom: clampNumber(updates.zoom ?? currentTransform.zoom, 1, 2.5),
       x: clampNumber(updates.x ?? currentTransform.x, -100, 100),
@@ -4933,6 +5030,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   };
 
   const nudgeHeaderImage = (axis, amount) => {
+    setImageStatus('loading');
     setHeaderImageTransform((currentTransform) => ({
       ...currentTransform,
       [axis]: clampNumber((currentTransform[axis] || 0) + amount, -100, 100),
@@ -4940,6 +5038,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   };
 
   const resetHeaderImageTransform = () => {
+    setImageStatus('loading');
     setHeaderImageTransform(DEFAULT_HEADER_IMAGE_TRANSFORM);
   };
 
@@ -5884,14 +5983,12 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
               >
                 {headerImageSrc ? (
                   <>
-                    <img
-                      src={headerImageSrc}
-                      alt=""
+                    <canvas
+                      ref={headerImagePreviewCanvasRef}
+                      width={HEADER_IMAGE_PREVIEW_WIDTH}
+                      height={HEADER_IMAGE_PREVIEW_HEIGHT}
+                      aria-label="Previsualización de imagen de portada"
                       className="h-full w-full object-cover"
-                      style={{
-                        transform: `translate(${-headerImageTransform.x * 0.25}%, ${-headerImageTransform.y * 0.25}%) scale(${headerImageTransform.zoom})`,
-                        transformOrigin: 'center',
-                      }}
                     />
                     <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-[10px] font-bold uppercase tracking-[0.14em] text-[#f0e6d2] pointer-events-none">
                       Cambiar imagen
@@ -5940,7 +6037,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                     <button
                       type="button"
                       onClick={() => nudgeHeaderImage('y', -10)}
-                      className="col-start-2 flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
+                      className="col-start-2 row-start-1 flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
                       title="Mover arriba"
                     >
                       <ArrowUp className="h-4 w-4" />
@@ -5948,7 +6045,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                     <button
                       type="button"
                       onClick={() => nudgeHeaderImage('x', -10)}
-                      className="flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
+                      className="col-start-1 row-start-2 flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
                       title="Mover izquierda"
                     >
                       <span className="text-base leading-none">←</span>
@@ -5956,7 +6053,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                     <button
                       type="button"
                       onClick={resetHeaderImageTransform}
-                      className="flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
+                      className="col-start-2 row-start-2 flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
                       title="Centrar"
                     >
                       0
@@ -5964,7 +6061,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                     <button
                       type="button"
                       onClick={() => nudgeHeaderImage('x', 10)}
-                      className="flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
+                      className="col-start-3 row-start-2 flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
                       title="Mover derecha"
                     >
                       <span className="text-base leading-none">→</span>
@@ -5972,7 +6069,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                     <button
                       type="button"
                       onClick={() => nudgeHeaderImage('y', 10)}
-                      className="col-start-2 flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
+                      className="col-start-2 row-start-3 flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
                       title="Mover abajo"
                     >
                       <ArrowDown className="h-4 w-4" />
@@ -5990,6 +6087,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                       max="2.5"
                       step="0.01"
                       value={headerImageTransform.zoom}
+                      onInput={(event) => updateHeaderImageTransform({ zoom: Number(event.currentTarget.value) })}
                       onChange={(event) => updateHeaderImageTransform({ zoom: Number(event.target.value) })}
                       className="w-full accent-[#c8aa6e]"
                     />
@@ -6007,6 +6105,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                         max="100"
                         step="1"
                         value={headerImageTransform.x}
+                        onInput={(event) => updateHeaderImageTransform({ x: Number(event.currentTarget.value) })}
                         onChange={(event) => updateHeaderImageTransform({ x: Number(event.target.value) })}
                         className="w-full accent-[#c8aa6e]"
                       />
@@ -6022,6 +6121,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                         max="100"
                         step="1"
                         value={headerImageTransform.y}
+                        onInput={(event) => updateHeaderImageTransform({ y: Number(event.currentTarget.value) })}
                         onChange={(event) => updateHeaderImageTransform({ y: Number(event.target.value) })}
                         className="w-full accent-[#c8aa6e]"
                       />
@@ -6044,6 +6144,82 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="space-y-2.5 border-t border-[#c8aa6e]/10 pt-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                    Fondo cabecera
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {ACCENT_PRESET_COLORS.map((preset) => {
+                    const isSelected = preset.id === 'default'
+                      ? !headerColorActive
+                      : headerColorActive && headerColor.toLowerCase() === preset.value.toLowerCase();
+                    return (
+                      <button
+                        key={`header-${preset.id}`}
+                        type="button"
+                        onClick={() => {
+                          if (preset.id === 'default') {
+                            setHeaderColorActive(false);
+                            setHeaderColor(DEFAULT_HEADER_BACKDROP_COLOR);
+                          } else {
+                            setHeaderColorActive(true);
+                            setHeaderColor(preset.value);
+                          }
+                          setImageStatus('loading');
+                        }}
+                        className={`flex h-11 items-center justify-center border text-[8px] font-black uppercase tracking-[0.08em] transition ${
+                          isSelected
+                            ? 'border-[#f0e6d2] text-[#f0e6d2]'
+                            : 'border-slate-800 text-slate-500 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                        }`}
+                        style={{
+                          background: `linear-gradient(135deg, ${
+                            preset.id === 'default' ? DEFAULT_HEADER_BACKDROP_COLOR : preset.value
+                          }44, ${
+                            preset.id === 'default' ? DEFAULT_HEADER_BACKDROP_COLOR : preset.value
+                          }12)`
+                        }}
+                        title={preset.label}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                      Personalizado
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHeaderColorActive(true);
+                      }}
+                      className={`border px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition ${
+                        headerColorActive && !ACCENT_PRESET_COLORS.some((preset) => preset.id !== 'default' && preset.value.toLowerCase() === headerColor.toLowerCase())
+                          ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                          : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                      }`}
+                    >
+                      Hex
+                    </button>
+                  </div>
+                  <HexColorInput
+                    value={headerColor}
+                    onChange={(value) => {
+                      setHeaderColor(value);
+                      setHeaderColorActive(true);
+                      setImageStatus('loading');
+                    }}
+                  />
+                  <p className="text-[10px] italic leading-normal text-slate-400">
+                    Aplica un filtro de color a la imagen o al fondo de la cabecera.
+                  </p>
+                </div>
               </div>
             </div>
             )}
