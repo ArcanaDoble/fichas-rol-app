@@ -2658,7 +2658,7 @@ const drawGeneralBaseImage = (context, generalBaseImg) => {
   context.restore();
 };
 
-const drawModularFrame = (context, accent = '#c46f1f', stardustImg = null, generalBaseImg = null) => {
+const drawModularFrame = (context, accent = '#c46f1f', stardustImg = null, generalBaseImg = null, bodyColor = '#c46f1f') => {
   context.save();
   if (generalBaseImg) {
     drawGeneralBaseImage(context, generalBaseImg);
@@ -2700,7 +2700,7 @@ const drawModularFrame = (context, accent = '#c46f1f', stardustImg = null, gener
   paperGradient.addColorStop(1, 'rgba(197,126,48,0.12)');
   context.fillStyle = paperGradient;
   context.fillRect(168, 770, 1552, 1658);
-  drawPaperTexture(context, 168, 770, 1552, 1658, accent, stardustImg);
+  drawPaperTexture(context, 168, 770, 1552, 1658, bodyColor, stardustImg);
 
   context.globalAlpha = 0.04;
   context.fillStyle = accent;
@@ -4062,6 +4062,8 @@ const drawCardCanvas = (
   generalBaseImg = null,
   headerImageTransform = DEFAULT_HEADER_IMAGE_TRANSFORM,
   headerBackdropColor = DEFAULT_HEADER_BACKDROP_COLOR,
+  bodyColorActive = false,
+  bodyColor = DEFAULT_BODY_BACKDROP_COLOR,
 ) => {
   const targetWidth = Math.max(1, Math.round(CANVAS_WIDTH * renderScale));
   const targetHeight = Math.max(1, Math.round(CANVAS_HEIGHT * renderScale));
@@ -4101,7 +4103,8 @@ const drawCardCanvas = (
   }
 
   const usesGeneralBase = cardType === 'general' && Boolean(generalBaseImg);
-  drawModularFrame(context, accent, stardustImg, usesGeneralBase ? generalBaseImg : null);
+  const currentBodyColor = bodyColorActive && bodyColor ? bodyColor : '#c46f1f';
+  drawModularFrame(context, accent, stardustImg, usesGeneralBase ? generalBaseImg : null, currentBodyColor);
   drawHeaderImageContainer(
     context,
     headerImageImg,
@@ -4304,6 +4307,8 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const [customColor, setCustomColor] = useState('#c8aa6e');
   const [headerColorActive, setHeaderColorActive] = useState(false);
   const [headerColor, setHeaderColor] = useState(DEFAULT_HEADER_BACKDROP_COLOR);
+  const [bodyColorActive, setBodyColorActive] = useState(false);
+  const [bodyColor, setBodyColor] = useState(DEFAULT_BODY_BACKDROP_COLOR);
   const [descriptionFormatColor, setDescriptionFormatColor] = useState('#ffffff');
   const [isUploadingCharacterCard, setIsUploadingCharacterCard] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
@@ -4785,11 +4790,13 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       generalBaseImg,
       headerImageTransform,
       headerColorActive && headerColor ? headerColor : DEFAULT_HEADER_BACKDROP_COLOR,
+      bodyColorActive,
+      bodyColor,
     );
 
     if (updateStatus) setImageStatus('ready');
     return undefined;
-  }, [cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, headerColorActive, headerColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode, headerImageSrc, headerImageTransform, cardContainers, containerTraits, containerDescriptions, containerDescriptionSizes, containerDamage, containerConsumptions, containerDescriptionStyles, actionSpeedId]);
+  }, [cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, headerColorActive, headerColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode, headerImageSrc, headerImageTransform, cardContainers, containerTraits, containerDescriptions, containerDescriptionSizes, containerDamage, containerConsumptions, containerDescriptionStyles, actionSpeedId, bodyColorActive, bodyColor]);
 
   useEffect(() => {
     let disposed = false;
@@ -4977,6 +4984,8 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     setCustomColor('#c8aa6e');
     setHeaderColorActive(false);
     setHeaderColor(DEFAULT_HEADER_BACKDROP_COLOR);
+    setBodyColorActive(false);
+    setBodyColor(DEFAULT_BODY_BACKDROP_COLOR);
     setDescriptionFormatColor('#ffffff');
     setActionCenterMode('dado');
     setActionSpeedId('rapida');
@@ -6331,6 +6340,84 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                   />
                   <p className="text-[10px] italic leading-normal text-slate-400">
                     Aplica un filtro de color a la imagen o al fondo de la cabecera.
+                  </p>
+                </div>
+              </div>
+
+              {/* Fondo cuerpo */}
+              <div className="space-y-2.5 border-t border-[#c8aa6e]/10 pt-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                    Fondo cuerpo
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {ACCENT_PRESET_COLORS.map((preset) => {
+                    const isSelected = preset.id === 'default'
+                      ? !bodyColorActive
+                      : bodyColorActive && bodyColor.toLowerCase() === preset.value.toLowerCase();
+                    return (
+                      <button
+                        key={`body-${preset.id}`}
+                        type="button"
+                        onClick={() => {
+                          if (preset.id === 'default') {
+                            setBodyColorActive(false);
+                            setBodyColor(DEFAULT_BODY_BACKDROP_COLOR);
+                          } else {
+                            setBodyColorActive(true);
+                            setBodyColor(preset.value);
+                          }
+                          setImageStatus('loading');
+                        }}
+                        className={`flex h-11 items-center justify-center border text-[8px] font-black uppercase tracking-[0.08em] transition ${
+                          isSelected
+                            ? 'border-[#f0e6d2] text-[#f0e6d2]'
+                            : 'border-slate-800 text-slate-500 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                        }`}
+                        style={{
+                          background: `linear-gradient(135deg, ${
+                            preset.id === 'default' ? DEFAULT_BODY_BACKDROP_COLOR : preset.value
+                          }44, ${
+                            preset.id === 'default' ? DEFAULT_BODY_BACKDROP_COLOR : preset.value
+                          }12)`
+                        }}
+                        title={preset.label}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                      Personalizado
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBodyColorActive(true);
+                      }}
+                      className={`border px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition ${
+                        bodyColorActive && !ACCENT_PRESET_COLORS.some((preset) => preset.id !== 'default' && preset.value.toLowerCase() === bodyColor.toLowerCase())
+                          ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                          : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                      }`}
+                    >
+                      Hex
+                    </button>
+                  </div>
+                  <HexColorInput
+                    value={bodyColor}
+                    onChange={(value) => {
+                      setBodyColor(value);
+                      setBodyColorActive(true);
+                      setImageStatus('loading');
+                    }}
+                  />
+                  <p className="text-[10px] italic leading-normal text-slate-400">
+                    Aplica un filtro de color a la textura de papel del cuerpo de la carta.
                   </p>
                 </div>
               </div>
