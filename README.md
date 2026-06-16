@@ -183,7 +183,13 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.7.3**
+> **Versión actual: 2.7.4**
+
+**Resumen de cambios v2.7.4:**
+
+- **Corrección en la aplicación del filtro de color en Fondo cuerpo**:
+  - Se corrigió un error que impedía que se tiñera el cuerpo de la carta al editar cartas de tipo General / Armas / Habilidades / etc., debido a que la carga del asset base (`general.png`) omitía la etapa del canvas de dibujo procedimental del papel.
+  - Ahora el filtro de color del cuerpo se aplica correctamente superpuesto a la zona de pergamino de la plantilla base cargada.
 
 **Resumen de cambios v2.7.3:**
 

@@ -2662,6 +2662,9 @@ const drawModularFrame = (context, accent = '#c46f1f', stardustImg = null, gener
   context.save();
   if (generalBaseImg) {
     drawGeneralBaseImage(context, generalBaseImg);
+    if (bodyColor && bodyColor.toLowerCase() !== '#c46f1f') {
+      applyBodyColorFilter(context, 168, 770, 1552, 1658, bodyColor);
+    }
     context.restore();
     return;
   }
