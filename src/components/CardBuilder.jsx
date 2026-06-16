@@ -2412,6 +2412,11 @@ const applyBodyColorFilter = (context, x, y, width, height, color) => {
   if (!color || color === DEFAULT_BODY_BACKDROP_COLOR) return;
 
   context.save();
+  context.beginPath();
+  drawRoundRectPath(context, 160, 126, 1568, 2310, 4);
+  context.clip();
+
+  context.save();
   context.globalCompositeOperation = 'color';
   context.fillStyle = color;
   context.globalAlpha = 0.42;
@@ -2423,6 +2428,8 @@ const applyBodyColorFilter = (context, x, y, width, height, color) => {
   context.fillStyle = color;
   context.globalAlpha = 0.08;
   context.fillRect(x, y, width, height);
+  context.restore();
+
   context.restore();
 };
 
@@ -2663,7 +2670,7 @@ const drawModularFrame = (context, accent = '#c46f1f', stardustImg = null, gener
   if (generalBaseImg) {
     drawGeneralBaseImage(context, generalBaseImg);
     if (bodyColor && bodyColor.toLowerCase() !== '#c46f1f') {
-      applyBodyColorFilter(context, 168, 770, 1552, 1658, bodyColor);
+      applyBodyColorFilter(context, 160, 740, 1568, 1700, bodyColor);
     }
     context.restore();
     return;
@@ -2697,13 +2704,19 @@ const drawModularFrame = (context, accent = '#c46f1f', stardustImg = null, gener
   context.strokeStyle = '#000000';
   context.stroke();
 
+  context.save();
+  context.beginPath();
+  drawRoundRectPath(context, 160, 126, 1568, 2310, 4);
+  context.clip();
+
   const paperGradient = context.createRadialGradient(944, 1440, 150, 944, 1440, 1200);
   paperGradient.addColorStop(0, 'rgba(255,248,230,0.65)');
   paperGradient.addColorStop(0.62, 'rgba(244,222,188,0.18)');
   paperGradient.addColorStop(1, 'rgba(197,126,48,0.12)');
   context.fillStyle = paperGradient;
-  context.fillRect(168, 770, 1552, 1658);
-  drawPaperTexture(context, 168, 770, 1552, 1658, bodyColor, stardustImg);
+  context.fillRect(160, 740, 1568, 1700);
+  drawPaperTexture(context, 160, 740, 1568, 1700, bodyColor, stardustImg);
+  context.restore();
 
   context.globalAlpha = 0.04;
   context.fillStyle = accent;

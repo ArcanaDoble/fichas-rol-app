@@ -183,7 +183,13 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.7.4**
+> **Versión actual: 2.7.5**
+
+**Resumen de cambios v2.7.5:**
+
+- **Alineación y recorte de bordes en Fondo cuerpo**:
+  - Se extendieron los límites del filtro del cuerpo de la carta (de `y = 740` a `y = 2440`) para rellenar completamente la zona de pergamino eliminando la franja sin teñir bajo la cabecera.
+  - Se aplicó una máscara de recorte (`clip()`) al contorno del rectángulo redondeado del pergamino (`drawRoundRectPath`) para que la coloración no se desborde del contorno ni pinte el marco exterior de madera o las esquinas de la carta.
 
 **Resumen de cambios v2.7.4:**
 
