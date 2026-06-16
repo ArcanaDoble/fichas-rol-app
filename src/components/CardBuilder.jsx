@@ -2386,9 +2386,9 @@ const MODULAR_CARD_OUTER_BOUNDS = {
 const GENERAL_BASE_SOURCE_CROP = { left: 14, top: 18, right: 18, bottom: 14 };
 const GENERAL_HEADER_BOUNDS = {
   x: 152.46,
-  y: 153.2,
+  y: 147.2,
   width: 1579.73,
-  height: 587.2,
+  height: 593.2,
 };
 
 const applyReferenceCardLayoutScale = (context) => {
@@ -2650,6 +2650,36 @@ const drawHeaderImageContainer = (
     drawCoverImage(context, headerImage, x, y, width, height);
   } else if (!skipGeneratedBackdrop) {
     drawGeneratedHeaderBackdrop(context, x, y, width, height);
+  }
+
+  if (headerImage && skipGeneratedBackdrop) {
+    const edgeFade = Math.max(70, Math.round(width * 0.075));
+    const topFade = Math.max(56, Math.round(height * 0.16));
+    const bottomFade = Math.max(150, Math.round(height * 0.34));
+    const leftFade = context.createLinearGradient(x, y, x + edgeFade, y);
+    leftFade.addColorStop(0, 'rgba(0,0,0,0.48)');
+    leftFade.addColorStop(1, 'rgba(0,0,0,0)');
+    context.fillStyle = leftFade;
+    context.fillRect(x, y, edgeFade, height);
+
+    const rightFade = context.createLinearGradient(x + width, y, x + width - edgeFade, y);
+    rightFade.addColorStop(0, 'rgba(0,0,0,0.48)');
+    rightFade.addColorStop(1, 'rgba(0,0,0,0)');
+    context.fillStyle = rightFade;
+    context.fillRect(x + width - edgeFade, y, edgeFade, height);
+
+    const topFadeGradient = context.createLinearGradient(x, y, x, y + topFade);
+    topFadeGradient.addColorStop(0, 'rgba(0,0,0,0.28)');
+    topFadeGradient.addColorStop(1, 'rgba(0,0,0,0)');
+    context.fillStyle = topFadeGradient;
+    context.fillRect(x, y, width, topFade);
+
+    const bottomFadeGradient = context.createLinearGradient(x, y + height, x, y + height - bottomFade);
+    bottomFadeGradient.addColorStop(0, 'rgba(0,0,0,0.72)');
+    bottomFadeGradient.addColorStop(0.58, 'rgba(0,0,0,0.34)');
+    bottomFadeGradient.addColorStop(1, 'rgba(0,0,0,0)');
+    context.fillStyle = bottomFadeGradient;
+    context.fillRect(x, y + height - bottomFade, width, bottomFade);
   }
 
   if (headerImage || !skipGeneratedBackdrop) {
