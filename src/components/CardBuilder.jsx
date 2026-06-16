@@ -2714,10 +2714,60 @@ const drawHeaderImageContainer = (
   }
   context.clip();
   if (headerImage) {
-    drawCoverImage(context, headerImage, x, y, width, height, headerImageTransform);
-    applyHeaderColorFilter(context, x, y, width, height, headerBackdropColor);
+    if (headerBackdropColor && headerBackdropColor !== DEFAULT_HEADER_BACKDROP_COLOR) {
+      // 1. Create a temporary offscreen canvas for the cover image
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = width;
+      tempCanvas.height = height;
+      const tctx = tempCanvas.getContext('2d');
+
+      // 2. Draw the cover image onto the offscreen canvas
+      drawCoverImage(tctx, headerImage, 0, 0, width, height, headerImageTransform);
+
+      // 3. Create a second offscreen canvas for the color mask
+      const maskCanvas = document.createElement('canvas');
+      maskCanvas.width = width;
+      maskCanvas.height = height;
+      const mctx = maskCanvas.getContext('2d');
+      mctx.fillStyle = headerBackdropColor;
+      mctx.fillRect(0, 0, width, height);
+
+      // 4. Clip the color mask to the non-transparent pixels of the image
+      mctx.globalCompositeOperation = 'destination-in';
+      mctx.drawImage(tempCanvas, 0, 0);
+
+      // 5. Apply the color filter overlay using 'color' blend mode on the image pixels
+      tctx.save();
+      tctx.globalCompositeOperation = 'color';
+      tctx.globalAlpha = 1.0;
+      tctx.drawImage(maskCanvas, 0, 0);
+      tctx.restore();
+
+      // 6. Draw the colorized cover image on the main canvas (keeps transparency intact)
+      context.drawImage(tempCanvas, x, y);
+    } else {
+      // No filter active (Base): draw the cover image completely unfiltered
+      drawCoverImage(context, headerImage, x, y, width, height, headerImageTransform);
+    }
   } else {
-    drawGeneratedHeaderBackdrop(context, x, y, width, height, headerBackdropColor, stardustImg);
+    // If no custom image is uploaded:
+    // If a color filter is active, apply it directly on the card template's built-in header artwork
+    if (headerBackdropColor && headerBackdropColor !== DEFAULT_HEADER_BACKDROP_COLOR) {
+      context.save();
+      context.globalCompositeOperation = 'color';
+      context.fillStyle = headerBackdropColor;
+      context.globalAlpha = 0.85;
+      context.fillRect(x, y, width, height);
+      context.restore();
+
+      context.save();
+      context.globalCompositeOperation = 'multiply';
+      context.fillStyle = headerBackdropColor;
+      context.globalAlpha = 0.15;
+      context.fillRect(x, y, width, height);
+      context.restore();
+    }
+    // If Base color, we draw nothing on top (showing the card base template's original built-in header backdrop)
   }
 
   if (headerImage && skipGeneratedBackdrop) {
@@ -4401,17 +4451,57 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     Promise.resolve(loadCachedImage(headerImageSrc)).then((image) => {
       if (disposed || !image) return;
       context.clearRect(0, 0, HEADER_IMAGE_PREVIEW_WIDTH, HEADER_IMAGE_PREVIEW_HEIGHT);
-      drawCoverImage(
-        context,
-        image,
-        0,
-        0,
-        HEADER_IMAGE_PREVIEW_WIDTH,
-        HEADER_IMAGE_PREVIEW_HEIGHT,
-        headerImageTransform,
-      );
-      if (headerColorActive && headerColor) {
-        applyHeaderColorFilter(context, 0, 0, HEADER_IMAGE_PREVIEW_WIDTH, HEADER_IMAGE_PREVIEW_HEIGHT, headerColor);
+
+      if (headerColorActive && headerColor && headerColor !== DEFAULT_HEADER_BACKDROP_COLOR) {
+        // 1. Create a temporary offscreen canvas for the cover image
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = HEADER_IMAGE_PREVIEW_WIDTH;
+        tempCanvas.height = HEADER_IMAGE_PREVIEW_HEIGHT;
+        const tctx = tempCanvas.getContext('2d');
+
+        // 2. Draw the cover image onto the offscreen canvas
+        drawCoverImage(
+          tctx,
+          image,
+          0,
+          0,
+          HEADER_IMAGE_PREVIEW_WIDTH,
+          HEADER_IMAGE_PREVIEW_HEIGHT,
+          headerImageTransform,
+        );
+
+        // 3. Create a second offscreen canvas for the color mask
+        const maskCanvas = document.createElement('canvas');
+        maskCanvas.width = HEADER_IMAGE_PREVIEW_WIDTH;
+        maskCanvas.height = HEADER_IMAGE_PREVIEW_HEIGHT;
+        const mctx = maskCanvas.getContext('2d');
+        mctx.fillStyle = headerColor;
+        mctx.fillRect(0, 0, HEADER_IMAGE_PREVIEW_WIDTH, HEADER_IMAGE_PREVIEW_HEIGHT);
+
+        // 4. Clip the color mask to the non-transparent pixels of the image
+        mctx.globalCompositeOperation = 'destination-in';
+        mctx.drawImage(tempCanvas, 0, 0);
+
+        // 5. Apply the color filter overlay using 'color' blend mode on the image pixels
+        tctx.save();
+        tctx.globalCompositeOperation = 'color';
+        tctx.globalAlpha = 1.0;
+        tctx.drawImage(maskCanvas, 0, 0);
+        tctx.restore();
+
+        // 6. Draw the colorized cover image on the preview canvas
+        context.drawImage(tempCanvas, 0, 0);
+      } else {
+        // Base / default: draw cover image unfiltered
+        drawCoverImage(
+          context,
+          image,
+          0,
+          0,
+          HEADER_IMAGE_PREVIEW_WIDTH,
+          HEADER_IMAGE_PREVIEW_HEIGHT,
+          headerImageTransform,
+        );
       }
     }).catch(() => {
       if (disposed) return;
