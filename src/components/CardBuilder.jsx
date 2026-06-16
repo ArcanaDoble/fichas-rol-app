@@ -188,6 +188,7 @@ const ACCENT_PRESET_COLORS = [
 ];
 
 const DEFAULT_HEADER_BACKDROP_COLOR = '#2a251e';
+const DEFAULT_BODY_BACKDROP_COLOR = '#f3e6cf';
 
 const DEFAULT_TRAITS = ['-', '-', '-', '-', '-', '-', '-', '-'];
 const MINION_ATTRIBUTE_TYPES = ['Hambre', 'Cuerpo', 'Mente'];
@@ -2407,6 +2408,24 @@ const applyHeaderColorFilter = (context, x, y, width, height, color) => {
   context.restore();
 };
 
+const applyBodyColorFilter = (context, x, y, width, height, color) => {
+  if (!color || color === DEFAULT_BODY_BACKDROP_COLOR) return;
+
+  context.save();
+  context.globalCompositeOperation = 'color';
+  context.fillStyle = color;
+  context.globalAlpha = 0.42;
+  context.fillRect(x, y, width, height);
+  context.restore();
+
+  context.save();
+  context.globalCompositeOperation = 'multiply';
+  context.fillStyle = color;
+  context.globalAlpha = 0.08;
+  context.fillRect(x, y, width, height);
+  context.restore();
+};
+
 const drawGeneratedHeaderBackdrop = (context, x, y, width, height, headerBackdropColor = DEFAULT_HEADER_BACKDROP_COLOR, stardustImg = null) => {
   context.save();
   // 1. Draw base paper color
@@ -2414,7 +2433,7 @@ const drawGeneratedHeaderBackdrop = (context, x, y, width, height, headerBackdro
   context.fillRect(x, y, width, height);
 
   // 2. Draw paper texture (noise, vignettes)
-  drawPaperTexture(context, x, y, width, height, headerBackdropColor, stardustImg);
+  drawPaperTexture(context, x, y, width, height, headerBackdropColor, stardustImg, true);
 
   // 3. Apply color filter if active
   if (headerBackdropColor && headerBackdropColor !== DEFAULT_HEADER_BACKDROP_COLOR) {
@@ -2461,7 +2480,7 @@ const applyReferenceCardLayoutScale = (context) => {
   context.scale(scale, scale);
 };
 
-const drawPaperTexture = (context, x, y, width, height, accent = '#c46f1f', stardustImg = null) => {
+const drawPaperTexture = (context, x, y, width, height, accent = '#c46f1f', stardustImg = null, isHeader = false) => {
   context.save();
   context.beginPath();
   context.rect(x, y, width, height);
@@ -2601,9 +2620,13 @@ const drawPaperTexture = (context, x, y, width, height, accent = '#c46f1f', star
   context.fillRect(x, y + height - vignette, width, vignette);
 
   // 7. Accent color soft overlay wash
-  context.globalAlpha = 0.03;
-  context.fillStyle = accent;
-  context.fillRect(x, y, width, height);
+  if (!isHeader && accent && accent.toLowerCase() !== '#c46f1f') {
+    applyBodyColorFilter(context, x, y, width, height, accent);
+  } else {
+    context.globalAlpha = 0.03;
+    context.fillStyle = accent;
+    context.fillRect(x, y, width, height);
+  }
 
   context.restore();
 };
