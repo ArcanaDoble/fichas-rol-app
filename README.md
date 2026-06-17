@@ -183,7 +183,13 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.7.15**
+> **Versión actual: 2.7.16**
+
+**Resumen de cambios v2.7.16:**
+
+- **Alineación y centrado del primer bloque modular**:
+  - Se implementó un desplazamiento dinámico en la coordenada central (`centerY`) del primer contenedor (`index === 0`).
+  - Al no contar con línea divisoria superior, se aplica un ajuste de `-34px` (frente a los `-14px` normales) que desplaza la barra de rango o el panel del minion `20px` hacia arriba. Esto balancea simétricamente el aire superior libre bajo el encabezado dorado y la separación con respecto a la primera divisoria inferior.
 
 **Resumen de cambios v2.7.15:**
 

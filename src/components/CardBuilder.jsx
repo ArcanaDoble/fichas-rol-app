@@ -2965,8 +2965,8 @@ const drawSectionDiamond = (context, x, y, size, accent) => {
 const MODULAR_CONTENT_TOP = 805;
 const MODULAR_DIVIDER_BOTTOM_INSET = 14;
 
-const getModularBlockCenterY = (y, height) => (
-  y + height / 2 - MODULAR_DIVIDER_BOTTOM_INSET
+const getModularBlockCenterY = (y, height, isFirst = false) => (
+  y + height / 2 - (isFirst ? 34 : MODULAR_DIVIDER_BOTTOM_INSET)
 );
 
 const drawContainerDivider = (context, y, accent) => {
@@ -3057,13 +3057,13 @@ const drawEmptyContainersMessage = (context) => {
   context.restore();
 };
 
-const drawModularRange = (context, y, height, selectedIndex, accent) => {
+const drawModularRange = (context, y, height, selectedIndex, accent, isFirst = false) => {
   const labels = ['TOQUE', 'CERCANO', 'INTERMEDIO', 'LEJANO', 'EXTREMO'];
   const centerX = 944;
   const width = 1148;
   const startX = centerX - width / 2;
   const endX = centerX + width / 2;
-  const trackY = getModularBlockCenterY(y, height) + 12;
+  const trackY = getModularBlockCenterY(y, height, isFirst) + 12;
   const step = (endX - startX) / 4;
   context.save();
   context.strokeStyle = '#252523';
@@ -4499,7 +4499,7 @@ const drawCardCanvas = (
       getModularContainerHeight(blockId, remainingHeight, index === blocks.length - 1, descriptionUnits),
     );
     const label = blockLabels[blockId] || blockId;
-    const blockCenterY = getModularBlockCenterY(y, blockHeight);
+    const blockCenterY = getModularBlockCenterY(y, blockHeight, index === 0);
 
     if (blockId !== 'consumption' && blockId !== 'range' && blockId !== 'description' && blockId !== 'minion') {
       drawContainerLabel(context, label, blockCenterY, accent);
@@ -4508,7 +4508,7 @@ const drawCardCanvas = (
     }
 
     if (blockId === 'range') {
-      drawModularRange(context, y, blockHeight, alcance, accent);
+      drawModularRange(context, y, blockHeight, alcance, accent, index === 0);
     } else if (blockId === 'consumption') {
       drawModularConsumption(
         context,
