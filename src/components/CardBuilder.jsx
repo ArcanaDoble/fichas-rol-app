@@ -6107,13 +6107,39 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     const targetIndex = descriptionContainers.findIndex((container) => container.key === targetContainer.key);
     const currentText = containerDescriptions[targetContainer.key] ?? (targetIndex === 0 ? description : '');
     const token = createDescriptionIconToken(iconId);
-    const nextText = currentText.trim().length > 0 ? `${currentText} ${token}` : token;
+
+    const textarea = containerDescriptionRefs.current[targetContainer.key];
+    let nextText = "";
+    let cursorPosition = 0;
+
+    if (textarea) {
+      const selectionStart = textarea.selectionStart;
+      const selectionEnd = textarea.selectionEnd;
+      const textBefore = currentText.substring(0, selectionStart);
+      const textAfter = currentText.substring(selectionEnd);
+
+      const needsSpaceBefore = textBefore.length > 0 && !textBefore.endsWith(' ');
+      const needsSpaceAfter = textAfter.length > 0 && !textAfter.startsWith(' ');
+
+      const insertedToken = (needsSpaceBefore ? ' ' : '') + token + (needsSpaceAfter ? ' ' : '');
+      nextText = textBefore + insertedToken + textAfter;
+      cursorPosition = selectionStart + insertedToken.length;
+    } else {
+      nextText = currentText.trim().length > 0 ? `${currentText} ${token}` : token;
+    }
 
     if (targetIndex === 0) {
       handleDescriptionChange(nextText);
     }
     handleContainerDescriptionChange(targetContainer.key, nextText);
     setActiveDescriptionKey(targetContainer.key);
+
+    if (textarea) {
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(cursorPosition, cursorPosition);
+      }, 0);
+    }
   };
 
   return (
