@@ -4299,7 +4299,7 @@ const getModularContainerHeight = (blockId, remainingHeight, isLast, description
   if (blockId === 'consumption') return 190;
   if (blockId === 'damage') return 180;
   if (blockId === 'traits') return 190;
-  if (blockId === 'minion') return 190;
+  if (blockId === 'minion') return 240;
   if (blockId === 'charge') return 0;
   if (blockId === 'description') {
     const baseHeight = Math.max(MODULAR_DESCRIPTION_UNIT_HEIGHT, MODULAR_DESCRIPTION_UNIT_HEIGHT * descriptionUnits);
@@ -4501,7 +4501,7 @@ const drawCardCanvas = (
     const label = blockLabels[blockId] || blockId;
     const blockCenterY = getModularBlockCenterY(y, blockHeight);
 
-    if (blockId !== 'consumption' && blockId !== 'range' && blockId !== 'description') {
+    if (blockId !== 'consumption' && blockId !== 'range' && blockId !== 'description' && blockId !== 'minion') {
       drawContainerLabel(context, label, blockCenterY, accent);
     } else if (blockId === 'description' && (containerDescriptionStyles[blockKey] || singleTextStyle || 'principal') !== 'narrative') {
       drawContainerLabel(context, label, y + 50, accent);
