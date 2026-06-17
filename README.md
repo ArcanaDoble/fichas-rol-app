@@ -183,7 +183,14 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.7.11**
+> **Versión actual: 2.7.12**
+
+**Resumen de cambios v2.7.12:**
+
+- **Presupuesto dinámico de altura física en contenedores**:
+  - Se implementó un control dinámico basado en la altura física disponible de `1581px` (`2386px` de alto total - `805px` de inicio modular `MODULAR_CONTENT_TOP`) para la adición de contenedores modulares.
+  - Tanto la función `addCardContainer` como los botones "+ Contenedor" de la interfaz se deshabilitan dinámicamente si añadir un contenedor causaría un desbordamiento visual.
+  - Esto permite combinar hasta 10 contenedores si son de tipo compacto (daño, consumo, rasgos), o menos si se configuran bloques de mayor altura física (minions, descripciones grandes).
 
 **Resumen de cambios v2.7.11:**
 

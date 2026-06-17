@@ -90,7 +90,7 @@ const DEFAULT_CARD_CONTAINERS_BY_TYPE = {
   status: ['description', 'charge'],
 };
 
-const MAX_CARD_CONTAINERS = 6;
+const MAX_CARD_CONTAINERS = 10;
 const MAX_TRAITS_PER_CONTAINER = 3;
 const SINGLE_INSTANCE_CARD_CONTAINERS = new Set(['range', 'minion', 'charge']);
 
@@ -4254,6 +4254,20 @@ const getRenderableCardContainers = (containers) => (
     .filter((block) => block.id !== 'charge')
 );
 
+const getContainersTotalHeight = (containers, containerDescriptionSizes = {}) => {
+  const blocks = getRenderableCardContainers(containers);
+  const fixedHeight = blocks.reduce((total, block) => {
+    if (block.id === 'description') {
+      const units = containerDescriptionSizes[block.key] || 1;
+      return total + Math.max(MODULAR_DESCRIPTION_UNIT_HEIGHT, MODULAR_DESCRIPTION_UNIT_HEIGHT * units);
+    }
+    return total + getModularContainerHeight(block.id, 0, false);
+  }, 0);
+  const hasChargeFooter = containers.some((container, index) => getContainerId(container, index) === 'charge');
+  const footerHeight = hasChargeFooter ? CHARGE_FOOTER_RESERVED_HEIGHT : 0;
+  return fixedHeight + footerHeight;
+};
+
 const getDescriptionUnitBudget = (containers, cardType = 'weapon') => {
   const blocks = getRenderableCardContainers(containers, cardType);
   const descriptionCount = blocks.filter((block) => block.id === 'description').length;
@@ -4400,50 +4414,27 @@ const drawCardCanvas = (
   const descriptionUnitBudget = getDescriptionUnitBudget(cardContainers, cardType);
   let usedDescriptionUnits = 0;
   const contentBottom = hasChargeFooter ? 2386 - CHARGE_FOOTER_RESERVED_HEIGHT : 2386;
+  let y = MODULAR_CONTENT_TOP;
 
-  // 1. Precalculo de alturas de cada bloque
-  let tempUsedDescriptionUnits = 0;
-  const blockHeights = blocks.map((block, index) => {
+  blocks.forEach((block, index) => {
     const blockId = block.id;
     const blockKey = block.key;
     const remainingDescriptionCount = blocks.slice(index + 1).filter((nextBlock) => nextBlock.id === 'description').length;
     const descriptionUnits = blockId === 'description'
       ? clampDescriptionUnits(
         containerDescriptionSizes[blockKey] || 1,
-        tempUsedDescriptionUnits,
+        usedDescriptionUnits,
         remainingDescriptionCount,
         descriptionUnitBudget,
       )
       : 1;
-    if (blockId === 'description') {
-      tempUsedDescriptionUnits += descriptionUnits;
-    }
-    const maxRemaining = contentBottom - MODULAR_CONTENT_TOP;
-    const naturalHeight = getModularContainerHeight(blockId, maxRemaining, index === blocks.length - 1, descriptionUnits);
-    return {
-      height: naturalHeight,
-      descriptionUnits,
-    };
-  });
-
-  // 2. Cálculo de espacio sobrante e incremento de gap
-  const totalHeightOfBlocks = blockHeights.reduce((sum, item) => sum + item.height, 0);
-  const extraSpace = contentBottom - MODULAR_CONTENT_TOP - totalHeightOfBlocks;
-  const maxGap = 65; // Límite estético de separación
-  const rawGap = extraSpace > 0 && blocks.length > 0 ? extraSpace / (blocks.length + 1) : 0;
-  const gapIncrement = Math.min(maxGap, rawGap);
-
-  // 3. Bucle de dibujo con coordenadas distribuidas
-  let y = MODULAR_CONTENT_TOP + gapIncrement;
-
-  blocks.forEach((block, index) => {
-    const blockId = block.id;
-    const blockKey = block.key;
-    const { height: naturalHeight, descriptionUnits } = blockHeights[index];
 
     if (y >= contentBottom - 120) return;
     const remainingHeight = contentBottom - y;
-    const blockHeight = Math.min(remainingHeight, naturalHeight);
+    const blockHeight = Math.min(
+      remainingHeight,
+      getModularContainerHeight(blockId, remainingHeight, index === blocks.length - 1, descriptionUnits),
+    );
     const label = blockLabels[blockId] || blockId;
     const blockCenterY = getModularBlockCenterY(y, blockHeight);
 
@@ -4497,14 +4488,12 @@ const drawCardCanvas = (
       );
     }
 
-    // Dibujo del divisor centrado en el gap
-    const dividerY = y + blockHeight + gapIncrement / 2;
+    const dividerY = y + blockHeight - 14;
     const isLastBlock = index === blocks.length - 1;
     if (!isLastBlock && dividerY < contentBottom - 18) {
       drawContainerDivider(context, dividerY, accent);
     }
-
-    y += blockHeight + gapIncrement;
+    y += blockHeight;
     if (blockId === 'description') {
       usedDescriptionUnits += descriptionUnits;
     }
@@ -5557,18 +5546,25 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
         return current;
       }
       const nextContainer = createCardContainer(containerId);
+      let tentative;
       if (containerId === 'charge') {
-        return [...current, nextContainer];
+        tentative = [...current, nextContainer];
+      } else {
+        const chargeIndex = current.findIndex((container, index) => getContainerId(container, index) === 'charge');
+        if (chargeIndex === -1) {
+          tentative = [...current, nextContainer];
+        } else {
+          tentative = [
+            ...current.slice(0, chargeIndex),
+            nextContainer,
+            ...current.slice(chargeIndex),
+          ];
+        }
       }
-      const chargeIndex = current.findIndex((container, index) => getContainerId(container, index) === 'charge');
-      if (chargeIndex === -1) {
-        return [...current, nextContainer];
+      if (getContainersTotalHeight(tentative, containerDescriptionSizes) > 1581) {
+        return current;
       }
-      return [
-        ...current.slice(0, chargeIndex),
-        nextContainer,
-        ...current.slice(chargeIndex),
-      ];
+      return tentative;
     });
   };
 
@@ -6933,7 +6929,27 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                 {CARD_CONTAINER_TYPES.map((container) => {
                   const isFull = cardContainers.length >= MAX_CARD_CONTAINERS;
                   const isSingletonTaken = SINGLE_INSTANCE_CARD_CONTAINERS.has(container.id) && hasContainer(container.id);
-                  const disabled = isFull || isSingletonTaken;
+                  
+                  // Validation of physical height budget (1581px)
+                  const nextContainer = createCardContainer(container.id);
+                  let tentative;
+                  if (container.id === 'charge') {
+                    tentative = [...cardContainers, nextContainer];
+                  } else {
+                    const chargeIndex = cardContainers.findIndex((c, idx) => getContainerId(c, idx) === 'charge');
+                    if (chargeIndex === -1) {
+                      tentative = [...cardContainers, nextContainer];
+                    } else {
+                      tentative = [
+                        ...cardContainers.slice(0, chargeIndex),
+                        nextContainer,
+                        ...cardContainers.slice(chargeIndex),
+                      ];
+                    }
+                  }
+                  const wouldOverflow = getContainersTotalHeight(tentative, containerDescriptionSizes) > 1581;
+                  const disabled = isFull || isSingletonTaken || wouldOverflow;
+                  
                   return (
                     <button
                       key={container.id}
