@@ -4517,6 +4517,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   // History system for undo/redo
   const descriptionHistoryRef = useRef({ past: [], future: [] });
   const flavorTextHistoryRef = useRef({ past: [], future: [] });
+  const containerDescriptionHistoryRef = useRef({});
   const lastHistoryPushRef = useRef(0);
 
   const saveToHistory = (historyRef, currentValue) => {
@@ -4568,6 +4569,42 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
         const nextValue = hist.future.pop();
         hist.past.push(currentValue);
         stateSetter(nextValue);
+      }
+    }
+  };
+
+  const handleContainerTextareaKeyDown = (event, containerKey) => {
+    const isUndo = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z';
+    const isRedo = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y';
+
+    if (isUndo || isRedo) {
+      if (!containerDescriptionHistoryRef.current[containerKey]) {
+        containerDescriptionHistoryRef.current[containerKey] = { past: [], future: [] };
+      }
+      const histRef = { current: containerDescriptionHistoryRef.current[containerKey] };
+      const currentVal = containerDescriptions[containerKey] ?? '';
+
+      event.preventDefault();
+      if (isUndo) {
+        const hist = histRef.current;
+        if (hist.past.length > 0) {
+          const previousValue = hist.past.pop();
+          hist.future.push(currentVal);
+          setContainerDescriptions((currentDescriptions) => ({
+            ...currentDescriptions,
+            [containerKey]: previousValue,
+          }));
+        }
+      } else if (isRedo) {
+        const hist = histRef.current;
+        if (hist.future.length > 0) {
+          const nextValue = hist.future.pop();
+          hist.past.push(currentVal);
+          setContainerDescriptions((currentDescriptions) => ({
+            ...currentDescriptions,
+            [containerKey]: nextValue,
+          }));
+        }
       }
     }
   };
@@ -5212,6 +5249,15 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   };
 
   const handleContainerDescriptionChange = (containerKey, value) => {
+    if (!containerDescriptionHistoryRef.current[containerKey]) {
+      containerDescriptionHistoryRef.current[containerKey] = { past: [], future: [] };
+    }
+    const currentVal = containerDescriptions[containerKey] ?? '';
+    saveToHistory(
+      { current: containerDescriptionHistoryRef.current[containerKey] },
+      currentVal
+    );
+
     setContainerDescriptions((currentDescriptions) => ({
       ...currentDescriptions,
       [containerKey]: value,
@@ -6315,6 +6361,13 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                 <textarea
                   value={description}
                   onChange={(event) => handleDescriptionChange(event.target.value)}
+                  onKeyDown={(event) => handleTextareaKeyDown(
+                    event,
+                    null,
+                    setDescription,
+                    descriptionHistoryRef,
+                    description
+                  )}
                   rows={3}
                   className="w-full resize-y border border-[#c8aa6e]/25 bg-[#09090b]/80 px-3 py-2 text-sm font-semibold leading-relaxed text-[#f0e6d2] outline-none transition placeholder:text-slate-600 focus:border-[#c8aa6e]/70"
                   placeholder="Texto inferior de la carta"
@@ -7209,6 +7262,9 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                             handleDescriptionChange(event.target.value);
                           }
                           handleContainerDescriptionChange(container.key, event.target.value);
+                        }}
+                        onKeyDown={(event) => {
+                          handleContainerTextareaKeyDown(event, container.key);
                         }}
                         onFocus={() => {
                           setActiveDescriptionKey(container.key);
