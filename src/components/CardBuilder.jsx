@@ -4008,7 +4008,7 @@ const drawActionCostAssets = (context, cost, numberImg, hourglassImg) => {
   context.drawImage(numberImg, startX, centerY - numberHeight / 2, numberWidth, numberHeight);
   for (let index = 0; index < cost; index += 1) {
     const x = hourglassStartX + index * (hourglassWidth + hourglassGap);
-    const yOffset = cost === 3 ? 20 : 46;
+    const yOffset = (cost === 3 || cost === 4) ? 20 : 46;
     context.drawImage(hourglassImg, x, centerY - hourglassHeight / 2 + yOffset, hourglassWidth, hourglassHeight);
   }
   context.restore();
