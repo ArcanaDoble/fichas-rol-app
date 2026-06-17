@@ -3743,11 +3743,19 @@ const drawModularTraits = (context, centerY, traits, visibleTraitRows, accent) =
     context.strokeStyle = 'rgba(181,92,18,0.74)';
     context.stroke();
 
-    context.font = '900 34px Lato, Arial, sans-serif';
+    let fontSize = 34;
+    context.font = `900 ${fontSize}px Lato, Arial, sans-serif`;
+    const maxTextWidth = badgeWidth - 72;
+    const upperLabel = label.toUpperCase();
+    while (fontSize > 16 && context.measureText(upperLabel).width > maxTextWidth) {
+      fontSize -= 1;
+      context.font = `900 ${fontSize}px Lato, Arial, sans-serif`;
+    }
+
     context.fillStyle = '#202321';
     context.textAlign = 'center';
     context.textBaseline = 'middle';
-    context.fillText(label.toUpperCase(), x + badgeWidth / 2 - 8, centerY + 1);
+    context.fillText(upperLabel, x + badgeWidth / 2 - 8, centerY + 1);
   });
   context.restore();
 };
