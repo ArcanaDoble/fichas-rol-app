@@ -129,7 +129,10 @@ export const ELEMENT_TYPES = [
   { id: 'Rayo', label: 'Rayo' },
   { id: 'Tierra', label: 'Tierra' },
   { id: 'Veneno', label: 'Veneno' },
-  { id: 'Viento', label: 'Viento' }
+  { id: 'Viento', label: 'Viento' },
+  { id: 'Magia', label: 'Magia' },
+  { id: 'Distancia', label: 'Distancia' },
+  { id: 'Espada', label: 'Espada' }
 ];
 
 const HEADER_ICON_SOURCES = {
@@ -142,6 +145,9 @@ const HEADER_ICON_SOURCES = {
   Tierra: '/cabecera/tierra.webp',
   Veneno: '/cabecera/veneno.webp',
   Viento: '/cabecera/viento.webp',
+  Magia: '/cabecera/magia.webp',
+  Distancia: '/cabecera/distancia.webp',
+  Espada: '/cabecera/espada.webp',
 };
 
 const ELEMENT_CONSUMPTION_ICON_SOURCES = {
@@ -154,6 +160,9 @@ const ELEMENT_CONSUMPTION_ICON_SOURCES = {
   Tierra: '/elementos_new/tierra.webp',
   Veneno: '/elementos_new/veneno.webp',
   Viento: '/elementos_new/viento.webp',
+  Magia: '/elementos_new/magia.webp',
+  Distancia: '/elementos_new/distancia.webp',
+  Espada: '/elementos_new/espada.webp',
 };
 
 const ELEMENT_CONSUMPTION_STYLES = {
@@ -166,6 +175,9 @@ const ELEMENT_CONSUMPTION_STYLES = {
   Tierra: { stroke: '#827044', fill: 'rgba(130,112,68,0.15)' },
   Veneno: { stroke: '#668f4f', fill: 'rgba(102,143,79,0.15)' },
   Viento: { stroke: '#6d958a', fill: 'rgba(109,149,138,0.15)' },
+  Magia: { stroke: '#8b5cf6', fill: 'rgba(139,92,246,0.15)' },
+  Distancia: { stroke: '#fbbf24', fill: 'rgba(251,191,36,0.15)' },
+  Espada: { stroke: '#94a3b8', fill: 'rgba(148,163,184,0.15)' },
 };
 
 const DESCRIPTION_ICON_STYLES = {
@@ -1220,6 +1232,9 @@ const DESCRIPTION_ICON_LIBRARY = [
   { id: 'Tierra', label: 'Tierra', src: '/elementos_new/tierra.webp' },
   { id: 'Veneno', label: 'Veneno', src: '/elementos_new/veneno.webp' },
   { id: 'Viento', label: 'Viento', src: '/elementos_new/viento.webp' },
+  { id: 'Magia', label: 'Magia', src: '/elementos_new/magia.webp' },
+  { id: 'Distancia', label: 'Distancia', src: '/elementos_new/distancia.webp' },
+  { id: 'Espada', label: 'Espada', src: '/elementos_new/espada.webp' },
 ];
 
 const KEYWORD_ICONS = Object.fromEntries(

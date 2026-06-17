@@ -2542,3 +2542,9 @@ Guía rápida: ver `docs/Minimapa.md`.
 
 - **Undo y Redo personalizados (`Ctrl + Z` / `Ctrl + Y`)**: Se implementó un sistema de control de historial personalizado para los campos de texto (`<textarea>`) de descripción de las cartas en `CardBuilder.jsx`. Esto anula el comportamiento nativo del navegador que a veces falla con los componentes controlados de React, permitiendo al usuario volver atrás y adelante en sus cambios de texto de manera fluida y sin perder el foco.
 - **Soporte para Contenedores Modulares**: El historial de cambios se mantiene de forma independiente para cada contenedor de descripción utilizando pilas de historial mapeadas por clave única de contenedor (`containerKey`), evitando mezclas de cambios entre distintos contenedores.
+
+## Novedades: Nuevos Iconos de Cabecera y Compendio Visual (v2.4.55)
+
+- **Nuevos iconos de combate y tipo**: Se han agregado los iconos de `Magia`, `Distancia` y `Espada` como opciones seleccionables para el icono de cabecera y ranuras de la carta.
+- **Integración con el Compendio Visual**: Estos tres nuevos iconos están ahora disponibles en la paleta del compendio visual, permitiendo insertarlos dinámicamente en cualquier descripción del constructor de cartas en el cursor de forma fluida.
+- **Estilos y Tinte de Ranuras**: Se definieron los colores de trazo y fondo rúnico personalizados en `ELEMENT_CONSUMPTION_STYLES` para los tres nuevos iconos (`Magia` en tono violeta, `Distancia` en tono ámbar y `Espada` en tono slate/plata) para su visualización y resaltado coherente en el canvas.
