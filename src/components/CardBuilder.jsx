@@ -3775,6 +3775,90 @@ const drawModularTraits = (context, centerY, traits, visibleTraitRows, accent) =
   context.restore();
 };
 
+const drawModularMinion = (context, centerY, minionAttributes, accent = '#c46f1f', resourceImages = {}) => {
+  context.save();
+  const attributes = ['Cuerpo', 'Mente', 'Hambre'];
+  const boxWidth = 280;
+  const boxHeight = 110;
+  const gap = 34;
+  const totalWidth = attributes.length * boxWidth + (attributes.length - 1) * gap;
+  const startX = 944 - totalWidth / 2;
+  const y = centerY - boxHeight / 2;
+
+  attributes.forEach((attr, index) => {
+    const boxX = startX + index * (boxWidth + gap);
+    
+    // Contenedor biselado
+    const bevel = 12;
+    context.beginPath();
+    context.moveTo(boxX + bevel, y);
+    context.lineTo(boxX + boxWidth - bevel, y);
+    context.lineTo(boxX + boxWidth, y + bevel);
+    context.lineTo(boxX + boxWidth, y + boxHeight - bevel);
+    context.lineTo(boxX + boxWidth - bevel, y + boxHeight);
+    context.lineTo(boxX + bevel, y + boxHeight);
+    context.lineTo(boxX, y + boxHeight - bevel);
+    context.lineTo(boxX, y + bevel);
+    context.closePath();
+    
+    context.fillStyle = 'rgba(9, 9, 11, 0.65)';
+    context.fill();
+    
+    context.lineWidth = 3.5;
+    context.strokeStyle = accent;
+    context.stroke();
+
+    // Línea dorada interior de detalle
+    const innerInset = 6;
+    const innerBevel = bevel - 2;
+    context.beginPath();
+    context.moveTo(boxX + innerInset + innerBevel, y + innerInset);
+    context.lineTo(boxX + boxWidth - innerInset - innerBevel, y + innerInset);
+    context.lineTo(boxX + boxWidth - innerInset, y + innerInset + innerBevel);
+    context.lineTo(boxX + boxWidth - innerInset, y + boxHeight - innerInset - innerBevel);
+    context.lineTo(boxX + boxWidth - innerInset - innerBevel, y + boxHeight - innerInset);
+    context.lineTo(boxX + innerInset + innerBevel, y + boxHeight - innerInset);
+    context.lineTo(boxX + innerInset, y + boxHeight - innerInset - innerBevel);
+    context.lineTo(boxX + innerInset, y + innerInset + innerBevel);
+    context.closePath();
+    context.lineWidth = 1.2;
+    context.strokeStyle = 'rgba(200, 170, 110, 0.25)';
+    context.stroke();
+
+    // Dibujo del icono
+    const iconKey = `minion:${attr}`;
+    const iconImg = resourceImages[iconKey];
+    const iconSize = 64;
+    const iconX = boxX + 28;
+    const iconY = centerY - iconSize / 2;
+
+    if (iconImg) {
+      context.drawImage(iconImg, iconX, iconY, iconSize, iconSize);
+    } else {
+      context.fillStyle = accent;
+      context.beginPath();
+      context.arc(iconX + iconSize / 2, centerY, iconSize / 3, 0, Math.PI * 2);
+      context.fill();
+    }
+
+    // Dibujo de textos
+    const textCenterX = boxX + 184;
+    
+    context.font = "900 16px 'Cinzel', 'Times New Roman', serif";
+    context.fillStyle = '#8a8a8a';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(attr.toUpperCase(), textCenterX, centerY - 22);
+
+    const val = minionAttributes[attr] ?? 0;
+    context.font = "900 48px 'Oswald', 'Bebas Neue', 'Arial Black', sans-serif";
+    context.fillStyle = '#202321';
+    context.fillText(String(val), textCenterX, centerY + 16);
+  });
+
+  context.restore();
+};
+
 const drawModularCombat = (context, centerY, weaponType, weaponIconImg) => {
   context.save();
   const iconSize = 96;
@@ -4152,7 +4236,7 @@ const getModularContainerHeight = (blockId, remainingHeight, isLast, description
   if (blockId === 'consumption') return 190;
   if (blockId === 'damage') return 180;
   if (blockId === 'traits') return 190;
-  if (blockId === 'minion') return 0;
+  if (blockId === 'minion') return 190;
   if (blockId === 'charge') return 0;
   if (blockId === 'description') {
     const baseHeight = Math.max(MODULAR_DESCRIPTION_UNIT_HEIGHT, MODULAR_DESCRIPTION_UNIT_HEIGHT * descriptionUnits);
@@ -4167,7 +4251,7 @@ const getModularContainerHeight = (blockId, remainingHeight, isLast, description
 const getRenderableCardContainers = (containers) => (
   containers
     .map((container, index) => normalizeCardContainer(container, index))
-    .filter((block) => block.id !== 'minion' && block.id !== 'charge')
+    .filter((block) => block.id !== 'charge')
 );
 
 const getDescriptionUnitBudget = (containers, cardType = 'weapon') => {
@@ -4375,7 +4459,7 @@ const drawCardCanvas = (
         accent,
       );
     } else if (blockId === 'minion') {
-      // Placeholder: se gestiona desde el menú, pero todavía no se renderiza.
+      drawModularMinion(context, blockCenterY, minionAttributes, accent, resourceImages);
     } else if (blockId === 'description') {
       drawModularDescription(
         context,
@@ -4868,6 +4952,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     const usesConsumptionContainer = normalizedContainers.some((container) => container.id === 'consumption');
     const usesTraitsContainer = normalizedContainers.some((container) => container.id === 'traits');
     const usesChargeContainer = normalizedContainers.some((container) => container.id === 'charge');
+    const usesMinionContainer = normalizedContainers.some((container) => container.id === 'minion');
 
     if (cardType === 'weapon' || cardType === 'skill') {
       const iconSrc = getWeaponTypeIconSrc(weaponType);
@@ -4911,7 +4996,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     const loadsConsumptionResources = usesConsumptionContainer && ((cardType === 'action' && actionCenterMode === 'dado') || (
       RESOURCE_CARD_TYPES.has(cardType) && (resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY)
     ) || cardType === 'status');
-    const loadsMinionAttributes = usesTraitsContainer && cardType === 'skill';
+    const loadsMinionAttributes = usesMinionContainer || (usesTraitsContainer && cardType === 'skill');
 
     if (loadsChargeResources || loadsConsumptionResources || loadsMinionAttributes) {
       const resourceOptions = [
@@ -4923,6 +5008,12 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
           label: option.label,
           src: ELEMENT_CONSUMPTION_ICON_SOURCES[option.id] || `/elementos/${option.id}.webp`,
           cacheKey: `consumption:${option.id}`,
+        })),
+        ...MINION_ATTRIBUTE_TYPES.map((attr) => ({
+          id: attr,
+          label: attr,
+          src: `/interfaz/cargas/${attr}.webp`,
+          cacheKey: `minion:${attr}`,
         })),
       ];
       const allConsumptionSlots = [
@@ -4938,7 +5029,9 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       ) || (
         loadsConsumptionResources && option.id === 'Tiempo' && option.cacheKey === 'consumption:Tiempo'
       ) || (
-        loadsMinionAttributes && MINION_ATTRIBUTE_TYPES.includes(option.id) && option.cacheKey.startsWith('attribute:')
+        loadsMinionAttributes && MINION_ATTRIBUTE_TYPES.includes(option.id) && (
+          option.cacheKey.startsWith('attribute:') || option.cacheKey.startsWith('minion:')
+        )
       ));
 
       await Promise.all(requiredResourceOptions.map(async (option) => {

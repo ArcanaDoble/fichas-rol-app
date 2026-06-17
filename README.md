@@ -2548,3 +2548,11 @@ Guía rápida: ver `docs/Minimapa.md`.
 - **Nuevos iconos de combate y tipo**: Se han agregado los iconos de `Magia`, `Distancia` y `Espada` como opciones seleccionables para el icono de cabecera y ranuras de la carta.
 - **Integración con el Compendio Visual**: Estos tres nuevos iconos están ahora disponibles en la paleta del compendio visual, permitiendo insertarlos dinámicamente en cualquier descripción del constructor de cartas en el cursor de forma fluida.
 - **Estilos y Tinte de Ranuras**: Se definieron los colores de trazo y fondo rúnico personalizados en `ELEMENT_CONSUMPTION_STYLES` para los tres nuevos iconos (`Magia` en tono violeta, `Distancia` en tono ámbar y `Espada` en tono slate/plata) para su visualización y resaltado coherente en el canvas.
+
+## Novedades: Renderizado del Contenedor de Minion (v2.4.56)
+
+- **Renderizado Premium de Minions**: Se activó la visualización del contenedor `Minion` en el canvas. Dibuja de forma simétrica tres cajas de atributos alineadas horizontalmente correspondientes a `Cuerpo`, `Mente` y `Hambre`.
+- **Estructura Rúnica y Biseles**: Cada contenedor de atributo posee un fondo oscuro translúcido (`rgba(9, 9, 11, 0.65)`), un contorno exterior de `3.5px` en el color de acento de la carta y un borde de detalle interior dorado en `rgba(200, 170, 110, 0.25)`.
+- **Indicadores de Alta Visibilidad**: Las cajas muestran el icono a color a la izquierda (`64x64px`) y los textos a la derecha (etiqueta superior en `Cinzel` de `16px` y el número indicador en `Oswald` / `Bebas Neue` de `48px` para máxima visibilidad).
+- **Precarga en Segundo Plano**: El motor del canvas detecta el uso del bloque de minion y precarga asíncronamente las imágenes oficiales de cargas (`/interfaz/cargas/`) para garantizar un redibujado instantáneo.
+
