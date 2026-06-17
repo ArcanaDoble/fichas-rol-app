@@ -65,6 +65,7 @@ const EMPTY_SLOT = '';
 const CARD_TYPES = [
   { id: 'general', label: 'General', containerId: 'damage', maxTraits: 6, layout: 'general' },
   { id: 'actions', label: 'Acciones', containerId: 'description', maxTraits: 0, layout: 'actions' },
+  { id: 'attribute', label: 'Atributo', containerId: 'description', maxTraits: 0, layout: 'attribute' },
 ];
 
 const CARD_CONTAINER_TYPES = [
@@ -84,6 +85,7 @@ const DEFAULT_CARD_CONTAINERS_BY_TYPE = {
   trap: ['range', 'consumption', 'traits', 'description', 'charge'],
   action: ['consumption', 'damage', 'description', 'charge'],
   actions: ['description'],
+  attribute: [],
   skill: ['range', 'damage', 'traits', 'minion', 'description', 'charge'],
   status: ['description', 'charge'],
 };
@@ -254,6 +256,11 @@ const ACTION_SPEED_OPTIONS = [
     cost: 4,
     description: 'Permite jugar una carta de coste 4.',
   },
+];
+const ATTRIBUTE_CARD_OPTIONS = [
+  { id: 'Cuerpo', label: 'Cuerpo', title: 'CUERPO', asset: 'Cuerpo.png' },
+  { id: 'Mente', label: 'Mente', title: 'MENTE', asset: 'Mente.png' },
+  { id: 'Hambre', label: 'Hambre', title: 'HAMBRE', asset: 'Hambre.png' },
 ];
 const RESOURCE_MODE_BOTH = 'charge-consumption';
 const RESOURCE_MODE_CHARGE_ONLY = 'charge-only';
@@ -3854,6 +3861,31 @@ const drawActionOrnamentLine = (context, centerX, y, width, accent, diamondSize 
   context.restore();
 };
 
+const drawAttributeOrnamentLine = (context, centerX, y, width, accent, diamondSize = 34) => {
+  const gap = 90;
+  context.save();
+  context.lineCap = 'round';
+  context.strokeStyle = 'rgba(255,224,166,0.18)';
+  context.lineWidth = 8;
+  context.beginPath();
+  context.moveTo(centerX - width / 2, y);
+  context.lineTo(centerX - gap / 2, y);
+  context.moveTo(centerX + gap / 2, y);
+  context.lineTo(centerX + width / 2, y);
+  context.stroke();
+
+  context.strokeStyle = 'rgba(96,43,12,0.72)';
+  context.lineWidth = 4;
+  context.beginPath();
+  context.moveTo(centerX - width / 2, y);
+  context.lineTo(centerX - gap / 2, y);
+  context.moveTo(centerX + gap / 2, y);
+  context.lineTo(centerX + width / 2, y);
+  context.stroke();
+  drawSectionDiamond(context, centerX, y, diamondSize, accent);
+  context.restore();
+};
+
 const drawActionBaseImage = (context, actionBaseImg) => {
   const sourceCrop = { left: 14, top: 22, right: 16, bottom: 13 };
   const scale = CANVAS_WIDTH / MODULAR_CARD_OUTER_BOUNDS.width;
@@ -3875,6 +3907,59 @@ const drawActionBaseImage = (context, actionBaseImg) => {
     MODULAR_CARD_OUTER_BOUNDS.width,
     visibleCardHeight,
   );
+};
+
+const drawAttributeBaseImage = (context, attributeBaseImg) => {
+  if (!attributeBaseImg) return;
+  const sourceCrop = { left: 0, top: 0, right: 0, bottom: 0 };
+  const scale = CANVAS_WIDTH / MODULAR_CARD_OUTER_BOUNDS.width;
+  const visibleCardHeight = CANVAS_HEIGHT / scale;
+  const imageWidth = attributeBaseImg.naturalWidth || attributeBaseImg.width || MODULAR_CARD_OUTER_BOUNDS.width;
+  const imageHeight = attributeBaseImg.naturalHeight || attributeBaseImg.height || visibleCardHeight;
+  const sourceX = Math.min(sourceCrop.left, imageWidth - 1);
+  const sourceY = Math.min(sourceCrop.top, imageHeight - 1);
+  const sourceWidth = Math.max(1, imageWidth - sourceCrop.left - sourceCrop.right);
+  const sourceHeight = Math.max(1, imageHeight - sourceCrop.top - sourceCrop.bottom);
+  context.drawImage(
+    attributeBaseImg,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    MODULAR_CARD_OUTER_BOUNDS.x,
+    MODULAR_CARD_OUTER_BOUNDS.y,
+    MODULAR_CARD_OUTER_BOUNDS.width,
+    visibleCardHeight,
+  );
+};
+
+const drawAttributeCard = (context, cardName, attributeBaseImg = null, accent = '#c46f1f') => {
+  context.save();
+  drawAttributeBaseImage(context, attributeBaseImg);
+
+  const titleLineTopY = 315;
+  const titleLineBottomY = 615;
+  const titleCenterY = (titleLineTopY + titleLineBottomY) / 2;
+
+  drawAttributeOrnamentLine(context, 944, titleLineTopY, 1280, accent, 30);
+
+  const title = normalizeCardName(cardName || 'CUERPO').toUpperCase();
+  const titleSize = fitActionTitleFont(context, title);
+  if ('letterSpacing' in context) context.letterSpacing = '0px';
+  context.font = `400 ${titleSize}px "Bebas Neue", "Arial Narrow", Impact, Lato, Arial, sans-serif`;
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillStyle = '#202321';
+  context.shadowColor = 'rgba(32,35,33,0.16)';
+  context.shadowBlur = 3;
+  const titleMetrics = context.measureText(title);
+  const titleAscent = titleMetrics.actualBoundingBoxAscent || titleSize * 0.72;
+  const titleDescent = titleMetrics.actualBoundingBoxDescent || titleSize * 0.18;
+  const visualTitleY = titleCenterY + (titleAscent - titleDescent) / 2;
+  context.fillText(title, 944, visualTitleY);
+  context.restore();
+
+  drawAttributeOrnamentLine(context, 944, titleLineBottomY, 1015, accent, 30);
 };
 
 const drawActionCostAssets = (context, cost, numberImg, hourglassImg) => {
@@ -4102,6 +4187,7 @@ const drawCardCanvas = (
   actionNumberImg = null,
   actionHourglassImg = null,
   generalBaseImg = null,
+  attributeBaseImg = null,
   headerImageTransform = DEFAULT_HEADER_IMAGE_TRANSFORM,
   headerBackdropColor = DEFAULT_HEADER_BACKDROP_COLOR,
   bodyColorActive = false,
@@ -4140,6 +4226,11 @@ const drawCardCanvas = (
       actionNumberImg,
       actionHourglassImg,
     );
+    context.restore();
+    return;
+  }
+  if (cardType === 'attribute') {
+    drawAttributeCard(context, cardName, attributeBaseImg, accent);
     context.restore();
     return;
   }
@@ -4369,6 +4460,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const [minionAttributes, setMinionAttributes] = useState(DEFAULT_MINION_ATTRIBUTES);
   const [actionCenterMode, setActionCenterMode] = useState('dado'); // 'dado' | 'Mente' | 'Cuerpo' | 'Hambre'
   const [actionSpeedId, setActionSpeedId] = useState('rapida');
+  const [attributeType, setAttributeType] = useState('Cuerpo');
 
   // History system for undo/redo
   const descriptionHistoryRef = useRef({ past: [], future: [] });
@@ -4630,6 +4722,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     let actionNumberImg = null;
     let actionHourglassImg = null;
     let generalBaseImg = null;
+    let attributeBaseImg = null;
     if (cardType === 'actions') {
       try {
         const speed = ACTION_SPEED_OPTIONS.find((option) => option.id === actionSpeedId) || ACTION_SPEED_OPTIONS[0];
@@ -4652,6 +4745,13 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
         generalBaseImg = await loadCachedImage(`${process.env.PUBLIC_URL || ''}/interfaz/general.png`);
       } catch (e) {
         console.error("Could not load general card base:", e);
+      }
+    } else if (cardType === 'attribute') {
+      try {
+        const attributeOption = ATTRIBUTE_CARD_OPTIONS.find((option) => option.id === attributeType) || ATTRIBUTE_CARD_OPTIONS[0];
+        attributeBaseImg = await loadCachedImage(`${process.env.PUBLIC_URL || ''}/interfaz/atributos/${attributeOption.asset}`);
+      } catch (e) {
+        console.error("Could not load attribute card base:", e);
       }
     }
 
@@ -4830,6 +4930,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       actionNumberImg,
       actionHourglassImg,
       generalBaseImg,
+      attributeBaseImg,
       headerImageTransform,
       headerColorActive && headerColor ? headerColor : DEFAULT_HEADER_BACKDROP_COLOR,
       bodyColorActive,
@@ -4838,7 +4939,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
 
     if (updateStatus) setImageStatus('ready');
     return undefined;
-  }, [cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, headerColorActive, headerColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode, headerImageSrc, headerImageTransform, cardContainers, containerTraits, containerDescriptions, containerDescriptionSizes, containerDamage, containerConsumptions, containerDescriptionStyles, actionSpeedId, bodyColorActive, bodyColor]);
+  }, [cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, headerColorActive, headerColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode, headerImageSrc, headerImageTransform, cardContainers, containerTraits, containerDescriptions, containerDescriptionSizes, containerDamage, containerConsumptions, containerDescriptionStyles, actionSpeedId, attributeType, bodyColorActive, bodyColor]);
 
   useEffect(() => {
     let disposed = false;
@@ -4875,6 +4976,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
         `${process.env.PUBLIC_URL || ''}/interfaz/acciones/3.webp`,
         `${process.env.PUBLIC_URL || ''}/interfaz/acciones/4.webp`,
         `${process.env.PUBLIC_URL || ''}/interfaz/acciones/reloj.webp`,
+        ...ATTRIBUTE_CARD_OPTIONS.map((option) => `${process.env.PUBLIC_URL || ''}/interfaz/atributos/${option.asset}`),
         ...WEAPON_TYPES.map((type) => getWeaponTypeIconSrc(type)),
         ...['D4', 'D6', 'D8', 'D10', 'D12', 'DX'].map((type) => `${process.env.PUBLIC_URL || ''}/dados/cartas/${type}.webp`),
         ...CHARGE_TYPES.map((option) => `${process.env.PUBLIC_URL || ''}${option.src}`),
@@ -5031,6 +5133,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     setDescriptionFormatColor('#ffffff');
     setActionCenterMode('dado');
     setActionSpeedId('rapida');
+    setAttributeType('Cuerpo');
     setSingleTextStyle('principal');
     setActiveDescriptionKey(null);
     setFocusedDescriptionKey(null);
@@ -5167,6 +5270,12 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     setDescription(speed.description);
   };
 
+  const handleAttributeTypeChange = (typeId) => {
+    const attributeOption = ATTRIBUTE_CARD_OPTIONS.find((option) => option.id === typeId) || ATTRIBUTE_CARD_OPTIONS[0];
+    setAttributeType(attributeOption.id);
+    setCardName(attributeOption.title);
+  };
+
   const handleDiceQtyChange = (value) => {
     setDiceQty(Math.min(MAX_DAMAGE_DICE_QTY, Math.max(1, value)));
   };
@@ -5281,6 +5390,12 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       setCardName(speed.title);
       setDescription(speed.description);
       setSelectedElement('Ninguno');
+    } else if (typeId === 'attribute') {
+      const attributeOption = ATTRIBUTE_CARD_OPTIONS.find((option) => option.id === attributeType) || ATTRIBUTE_CARD_OPTIONS[0];
+      setVisibleTraitRows(0);
+      setShowTraits(false);
+      setCardName(attributeOption.title);
+      setDescription('');
     } else {
       setVisibleTraitRows(3);
       setShowTraits(true);
@@ -5814,6 +5929,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     name: normalizeCardName(cardName) || 'Carta sin nombre',
     frontUrl,
     type,
+    ...(cardType === 'attribute' ? { attributeType } : {}),
     visibleToPlayers: true,
     createdAt: Date.now(),
     createdBy: currentUserId || ownerName || mode,
@@ -5920,6 +6036,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     [cardContainers, cardType],
   );
   const isActionTimingLayout = cardType === 'actions';
+  const isDedicatedBaseLayout = cardType === 'actions' || cardType === 'attribute';
   const getAvailableDescriptionUnits = (containerKey) => {
     const otherUsedUnits = descriptionContainers.reduce((total, container) => {
       if (container.key === containerKey) return total;
@@ -6063,7 +6180,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                 <Tag className="h-4 w-4" />
                 Tipo de carta
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {CARD_TYPES.map((type) => (
                   <button
                     key={type.id}
@@ -6127,7 +6244,31 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
               </div>
             )}
 
-            {!isActionTimingLayout && (
+            {cardType === 'attribute' && (
+              <div className="space-y-4 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
+                <div className="font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
+                  Atributo
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {ATTRIBUTE_CARD_OPTIONS.map((attributeOption) => (
+                    <button
+                      key={attributeOption.id}
+                      type="button"
+                      onClick={() => handleAttributeTypeChange(attributeOption.id)}
+                      className={`border px-2 py-2 text-[10px] font-black uppercase tracking-[0.12em] transition ${
+                        attributeType === attributeOption.id
+                          ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                          : 'border-slate-800 bg-[#09090b]/60 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                      }`}
+                    >
+                      {attributeOption.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!isDedicatedBaseLayout && (
             <div className="space-y-3 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
               <div className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
                 <ImageIcon className="h-4 w-4" />
@@ -6466,7 +6607,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
             </div>
             )}
 
-            {!isActionTimingLayout && (
+            {!isDedicatedBaseLayout && (
             <div className="space-y-3 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
               <div className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
                 <Plus className="h-4 w-4" />
@@ -6545,7 +6686,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
             </div>
             )}
 
-            {!isActionTimingLayout && cardType === 'general' && (
+            {!isDedicatedBaseLayout && cardType === 'general' && (
               <div className="space-y-4 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
                 <div className="font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
                   Datos de contenedores
@@ -6875,7 +7016,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
               </div>
             )}
 
-            {!isActionTimingLayout && hasContainer('description') && (
+            {!isDedicatedBaseLayout && hasContainer('description') && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3 pb-1">
                   <label className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">

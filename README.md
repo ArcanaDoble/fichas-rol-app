@@ -2488,8 +2488,9 @@ Guía rápida: ver `docs/Minimapa.md`.
 
 ## Novedades: Cartas de Acciones en el Constructor
 
-- **Tipos simplificados**: El constructor queda reducido a dos tipos de carta: `General` y `Acciones`.
-- **Diseño dedicado**: `General` mantiene el canvas modular editable y `Acciones` usa la plantilla visual específica de acciones.
+- **Tipos simplificados**: El constructor muestra los tipos `General`, `Acciones` y `Atributo`.
+- **Diseño dedicado**: `General` mantiene el canvas modular editable, `Acciones` usa la plantilla visual específica de acciones y `Atributo` renderiza una base propia.
+- **Bases de Atributo**: El tipo `Atributo` permite alternar entre `Cuerpo`, `Mente` y `Hambre`, usando `public/interfaz/atributos/Cuerpo.png`, `Mente.png` y `Hambre.png` como bases dedicadas y colocando el título con sus líneas divisorias en la misma posición visual que las cartas de `Acciones`.
 - **Base integrada para General**: Las cartas `General` usan `public/interfaz/general.png` como fondo completo del marco modular, manteniendo encima las posiciones existentes de título, iconos y contenedores.
 - **Cabecera integrada en General**: Las imágenes personalizadas de la cabecera se recortan al recuadro real de `general.png` y reciben un difuminado oscuro interior para integrarse con el marco.
 - **Encuadre manual de cabecera**: Las imágenes personalizadas permiten ajustar zoom y desplazamiento horizontal/vertical con sliders y botones táctiles, partiendo del mismo autoencuadre que usa la carta renderizada y con opción de volver al autoajuste con `Reajustar`.
