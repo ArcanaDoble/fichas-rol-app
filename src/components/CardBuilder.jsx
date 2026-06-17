@@ -175,9 +175,9 @@ const ELEMENT_CONSUMPTION_STYLES = {
   Tierra: { stroke: '#827044', fill: 'rgba(130,112,68,0.15)' },
   Veneno: { stroke: '#668f4f', fill: 'rgba(102,143,79,0.15)' },
   Viento: { stroke: '#6d958a', fill: 'rgba(109,149,138,0.15)' },
-  Magia: { stroke: '#8b5cf6', fill: 'rgba(139,92,246,0.15)' },
-  Distancia: { stroke: '#fbbf24', fill: 'rgba(251,191,36,0.15)' },
-  Espada: { stroke: '#94a3b8', fill: 'rgba(148,163,184,0.15)' },
+  Magia: { stroke: '#374151', fill: 'rgba(55,65,81,0.15)' },
+  Distancia: { stroke: '#374151', fill: 'rgba(55,65,81,0.15)' },
+  Espada: { stroke: '#374151', fill: 'rgba(55,65,81,0.15)' },
 };
 
 const DESCRIPTION_ICON_STYLES = {
