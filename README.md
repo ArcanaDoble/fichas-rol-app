@@ -183,7 +183,14 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.7.13**
+> **Versión actual: 2.7.14**
+
+**Resumen de cambios v2.7.14:**
+
+- **Rediseño premium del contenedor de Minion**:
+  - Se unificaron los 3 bloques independientes de Cuerpo, Mente y Hambre en un único panel horizontal unificado de `1148px` de ancho con bordes dobles dorados/bronce y esquinas biseladas.
+  - Cada atributo ahora cuenta con una insignia de rombo/diamante con esquinas redondeadas y rotación de 45 grados, teñida con su color táctico y borde oscuro (Cuerpo en rojo, Mente en azul, Hambre en verde), conteniendo el icono correspondiente perfectamente centrado y sin rotación.
+  - Se añadieron divisores verticales estilizados de color bronce translúcido con un rombo decorativo central de `18px` para separar simétricamente las columnas de cada atributo.
 
 **Resumen de cambios v2.7.13:**
 

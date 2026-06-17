@@ -3777,83 +3777,129 @@ const drawModularTraits = (context, centerY, traits, visibleTraitRows, accent) =
 
 const drawModularMinion = (context, centerY, minionAttributes, accent = '#c46f1f', resourceImages = {}) => {
   context.save();
-  const attributes = ['Cuerpo', 'Mente', 'Hambre'];
-  const boxWidth = 280;
-  const boxHeight = 110;
-  const gap = 34;
-  const totalWidth = attributes.length * boxWidth + (attributes.length - 1) * gap;
-  const startX = 944 - totalWidth / 2;
-  const y = centerY - boxHeight / 2;
+  
+  // 1. Draw outer double-border panel
+  const panelWidth = 1148;
+  const panelHeight = 142;
+  const startX = 944 - panelWidth / 2;
+  const y = centerY - panelHeight / 2;
+  const bevel = 18;
+  
+  // Outer notch path
+  context.beginPath();
+  context.moveTo(startX + bevel, y);
+  context.lineTo(startX + panelWidth - bevel, y);
+  context.lineTo(startX + panelWidth, y + bevel);
+  context.lineTo(startX + panelWidth, y + panelHeight - bevel);
+  context.lineTo(startX + panelWidth - bevel, y + panelHeight);
+  context.lineTo(startX + bevel, y + panelHeight);
+  context.lineTo(startX, y + panelHeight - bevel);
+  context.lineTo(startX, y + bevel);
+  context.closePath();
+  
+  context.fillStyle = 'rgba(200, 170, 110, 0.05)';
+  context.fill();
+  
+  context.strokeStyle = accent;
+  context.lineWidth = 3.5;
+  context.stroke();
 
+  // Inner notch path (inset by 6px)
+  const inset = 6;
+  const innerBevel = Math.max(2, bevel - inset);
+  const ix = startX + inset;
+  const iy = y + inset;
+  const iw = panelWidth - 2 * inset;
+  const ih = panelHeight - 2 * inset;
+
+  context.beginPath();
+  context.moveTo(ix + innerBevel, iy);
+  context.lineTo(ix + iw - innerBevel, iy);
+  context.lineTo(ix + iw, iy + innerBevel);
+  context.lineTo(ix + iw, iy + ih - innerBevel);
+  context.lineTo(ix + iw - innerBevel, iy + ih);
+  context.lineTo(ix + innerBevel, iy + ih);
+  context.lineTo(ix, iy + ih - innerBevel);
+  context.lineTo(ix, iy + innerBevel);
+  context.closePath();
+
+  context.strokeStyle = 'rgba(200, 170, 110, 0.45)';
+  context.lineWidth = 1.5;
+  context.stroke();
+
+  // 2. Attributes configurations
+  const attributes = [
+    { name: 'Cuerpo', fill: '#c85a4b', border: '#631f16' },
+    { name: 'Mente', fill: '#6a8ea8', border: '#2a3d4d' },
+    { name: 'Hambre', fill: '#739b5b', border: '#28421d' }
+  ];
+
+  const colWidth = panelWidth / 3;
+  
   attributes.forEach((attr, index) => {
-    const boxX = startX + index * (boxWidth + gap);
+    const colCenterX = startX + colWidth * index + colWidth / 2;
+    const diamondX = colCenterX - 80;
+    const textX = colCenterX + 80;
+
+    // Draw Rounded-Corner Diamond
+    context.save();
+    context.translate(diamondX, centerY);
+    context.rotate(Math.PI / 4);
     
-    // Contenedor biselado
-    const bevel = 12;
-    context.beginPath();
-    context.moveTo(boxX + bevel, y);
-    context.lineTo(boxX + boxWidth - bevel, y);
-    context.lineTo(boxX + boxWidth, y + bevel);
-    context.lineTo(boxX + boxWidth, y + boxHeight - bevel);
-    context.lineTo(boxX + boxWidth - bevel, y + boxHeight);
-    context.lineTo(boxX + bevel, y + boxHeight);
-    context.lineTo(boxX, y + boxHeight - bevel);
-    context.lineTo(boxX, y + bevel);
-    context.closePath();
+    const size = 68; // diagonal will be ~96px
+    const r = 12;
+    drawRoundRectPath(context, -size/2, -size/2, size, size, r);
     
-    context.fillStyle = 'rgba(9, 9, 11, 0.65)';
+    context.fillStyle = attr.fill;
     context.fill();
     
     context.lineWidth = 3.5;
-    context.strokeStyle = accent;
+    context.strokeStyle = attr.border;
     context.stroke();
+    context.restore();
 
-    // Línea dorada interior de detalle
-    const innerInset = 6;
-    const innerBevel = bevel - 2;
-    context.beginPath();
-    context.moveTo(boxX + innerInset + innerBevel, y + innerInset);
-    context.lineTo(boxX + boxWidth - innerInset - innerBevel, y + innerInset);
-    context.lineTo(boxX + boxWidth - innerInset, y + innerInset + innerBevel);
-    context.lineTo(boxX + boxWidth - innerInset, y + boxHeight - innerInset - innerBevel);
-    context.lineTo(boxX + boxWidth - innerInset - innerBevel, y + boxHeight - innerInset);
-    context.lineTo(boxX + innerInset + innerBevel, y + boxHeight - innerInset);
-    context.lineTo(boxX + innerInset, y + boxHeight - innerInset - innerBevel);
-    context.lineTo(boxX + innerInset, y + innerInset + innerBevel);
-    context.closePath();
-    context.lineWidth = 1.2;
-    context.strokeStyle = 'rgba(200, 170, 110, 0.25)';
-    context.stroke();
-
-    // Dibujo del icono
-    const iconKey = `minion:${attr}`;
+    // Draw Icon inside Diamond (no rotation)
+    const iconKey = `minion:${attr.name}`;
     const iconImg = resourceImages[iconKey];
-    const iconSize = 64;
-    const iconX = boxX + 28;
-    const iconY = centerY - iconSize / 2;
-
+    const iconSize = 52;
+    
     if (iconImg) {
-      context.drawImage(iconImg, iconX, iconY, iconSize, iconSize);
+      context.drawImage(iconImg, diamondX - iconSize / 2, centerY - iconSize / 2, iconSize, iconSize);
     } else {
-      context.fillStyle = accent;
+      context.fillStyle = attr.border;
       context.beginPath();
-      context.arc(iconX + iconSize / 2, centerY, iconSize / 3, 0, Math.PI * 2);
+      context.arc(diamondX, centerY, iconSize / 3, 0, Math.PI * 2);
       context.fill();
     }
 
-    // Dibujo de textos
-    const textCenterX = boxX + 184;
-    
-    context.font = "900 16px 'Cinzel', 'Times New Roman', serif";
-    context.fillStyle = '#8a8a8a';
+    // Draw Text Label (above centerY)
+    context.font = "900 28px Lato, Arial, sans-serif";
+    context.fillStyle = '#171a19';
     context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    context.fillText(attr.toUpperCase(), textCenterX, centerY - 22);
+    context.textBaseline = 'bottom';
+    context.fillText(attr.name.toUpperCase(), textX, centerY - 2);
 
-    const val = minionAttributes[attr] ?? 0;
-    context.font = "900 48px 'Oswald', 'Bebas Neue', 'Arial Black', sans-serif";
-    context.fillStyle = '#202321';
-    context.fillText(String(val), textCenterX, centerY + 16);
+    // Draw Value (below centerY)
+    const val = minionAttributes[attr.name] ?? 0;
+    context.font = "900 52px 'Oswald', 'Bebas Neue', 'Arial Black', sans-serif";
+    context.textBaseline = 'top';
+    context.fillText(String(val), textX, centerY + 2);
+
+    // Draw separators between columns
+    if (index < 2) {
+      const sepX = startX + colWidth * (index + 1);
+      
+      // Vertical line
+      context.strokeStyle = 'rgba(200, 170, 110, 0.45)';
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(sepX, centerY - 35);
+      context.lineTo(sepX, centerY + 35);
+      context.stroke();
+
+      // Middle small diamond ornament
+      drawSectionDiamond(context, sepX, centerY, 18, accent);
+    }
   });
 
   context.restore();
