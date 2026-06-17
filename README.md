@@ -183,7 +183,13 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.7.12**
+> **Versión actual: 2.7.13**
+
+**Resumen de cambios v2.7.13:**
+
+- **Optimización de espacio y ajuste de márgenes en última descripción**:
+  - Se redujo el margen superior (`top` a `y + 96` para el estilo principal) y se extendió el límite inferior de renderizado (`bottom`) hasta la frontera física del indicador de carga (`2328 - 20px`) o el borde inferior de la carta (`2386 - 55px`) cuando la descripción es el último bloque.
+  - Esto aprovecha dinámicamente el espacio residual al final del pergamino para permitir que quepan hasta 1 o 2 líneas adicionales de texto (párrafos más largos) sin chocar con los diamantes del footer.
 
 **Resumen de cambios v2.7.12:**
 

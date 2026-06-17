@@ -3905,7 +3905,18 @@ const drawModularCombat = (context, centerY, weaponType, weaponIconImg) => {
   context.restore();
 };
 
-const drawModularDescription = (context, y, height, description, hyphenate, singleTextStyle, resourceImages, accent = '#c46f1f') => {
+const drawModularDescription = (
+  context,
+  y,
+  height,
+  description,
+  hyphenate,
+  singleTextStyle,
+  resourceImages,
+  accent = '#c46f1f',
+  isLast = false,
+  hasChargeFooter = false,
+) => {
   const x = 314;
   const maxWidth = 1260;
   const text = description.trim() || DESCRIPTION_PREVIEW_TEXT;
@@ -3913,8 +3924,14 @@ const drawModularDescription = (context, y, height, description, hyphenate, sing
   const isNarrativeStyle = singleTextStyle === 'narrative';
   const fontSize = isNarrativeStyle ? 50 : 45;
   const lineHeight = isNarrativeStyle ? 66 : 61;
-  const top = isNarrativeStyle ? y + 36 : y + 106;
-  const bottom = isNarrativeStyle ? y + height - 58 : y + height - 30;
+  const top = isNarrativeStyle ? y + 36 : y + 96;
+  
+  let bottom;
+  if (isLast) {
+    bottom = hasChargeFooter ? 2328 - 20 : 2386 - 55;
+  } else {
+    bottom = isNarrativeStyle ? y + height - 58 : y + height - 30;
+  }
 
   context.save();
   context.font = `${isNarrativeStyle ? 'italic ' : 'italic '}400 ${fontSize}px Lato, Arial, sans-serif`;
@@ -4485,6 +4502,8 @@ const drawCardCanvas = (
         containerDescriptionStyles[blockKey] || singleTextStyle || 'principal',
         resourceImages,
         accent,
+        index === blocks.length - 1,
+        hasChargeFooter,
       );
     }
 
