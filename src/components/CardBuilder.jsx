@@ -3844,7 +3844,7 @@ const drawModularMinion = (context, centerY, minionAttributes, accent = '#c46f1f
     // Draw Icon (no rotation, no background container, size matches the removed container)
     const iconKey = `minion:${attr.name}`;
     const iconImg = resourceImages[iconKey];
-    const iconSize = 96;
+    const iconSize = 120;
     const tintColor = DESCRIPTION_ICON_STYLES[attr.name]?.stroke || '#c46f1f';
     
     if (iconImg) {

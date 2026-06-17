@@ -183,7 +183,12 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.7.19**
+> **Versión actual: 2.7.20**
+
+**Resumen de cambios v2.7.20:**
+
+- **Aumento del tamaño de los iconos de atributos de Minion**:
+  - Se incrementó el tamaño de los iconos sueltos de Cuerpo, Mente y Hambre de `96px` a `120px` dentro del panel del minion, mejorando su visibilidad y balance estético con los valores numéricos y letreros correspondientes.
 
 **Resumen de cambios v2.7.19:**
 
