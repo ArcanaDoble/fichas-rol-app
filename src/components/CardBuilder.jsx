@@ -3653,7 +3653,7 @@ const drawModularConsumption = (context, centerY, slots, resourceImages = {}, ac
   context.restore();
 };
 
-const drawModularDamage = (context, centerY, diceIconImg, diceQty, diceType) => {
+const drawModularDamage = (context, centerY, diceIconImg, diceQty, diceType, accent = '#c46f1f') => {
   context.save();
   const count = diceType === 'DX' ? 1 : Math.max(1, Math.min(MAX_DAMAGE_DICE_QTY, diceQty));
   const size = 96;
@@ -3661,8 +3661,34 @@ const drawModularDamage = (context, centerY, diceIconImg, diceQty, diceType) => 
   const totalWidth = count * size + (count - 1) * gap;
   let x = 944 - totalWidth / 2;
   const y = centerY - size / 2;
+
+  let tintedDiceCanvas = null;
+  if (diceIconImg && accent) {
+    try {
+      const canvas = typeof window !== 'undefined' && typeof window.OffscreenCanvas !== 'undefined'
+        ? new window.OffscreenCanvas(size, size)
+        : document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(diceIconImg, 0, 0, size, size);
+        ctx.globalCompositeOperation = 'source-in';
+        ctx.fillStyle = accent;
+        ctx.fillRect(0, 0, size, size);
+        tintedDiceCanvas = canvas;
+      }
+    } catch (e) {
+      console.error("Error tinting dice image:", e);
+    }
+  }
+
   for (let i = 0; i < count; i++) {
-    if (diceIconImg) {
+    if (tintedDiceCanvas) {
+      context.drawImage(tintedDiceCanvas, x, y, size, size);
+    } else if (diceIconImg) {
       context.drawImage(diceIconImg, x, y, size, size);
     } else {
       context.font = '900 58px Lato, Arial, sans-serif';
@@ -4315,6 +4341,7 @@ const drawCardCanvas = (
         diceIconImages[damageDiceType] || diceIconImg,
         damageConfig.diceQty || DEFAULT_CONTAINER_DAMAGE.diceQty,
         damageDiceType,
+        accent,
       );
     } else if (blockId === 'traits') {
       drawModularTraits(
