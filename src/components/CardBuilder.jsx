@@ -4400,26 +4400,50 @@ const drawCardCanvas = (
   const descriptionUnitBudget = getDescriptionUnitBudget(cardContainers, cardType);
   let usedDescriptionUnits = 0;
   const contentBottom = hasChargeFooter ? 2386 - CHARGE_FOOTER_RESERVED_HEIGHT : 2386;
-  let y = MODULAR_CONTENT_TOP;
 
-  blocks.forEach((block, index) => {
+  // 1. Precalculo de alturas de cada bloque
+  let tempUsedDescriptionUnits = 0;
+  const blockHeights = blocks.map((block, index) => {
     const blockId = block.id;
     const blockKey = block.key;
     const remainingDescriptionCount = blocks.slice(index + 1).filter((nextBlock) => nextBlock.id === 'description').length;
     const descriptionUnits = blockId === 'description'
       ? clampDescriptionUnits(
         containerDescriptionSizes[blockKey] || 1,
-        usedDescriptionUnits,
+        tempUsedDescriptionUnits,
         remainingDescriptionCount,
         descriptionUnitBudget,
       )
       : 1;
+    if (blockId === 'description') {
+      tempUsedDescriptionUnits += descriptionUnits;
+    }
+    const maxRemaining = contentBottom - MODULAR_CONTENT_TOP;
+    const naturalHeight = getModularContainerHeight(blockId, maxRemaining, index === blocks.length - 1, descriptionUnits);
+    return {
+      height: naturalHeight,
+      descriptionUnits,
+    };
+  });
+
+  // 2. Cálculo de espacio sobrante e incremento de gap
+  const totalHeightOfBlocks = blockHeights.reduce((sum, item) => sum + item.height, 0);
+  const extraSpace = contentBottom - MODULAR_CONTENT_TOP - totalHeightOfBlocks;
+  const maxGap = 65; // Límite estético de separación
+  const rawGap = extraSpace > 0 && blocks.length > 0 ? extraSpace / (blocks.length + 1) : 0;
+  const gapIncrement = Math.min(maxGap, rawGap);
+
+  // 3. Bucle de dibujo con coordenadas distribuidas
+  let y = MODULAR_CONTENT_TOP + gapIncrement;
+
+  blocks.forEach((block, index) => {
+    const blockId = block.id;
+    const blockKey = block.key;
+    const { height: naturalHeight, descriptionUnits } = blockHeights[index];
+
     if (y >= contentBottom - 120) return;
     const remainingHeight = contentBottom - y;
-    const blockHeight = Math.min(
-      remainingHeight,
-      getModularContainerHeight(blockId, remainingHeight, index === blocks.length - 1, descriptionUnits),
-    );
+    const blockHeight = Math.min(remainingHeight, naturalHeight);
     const label = blockLabels[blockId] || blockId;
     const blockCenterY = getModularBlockCenterY(y, blockHeight);
 
@@ -4473,12 +4497,14 @@ const drawCardCanvas = (
       );
     }
 
-    const dividerY = y + blockHeight - 14;
+    // Dibujo del divisor centrado en el gap
+    const dividerY = y + blockHeight + gapIncrement / 2;
     const isLastBlock = index === blocks.length - 1;
     if (!isLastBlock && dividerY < contentBottom - 18) {
       drawContainerDivider(context, dividerY, accent);
     }
-    y += blockHeight;
+
+    y += blockHeight + gapIncrement;
     if (blockId === 'description') {
       usedDescriptionUnits += descriptionUnits;
     }

@@ -2556,3 +2556,10 @@ Guía rápida: ver `docs/Minimapa.md`.
 - **Indicadores de Alta Visibilidad**: Las cajas muestran el icono a color a la izquierda (`64x64px`) y los textos a la derecha (etiqueta superior en `Cinzel` de `16px` y el número indicador en `Oswald` / `Bebas Neue` de `48px` para máxima visibilidad).
 - **Precarga en Segundo Plano**: El motor del canvas detecta el uso del bloque de minion y precarga asíncronamente las imágenes oficiales de cargas (`/interfaz/cargas/`) para garantizar un redibujado instantáneo.
 
+## Novedades: Distribución Inteligente de Espacio Vertical (v2.4.57)
+
+- **Distribución de Espacio Equitativa (`space-evenly`)**: Se implementó un algoritmo dinámico que calcula el espacio sobrante en el canvas de la carta y lo distribuye de forma proporcional arriba, abajo y entre los contenedores habilitados, optimizando la composición estética general de la carta.
+- **Límite Estético Capped**: El espaciado automático está limitado a un máximo de `65px` para conservar la cohesión del diseño y evitar distanciamientos exagerados cuando hay muy pocos contenedores.
+- **Divisores Centrados Simétricos**: Las líneas divisorias rústicas se posicionan exactamente en el centro geométrico de la separación calculada entre bloques, asegurando simetría perfecta en la distribución de aire visual.
+
+
