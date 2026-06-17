@@ -3864,7 +3864,19 @@ const drawModularMinion = (context, centerY, minionAttributes, accent = '#c46f1f
     const iconSize = 52;
     
     if (iconImg) {
-      context.drawImage(iconImg, diamondX - iconSize / 2, centerY - iconSize / 2, iconSize, iconSize);
+      const buffer = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+      const bufferContext = buffer?.getContext('2d');
+      if (buffer && bufferContext) {
+        buffer.width = iconSize;
+        buffer.height = iconSize;
+        bufferContext.drawImage(iconImg, 0, 0, iconSize, iconSize);
+        bufferContext.globalCompositeOperation = 'source-in';
+        bufferContext.fillStyle = DESCRIPTION_ICON_STYLES[attr.name]?.stroke || '#c46f1f';
+        bufferContext.fillRect(0, 0, iconSize, iconSize);
+        context.drawImage(buffer, diamondX - iconSize / 2, centerY - iconSize / 2);
+      } else {
+        context.drawImage(iconImg, diamondX - iconSize / 2, centerY - iconSize / 2, iconSize, iconSize);
+      }
     } else {
       context.fillStyle = attr.border;
       context.beginPath();
