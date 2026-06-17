@@ -2988,7 +2988,7 @@ const CHARGE_STYLES = {
 const drawModularChargeFooter = (context, chargeSlots, resourceImages = {}, accent = '#c46f1f') => {
   const slots = Array.from({ length: CHARGE_SLOT_COUNT }, (_, index) => chargeSlots[index] || EMPTY_SLOT);
   const y = CHARGE_FOOTER_LINE_Y;
-  const centers = [764, 848, 944, 1040, 1124];
+  const centers = [764, 854, 944, 1034, 1124];
   const sizes = [45, 45, 45, 45, 45];
 
   context.save();
