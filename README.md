@@ -183,7 +183,13 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.7.21**
+> **Versión actual: 2.7.22**
+
+**Resumen de cambios v2.7.22:**
+
+- **Distribución de espacio simétrica y equidistante en Minion**:
+  - Se implementó un desplazamiento simétrico constante de `85px` a la izquierda para el icono (`colCenterX - 85`) y a la derecha para el texto y número (`colCenterX + 85`) respecto al centro geométrico de cada columna.
+  - Esto equilibra perfectamente todos los márgenes y vacíos del panel, garantizando que el espacio a la izquierda del corazón y a la derecha del letrero de Hambre sean matemáticamente idénticos (`46.3px`).
 
 **Resumen de cambios v2.7.21:**
 

@@ -3838,8 +3838,8 @@ const drawModularMinion = (context, centerY, minionAttributes, accent = '#c46f1f
   
   attributes.forEach((attr, index) => {
     const colCenterX = startX + colWidth * index + colWidth / 2;
-    const colRightX = startX + colWidth * (index + 1);
-    const diamondX = colCenterX - 80;
+    const diamondX = colCenterX - 85;
+    const textX = colCenterX + 85;
 
     // Draw Icon (no rotation, no background container, size matches the removed container)
     const iconKey = `minion:${attr.name}`;
@@ -3867,9 +3867,6 @@ const drawModularMinion = (context, centerY, minionAttributes, accent = '#c46f1f
       context.arc(diamondX, centerY, iconSize / 3, 0, Math.PI * 2);
       context.fill();
     }
-
-    const iconRightX = diamondX + iconSize / 2;
-    const textX = (iconRightX + colRightX) / 2;
 
     // Draw Text Label (above centerY)
     context.font = "900 28px Lato, Arial, sans-serif";
