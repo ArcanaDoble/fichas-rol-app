@@ -2989,7 +2989,7 @@ const drawModularChargeFooter = (context, chargeSlots, resourceImages = {}, acce
   const slots = Array.from({ length: CHARGE_SLOT_COUNT }, (_, index) => chargeSlots[index] || EMPTY_SLOT);
   const y = CHARGE_FOOTER_LINE_Y;
   const centers = [764, 848, 944, 1040, 1124];
-  const sizes = [45, 45, 70, 45, 45];
+  const sizes = [45, 45, 45, 45, 45];
 
   context.save();
   context.strokeStyle = 'rgba(181,92,18,0.58)';

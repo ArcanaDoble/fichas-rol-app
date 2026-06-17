@@ -2533,5 +2533,6 @@ Guía rápida: ver `docs/Minimapa.md`.
 - **Optimización de formato y resolución**: Se convirtieron los nuevos dados proporcionados en formato PNG a formato WebP de alta definición y con canal de transparencia (conservando transparencias originales).
 - **Estandarización de assets**: Los nuevos dados (`D4`, `D6`, `D8`, `D10`, `D12`, `DX`) se renombraron y reemplazaron en la ubicación del constructor de cartas (`public/dados/cartas/`) para actualizar automáticamente el visualizador del canvas en `CardBuilder.jsx` sin requerir modificaciones en el código fuente.
 - **Tinte dinámico con color de acento**: Se implementó el soporte para tintar dinámicamente las imágenes de los dados usando el color de acento seleccionado para la carta (`accent`). El motor de dibujo del canvas en `CardBuilder.jsx` aplica un filtro de mezcla por canal alfa (`source-in`) sobre los trazados del dado antes de renderizarlos, garantizando una perfecta consistencia cromática con la temática de cada carta.
+- **Estandarización de ranuras de carga**: Se unificó el tamaño de los rombos de carga en el pie de página de la carta (`drawModularChargeFooter` en `CardBuilder.jsx`), reduciendo el tamaño del tercer rombo (el central) de 70 a 45 píxeles para que sea idéntico y simétrico al de las otras cuatro ranuras.
 
 
