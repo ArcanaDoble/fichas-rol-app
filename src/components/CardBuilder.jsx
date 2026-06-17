@@ -4433,6 +4433,23 @@ const getSafeFileSlug = (value) => (
     .replace(/(^-|-$)/g, '') || 'carta'
 );
 
+const fitsTraitWidth = (text) => {
+  if (!text) return true;
+  try {
+    const canvas = typeof window !== 'undefined' && typeof window.OffscreenCanvas !== 'undefined'
+      ? new window.OffscreenCanvas(1, 1)
+      : (typeof document !== 'undefined' ? document.createElement('canvas') : null);
+    if (!canvas) return true;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return true;
+    ctx.font = '900 24px Lato, Arial, sans-serif';
+    const width = ctx.measureText(text.toUpperCase()).width;
+    return width <= 220;
+  } catch (e) {
+    return true;
+  }
+};
+
 const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserId = '' }) => {
   const canvasRef = useRef(null);
   const descriptionRef = useRef(null);
@@ -7219,21 +7236,27 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                           Rasgos {traitsIndex + 1} · Máximo 3
                         </div>
                         <div className="grid grid-cols-1 gap-2">
-                          {Array.from({ length: MAX_TRAITS_PER_CONTAINER }).map((_, index) => (
-                            <input
-                              key={`${container.key}-trait-${index}`}
-                              value={traitValues[index] || ''}
-                              onChange={(event) => {
-                                if (traitsIndex === 0) {
-                                  handleTraitChange(index, event.target.value);
-                                }
-                                handleContainerTraitChange(container.key, index, event.target.value);
-                              }}
-                              maxLength={22}
-                              className="w-full border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 py-2 text-sm font-bold uppercase tracking-[0.08em] text-[#f0e6d2] outline-none transition placeholder:text-slate-700 focus:border-[#c8aa6e]/70"
-                              placeholder={`Rasgo ${index + 1}`}
-                            />
-                          ))}
+                          {Array.from({ length: MAX_TRAITS_PER_CONTAINER }).map((_, index) => {
+                            const currentValue = traitValues[index] || '';
+                            return (
+                              <input
+                                key={`${container.key}-trait-${index}`}
+                                value={currentValue}
+                                onChange={(event) => {
+                                  const val = event.target.value;
+                                  if (val.length < currentValue.length || fitsTraitWidth(val)) {
+                                    if (traitsIndex === 0) {
+                                      handleTraitChange(index, val);
+                                    }
+                                    handleContainerTraitChange(container.key, index, val);
+                                  }
+                                }}
+                                maxLength={22}
+                                className="w-full border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 py-2 text-sm font-bold uppercase tracking-[0.08em] text-[#f0e6d2] outline-none transition placeholder:text-slate-700 focus:border-[#c8aa6e]/70"
+                                placeholder={`Rasgo ${index + 1}`}
+                              />
+                            );
+                          })}
                         </div>
                       </div>
                     );
