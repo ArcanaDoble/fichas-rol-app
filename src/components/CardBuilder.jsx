@@ -3841,27 +3841,11 @@ const drawModularMinion = (context, centerY, minionAttributes, accent = '#c46f1f
     const diamondX = colCenterX - 80;
     const textX = colCenterX + 80;
 
-    // Draw Rounded-Corner Diamond
-    context.save();
-    context.translate(diamondX, centerY);
-    context.rotate(Math.PI / 4);
-    
-    const size = 68; // diagonal will be ~96px
-    const r = 12;
-    drawRoundRectPath(context, -size/2, -size/2, size, size, r);
-    
-    context.fillStyle = attr.fill;
-    context.fill();
-    
-    context.lineWidth = 3.5;
-    context.strokeStyle = attr.border;
-    context.stroke();
-    context.restore();
-
-    // Draw Icon inside Diamond (no rotation)
+    // Draw Icon (no rotation, no background container, size matches the removed container)
     const iconKey = `minion:${attr.name}`;
     const iconImg = resourceImages[iconKey];
-    const iconSize = 52;
+    const iconSize = 96;
+    const tintColor = DESCRIPTION_ICON_STYLES[attr.name]?.stroke || '#c46f1f';
     
     if (iconImg) {
       const buffer = typeof document !== 'undefined' ? document.createElement('canvas') : null;
@@ -3871,14 +3855,14 @@ const drawModularMinion = (context, centerY, minionAttributes, accent = '#c46f1f
         buffer.height = iconSize;
         bufferContext.drawImage(iconImg, 0, 0, iconSize, iconSize);
         bufferContext.globalCompositeOperation = 'source-in';
-        bufferContext.fillStyle = DESCRIPTION_ICON_STYLES[attr.name]?.stroke || '#c46f1f';
+        bufferContext.fillStyle = tintColor;
         bufferContext.fillRect(0, 0, iconSize, iconSize);
         context.drawImage(buffer, diamondX - iconSize / 2, centerY - iconSize / 2);
       } else {
         context.drawImage(iconImg, diamondX - iconSize / 2, centerY - iconSize / 2, iconSize, iconSize);
       }
     } else {
-      context.fillStyle = attr.border;
+      context.fillStyle = tintColor;
       context.beginPath();
       context.arc(diamondX, centerY, iconSize / 3, 0, Math.PI * 2);
       context.fill();
