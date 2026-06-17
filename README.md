@@ -2528,4 +2528,9 @@ Guía rápida: ver `docs/Minimapa.md`.
 - **Filtros de color reales en imágenes**: El selector de color de cabecera ahora funciona como un verdadero filtro de color (mezcla de capas `color` y `multiply` en el canvas) que se aplica sobre la imagen de portada subida, mostrándose dinámicamente tanto en el canvas principal como en la previsualización del panel lateral.
 - **Backdrop generado con textura**: Cuando no hay imagen de portada, en lugar de incrustar una capa oscura degradada plana, el generador ahora renderiza la misma textura de pergamino envejecido y polvo de estrellas que el cuerpo del documento, tintado con el filtro del color seleccionado.
 
+## Novedades: Reemplazo de Imágenes de Dados en el Constructor de Cartas (v2.4.53)
+
+- **Optimización de formato y resolución**: Se convirtieron los nuevos dados proporcionados en formato PNG a formato WebP de alta definición y con canal de transparencia (conservando transparencias originales).
+- **Estandarización de assets**: Los nuevos dados (`D4`, `D6`, `D8`, `D10`, `D12`, `DX`) se renombraron y reemplazaron en la ubicación del constructor de cartas (`public/dados/cartas/`) para actualizar automáticamente el visualizador del canvas en `CardBuilder.jsx` sin requerir modificaciones en el código fuente.
+
 
