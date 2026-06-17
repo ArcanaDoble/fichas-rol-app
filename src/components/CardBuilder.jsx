@@ -3747,7 +3747,7 @@ const drawModularTraits = (context, centerY, traits, visibleTraitRows, accent) =
     context.font = `900 ${fontSize}px Lato, Arial, sans-serif`;
     const maxTextWidth = badgeWidth - 72;
     const upperLabel = label.toUpperCase();
-    while (fontSize > 16 && context.measureText(upperLabel).width > maxTextWidth) {
+    while (fontSize > 24 && context.measureText(upperLabel).width > maxTextWidth) {
       fontSize -= 1;
       context.font = `900 ${fontSize}px Lato, Arial, sans-serif`;
     }
