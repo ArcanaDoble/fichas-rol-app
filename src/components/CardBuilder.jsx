@@ -3797,10 +3797,10 @@ const drawModularMinion = (context, centerY, minionAttributes, accent = '#c46f1f
   context.lineTo(startX, y + bevel);
   context.closePath();
   
-  context.fillStyle = 'rgba(200, 170, 110, 0.05)';
+  context.fillStyle = 'rgba(32, 35, 33, 0.08)';
   context.fill();
   
-  context.strokeStyle = accent;
+  context.strokeStyle = 'rgba(32, 35, 33, 0.45)';
   context.lineWidth = 3.5;
   context.stroke();
 
@@ -3823,7 +3823,7 @@ const drawModularMinion = (context, centerY, minionAttributes, accent = '#c46f1f
   context.lineTo(ix, iy + innerBevel);
   context.closePath();
 
-  context.strokeStyle = 'rgba(200, 170, 110, 0.45)';
+  context.strokeStyle = 'rgba(32, 35, 33, 0.20)';
   context.lineWidth = 1.5;
   context.stroke();
 
@@ -5092,7 +5092,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
         ...MINION_ATTRIBUTE_TYPES.map((attr) => ({
           id: attr,
           label: attr,
-          src: `/interfaz/cargas/${attr}.webp`,
+          src: `/interfaz/consumo_new/${attr}.webp`,
           cacheKey: `minion:${attr}`,
         })),
       ];
@@ -7238,14 +7238,14 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                   );
                 })}
 
-                {cardType === 'skill' && (
+                {(cardType === 'skill' || hasContainer('minion')) && (
                   <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-3">
                     <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                       Atributos del Minion
                     </label>
                     <div className="grid grid-cols-3 gap-2">
                       {MINION_ATTRIBUTE_TYPES.map((attribute) => {
-                        const iconSrc = `${process.env.PUBLIC_URL || ''}/interfaz/cargas/${attribute}.webp`;
+                        const iconSrc = `${process.env.PUBLIC_URL || ''}/interfaz/consumo_new/${attribute}.webp`;
                         return (
                           <label
                             key={`minion-attribute-${attribute}`}

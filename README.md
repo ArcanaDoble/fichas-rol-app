@@ -183,7 +183,14 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.7.16**
+> **Versión actual: 2.7.17**
+
+**Resumen de cambios v2.7.17:**
+
+- **Actualización de iconos, controles y estética del contenedor de Minion**:
+  - Se sustituyeron los iconos del minion por los de la librería de compendio visual bajo `/interfaz/consumo_new/`.
+  - Se habilitó la edición y controles de "Atributos del Minion" en la barra lateral para cualquier tipo de carta (ej. general, armas, etc.) siempre que el contenedor de `minion` esté presente (`cardType === 'skill' || hasContainer('minion')`).
+  - Se alineó estéticamente el panel unificado con el slot de consumo vacío, usando un fondo de `rgba(32, 35, 33, 0.08)` y bordes dobles de `rgba(32, 35, 33, 0.45)` (exterior) y `rgba(32, 35, 33, 0.20)` (interior).
 
 **Resumen de cambios v2.7.16:**
 
