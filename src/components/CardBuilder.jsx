@@ -116,8 +116,30 @@ const getDefaultCardContainers = (typeId) => (
   DEFAULT_CARD_CONTAINERS_BY_TYPE[typeId] || DEFAULT_CARD_CONTAINERS_BY_TYPE.general
 ).map((id) => createCardContainer(id));
 
+const DESCRIPTION_SPACE_AUTO = 'auto';
 const DESCRIPTION_SPACE_UNITS = [1, 2, 3, 4, 5, 6];
 const MODULAR_DESCRIPTION_UNIT_HEIGHT = 240;
+const DESCRIPTION_AUTO_BUDGET_UNITS = 1;
+const DEFAULT_NARRATIVE_CENTERING = true;
+
+const normalizeDescriptionUnits = (value) => {
+  const parsed = Number.parseFloat(value);
+  return DESCRIPTION_SPACE_UNITS.includes(parsed) ? parsed : 1;
+};
+
+const isAutoDescriptionUnits = (value) => value === DESCRIPTION_SPACE_AUTO;
+
+const getDescriptionBudgetUnits = (value) => (
+  isAutoDescriptionUnits(value) ? DESCRIPTION_AUTO_BUDGET_UNITS : normalizeDescriptionUnits(value)
+);
+
+const clampDescriptionUnitOption = (value, maxUnits = 6) => {
+  if (isAutoDescriptionUnits(value)) return DESCRIPTION_SPACE_AUTO;
+  const normalized = normalizeDescriptionUnits(value);
+  const allowedUnits = DESCRIPTION_SPACE_UNITS.filter((unit) => unit <= maxUnits);
+  const maxAllowedUnit = allowedUnits[allowedUnits.length - 1] || 1;
+  return Math.min(normalized, maxAllowedUnit);
+};
 
 export const ELEMENT_TYPES = [
   { id: 'Ninguno', label: 'Ninguno' },
@@ -2173,87 +2195,6 @@ const drawDescriptionSeparator = (context, layout, y, lineHeight) => {
   context.restore();
 };
 
-const drawMinionAttributes = (context, attributes, resourceImages = {}) => {
-  const slots = [
-    { x: 225, y: 807, width: 430, height: 175 },
-    { x: 729, y: 807, width: 430, height: 175 },
-    { x: 1233, y: 807, width: 430, height: 175 },
-  ];
-
-  MINION_ATTRIBUTE_TYPES.forEach((attribute, index) => {
-    const slot = slots[index];
-    const { x, y, width, height } = slot;
-    const bevel = 58;
-    const icon = resourceImages[`attribute:${attribute}`] || resourceImages[`keyword:${attribute}`];
-    const iconSize = 70;
-    const value = Number.isFinite(Number(attributes?.[attribute])) ? Number(attributes[attribute]) : 0;
-
-    context.save();
-    const traceAttributePath = (grow = 0) => {
-      const gx = x - grow;
-      const gy = y - grow * 0.65;
-      const gw = width + grow * 2;
-      const gh = height + grow * 1.3;
-      const gb = bevel + grow * 0.4;
-      context.beginPath();
-      context.moveTo(gx + gb, gy);
-      context.lineTo(gx + gw - gb, gy);
-      context.lineTo(gx + gw, gy + gh / 2);
-      context.lineTo(gx + gw - gb, gy + gh);
-      context.lineTo(gx + gb, gy + gh);
-      context.lineTo(gx, gy + gh / 2);
-      context.closePath();
-    };
-
-    traceAttributePath();
-    const fill = context.createLinearGradient(x, y, x, y + height);
-    fill.addColorStop(0, 'rgba(0,0,0,0.88)');
-    fill.addColorStop(0.52, 'rgba(0,0,0,0.98)');
-    fill.addColorStop(1, 'rgba(0,0,0,0.84)');
-    context.fillStyle = fill;
-    context.shadowColor = 'rgba(0,0,0,0.85)';
-    context.shadowBlur = 16;
-    context.fill();
-
-    traceAttributePath(2);
-    context.shadowColor = 'rgba(255,255,255,0.46)';
-    context.shadowBlur = 24;
-    context.lineWidth = 4;
-    context.strokeStyle = 'rgba(255,255,255,0.28)';
-    context.stroke();
-
-    traceAttributePath();
-    context.shadowBlur = 0;
-    context.lineWidth = 2.5;
-    context.strokeStyle = 'rgba(255,255,255,0.58)';
-    context.stroke();
-
-    if (icon) {
-      context.save();
-      context.shadowColor = 'rgba(255,255,255,0.24)';
-      context.shadowBlur = 10;
-      context.drawImage(icon, x + 82, y + height / 2 - iconSize / 2, iconSize, iconSize);
-      context.restore();
-    }
-
-    context.fillStyle = 'rgba(255,255,255,0.96)';
-    context.shadowColor = 'rgba(0,0,0,0.88)';
-    context.shadowBlur = 8;
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    if ('letterSpacing' in context) context.letterSpacing = '0px';
-    context.font = '900 76px Cinzel, Georgia, serif';
-    context.fillText(String(value), x + width / 2 + 15, y + height / 2 - 10);
-
-    context.fillStyle = 'rgba(200,170,110,0.92)';
-    context.font = '900 24px Lato, Arial, sans-serif';
-    if ('letterSpacing' in context) context.letterSpacing = '2px';
-    context.fillText(attribute.toUpperCase(), x + width / 2 + 16, y + height / 2 + 48);
-
-    context.restore();
-  });
-};
-
 const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate = false, resourceImages = {}) => {
   const hasUserText = textValue.trim().length > 0;
   const text = hasUserText ? textValue.trim() : previewText;
@@ -3782,7 +3723,8 @@ const drawModularMinion = (context, centerY, minionAttributes, accent = '#c46f1f
   const panelWidth = 1148;
   const panelHeight = 142;
   const startX = 944 - panelWidth / 2;
-  const y = centerY - panelHeight / 2;
+  const panelCenterY = centerY - 15;
+  const y = panelCenterY - panelHeight / 2;
   const bevel = 18;
   
   // Outer notch path
@@ -3829,9 +3771,9 @@ const drawModularMinion = (context, centerY, minionAttributes, accent = '#c46f1f
 
   // 2. Attributes configurations
   const attributes = [
+    { name: 'Hambre', fill: '#739b5b', border: '#28421d' },
     { name: 'Cuerpo', fill: '#c85a4b', border: '#631f16' },
-    { name: 'Mente', fill: '#6a8ea8', border: '#2a3d4d' },
-    { name: 'Hambre', fill: '#739b5b', border: '#28421d' }
+    { name: 'Mente', fill: '#6a8ea8', border: '#2a3d4d' }
   ];
 
   const colWidth = panelWidth / 3;
@@ -3857,14 +3799,14 @@ const drawModularMinion = (context, centerY, minionAttributes, accent = '#c46f1f
         bufferContext.globalCompositeOperation = 'source-in';
         bufferContext.fillStyle = tintColor;
         bufferContext.fillRect(0, 0, iconSize, iconSize);
-        context.drawImage(buffer, diamondX - iconSize / 2, centerY - iconSize / 2);
+        context.drawImage(buffer, diamondX - iconSize / 2, panelCenterY - iconSize / 2);
       } else {
-        context.drawImage(iconImg, diamondX - iconSize / 2, centerY - iconSize / 2, iconSize, iconSize);
+        context.drawImage(iconImg, diamondX - iconSize / 2, panelCenterY - iconSize / 2, iconSize, iconSize);
       }
     } else {
       context.fillStyle = tintColor;
       context.beginPath();
-      context.arc(diamondX, centerY, iconSize / 3, 0, Math.PI * 2);
+      context.arc(diamondX, panelCenterY, iconSize / 3, 0, Math.PI * 2);
       context.fill();
     }
 
@@ -3873,13 +3815,13 @@ const drawModularMinion = (context, centerY, minionAttributes, accent = '#c46f1f
     context.fillStyle = '#171a19';
     context.textAlign = 'center';
     context.textBaseline = 'bottom';
-    context.fillText(attr.name.toUpperCase(), textX, centerY - 2);
+    context.fillText(attr.name.toUpperCase(), textX, panelCenterY - 2);
 
     // Draw Value (below centerY)
     const val = minionAttributes[attr.name] ?? 0;
     context.font = "900 52px 'Oswald', 'Bebas Neue', 'Arial Black', sans-serif";
     context.textBaseline = 'top';
-    context.fillText(String(val), textX, centerY + 2);
+    context.fillText(String(val), textX, panelCenterY + 2);
 
     // Draw separators between columns
     if (index < 2) {
@@ -3889,12 +3831,12 @@ const drawModularMinion = (context, centerY, minionAttributes, accent = '#c46f1f
       context.strokeStyle = 'rgba(200, 170, 110, 0.45)';
       context.lineWidth = 2;
       context.beginPath();
-      context.moveTo(sepX, centerY - 35);
-      context.lineTo(sepX, centerY + 35);
+      context.moveTo(sepX, panelCenterY - 35);
+      context.lineTo(sepX, panelCenterY + 35);
       context.stroke();
 
       // Middle small diamond ornament
-      drawSectionDiamond(context, sepX, centerY, 18, accent);
+      drawSectionDiamond(context, sepX, panelCenterY, 18, accent);
     }
   });
 
@@ -3958,6 +3900,7 @@ const drawModularDescription = (
   accent = '#c46f1f',
   isLast = false,
   hasChargeFooter = false,
+  centerNarrativeText = DEFAULT_NARRATIVE_CENTERING,
 ) => {
   const x = 314;
   const maxWidth = 1260;
@@ -3976,7 +3919,8 @@ const drawModularDescription = (
   }
 
   context.save();
-  context.font = `${isNarrativeStyle ? 'italic ' : 'italic '}400 ${fontSize}px Lato, Arial, sans-serif`;
+  const textWeight = isNarrativeStyle ? '700' : '400';
+  context.font = `italic ${textWeight} ${fontSize}px Lato, Arial, sans-serif`;
   context.textAlign = 'left';
   context.textBaseline = 'top';
   context.fillStyle = isPreview ? 'rgba(29,33,32,0.42)' : '#171a19';
@@ -4024,6 +3968,38 @@ const drawModularDescription = (
     cursorY += item.height;
   });
   context.restore();
+};
+
+const getModularDescriptionAutoHeight = (
+  context,
+  description,
+  hyphenate,
+  singleTextStyle,
+  maxHeight,
+) => {
+  const maxWidth = 1260;
+  const text = description.trim() || DESCRIPTION_PREVIEW_TEXT;
+  const isNarrativeStyle = singleTextStyle === 'narrative';
+  const fontSize = isNarrativeStyle ? 50 : 45;
+  const lineHeight = isNarrativeStyle ? 66 : 61;
+  const textWeight = isNarrativeStyle ? '700' : '400';
+  const topInset = isNarrativeStyle ? 36 : 96;
+  const bottomInset = isNarrativeStyle ? 58 : 30;
+
+  context.save();
+  context.font = `italic ${textWeight} ${fontSize}px Lato, Arial, sans-serif`;
+  const items = getDescriptionFlowItems(context, text, maxWidth, lineHeight, hyphenate, {
+    ignoreIcons: isNarrativeStyle,
+    paragraphGapScale: 0.12,
+  });
+  context.restore();
+
+  const totalTextHeight = items.reduce((total, item) => total + item.height, 0);
+  const desiredHeight = topInset + totalTextHeight + bottomInset + 18;
+  return Math.max(
+    MODULAR_DESCRIPTION_UNIT_HEIGHT,
+    Math.min(maxHeight, Math.ceil(desiredHeight)),
+  );
 };
 
 const fitActionTitleFont = (context, title) => {
@@ -4317,7 +4293,7 @@ const getContainersTotalHeight = (containers, containerDescriptionSizes = {}) =>
   const blocks = getRenderableCardContainers(containers);
   const fixedHeight = blocks.reduce((total, block) => {
     if (block.id === 'description') {
-      const units = containerDescriptionSizes[block.key] || 1;
+      const units = getDescriptionBudgetUnits(containerDescriptionSizes[block.key] || DESCRIPTION_SPACE_AUTO);
       return total + Math.max(MODULAR_DESCRIPTION_UNIT_HEIGHT, MODULAR_DESCRIPTION_UNIT_HEIGHT * units);
     }
     return total + getModularContainerHeight(block.id, 0, false);
@@ -4343,10 +4319,10 @@ const getDescriptionUnitBudget = (containers, cardType = 'weapon') => {
 };
 
 const clampDescriptionUnits = (requestedUnits, usedUnits, remainingDescriptions, totalBudget) => {
-  const parsedUnits = parseInt(requestedUnits, 10);
-  const desiredUnits = DESCRIPTION_SPACE_UNITS.includes(parsedUnits) ? parsedUnits : 1;
+  if (isAutoDescriptionUnits(requestedUnits)) return DESCRIPTION_SPACE_AUTO;
+  const desiredUnits = normalizeDescriptionUnits(requestedUnits);
   const maxUnits = Math.max(1, totalBudget - usedUnits - remainingDescriptions);
-  return Math.min(desiredUnits, maxUnits);
+  return clampDescriptionUnitOption(desiredUnits, maxUnits);
 };
 
 const drawCardCanvas = (
@@ -4386,6 +4362,7 @@ const drawCardCanvas = (
   containerDamage = {},
   containerConsumptions = {},
   containerDescriptionStyles = {},
+  containerDescriptionCentered = {},
   stardustImg = null,
   diceIconImages = {},
   actionSpeedId = 'rapida',
@@ -4478,10 +4455,20 @@ const drawCardCanvas = (
   blocks.forEach((block, index) => {
     const blockId = block.id;
     const blockKey = block.key;
+    const selectedDescriptionStyle = blockId === 'description'
+      ? containerDescriptionStyles[blockKey] || singleTextStyle || 'principal'
+      : 'principal';
+    const selectedDescriptionCentered = blockId === 'description'
+      ? containerDescriptionCentered[blockKey] ?? DEFAULT_NARRATIVE_CENTERING
+      : DEFAULT_NARRATIVE_CENTERING;
+    const shouldCenterLastNarrativeBlock = blockId === 'description'
+      && selectedDescriptionStyle === 'narrative'
+      && selectedDescriptionCentered
+      && index === blocks.length - 1;
     const remainingDescriptionCount = blocks.slice(index + 1).filter((nextBlock) => nextBlock.id === 'description').length;
     const descriptionUnits = blockId === 'description'
       ? clampDescriptionUnits(
-        containerDescriptionSizes[blockKey] || 1,
+        containerDescriptionSizes[blockKey] || DESCRIPTION_SPACE_AUTO,
         usedDescriptionUnits,
         remainingDescriptionCount,
         descriptionUnitBudget,
@@ -4490,16 +4477,31 @@ const drawCardCanvas = (
 
     if (y >= contentBottom - 120) return;
     const remainingHeight = contentBottom - y;
-    const blockHeight = Math.min(
-      remainingHeight,
-      getModularContainerHeight(blockId, remainingHeight, index === blocks.length - 1, descriptionUnits),
-    );
+    const isAutoDescription = blockId === 'description' && isAutoDescriptionUnits(descriptionUnits);
+    const maxDescriptionUnits = blockId === 'description'
+      ? Math.max(1, descriptionUnitBudget - usedDescriptionUnits - remainingDescriptionCount)
+      : 1;
+    const blockHeight = isAutoDescription
+      ? Math.min(
+        remainingHeight,
+        getModularDescriptionAutoHeight(
+          context,
+          containerDescriptions[blockKey] ?? description,
+          hyphenate,
+          selectedDescriptionStyle,
+          maxDescriptionUnits * MODULAR_DESCRIPTION_UNIT_HEIGHT,
+        ),
+      )
+      : Math.min(
+        remainingHeight,
+        getModularContainerHeight(blockId, remainingHeight, index === blocks.length - 1, descriptionUnits),
+      );
     const label = blockLabels[blockId] || blockId;
     const blockCenterY = getModularBlockCenterY(y, blockHeight, index === 0);
 
     if (blockId !== 'consumption' && blockId !== 'range' && blockId !== 'description' && blockId !== 'minion') {
       drawContainerLabel(context, label, blockCenterY, accent);
-    } else if (blockId === 'description' && (containerDescriptionStyles[blockKey] || singleTextStyle || 'principal') !== 'narrative') {
+    } else if (blockId === 'description' && selectedDescriptionStyle !== 'narrative') {
       drawContainerLabel(context, label, y + 50, accent);
     }
 
@@ -4541,11 +4543,12 @@ const drawCardCanvas = (
         blockHeight,
         containerDescriptions[blockKey] ?? description,
         hyphenate,
-        containerDescriptionStyles[blockKey] || singleTextStyle || 'principal',
+        selectedDescriptionStyle,
         resourceImages,
         accent,
-        index === blocks.length - 1,
+        index === blocks.length - 1 && (!isAutoDescription || shouldCenterLastNarrativeBlock),
         hasChargeFooter,
+        selectedDescriptionCentered,
       );
     }
 
@@ -4556,7 +4559,9 @@ const drawCardCanvas = (
     }
     y += blockHeight;
     if (blockId === 'description') {
-      usedDescriptionUnits += descriptionUnits;
+      usedDescriptionUnits += isAutoDescription
+        ? blockHeight / MODULAR_DESCRIPTION_UNIT_HEIGHT
+        : descriptionUnits;
     }
   });
   if (hasChargeFooter) {
@@ -4655,6 +4660,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const [containerDescriptions, setContainerDescriptions] = useState({});
   const [containerDescriptionSizes, setContainerDescriptionSizes] = useState({});
   const [containerDescriptionStyles, setContainerDescriptionStyles] = useState({});
+  const [containerDescriptionCentered, setContainerDescriptionCentered] = useState({});
   const [containerDamage, setContainerDamage] = useState({});
   const [containerConsumptions, setContainerConsumptions] = useState({});
   const [selectedBackground, setSelectedBackground] = useState('Gris.webp');
@@ -5196,6 +5202,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       containerDamage,
       containerConsumptions,
       containerDescriptionStyles,
+      containerDescriptionCentered,
       stardustImg,
       diceIconImages,
       actionSpeedId,
@@ -5212,7 +5219,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
 
     if (updateStatus) setImageStatus('ready');
     return undefined;
-  }, [cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, headerColorActive, headerColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode, headerImageSrc, headerImageTransform, cardContainers, containerTraits, containerDescriptions, containerDescriptionSizes, containerDamage, containerConsumptions, containerDescriptionStyles, actionSpeedId, attributeType, bodyColorActive, bodyColor]);
+  }, [cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, headerColorActive, headerColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode, headerImageSrc, headerImageTransform, cardContainers, containerTraits, containerDescriptions, containerDescriptionSizes, containerDamage, containerConsumptions, containerDescriptionStyles, containerDescriptionCentered, actionSpeedId, attributeType, bodyColorActive, bodyColor]);
 
   useEffect(() => {
     let disposed = false;
@@ -5327,7 +5334,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       let changed = false;
       const nextSizes = {};
       descriptionKeys.forEach((key) => {
-        nextSizes[key] = currentSizes[key] || 1;
+        nextSizes[key] = currentSizes[key] || DESCRIPTION_SPACE_AUTO;
         if (!currentSizes[key]) changed = true;
       });
       if (Object.keys(currentSizes).some((key) => !descriptionKeys.has(key))) changed = true;
@@ -5343,6 +5350,17 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       });
       if (Object.keys(currentStyles).some((key) => !descriptionKeys.has(key))) changed = true;
       return changed ? nextStyles : currentStyles;
+    });
+
+    setContainerDescriptionCentered((currentCentered) => {
+      let changed = false;
+      const nextCentered = {};
+      descriptionKeys.forEach((key) => {
+        nextCentered[key] = currentCentered[key] ?? DEFAULT_NARRATIVE_CENTERING;
+        if (!Object.prototype.hasOwnProperty.call(currentCentered, key)) changed = true;
+      });
+      if (Object.keys(currentCentered).some((key) => !descriptionKeys.has(key))) changed = true;
+      return changed ? nextCentered : currentCentered;
     });
 
     setContainerDamage((currentDamage) => {
@@ -5374,6 +5392,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     setContainerDescriptions({});
     setContainerDescriptionSizes({});
     setContainerDescriptionStyles({});
+    setContainerDescriptionCentered({});
     setContainerDamage({});
     setContainerConsumptions({});
     setFlavorText(DEFAULT_FLAVOR_TEXT);
@@ -5449,8 +5468,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   };
 
   const handleContainerDescriptionSizeChange = (containerKey, value) => {
-    const parsed = parseInt(value, 10);
-    const nextValue = DESCRIPTION_SPACE_UNITS.includes(parsed) ? parsed : 1;
+    const nextValue = clampDescriptionUnitOption(value);
     setContainerDescriptionSizes((currentSizes) => ({
       ...currentSizes,
       [containerKey]: nextValue,
@@ -5460,6 +5478,13 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const handleContainerDescriptionStyleChange = (containerKey, value) => {
     setContainerDescriptionStyles((currentStyles) => ({
       ...currentStyles,
+      [containerKey]: value,
+    }));
+  };
+
+  const handleContainerDescriptionCenteredChange = (containerKey, value) => {
+    setContainerDescriptionCentered((currentCentered) => ({
+      ...currentCentered,
       [containerKey]: value,
     }));
   };
@@ -5608,7 +5633,9 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       }
       const nextContainer = createCardContainer(containerId);
       let tentative;
-      if (containerId === 'charge') {
+      if (containerId === 'minion') {
+        tentative = [nextContainer, ...current];
+      } else if (containerId === 'charge') {
         tentative = [...current, nextContainer];
       } else {
         const chargeIndex = current.findIndex((container, index) => getContainerId(container, index) === 'charge');
@@ -6329,8 +6356,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const getAvailableDescriptionUnits = (containerKey) => {
     const otherUsedUnits = descriptionContainers.reduce((total, container) => {
       if (container.key === containerKey) return total;
-      const parsedUnits = parseInt(containerDescriptionSizes[container.key], 10);
-      return total + (DESCRIPTION_SPACE_UNITS.includes(parsedUnits) ? parsedUnits : 1);
+      return total + getDescriptionBudgetUnits(containerDescriptionSizes[container.key]);
     }, 0);
     return Math.max(1, Math.min(6, descriptionUnitBudget - otherUsedUnits));
   };
@@ -6994,7 +7020,9 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                   // Validation of physical height budget (1581px)
                   const nextContainer = createCardContainer(container.id);
                   let tentative;
-                  if (container.id === 'charge') {
+                  if (container.id === 'minion') {
+                    tentative = [nextContainer, ...cardContainers];
+                  } else if (container.id === 'charge') {
                     tentative = [...cardContainers, nextContainer];
                   } else {
                     const chargeIndex = cardContainers.findIndex((c, idx) => getContainerId(c, idx) === 'charge');
@@ -7234,39 +7262,6 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                   );
                 })}
 
-                {(cardType === 'skill' || hasContainer('minion')) && (
-                  <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-3">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                      Atributos del Minion
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {MINION_ATTRIBUTE_TYPES.map((attribute) => {
-                        const iconSrc = `${process.env.PUBLIC_URL || ''}/interfaz/consumo_new/${attribute}.webp`;
-                        return (
-                          <label
-                            key={`minion-attribute-${attribute}`}
-                            className="grid grid-cols-[2rem_1fr] items-center border border-[#c8aa6e]/20 bg-[#09090b]/80"
-                            title={attribute}
-                          >
-                            <span className="flex h-full items-center justify-center border-r border-[#c8aa6e]/15">
-                              <img src={iconSrc} alt="" className="h-5 w-5 object-contain" />
-                            </span>
-                            <input
-                              type="number"
-                              min={0}
-                              max={99}
-                              value={minionAttributes[attribute]}
-                              onChange={(event) => handleMinionAttributeChange(attribute, event.target.value)}
-                              className="h-[34px] min-w-0 bg-transparent px-1 text-center text-sm font-black text-[#f0e6d2] outline-none"
-                              aria-label={`Atributo ${attribute}`}
-                            />
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
                 {consumptionContainers.map((container, consumptionIndex) => {
                   const consumptionConfig = containerConsumptions[container.key] || createDefaultContainerConsumption();
                   const activeSlots = [...(consumptionConfig.slots || DEFAULT_CONSUMPTION_SLOTS)].slice(0, RESOURCE_SLOT_COUNT);
@@ -7355,6 +7350,54 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                     </div>
                   );
                 })}
+
+                {(cardType === 'skill' || hasContainer('minion')) && (
+                  <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-3">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      Atributos del Minion
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {MINION_ATTRIBUTE_TYPES.map((attribute) => {
+                        const iconSrc = `${process.env.PUBLIC_URL || ''}/interfaz/consumo_new/${attribute}.webp`;
+                        return (
+                          <label
+                            key={`minion-attribute-${attribute}`}
+                            className="grid grid-cols-[1fr_2rem] items-center border border-[#c8aa6e]/20 bg-[#09090b]/80"
+                            title={attribute}
+                          >
+                            <input
+                              type="number"
+                              min={0}
+                              max={99}
+                              value={minionAttributes[attribute]}
+                              onChange={(event) => handleMinionAttributeChange(attribute, event.target.value)}
+                              className="h-[34px] min-w-0 bg-transparent px-1 text-center text-sm font-black text-[#f0e6d2] outline-none"
+                              aria-label={`Atributo ${attribute}`}
+                            />
+                            <span className="flex h-full items-center justify-center border-l border-[#c8aa6e]/15">
+                              <span
+                                style={{
+                                  display: 'block',
+                                  width: '1.25rem',
+                                  height: '1.25rem',
+                                  backgroundColor: DESCRIPTION_ICON_STYLES[attribute]?.stroke || '#c46f1f',
+                                  WebkitMaskImage: `url("${iconSrc}")`,
+                                  maskImage: `url("${iconSrc}")`,
+                                  WebkitMaskRepeat: 'no-repeat',
+                                  maskRepeat: 'no-repeat',
+                                  WebkitMaskPosition: 'center',
+                                  maskPosition: 'center',
+                                  WebkitMaskSize: 'contain',
+                                  maskSize: 'contain',
+                                }}
+                              />
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -7413,8 +7456,12 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
 
                 {descriptionContainers.map((container, descriptionIndex) => {
                   const maxUnitsForContainer = getAvailableDescriptionUnits(container.key);
-                  const selectedUnits = Math.min(containerDescriptionSizes[container.key] || 1, maxUnitsForContainer);
+                  const selectedUnits = clampDescriptionUnitOption(
+                    containerDescriptionSizes[container.key] || DESCRIPTION_SPACE_AUTO,
+                    maxUnitsForContainer,
+                  );
                   const selectedStyle = containerDescriptionStyles[container.key] || 'principal';
+                  const selectedNarrativeCentered = containerDescriptionCentered[container.key] ?? DEFAULT_NARRATIVE_CENTERING;
 
                   return (
                     <div
@@ -7429,9 +7476,10 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                           Espacio
                           <select
                             value={selectedUnits}
-                            onChange={(event) => handleContainerDescriptionSizeChange(container.key, Number(event.target.value))}
+                            onChange={(event) => handleContainerDescriptionSizeChange(container.key, event.target.value)}
                             className="h-8 border border-[#c8aa6e]/20 bg-[#09090b]/90 px-2 text-xs font-bold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70"
                           >
+                            <option value={DESCRIPTION_SPACE_AUTO}>Auto</option>
                             {DESCRIPTION_SPACE_UNITS.filter((unit) => unit <= maxUnitsForContainer).map((unit) => (
                               <option key={`${container.key}-description-unit-${unit}`} value={unit}>
                                 {unit}
@@ -7457,6 +7505,18 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                           </button>
                         ))}
                       </div>
+
+                      {selectedStyle === 'narrative' && (
+                        <label className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                          <input
+                            type="checkbox"
+                            checked={selectedNarrativeCentered}
+                            onChange={(event) => handleContainerDescriptionCenteredChange(container.key, event.target.checked)}
+                            className="h-4 w-4 accent-[#c8aa6e]"
+                          />
+                          Centrar bloque
+                        </label>
+                      )}
 
                       {selectedStyle === 'principal' && renderContainerDescriptionToolbar(container.key, descriptionIndex)}
                       <textarea

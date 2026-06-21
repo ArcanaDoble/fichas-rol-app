@@ -183,7 +183,21 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.7.23**
+> **Versión actual: 2.7.24**
+
+**Resumen de cambios v2.7.24:**
+
+- **Ajuste del contenedor modular Minion en CardBuilder**:
+  - Al añadir el contenedor `Minion` desde el menú de contenedores, ahora se inserta directamente como primer bloque del cuerpo de la carta, por encima de `Alcance`, tal como se muestra en la referencia.
+  - El panel interno de atributos del minion se desplaza `15px` hacia arriba dentro de su propio contenedor para quedar alineado con la composición marcada en la referencia visual.
+  - El orden visual de atributos en el render del panel de minion queda como `Hambre`, `Cuerpo` y `Mente` de izquierda a derecha.
+  - Se eliminó la función antigua de dibujo de atributos de minion que pertenecía al diseño previo y ya no se usaba en el renderizado modular.
+- **Límite de párrafo narrativo en descripciones**:
+  - El texto narrativo se mide ahora con el mismo peso tipográfico con el que se renderiza, evitando que sus líneas sobrepasen el límite de párrafo usado por el texto principal.
+- **Altura automática en descripciones**:
+  - Los contenedores de descripción nuevos usan `Auto` por defecto, midiendo el texto conforme se escribe para cerrar o abrir gradualmente el bloque según el contenido real; los tamaños manuales (`1`, `2`, etc.) siguen disponibles.
+- **Centrado narrativo configurable**:
+  - El estilo `Narrativo` mantiene siempre el texto alineado al centro horizontalmente. La opción `Centrar bloque` viene activada por defecto y, cuando el narrativo es el último bloque, coloca el conjunto de texto en el centro del espacio restante; al desactivarla, el bloque queda ajustado al texto sin perder la alineación centrada.
 
 **Resumen de cambios v2.7.23:**
 
