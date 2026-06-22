@@ -183,7 +183,15 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.7.24**
+> **Versión actual: 2.7.25**
+
+**Resumen de cambios v2.7.25:**
+
+- **Sincronización robusta con transacciones atómicas**:
+  - Implementación de guardado transaccional a nivel de elementos (`safePersistItems`) para todas las acciones del canvas (arrastre, rotación, redimensionamiento, unstacking, eliminación, enlace de personajes, reinicio de velocidad, reacciones de combate y fin de turno).
+  - Fusión inteligente en tiempo real que previene que los movimientos simultáneos de jugadores se pisen o que cartas y elementos eliminados vuelvan a aparecer (snapback).
+  - Transacción atómica en el guardado manual del escenario para fusionar metadatos del Máster con las posiciones actualizadas por jugadores concurrentes.
+  - Mitigación de condiciones de carrera mediante cola secuencial de escrituras pendientes.
 
 **Resumen de cambios v2.7.24:**
 

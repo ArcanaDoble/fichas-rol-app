@@ -4172,12 +4172,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 }, 500);
             }
 
-            import('firebase/firestore').then(({ doc, updateDoc }) => {
-                 updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-                     items: nextItems,
-                     lastModified: Date.now()
-                 }).catch(err => console.error("Error saving die roll", err));
-            });
+            safePersistItems(currentScenario.id, nextItems, currentScenario.items);
         };
         window.addEventListener('save-die-roll', handleSaveDieRoll);
         return () => window.removeEventListener('save-die-roll', handleSaveDieRoll);
@@ -5799,10 +5794,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             if (Math.hypot(newWall.x2 - newWall.x1, newWall.y2 - newWall.y1) > 5) {
                 const updatedItems = [...(activeScenario.items || []), newWall];
                 setActiveScenario(prev => ({ ...prev, items: updatedItems }));
-                updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-                    items: updatedItems,
-                    lastModified: Date.now()
-                });
+                safePersistItems(activeScenario.id, updatedItems, activeScenario.items);
             }
 
             setWallDrawingStart(null);
@@ -5877,10 +5869,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }
 
         if (draggingWallHandle && activeScenario) {
-            updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-                items: activeScenario.items,
-                lastModified: Date.now()
-            });
+            safePersistItems(activeScenario.id, activeScenario.items, activeScenario.items);
             setDraggingWallHandle(null);
             return;
         }
@@ -6016,14 +6005,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         setSelectedTokenIds([draggedTokenId]);
                         lastSelectedIdRef.current = draggedTokenId;
 
-                        try {
-                            updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-                                items: finalItems,
-                                lastModified: Date.now()
-                            });
-                        } catch (error) {
-                            console.error("Error saving card stack:", error);
-                        }
+                        safePersistItems(currentScenario.id, finalItems, currentScenario.items);
 
                         setDraggedTokenId(null);
                         setRotatingTokenId(null);
@@ -6043,14 +6025,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         setSelectedTokenIds([containerTarget.id]);
                         lastSelectedIdRef.current = containerTarget.id;
 
-                        try {
-                            updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-                                items: finalItems,
-                                lastModified: Date.now()
-                            });
-                        } catch (error) {
-                            console.error("Error saving card container:", error);
-                        }
+                        safePersistItems(currentScenario.id, finalItems, currentScenario.items);
 
                         setDraggedTokenId(null);
                         setRotatingTokenId(null);
@@ -6579,18 +6554,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     });
                     const updatedItems = [...(activeScenario.items || []), ...newTokens];
                     setActiveScenario(prev => ({ ...prev, items: updatedItems }));
-                    try {
-                        await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-                            items: updatedItems,
-                            lastModified: Date.now()
-                        });
-                        setSelectedTokenIds(newTokens.map(t => t.id));
-                        setToastType('success');
-                        setShowToast(true);
-                        setTimeout(() => setShowToast(false), 2500);
-                    } catch (error) {
-                        console.error('Error al pegar tokens:', error);
-                    }
+                    safePersistItems(activeScenario.id, updatedItems, activeScenario.items);
+                    setSelectedTokenIds(newTokens.map(t => t.id));
+                    setToastType('success');
+                    setShowToast(true);
+                    setTimeout(() => setShowToast(false), 2500);
                 }
             }
 
@@ -6600,15 +6568,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     const updatedItems = activeScenario.items.filter(item => !selectedTokenIds.includes(item.id));
                     setActiveScenario(prev => ({ ...prev, items: updatedItems }));
                     setSelectedTokenIds([]);
-                    try {
-                        await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-                            items: updatedItems,
-                            lastModified: Date.now()
-                        });
-                        triggerToast("Selección Eliminada", "El tablero se ha sincronizado", 'info');
-                    } catch (error) {
-                        console.error('Error al eliminar items con teclado:', error);
-                    }
+                    safePersistItems(activeScenario.id, updatedItems, activeScenario.items);
+                    triggerToast("Selección Eliminada", "El tablero se ha sincronizado", 'info');
                 }
             }
         };
@@ -6708,10 +6669,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         // Modificar SOLO el token del jugador en la lista fresca del servidor
                         const updatedItems = freshItems.map(i => i.id === existingToken.id ? syncedToken : i);
                         setActiveScenario(prev => prev?.id === scenarioId ? { ...prev, items: updatedItems } : prev);
-                        await updateDoc(doc(db, scenarioCollectionName, scenarioId), {
-                            items: updatedItems,
-                            lastModified: Date.now()
-                        });
+                        await safePersistItems(scenarioId, updatedItems, freshItems);
                     } else {
                         // Si no hay cambios, solo actualizar estado local con datos frescos
                         setActiveScenario(prev => prev?.id === scenarioId ? { ...prev, items: freshItems } : prev);
@@ -6759,10 +6717,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         y: -(spawnPosition.y + defaultTokenDimensions.height / 2 - WORLD_SIZE / 2) * playerZoom,
                     });
 
-                    await updateDoc(doc(db, scenarioCollectionName, scenarioId), {
-                        items: updatedItems,
-                        lastModified: Date.now()
-                    });
+                    await safePersistItems(scenarioId, updatedItems, freshItems);
                 }
 
                 hasCreatedAutoToken.current = true;
@@ -6823,10 +6778,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 if (hasChanges) {
                     console.log(' [SafeSync] Sincronización en tiempo real para:', name);
                     setActiveScenario(prev => prev?.id === currentScenario.id ? { ...prev, items: updatedItems } : prev);
-                    await updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-                        items: updatedItems,
-                        lastModified: Date.now()
-                    });
+                    await safePersistItems(currentScenario.id, updatedItems, freshItems);
                 }
             } catch (err) {
                 console.error(' [SafeSync] Error sincronizando ficha en tiempo real:', err);
@@ -6909,7 +6861,57 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             // Limpiar localUnsavedEditsRef (borradores de inspector) puesto que ya se guardan
             localUnsavedEditsRef.current = {};
 
-            await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), savePayload);
+            await runTransaction(db, async (transaction) => {
+                const sfDoc = await transaction.get(doc(db, scenarioCollectionName, activeScenario.id));
+                if (!sfDoc.exists()) return;
+
+                const currentData = sfDoc.data();
+                const currentItems = currentData.items || [];
+
+                const lastKnownItems = activeScenarioRef.current?.items || [];
+                const lastKnownMap = new Map(lastKnownItems.map(i => [i.id, i]));
+                const finalMap = new Map((activeScenario.items || []).map(i => [i.id, i]));
+
+                const modifiedOrAdded = [];
+                (activeScenario.items || []).forEach(item => {
+                    const orig = lastKnownMap.get(item.id);
+                    if (!orig || JSON.stringify(orig) !== JSON.stringify(item)) {
+                        modifiedOrAdded.push(item);
+                    }
+                });
+
+                const deletedIds = [];
+                lastKnownItems.forEach(item => {
+                    if (!finalMap.has(item.id)) {
+                        deletedIds.push(item.id);
+                    }
+                });
+
+                let nextItems = currentItems.map(item => {
+                    if (deletedIds.includes(item.id)) return null;
+                    const localMod = modifiedOrAdded.find(m => m.id === item.id);
+                    if (localMod) return localMod;
+                    return item;
+                }).filter(Boolean);
+
+                const currentIds = new Set(currentItems.map(i => i.id));
+                const originalIds = new Set(lastKnownItems.map(i => i.id));
+
+                modifiedOrAdded.forEach(newItem => {
+                    if (!currentIds.has(newItem.id)) {
+                        if (!originalIds.has(newItem.id)) {
+                            nextItems.push(newItem);
+                        }
+                    }
+                });
+
+                const payload = {
+                    ...savePayload,
+                    items: nextItems
+                };
+
+                transaction.update(doc(db, scenarioCollectionName, activeScenario.id), payload);
+            });
 
             //  SINCRONIZACIÓN BIDIRECCIONAL: Actualizar fichas de personajes vinculados
             if (activeScenario.items && activeScenario.items.length > 0) {
@@ -7148,12 +7150,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             ...prev,
             items: nextItems
         }));
-        if (activeScenario.id) {
-            updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-                items: nextItems,
-                lastModified: Date.now()
-            }).catch(err => console.error("Error saving board card:", err));
-        }
+        safePersistItems(activeScenario.id, nextItems, activeScenario.items);
     };
 
     const getBoardHandOwner = () => {
@@ -7254,12 +7251,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             ...prev,
             items: nextItems
         }));
-        if (activeScenario.id) {
-            updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-                items: nextItems,
-                lastModified: Date.now()
-            }).catch(err => console.error("Error saving hand card:", err));
-        }
+        safePersistItems(activeScenario.id, nextItems, activeScenario.items);
     };
 
     const addCardContainerToBoard = () => {
@@ -7291,10 +7283,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
         setSelectedTokenIds([newContainer.id]);
         lastSelectedIdRef.current = newContainer.id;
-        updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error saving card container:", err));
+        safePersistItems(activeScenario.id, nextItems, activeScenario.items);
     };
 
     const addDeckToBoard = (deck) => {
@@ -7376,10 +7365,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
         setSelectedTokenIds([containerId]);
         lastSelectedIdRef.current = containerId;
-        updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error saving deck board:", err));
+        safePersistItems(activeScenario.id, nextItems, activeScenario.items);
     };
 
     const addBoardMarkerToBoard = () => {
@@ -7410,10 +7396,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
         setSelectedTokenIds([marker.id]);
         lastSelectedIdRef.current = marker.id;
-        updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error saving board marker:", err));
+        safePersistItems(activeScenario.id, nextItems, activeScenario.items);
     };
 
     const addBoardDieToBoard = () => {
@@ -7446,10 +7429,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
         setSelectedTokenIds([die.id]);
         lastSelectedIdRef.current = die.id;
-        updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error saving board die:", err));
+        safePersistItems(activeScenario.id, nextItems, activeScenario.items);
     };
 
     const adjustBoardDiceCount = (sides, delta) => {
@@ -7994,10 +7974,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
         setSelectedTokenIds([topCardId]);
         lastSelectedIdRef.current = topCardId;
-        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error unstacking card:", err));
+        safePersistItems(currentScenario.id, nextItems, currentScenario.items);
     };
 
     const unstackAllCards = (stackParentId) => {
@@ -8035,10 +8012,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }));
 
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
-        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error unstacking cards:", err));
+        safePersistItems(currentScenario.id, nextItems, currentScenario.items);
     };
 
     const consumeCardStackQuickActionEvent = (event) => {
@@ -8092,10 +8066,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
         setSelectedTokenIds([cardId]);
         lastSelectedIdRef.current = cardId;
-        updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-            items: nextItems,
-            lastModified: Date.now()
-        }).catch(err => console.error("Error unstacking selected card:", err));
+        safePersistItems(currentScenario.id, nextItems, currentScenario.items);
     };
 
     const addTokenToCanvas = (tokenUrl) => {
@@ -8376,15 +8347,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         const updatedItems = activeScenario.items.map(i => i.id === tokenId ? finalToken : i);
         setActiveScenario(prev => ({ ...prev, items: updatedItems }));
-        updateDoc(doc(db, scenarioCollectionName, activeScenario.id), { items: updatedItems })
-            .then(() => {
-                triggerToast(
-                    "Vínculo establecido",
-                    `Token vinculado a ${charData.name}`,
-                    'success'
-                );
-            })
-            .catch(err => console.error('Error al vincular personaje:', err));
+        safePersistItems(activeScenario.id, updatedItems, activeScenario.items);
+        triggerToast(
+            "Vínculo establecido",
+            `Token vinculado a ${charData.name}`,
+            'success'
+        );
     };
 
     const unlinkCharacter = (tokenId) => {
@@ -8398,15 +8366,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         const updatedItems = activeScenario.items.map(i => i.id === tokenId ? finalToken : i);
         setActiveScenario(prev => ({ ...prev, items: updatedItems }));
-        updateDoc(doc(db, scenarioCollectionName, activeScenario.id), { items: updatedItems })
-            .then(() => {
-                triggerToast(
-                    "Vínculo eliminado",
-                    "El token ya no está vinculado a una ficha",
-                    'info'
-                );
-            })
-            .catch(err => console.error('Error al desvincular personaje:', err));
+        safePersistItems(activeScenario.id, updatedItems, activeScenario.items);
+        triggerToast(
+            "Vínculo eliminado",
+            "El token ya no está vinculado a una ficha",
+            'info'
+        );
     };
 
     const deleteItem = async (itemId) => {
@@ -8445,16 +8410,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             items: updatedItems
         }));
         setSelectedTokenIds(prev => prev.filter(id => !idsToDelete.has(id)));
-
-        try {
-            await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-                items: updatedItems,
-                lastModified: Date.now()
-            });
-            triggerToast("Elemento Eliminado", "El cambio se ha sincronizado", 'info');
-        } catch (error) {
-            console.error("Error al eliminar item del canvas:", error);
-        }
+        safePersistItems(activeScenario.id, updatedItems, activeScenario.items);
+        triggerToast("Elemento Eliminado", "El cambio se ha sincronizado", 'info');
     };
 
     const rotateItem = (itemId, angle) => {
@@ -8519,10 +8476,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 return item;
             });
 
-            updateDoc(doc(db, scenarioCollectionName, prev.id), {
-                items: firebaseItems,
-                lastModified: Date.now()
-            });
+            safePersistItems(prev.id, firebaseItems, prev.items);
 
             return { ...prev, items: newItems };
         });
@@ -8571,14 +8525,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         setActiveScenario(prev => ({ ...prev, items: updatedItems }));
 
-        try {
-            await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-                items: updatedItems,
-                lastModified: Date.now()
-            });
-        } catch (error) {
-            console.error("Error adding light:", error);
-        }
+        safePersistItems(activeScenario.id, updatedItems, activeScenario.items);
     };
 
     const addAreaToCanvas = async (shape = 'rect') => {
@@ -8612,14 +8559,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setActiveScenario(prev => ({ ...prev, items: updatedItems }));
         setSelectedTokenIds([newArea.id]);
 
-        try {
-            await updateDoc(doc(db, scenarioCollectionName, activeScenario.id), {
-                items: updatedItems,
-                lastModified: Date.now()
-            });
-        } catch (error) {
-            console.error("Error adding area:", error);
-        }
+        safePersistItems(activeScenario.id, updatedItems, activeScenario.items);
     };
 
     // --- HELPER: renderItemJSX ---
@@ -9742,9 +9682,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     }).filter(Boolean);
 
                     const currentIds = new Set(currentItems.map(i => i.id));
+                    const originalIds = new Set((origItems || []).map(i => i.id));
+
                     modifiedOrAdded.forEach(newItem => {
                         if (!currentIds.has(newItem.id)) {
-                            nextItems.push(newItem);
+                            if (!originalIds.has(newItem.id)) {
+                                nextItems.push(newItem);
+                            }
                         }
                     });
 
@@ -10128,16 +10072,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setActiveScenario(prev => ({ ...prev, items: newItems }));
 
         // Persistir a Firebase
-        try {
-            updateDoc(doc(db, scenarioCollectionName, currentScenario.id), {
-                items: newItems,
-                lastModified: Date.now()
-            });
-            triggerToast("Velocidad Reiniciada", "Todos los contadores han vuelto a 0", 'info');
-        } catch (error) {
-            console.error("Error resetting speed:", error);
-            triggerToast("Error", "No se pudo reiniciar la velocidad", 'error');
-        }
+        safePersistItems(currentScenario.id, newItems, currentScenario.items);
+        triggerToast("Velocidad Reiniciada", "Todos los contadores han vuelto a 0", 'info');
     };
 
     const handleCombatAction = (tokenId, actionId, data = null) => {
@@ -11530,7 +11466,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         }
 
                         if (changed) {
-                            await updateDoc(doc(db, scenarioCollectionName, snap.id), { items: currentItems, lastModified: Date.now() });
+                            await safePersistItems(snap.id, currentItems, snap.data().items);
                         }
                     }
                 }
@@ -11984,10 +11920,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setPendingTurnState(null);
 
         try {
-            await updateDoc(doc(db, scenarioCollectionName, scenario.id), {
-                items: newItems,
-                lastModified: Date.now()
-            });
+            await safePersistItems(scenario.id, newItems, scenario.items);
             if (endTurnSangradoAnimation) {
                 queueSangradoSpeedAnimation(endTurnSangradoAnimation.token, endTurnSangradoAnimation.lostVida, { shared: true });
             }
