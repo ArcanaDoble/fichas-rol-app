@@ -212,6 +212,14 @@ const DESCRIPTION_ICON_STYLES = {
   ...ELEMENT_CONSUMPTION_STYLES,
 };
 
+const DESCRIPTION_FORMAT_PRESET_COLORS = [
+  { name: 'Dorado', value: '#b99a55' },
+  { name: 'Rojo', value: '#a93832' },
+  { name: 'Verde', value: '#3d7d45' },
+  { name: 'Azul', value: '#2f6fb3' },
+  { name: 'Morado', value: '#5f5873' },
+];
+
 const ACCENT_PRESET_COLORS = [
   { id: 'default', label: 'Base', value: '#c46f1f' },
   { id: 'gold', label: 'Dorado', value: '#c8aa6e' },
@@ -3929,7 +3937,7 @@ const drawModularDescription = (
     paragraphGapScale: 0.12,
   });
   const totalTextHeight = items.reduce((total, item) => total + item.height, 0);
-  let cursorY = isNarrativeStyle
+  let cursorY = isNarrativeStyle && centerNarrativeText
     ? top + Math.max(0, (bottom - top - totalTextHeight) / 2)
     : top;
 
@@ -4001,6 +4009,21 @@ const getModularDescriptionAutoHeight = (
     Math.min(maxHeight, Math.ceil(desiredHeight)),
   );
 };
+
+const getModularDescriptionDesiredHeight = (
+  context,
+  description,
+  hyphenate,
+  singleTextStyle,
+) => (
+  getModularDescriptionAutoHeight(
+    context,
+    description,
+    hyphenate,
+    singleTextStyle,
+    Number.MAX_SAFE_INTEGER,
+  )
+);
 
 const fitActionTitleFont = (context, title) => {
   let size = 200;
@@ -4325,6 +4348,89 @@ const clampDescriptionUnits = (requestedUnits, usedUnits, remainingDescriptions,
   return clampDescriptionUnitOption(desiredUnits, maxUnits);
 };
 
+const getResolvedModularBlockHeights = ({
+  context,
+  blocks,
+  contentHeight,
+  containerDescriptionSizes,
+  containerDescriptionStyles,
+  containerDescriptions,
+  description,
+  hyphenate,
+  singleTextStyle,
+}) => {
+  const heights = new Array(blocks.length).fill(0);
+  const growableDescriptions = [];
+
+  blocks.forEach((block, index) => {
+    const blockId = block.id;
+    if (blockId !== 'description') {
+      heights[index] = getModularContainerHeight(blockId, 0, false);
+      return;
+    }
+
+    const blockKey = block.key;
+    const requestedUnits = containerDescriptionSizes[blockKey] || DESCRIPTION_SPACE_AUTO;
+    const reservedHeight = isAutoDescriptionUnits(requestedUnits)
+      ? MODULAR_DESCRIPTION_UNIT_HEIGHT
+      : Math.max(
+        MODULAR_DESCRIPTION_UNIT_HEIGHT,
+        MODULAR_DESCRIPTION_UNIT_HEIGHT * normalizeDescriptionUnits(requestedUnits),
+      );
+    const selectedDescriptionStyle = containerDescriptionStyles[blockKey] || singleTextStyle || 'principal';
+    const desiredHeight = getModularDescriptionDesiredHeight(
+      context,
+      containerDescriptions[blockKey] ?? description,
+      hyphenate,
+      selectedDescriptionStyle,
+    );
+
+    heights[index] = reservedHeight;
+    growableDescriptions.push({
+      index,
+      desiredHeight: Math.max(reservedHeight, desiredHeight),
+    });
+  });
+
+  const minTotalHeight = heights.reduce((total, height) => total + height, 0);
+  let extraHeight = Math.max(0, contentHeight - minTotalHeight);
+
+  if (growableDescriptions.length > 0 && extraHeight > 0) {
+    const totalNeedFromReserved = growableDescriptions.reduce(
+      (total, entry) => total + Math.max(0, entry.desiredHeight - heights[entry.index]),
+      0,
+    );
+
+    if (totalNeedFromReserved > 0) {
+      if (extraHeight >= totalNeedFromReserved) {
+        growableDescriptions.forEach((entry) => {
+          heights[entry.index] = entry.desiredHeight;
+        });
+        extraHeight -= totalNeedFromReserved;
+      } else {
+        let assigned = 0;
+        growableDescriptions.forEach((entry, growIndex) => {
+          const need = Math.max(0, entry.desiredHeight - heights[entry.index]);
+          const share = growIndex === growableDescriptions.length - 1
+            ? extraHeight - assigned
+            : Math.floor((extraHeight * need) / totalNeedFromReserved);
+          assigned += share;
+          heights[entry.index] += share;
+        });
+        extraHeight = 0;
+      }
+    }
+
+    if (extraHeight > 0) {
+      const lastGrowableDescription = growableDescriptions[growableDescriptions.length - 1];
+      heights[lastGrowableDescription.index] += extraHeight;
+      extraHeight = 0;
+    }
+  }
+
+  return heights;
+};
+
 const drawCardCanvas = (
   canvas,
   image,
@@ -4447,9 +4553,18 @@ const drawCardCanvas = (
     return;
   }
 
-  const descriptionUnitBudget = getDescriptionUnitBudget(cardContainers, cardType);
-  let usedDescriptionUnits = 0;
   const contentBottom = hasChargeFooter ? 2386 - CHARGE_FOOTER_RESERVED_HEIGHT : 2386;
+  const resolvedBlockHeights = getResolvedModularBlockHeights({
+    context,
+    blocks,
+    contentHeight: contentBottom - MODULAR_CONTENT_TOP,
+    containerDescriptionSizes,
+    containerDescriptionStyles,
+    containerDescriptions,
+    description,
+    hyphenate,
+    singleTextStyle,
+  });
   let y = MODULAR_CONTENT_TOP;
 
   blocks.forEach((block, index) => {
@@ -4461,41 +4576,16 @@ const drawCardCanvas = (
     const selectedDescriptionCentered = blockId === 'description'
       ? containerDescriptionCentered[blockKey] ?? DEFAULT_NARRATIVE_CENTERING
       : DEFAULT_NARRATIVE_CENTERING;
-    const shouldCenterLastNarrativeBlock = blockId === 'description'
-      && selectedDescriptionStyle === 'narrative'
-      && selectedDescriptionCentered
-      && index === blocks.length - 1;
-    const remainingDescriptionCount = blocks.slice(index + 1).filter((nextBlock) => nextBlock.id === 'description').length;
     const descriptionUnits = blockId === 'description'
-      ? clampDescriptionUnits(
-        containerDescriptionSizes[blockKey] || DESCRIPTION_SPACE_AUTO,
-        usedDescriptionUnits,
-        remainingDescriptionCount,
-        descriptionUnitBudget,
-      )
+      ? containerDescriptionSizes[blockKey] || DESCRIPTION_SPACE_AUTO
       : 1;
 
     if (y >= contentBottom - 120) return;
     const remainingHeight = contentBottom - y;
-    const isAutoDescription = blockId === 'description' && isAutoDescriptionUnits(descriptionUnits);
-    const maxDescriptionUnits = blockId === 'description'
-      ? Math.max(1, descriptionUnitBudget - usedDescriptionUnits - remainingDescriptionCount)
-      : 1;
-    const blockHeight = isAutoDescription
-      ? Math.min(
-        remainingHeight,
-        getModularDescriptionAutoHeight(
-          context,
-          containerDescriptions[blockKey] ?? description,
-          hyphenate,
-          selectedDescriptionStyle,
-          maxDescriptionUnits * MODULAR_DESCRIPTION_UNIT_HEIGHT,
-        ),
-      )
-      : Math.min(
-        remainingHeight,
-        getModularContainerHeight(blockId, remainingHeight, index === blocks.length - 1, descriptionUnits),
-      );
+    const blockHeight = Math.min(
+      remainingHeight,
+      resolvedBlockHeights[index] || getModularContainerHeight(blockId, remainingHeight, index === blocks.length - 1, descriptionUnits),
+    );
     const label = blockLabels[blockId] || blockId;
     const blockCenterY = getModularBlockCenterY(y, blockHeight, index === 0);
 
@@ -4546,7 +4636,7 @@ const drawCardCanvas = (
         selectedDescriptionStyle,
         resourceImages,
         accent,
-        index === blocks.length - 1 && (!isAutoDescription || shouldCenterLastNarrativeBlock),
+        index === blocks.length - 1,
         hasChargeFooter,
         selectedDescriptionCentered,
       );
@@ -4558,11 +4648,6 @@ const drawCardCanvas = (
       drawContainerDivider(context, dividerY, accent);
     }
     y += blockHeight;
-    if (blockId === 'description') {
-      usedDescriptionUnits += isAutoDescription
-        ? blockHeight / MODULAR_DESCRIPTION_UNIT_HEIGHT
-        : descriptionUnits;
-    }
   });
   if (hasChargeFooter) {
     drawModularChargeFooter(context, chargeSlots, resourceImages, accent);
@@ -6000,13 +6085,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   };
 
   const renderContainerDescriptionToolbar = (containerKey, descriptionIndex) => {
-    const presetColors = [
-      { name: 'Dorado', value: '#c8aa6e' },
-      { name: 'Rojo', value: '#ff4d4d' },
-      { name: 'Verde', value: '#5cd65c' },
-      { name: 'Azul', value: '#33adff' },
-      { name: 'Morado', value: '#b366ff' },
-    ];
+    const presetColors = DESCRIPTION_FORMAT_PRESET_COLORS;
     const isFocused = focusedDescriptionKey === containerKey;
     const borderClass = isFocused
       ? 'border-[#c8aa6e]/70 shadow-[0_-4px_12px_rgba(200,170,110,0.06),_4px_0_12px_rgba(200,170,110,0.06),_-4px_0_12px_rgba(200,170,110,0.06)]'
@@ -6068,14 +6147,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   };
 
   const renderToolbar = (ref, fieldId) => {
-    const presetColors = [
-      { name: 'Dorado', value: '#c8aa6e' },
-      { name: 'Rojo', value: '#ff4d4d' },
-      { name: 'Verde', value: '#5cd65c' },
-      { name: 'Azul', value: '#33adff' },
-      { name: 'Morado', value: '#b366ff' },
-      { name: 'Blanco', value: '#ffffff' },
-    ];
+    const presetColors = DESCRIPTION_FORMAT_PRESET_COLORS;
 
     const isFocused = focusedField === fieldId;
     const borderClass = isFocused
