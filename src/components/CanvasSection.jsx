@@ -26,6 +26,15 @@ import { nanoid } from 'nanoid';
 import { getCustomImage, useCustomEquipmentImages } from '../hooks/useCustomEquipmentImages';
 import { parseDieValue } from '../utils/damage';
 import { getCombatQueueDisplayState, sortCombatQueueEntries } from '../utils/combatQueue';
+import {
+    RECENT_LOCAL_WRITE_PROTECTION_MS,
+    buildScenarioItemChanges,
+    getChangedItemFields,
+    getRemoteModifiedItemIds,
+    mergeScenarioItemsForPersist,
+    normalizeRecentLocalWrite,
+    shouldTreatRemotePositionAsConflict,
+} from '../utils/scenarioSync';
 import DiceSvg from './DiceSvg';
 
 // --- Constants ---
@@ -58,6 +67,16 @@ const D4_VERTEX_VALUES = [
     { value: 3, vertex: { x: -1, y: 1, z: -1 } },
     { value: 4, vertex: { x: 1, y: -1, z: -1 } },
 ];
+
+const areScenarioFieldValuesEqual = (left, right) => {
+    if (left === right) return true;
+
+    try {
+        return JSON.stringify(left) === JSON.stringify(right);
+    } catch {
+        return false;
+    }
+};
 
 const getReadableMarkerTextColor = (color = '#c8aa6e') => {
     const hex = color.replace('#', '');
@@ -4112,7 +4131,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const activeScenarioRef = useRef(null);
     useEffect(() => { activeScenarioRef.current = activeScenario; }, [activeScenario]);
     const localUnsavedEditsRef = useRef({}); // { [itemId]: { [key]: value } }
-    const recentLocalWritesRef = useRef({}); // { [itemId]: { x, y, rotation, time } }
+    const recentLocalWritesRef = useRef({}); // { [itemId]: { fields: { [key]: value }, time } }
     const lastFlipTimesRef = useRef({}); // { [cardId]: timestamp }
     const activePersistPromiseRef = useRef(null);
     const nextPersistRequestRef = useRef(null); // { scenarioId, finalItems, originalItems, explicitModifiedIds }
@@ -4188,6 +4207,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setToastSubMessage(subMessage);
         setShowToast(true);
     }, []);
+
+    const getLocalSyncActorId = useCallback(() => (
+        isPlayerView
+            ? `player:${playerName || currentUserId || 'unknown'}`
+            : `master:${currentUserId || 'master'}`
+    ), [currentUserId, isPlayerView, playerName]);
     const [itemToDelete, setItemToDelete] = useState(null);
     const [pendingImageFile, setPendingImageFile] = useState(null); // Archivo real para subir a Storage
     const [isSaving, setIsSaving] = useState(false); // Estado de guardado en progreso
@@ -4655,22 +4680,38 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 // local para evitar saltos visuales (snap-back) y desincronización de turnos.
                 if (isPlayerView && activeScenarioRef.current && remoteData.lastModified > (activeScenarioRef.current.lastModified || 0)) {
                     const remoteItems = remoteData.items || [];
+                    const remoteItemMap = new Map(remoteItems.map(item => [item.id, item]));
+                    const localItemMap = new Map((activeScenarioRef.current?.items || []).map(item => [item.id, item]));
+                    const remoteModifiedItemIds = getRemoteModifiedItemIds(remoteData);
+                    const remoteWriterId = remoteData.lastModifiedBy || null;
+                    const localWriterId = getLocalSyncActorId();
+                    const conflictCheckTime = Date.now();
                     const livePendingTurnState = isUsablePendingTurnState(pendingTurnStateRef.current) ? pendingTurnStateRef.current : null;
                     let hasConflict = false;
 
                     // 1. Conflicto con Arrastre (Individual o Múltiple)
                     if (draggedTokenIdRef.current) {
-                        const idsToCheck = selectedTokenIdsRef.current.length > 0 ? selectedTokenIdsRef.current : [draggedTokenIdRef.current];
+                        const idsToCheck = Array.from(new globalThis.Set([
+                            draggedTokenIdRef.current,
+                            ...(selectedTokenIdsRef.current || []),
+                            ...Object.keys(tokenOriginalPosRef.current || {})
+                        ].filter(Boolean)));
                         const movedExternally = idsToCheck.some(id => {
-                            const remoteItem = remoteItems.find(i => i.id === id);
+                            const remoteItem = remoteItemMap.get(id);
                             const original = tokenOriginalPosRef.current[id];
-                            const localCurrent = activeScenarioRef.current?.items.find(i => i.id === id);
+                            const localCurrent = localItemMap.get(id);
 
-                            // Si la posición remota es distinta a la original Y distinta a la que tenemos nosotros ahora mismo,
-                            // es que alguien externo (el Master) ha cambiado la ficha de sitio.
-                            return remoteItem && original && localCurrent &&
-                                (remoteItem.x !== original.x || remoteItem.y !== original.y) &&
-                                (remoteItem.x !== localCurrent.x || remoteItem.y !== localCurrent.y);
+                            return shouldTreatRemotePositionAsConflict({
+                                itemId: id,
+                                remoteItem,
+                                originalItem: original,
+                                localItem: localCurrent,
+                                remoteModifiedItemIds,
+                                remoteWriterId,
+                                localWriterId,
+                                recentLocalWrite: recentLocalWritesRef.current[id],
+                                now: conflictCheckTime,
+                            });
                         });
 
                         if (movedExternally) {
@@ -4691,32 +4732,45 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     // 2. Conflicto con Turno Pendiente (Combat Mode)
                     if (!hasConflict && livePendingTurnState) {
                         const id = livePendingTurnState.tokenId;
-                        const remoteItem = remoteItems.find(i => i.id === id);
+                        const remoteItem = remoteItemMap.get(id);
                         const startX = livePendingTurnState.startX;
                         const startY = livePendingTurnState.startY;
-                        const localCurrent = activeScenarioRef.current?.items.find(i => i.id === id);
+                        const localCurrent = localItemMap.get(id);
+                        const movedExternally = shouldTreatRemotePositionAsConflict({
+                            itemId: id,
+                            remoteItem,
+                            originalItem: { id, x: startX, y: startY },
+                            localItem: localCurrent,
+                            remoteModifiedItemIds,
+                            remoteWriterId,
+                            localWriterId,
+                            recentLocalWrite: recentLocalWritesRef.current[id],
+                            now: conflictCheckTime,
+                        });
 
-                        if (remoteItem && localCurrent && (remoteItem.x !== startX || remoteItem.y !== startY)) {
-                            // Validar si el cambio remoto coincide con nuestra posición "provisional" local.
-                            // Si coinciden, es que nosotros mismos hemos subido el cambio (ej: al abrir una puerta)
-                            // y no debemos reiniciar el turno.
-                            if (remoteItem.x !== localCurrent.x || remoteItem.y !== localCurrent.y) {
-                                pendingTurnStateRef.current = null;
-                                setPendingTurnState(null);
-                                triggerToast("Turno Reiniciado", "El Master ha movido tu ficha", 'warning');
-                                hasConflict = true;
-                            }
+                        if (movedExternally) {
+                            pendingTurnStateRef.current = null;
+                            setPendingTurnState(null);
+                            triggerToast("Turno Reiniciado", "El Master ha movido tu ficha", 'warning');
+                            hasConflict = true;
                         }
                     }
 
                     // 3. Conflicto con Rotación o Redimensión
                     if (!hasConflict && (rotatingTokenIdRef.current || resizingTokenIdRef.current)) {
                         const id = rotatingTokenIdRef.current || resizingTokenIdRef.current;
-                        const remoteItem = remoteItems.find(i => i.id === id);
-                        const localBaseline = activeScenarioRef.current.items.find(i => i.id === id);
+                        const remoteItem = remoteItemMap.get(id);
+                        const localBaseline = localItemMap.get(id);
+                        const remoteClaimsItemChange = !remoteModifiedItemIds || remoteModifiedItemIds.has(id);
 
                         // Solo hay conflicto si la posición remota ha cambiado respecto a lo que tenemos localmente
-                        if (remoteItem && localBaseline && (remoteItem.x !== localBaseline.x || remoteItem.y !== localBaseline.y)) {
+                        if (
+                            remoteClaimsItemChange &&
+                            remoteWriterId !== localWriterId &&
+                            remoteItem &&
+                            localBaseline &&
+                            (remoteItem.x !== localBaseline.x || remoteItem.y !== localBaseline.y)
+                        ) {
                             setRotatingTokenId(null);
                             setResizingTokenId(null);
                             triggerToast("Interacción Interrumpida", "El Master ha movido la ficha", 'warning');
@@ -4730,13 +4784,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                     const remoteItems = remoteData.items || [];
                     const localItems = Array.isArray(current.items) ? current.items : [];
+                    const localItemMap = new Map(localItems.map(item => [item.id, item]));
+                    const remoteItemIds = new globalThis.Set(remoteItems.map(item => item.id));
+                    const activeDragItemIds = new globalThis.Set([
+                        draggedTokenIdRef.current,
+                        ...(selectedTokenIdsRef.current || []),
+                        ...Object.keys(tokenOriginalPosRef.current || {})
+                    ].filter(Boolean));
+                    const mergeTime = Date.now();
                     const livePendingTurnState = isUsablePendingTurnState(pendingTurnStateRef.current) ? pendingTurnStateRef.current : null;
 
                     // Protegemos las fichas que estamos manipulando localmente (tanto Master como jugadores)
                     // para evitar que los snapshots remotos borren arrastres activos, escrituras recientes (snapback),
                     // ediciones sin guardar del inspector o turnos pendientes.
                     const mergedItems = remoteItems.map(remote => {
-                        const localItem = localItems.find(i => i.id === remote.id);
+                        const localItem = localItemMap.get(remote.id);
                         if (!localItem) return remote;
 
                         // Caso A: Preservar ediciones no guardadas del inspector (Drafts)
@@ -4744,7 +4806,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         let itemWithEdits = localEdits ? { ...remote, ...localEdits } : remote;
 
                         // Caso B: Preservar posición de fichas arrastradas activamente
-                        if (draggedTokenIdRef.current && selectedTokenIdsRef.current.includes(remote.id)) {
+                        if (draggedTokenIdRef.current && activeDragItemIds.has(remote.id)) {
                             return {
                                 ...itemWithEdits,
                                 x: localItem.x,
@@ -4753,16 +4815,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             };
                         }
 
-                        // Caso C: Prevenir snapback/rubber-banding de campos de escritura persistente recientes (últimos 1500ms)
-                        const recentWrite = recentLocalWritesRef.current[remote.id];
+                        // Caso C: Prevenir snapback/rubber-banding de campos de escritura persistente recientes
+                        const recentWrite = normalizeRecentLocalWrite(recentLocalWritesRef.current[remote.id]);
                         if (recentWrite) {
-                            if (Date.now() - recentWrite.time < 3000) {
+                            if (mergeTime - recentWrite.time < RECENT_LOCAL_WRITE_PROTECTION_MS) {
                                 // Limpiamos campos confirmados por el servidor
                                 const fieldsToProtect = {};
                                 let hasProtectedFields = false;
 
                                 Object.entries(recentWrite.fields || {}).forEach(([key, val]) => {
-                                    if (remote[key] === val) {
+                                    if (areScenarioFieldValuesEqual(remote[key], val)) {
                                         // Confirmado por el servidor, ya no es necesario protegerlo
                                     } else {
                                         fieldsToProtect[key] = val;
@@ -4771,7 +4833,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 });
 
                                 if (hasProtectedFields) {
-                                    recentLocalWritesRef.current[remote.id].fields = fieldsToProtect;
+                                    recentLocalWritesRef.current[remote.id] = {
+                                        time: recentWrite.time,
+                                        fields: fieldsToProtect
+                                    };
                                     itemWithEdits = {
                                         ...itemWithEdits,
                                         ...fieldsToProtect
@@ -4797,15 +4862,23 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                         return itemWithEdits;
                     });
+                    const protectedLocalOnlyItems = localItems.filter(localItem => {
+                        if (remoteItemIds.has(localItem.id)) return false;
+                        const recentWrite = normalizeRecentLocalWrite(recentLocalWritesRef.current[localItem.id]);
+                        return !!recentWrite && mergeTime - recentWrite.time < RECENT_LOCAL_WRITE_PROTECTION_MS;
+                    });
+                    const nextMergedItems = protectedLocalOnlyItems.length > 0
+                        ? [...mergedItems, ...protectedLocalOnlyItems]
+                        : mergedItems;
 
-                    const itemsChanged = JSON.stringify(mergedItems) !== JSON.stringify(localItems);
+                    const itemsChanged = JSON.stringify(nextMergedItems) !== JSON.stringify(localItems);
                     const lastModifiedChanged = remoteData.lastModified !== current.lastModified;
 
                     if (itemsChanged || lastModifiedChanged) {
                         console.log("Sincronizando tablero con datos remotos (Merging local locks)...");
                         return {
                             ...current,
-                            items: mergedItems,
+                            items: nextMergedItems,
                             lastModified: remoteData.lastModified
                         };
                     }
@@ -4828,7 +4901,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         });
 
         return () => unsub();
-    }, [activeScenario?.id]); // Solo se reinicia si cambiamos de escenario base (ID)
+    }, [activeScenario?.id, getLocalSyncActorId, isPlayerView, scenarioCollectionName]); // Solo se reinicia si cambiamos de escenario base o identidad de sincronización
 
     // --- Listener de Eventos de Combate Inminentes (Defensa Activa) ---
     useEffect(() => {
@@ -6852,10 +6925,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             // Registrar posiciones escritas en recentLocalWritesRef para evitar snapback
             (activeScenario.items || []).forEach(item => {
                 recentLocalWritesRef.current[item.id] = {
-                    x: item.x,
-                    y: item.y,
-                    rotation: item.rotation,
-                    time: Date.now()
+                    time: Date.now(),
+                    fields: {
+                        x: item.x,
+                        y: item.y,
+                        rotation: item.rotation
+                    }
                 };
             });
             // Limpiar localUnsavedEditsRef (borradores de inspector) puesto que ya se guardan
@@ -6869,45 +6944,27 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 const currentItems = currentData.items || [];
 
                 const lastKnownItems = activeScenarioRef.current?.items || [];
-                const lastKnownMap = new Map(lastKnownItems.map(i => [i.id, i]));
-                const finalMap = new Map((activeScenario.items || []).map(i => [i.id, i]));
-
-                const modifiedOrAdded = [];
-                (activeScenario.items || []).forEach(item => {
-                    const orig = lastKnownMap.get(item.id);
-                    if (!orig || JSON.stringify(orig) !== JSON.stringify(item)) {
-                        modifiedOrAdded.push(item);
-                    }
-                });
-
-                const deletedIds = [];
-                lastKnownItems.forEach(item => {
-                    if (!finalMap.has(item.id)) {
-                        deletedIds.push(item.id);
-                    }
-                });
-
-                let nextItems = currentItems.map(item => {
-                    if (deletedIds.includes(item.id)) return null;
-                    const localMod = modifiedOrAdded.find(m => m.id === item.id);
-                    if (localMod) return localMod;
-                    return item;
-                }).filter(Boolean);
-
-                const currentIds = new Set(currentItems.map(i => i.id));
-                const originalIds = new Set(lastKnownItems.map(i => i.id));
-
-                modifiedOrAdded.forEach(newItem => {
-                    if (!currentIds.has(newItem.id)) {
-                        if (!originalIds.has(newItem.id)) {
-                            nextItems.push(newItem);
-                        }
-                    }
-                });
+                const { modifiedOrAdded, deletedIds } = buildScenarioItemChanges(
+                    activeScenario.items || [],
+                    lastKnownItems
+                );
+                const nextItems = mergeScenarioItemsForPersist(
+                    currentItems,
+                    modifiedOrAdded,
+                    deletedIds,
+                    lastKnownItems
+                );
+                const modifiedItemIds = Array.from(new globalThis.Set([
+                    ...modifiedOrAdded.map(item => item.id),
+                    ...deletedIds
+                ].filter(Boolean)));
 
                 const payload = {
                     ...savePayload,
-                    items: nextItems
+                    items: nextItems,
+                    lastModifiedItemIds: modifiedItemIds,
+                    lastModifiedBy: getLocalSyncActorId(),
+                    lastModifiedByRole: isPlayerView ? 'player' : 'master'
                 };
 
                 transaction.update(doc(db, scenarioCollectionName, activeScenario.id), payload);
@@ -9636,6 +9693,27 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const safePersistItems = async (scenarioId, finalItems, originalItems, explicitModifiedIds = null) => {
         if (!scenarioId || !finalItems) return;
 
+        const registerRecentPersistedFields = (itemsToPersist, origItems, explicitIds) => {
+            const { originalMap, modifiedOrAdded } = buildScenarioItemChanges(itemsToPersist, origItems, explicitIds);
+            const writeTime = Date.now();
+
+            modifiedOrAdded.forEach(item => {
+                const changedFields = getChangedItemFields(item, originalMap.get(item.id));
+                if (Object.keys(changedFields).length === 0) return;
+
+                const existingWrite = normalizeRecentLocalWrite(recentLocalWritesRef.current[item.id]);
+                recentLocalWritesRef.current[item.id] = {
+                    time: writeTime,
+                    fields: {
+                        ...(existingWrite?.fields || {}),
+                        ...changedFields
+                    }
+                };
+            });
+        };
+
+        registerRecentPersistedFields(finalItems, originalItems, explicitModifiedIds);
+
         // Si ya hay una persistencia en curso, encolamos esta petición (que sobrescribirá cualquier petición previa en espera)
         if (activePersistPromiseRef.current) {
             nextPersistRequestRef.current = { scenarioId, finalItems, originalItems, explicitModifiedIds };
@@ -9645,65 +9723,52 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         // Definimos la función interna que ejecuta el guardado
         const executePersist = async (reqId, itemsToPersist, origItems, explicitIds) => {
             const docRef = doc(db, scenarioCollectionName, reqId);
-            const originalMap = new Map((origItems || []).map(i => [i.id, i]));
-            const finalMap = new Map((itemsToPersist || []).map(i => [i.id, i]));
-
-            const modifiedOrAdded = [];
-            itemsToPersist.forEach(item => {
-                const isExplicit = Array.isArray(explicitIds) && explicitIds.includes(item.id);
-                const orig = originalMap.get(item.id);
-                if (isExplicit || !orig || JSON.stringify(orig) !== JSON.stringify(item)) {
-                    modifiedOrAdded.push(item);
-                }
-            });
-
-            const deletedIds = [];
-            (origItems || []).forEach(item => {
-                if (!finalMap.has(item.id)) {
-                    deletedIds.push(item.id);
-                }
-            });
+            const { modifiedOrAdded, deletedIds } = buildScenarioItemChanges(itemsToPersist, origItems, explicitIds);
 
             if (modifiedOrAdded.length === 0 && deletedIds.length === 0) return;
 
-            try {
-                await runTransaction(db, async (transaction) => {
-                    const sfDoc = await transaction.get(docRef);
-                    if (!sfDoc.exists()) return;
+            const modifiedItemIds = Array.from(new globalThis.Set([
+                ...modifiedOrAdded.map(item => item.id),
+                ...deletedIds
+            ].filter(Boolean)));
+            const writerId = getLocalSyncActorId();
+            const writerRole = isPlayerView ? 'player' : 'master';
+            const retryDelay = (ms) => new Promise(resolve => globalThis.setTimeout(resolve, ms));
+            let lastError = null;
 
-                    const currentData = sfDoc.data();
-                    const currentItems = currentData.items || [];
+            for (let attempt = 0; attempt < 3; attempt += 1) {
+                try {
+                    await runTransaction(db, async (transaction) => {
+                        const sfDoc = await transaction.get(docRef);
+                        if (!sfDoc.exists()) return;
 
-                    let nextItems = currentItems.map(item => {
-                        if (deletedIds.includes(item.id)) return null;
-                        const localMod = modifiedOrAdded.find(m => m.id === item.id);
-                        if (localMod) return localMod;
-                        return item;
-                    }).filter(Boolean);
+                        const currentData = sfDoc.data();
+                        const currentItems = currentData.items || [];
+                        const nextItems = mergeScenarioItemsForPersist(
+                            currentItems,
+                            modifiedOrAdded,
+                            deletedIds,
+                            origItems
+                        );
 
-                    const currentIds = new Set(currentItems.map(i => i.id));
-                    const originalIds = new Set((origItems || []).map(i => i.id));
-
-                    modifiedOrAdded.forEach(newItem => {
-                        if (!currentIds.has(newItem.id)) {
-                            if (!originalIds.has(newItem.id)) {
-                                nextItems.push(newItem);
-                            }
-                        }
+                        transaction.update(docRef, {
+                            items: nextItems,
+                            lastModified: Date.now(),
+                            lastModifiedItemIds: modifiedItemIds,
+                            lastModifiedBy: writerId,
+                            lastModifiedByRole: writerRole
+                        });
                     });
-
-                    transaction.update(docRef, {
-                        items: nextItems,
-                        lastModified: Date.now()
-                    });
-                });
-            } catch (error) {
-                console.error("Error in safePersistItems transaction:", error);
-                await updateDoc(docRef, {
-                    items: itemsToPersist,
-                    lastModified: Date.now()
-                }).catch(err => console.error("Error in fallback safePersistItems updateDoc:", err));
+                    return;
+                } catch (error) {
+                    lastError = error;
+                    if (attempt < 2) {
+                        await retryDelay(120 * (attempt + 1));
+                    }
+                }
             }
+
+            console.error("Error in safePersistItems transaction after retries:", lastError);
         };
 
         // Creamos la promesa de ejecución secuencial
@@ -9743,7 +9808,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             }
 
             // Registrar los campos persistentes en recentLocalWritesRef para evitar snapback
-            const existingWrite = recentLocalWritesRef.current[itemId] || { fields: {} };
+            const existingWrite = normalizeRecentLocalWrite(recentLocalWritesRef.current[itemId]) || { fields: {} };
             recentLocalWritesRef.current[itemId] = {
                 time: Date.now(),
                 fields: {

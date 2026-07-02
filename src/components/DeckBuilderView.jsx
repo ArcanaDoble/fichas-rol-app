@@ -40,6 +40,7 @@ import {
 import { db } from '../firebase';
 import Boton from './Boton';
 import { uploadFile } from '../utils/storage';
+import sanitize from '../utils/sanitize';
 
 // Card categories mapping
 const CARD_TYPES = [
@@ -557,7 +558,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, currentUserId, knownPlayer
         setLocalCards(updatedCards);
         try {
             await updateDoc(doc(db, 'card_decks', activeDeck.id), {
-                cards: updatedCards
+                cards: sanitize(updatedCards)
             });
         } catch (err) {
             console.error("Error adding card:", err);
@@ -570,7 +571,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, currentUserId, knownPlayer
         setLocalCards(updatedCards);
         try {
             await updateDoc(doc(db, 'card_decks', activeDeck.id), {
-                cards: updatedCards
+                cards: sanitize(updatedCards)
             });
         } catch (err) {
             console.error("Error removing card:", err);
@@ -612,7 +613,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, currentUserId, knownPlayer
         setLocalCards(updatedCards);
         try {
             await updateDoc(doc(db, 'card_decks', activeDeck.id), {
-                cards: updatedCards
+                cards: sanitize(updatedCards)
             });
         } catch (err) {
             console.error("Error updating card type:", err);
@@ -630,7 +631,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, currentUserId, knownPlayer
         setLocalCards(updatedCards);
         try {
             await updateDoc(doc(db, 'card_decks', activeDeck.id), {
-                cards: updatedCards
+                cards: sanitize(updatedCards)
             });
         } catch (err) {
             console.error("Error updating card visibility:", err);
@@ -688,7 +689,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, currentUserId, knownPlayer
             const updatedCards = [...localCards, newCard];
             setLocalCards(updatedCards);
             await updateDoc(doc(db, 'card_decks', activeDeck.id), {
-                cards: updatedCards
+                cards: sanitize(updatedCards)
             });
         } catch (err) {
             console.error("Error uploading library card:", err);
@@ -933,7 +934,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, currentUserId, knownPlayer
 
         try {
             await updateDoc(doc(db, 'card_decks', activeDeck.id), {
-                cards: updatedCards
+                cards: sanitize(updatedCards)
             });
         } catch (err) {
             console.error("Error saving card order:", err);

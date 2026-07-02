@@ -192,6 +192,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Sincronización robusta con transacciones atómicas**:
   - Implementación de guardado transaccional a nivel de elementos (`safePersistItems`) para todas las acciones del canvas (arrastre, rotación, redimensionamiento, unstacking, eliminación, enlace de personajes, reinicio de velocidad, reacciones de combate y fin de turno).
   - Fusión inteligente en tiempo real que previene que los movimientos simultáneos de jugadores se pisen o que cartas y elementos eliminados vuelvan a aparecer (snapback).
+  - El tablero de cartas etiqueta cada escritura con los elementos modificados y ya no usa escrituras completas de emergencia, evitando falsos avisos de "Movimiento Interrumpido" cuando Master y jugadores mueven cartas o tableros grandes a la vez.
+  - Las subidas y ediciones de cartas en colecciones base limpian campos indefinidos antes de guardar en Firestore, evitando que una carta antigua bloquee nuevas subidas a la colección.
+  - El despliegue de Firebase incluye ahora `storage.rules`, corrigiendo el bloqueo `storage/unauthorized` que impedía subir imágenes de cartas tanto en local como en producción.
   - Transacción atómica en el guardado manual del escenario para fusionar metadatos del Máster con las posiciones actualizadas por jugadores concurrentes.
   - Mitigación de condiciones de carrera mediante cola secuencial de escrituras pendientes.
 

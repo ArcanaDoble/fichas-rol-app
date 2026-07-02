@@ -25,6 +25,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { uploadDataUrl } from '../utils/storage';
+import sanitize from '../utils/sanitize';
 import HexColorInput from './HexColorInput';
 
 export const CARD_BACKGROUNDS = [
@@ -6347,7 +6348,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
         characterName: ownerName
       };
       await updateDoc(doc(db, 'card_decks', library.id), {
-        cards: [...(library.cards || []), newCard]
+        cards: sanitize([...(library.cards || []), newCard])
       });
       setUploadStatus(`Subida a ${ownerName}`);
     } catch (error) {
@@ -6379,7 +6380,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       );
       const newCard = buildUploadedCardPayload(cardId, frontUrl, libraryType, 'master');
       await updateDoc(doc(db, 'card_decks', library.id), {
-        cards: [...(library.cards || []), newCard]
+        cards: sanitize([...(library.cards || []), newCard])
       });
       setUploadStatus(`Subida a ${library.name || 'colección base'}`);
     } catch (error) {
