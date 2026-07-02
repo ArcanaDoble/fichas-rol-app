@@ -4130,6 +4130,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [availableCharacters, setAvailableCharacters] = useState([]);
     const activeScenarioRef = useRef(null);
     useEffect(() => { activeScenarioRef.current = activeScenario; }, [activeScenario]);
+    const lastRemoteScenarioItemsRef = useRef([]);
     const localUnsavedEditsRef = useRef({}); // { [itemId]: { [key]: value } }
     const recentLocalWritesRef = useRef({}); // { [itemId]: { fields: { [key]: value }, time } }
     const lastFlipTimesRef = useRef({}); // { [cardId]: timestamp }
@@ -4674,12 +4675,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const unsub = onSnapshot(doc(db, scenarioCollectionName, activeScenario.id), (docSnap) => {
             if (docSnap.exists()) {
                 const remoteData = docSnap.data();
+                const remoteItems = remoteData.items || [];
+                lastRemoteScenarioItemsRef.current = remoteItems;
 
                 // --- DETECCIÓN DE CONFLICTOS PARA JUGADORES ---
                 // Si el Master mueve una ficha que nosotros estamos manipulando, cancelamos nuestra interacción
                 // local para evitar saltos visuales (snap-back) y desincronización de turnos.
                 if (isPlayerView && activeScenarioRef.current && remoteData.lastModified > (activeScenarioRef.current.lastModified || 0)) {
-                    const remoteItems = remoteData.items || [];
                     const remoteItemMap = new Map(remoteItems.map(item => [item.id, item]));
                     const localItemMap = new Map((activeScenarioRef.current?.items || []).map(item => [item.id, item]));
                     const remoteModifiedItemIds = getRemoteModifiedItemIds(remoteData);
@@ -4782,7 +4784,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 setActiveScenario(current => {
                     if (!current || current.id !== docSnap.id) return current;
 
-                    const remoteItems = remoteData.items || [];
                     const localItems = Array.isArray(current.items) ? current.items : [];
                     const localItemMap = new Map(localItems.map(item => [item.id, item]));
                     const remoteItemIds = new globalThis.Set(remoteItems.map(item => item.id));
@@ -6671,6 +6672,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     };
 
     const loadScenario = (scenario) => {
+        lastRemoteScenarioItemsRef.current = scenario.items || [];
+        localUnsavedEditsRef.current = {};
         setActiveScenario(scenario);
         if (scenario.config) setGridConfig(normalizeGridConfig(scenario.config));
 
@@ -6873,12 +6876,49 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setIsSaving(true);
         console.log("💾 Iniciando guardado de escenario:", activeScenario.name);
 
+        const localItems = activeScenario.items || [];
+        const baselineItems = lastRemoteScenarioItemsRef.current || [];
+        const pendingLocalEdits = Object.entries(localUnsavedEditsRef.current || {})
+            .reduce((acc, [itemId, edits]) => {
+                acc[itemId] = { ...(edits || {}) };
+                return acc;
+            }, {});
+        const pendingEditedItemIds = Object.keys(pendingLocalEdits);
+        const explicitModifiedIds = pendingEditedItemIds.length > 0
+            ? pendingEditedItemIds
+            : null;
+        const {
+            originalMap: baselineItemMap,
+            modifiedOrAdded: pendingModifiedOrAdded,
+            deletedIds: pendingDeletedIds
+        } = buildScenarioItemChanges(localItems, baselineItems, explicitModifiedIds);
+        const pendingModifiedItemIds = Array.from(new globalThis.Set([
+            ...pendingModifiedOrAdded.map(item => item.id),
+            ...pendingDeletedIds
+        ].filter(Boolean)));
+        const saveStartedAt = Date.now();
+        let persistedItems = null;
+
+        pendingModifiedOrAdded.forEach(item => {
+            const changedFields = getChangedItemFields(item, baselineItemMap.get(item.id));
+            if (Object.keys(changedFields).length === 0) return;
+
+            const existingWrite = normalizeRecentLocalWrite(recentLocalWritesRef.current[item.id]);
+            recentLocalWritesRef.current[item.id] = {
+                time: saveStartedAt,
+                fields: {
+                    ...(existingWrite?.fields || {}),
+                    ...changedFields
+                }
+            };
+        });
+
         // Feedback visual inmediato
         triggerToast("PROGRESO\nGUARDADO", "Encuentro Sincronizado", 'success');
 
         try {
             const savePayload = {
-                items: activeScenario.items || [],
+                items: localItems,
                 lastModified: Date.now()
             };
 
@@ -6922,47 +6962,24 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 savePayload.allowedPlayers = activeScenario.allowedPlayers || [];
             }
 
-            // Registrar posiciones escritas en recentLocalWritesRef para evitar snapback
-            (activeScenario.items || []).forEach(item => {
-                recentLocalWritesRef.current[item.id] = {
-                    time: Date.now(),
-                    fields: {
-                        x: item.x,
-                        y: item.y,
-                        rotation: item.rotation
-                    }
-                };
-            });
-            // Limpiar localUnsavedEditsRef (borradores de inspector) puesto que ya se guardan
-            localUnsavedEditsRef.current = {};
-
             await runTransaction(db, async (transaction) => {
                 const sfDoc = await transaction.get(doc(db, scenarioCollectionName, activeScenario.id));
                 if (!sfDoc.exists()) return;
 
                 const currentData = sfDoc.data();
                 const currentItems = currentData.items || [];
-
-                const lastKnownItems = activeScenarioRef.current?.items || [];
-                const { modifiedOrAdded, deletedIds } = buildScenarioItemChanges(
-                    activeScenario.items || [],
-                    lastKnownItems
-                );
                 const nextItems = mergeScenarioItemsForPersist(
                     currentItems,
-                    modifiedOrAdded,
-                    deletedIds,
-                    lastKnownItems
+                    pendingModifiedOrAdded,
+                    pendingDeletedIds,
+                    baselineItems
                 );
-                const modifiedItemIds = Array.from(new globalThis.Set([
-                    ...modifiedOrAdded.map(item => item.id),
-                    ...deletedIds
-                ].filter(Boolean)));
+                persistedItems = nextItems;
 
                 const payload = {
                     ...savePayload,
                     items: nextItems,
-                    lastModifiedItemIds: modifiedItemIds,
+                    lastModifiedItemIds: pendingModifiedItemIds,
                     lastModifiedBy: getLocalSyncActorId(),
                     lastModifiedByRole: isPlayerView ? 'player' : 'master'
                 };
@@ -6970,10 +6987,29 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 transaction.update(doc(db, scenarioCollectionName, activeScenario.id), payload);
             });
 
+            if (persistedItems) {
+                lastRemoteScenarioItemsRef.current = persistedItems;
+            }
+
+            Object.entries(pendingLocalEdits).forEach(([itemId, edits]) => {
+                const currentEdits = localUnsavedEditsRef.current[itemId];
+                if (!currentEdits) return;
+
+                Object.entries(edits || {}).forEach(([key, value]) => {
+                    if (areScenarioFieldValuesEqual(currentEdits[key], value)) {
+                        delete currentEdits[key];
+                    }
+                });
+
+                if (Object.keys(currentEdits).length === 0) {
+                    delete localUnsavedEditsRef.current[itemId];
+                }
+            });
+
             //  SINCRONIZACIÓN BIDIRECCIONAL: Actualizar fichas de personajes vinculados
-            if (activeScenario.items && activeScenario.items.length > 0) {
+            if (localItems.length > 0) {
                 console.log(" Iniciando sincronización inversa con fichas vinculadas...");
-                const syncPromises = activeScenario.items
+                const syncPromises = localItems
                     .filter(token => token.linkedCharacterId)
                     .map(async (token) => {
                         const charId = token.linkedCharacterId;
@@ -7333,6 +7369,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             zone: 'board',
             name,
             containerKind: 'board',
+            hideContainedCardsForPlayers: true,
             snapToGrid: false,
         };
 
@@ -7386,6 +7423,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             sourceDeckId: deck.id,
             ownerId: currentUserId,
             ownerName: playerName || (isPlayerView ? currentUserId : 'Master'),
+            hideContainedCardsForPlayers: true,
             snapToGrid: false,
         };
 

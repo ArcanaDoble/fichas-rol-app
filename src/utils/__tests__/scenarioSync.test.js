@@ -75,3 +75,65 @@ test('getChangedItemFields returns only changed fields', () => {
     { id: 'card', x: 10, y: 8, faceDown: true }
   )).toEqual({ y: 12 });
 });
+
+test('inspector drafts are detected against the last remote baseline', () => {
+  const remoteBaselineItems = [
+    { id: 'token-1', x: 10, y: 20, controlledBy: ['Alice'], hidden: false },
+  ];
+  const localDraftItems = [
+    { id: 'token-1', x: 10, y: 20, controlledBy: ['Bob'], hidden: true },
+  ];
+
+  const comparingAgainstLocalState = buildScenarioItemChanges(
+    localDraftItems,
+    localDraftItems,
+    ['token-1']
+  );
+  const comparingAgainstRemoteBaseline = buildScenarioItemChanges(
+    localDraftItems,
+    remoteBaselineItems,
+    ['token-1']
+  );
+
+  expect(getChangedItemFields(
+    localDraftItems[0],
+    comparingAgainstLocalState.originalMap.get('token-1')
+  )).toEqual({});
+  expect(getChangedItemFields(
+    localDraftItems[0],
+    comparingAgainstRemoteBaseline.originalMap.get('token-1')
+  )).toEqual({
+    controlledBy: ['Bob'],
+    hidden: true,
+  });
+});
+
+test('inspector save merge preserves concurrent remote items', () => {
+  const remoteBaselineItems = [
+    { id: 'token-1', x: 10, y: 20, controlledBy: ['Alice'] },
+  ];
+  const localDraftItems = [
+    { id: 'token-1', x: 10, y: 20, controlledBy: ['Bob'] },
+  ];
+  const latestRemoteItems = [
+    { id: 'token-1', x: 10, y: 20, controlledBy: ['Alice'] },
+    { id: 'token-2', x: 80, y: 90, controlledBy: ['Clara'] },
+  ];
+
+  const { modifiedOrAdded, deletedIds } = buildScenarioItemChanges(
+    localDraftItems,
+    remoteBaselineItems,
+    ['token-1']
+  );
+  const merged = mergeScenarioItemsForPersist(
+    latestRemoteItems,
+    modifiedOrAdded,
+    deletedIds,
+    remoteBaselineItems
+  );
+
+  expect(merged).toEqual([
+    { id: 'token-1', x: 10, y: 20, controlledBy: ['Bob'] },
+    { id: 'token-2', x: 80, y: 90, controlledBy: ['Clara'] },
+  ]);
+});
