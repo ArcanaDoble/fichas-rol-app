@@ -7369,7 +7369,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             zone: 'board',
             name,
             containerKind: 'board',
-            hideContainedCardsForPlayers: true,
+            hideContainedCardsForPlayers: !isPlayerView,
             snapToGrid: false,
         };
 
@@ -7423,7 +7423,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             sourceDeckId: deck.id,
             ownerId: currentUserId,
             ownerName: playerName || (isPlayerView ? currentUserId : 'Master'),
-            hideContainedCardsForPlayers: true,
+            hideContainedCardsForPlayers: !isPlayerView,
             snapToGrid: false,
         };
 
