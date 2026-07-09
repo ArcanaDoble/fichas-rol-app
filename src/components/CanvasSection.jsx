@@ -2480,7 +2480,7 @@ const getCombatCellOccupancyIssue = ({ movingToken, nextX, nextY, items = [], co
 
 const canOccupyCombatCell = (params) => !getCombatCellOccupancyIssue(params);
 
-const MOBILE_TACTICAL_MOVE_RANGE = 4;
+const MOBILE_TACTICAL_MOVE_RANGE = 2;
 
 const getCombatGridCenter = (token, config = {}) => {
     const bounds = getTokenGridBounds(token, config);
@@ -4542,6 +4542,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     useEffect(() => { draggedTokenIdRef.current = draggedTokenId; }, [draggedTokenId]);
     const selectedTokenIdsRef = useRef([]);
     useEffect(() => { selectedTokenIdsRef.current = selectedTokenIds; }, [selectedTokenIds]);
+
+    // Limpiar el estado de hover táctil móvil si cambia la selección, la posición del token o el estado de turno
+    const selectedTokenForHover = activeScenario?.items?.find(item => selectedTokenIds.includes(item.id));
+    const selectedTokenForHoverX = selectedTokenForHover?.x;
+    const selectedTokenForHoverY = selectedTokenForHover?.y;
+    useEffect(() => {
+        setMobileMoveHoverCellKey(null);
+    }, [selectedTokenIds, selectedTokenForHoverX, selectedTokenForHoverY, pendingTurnState]);
 
     useEffect(() => {
         if (!isBoardMode || !activeScenario?.items) return;
@@ -8454,6 +8462,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
             setSelectedTokenIds([tokenId]);
             lastSelectedIdRef.current = tokenId;
+            setMobileMoveHoverCellKey(null);
             setPendingTurnState(prev => {
                 const isSameToken = prev && prev.tokenId === tokenId;
                 const actionCost = isSameToken ? (Number(prev.actionCost) || 0) : 0;
@@ -8506,6 +8515,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setSelectedTokenIds([tokenId]);
         lastSelectedIdRef.current = tokenId;
         setPendingTurnState(null);
+        setMobileMoveHoverCellKey(null);
         safePersistItems(scenario.id, nextItems, scenario.items, [tokenId]);
 
         if (sangradoAnimation) {
@@ -8539,6 +8549,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setSelectedTokenIds([tokenId]);
         setActiveBoardHandTokenId(tokenId);
         lastSelectedIdRef.current = tokenId;
+        setMobileMoveHoverCellKey(null);
         safePersistItems(scenario.id, nextItems, scenario.items, [tokenId]);
     };
 
@@ -15960,87 +15971,134 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     if (moveOptions.length === 0 && !hasPendingMovement) return null;
 
                                     const tokenCenterX = token.x + ((Number(token.width) || gridConfig.cellWidth || 50) / 2);
+
+                                     // Calcular las celdas individuales alcanzables para pintar el fondo de forma uniforme (sin solapamiento de color)
+                                     const tokenBounds = getTokenGridBounds(token, gridConfig);
+                                     const reachableCells = new Map();
+                                     moveOptions.forEach((option) => {
+                                         for (let dx = 0; dx < Math.max(1, tokenBounds.w); dx++) {
+                                             for (let dy = 0; dy < Math.max(1, tokenBounds.h); dy++) {
+                                                 const cx = option.cell.x + dx;
+                                                 const cy = option.cell.y + dy;
+                                                 const cellKey = `${cx}:${cy}`;
+                                                 reachableCells.set(cellKey, { x: cx, y: cy });
+                                             }
+                                         }
+                                     });
                                     const tokenCenterY = token.y + ((Number(token.height) || gridConfig.cellHeight || 50) / 2);
 
                                     return (
                                         <div className="absolute inset-0 z-[15] pointer-events-none" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
-                                            <div
-                                                className="absolute z-[17] pointer-events-none flex h-9 w-9 -translate-x-1/2 -translate-y-[calc(100%+0.75rem)] items-center justify-center rounded-full border border-red-300/40 bg-black/85 text-red-100 shadow-[0_0_16px_rgba(239,68,68,0.25)]"
-                                                style={{ left: tokenCenterX, top: tokenCenterY }}
-                                                title="Movimiento"
-                                            >
-                                                <Footprints size={15} strokeWidth={2.2} />
-                                            </div>
+                                             {/* Capa de Fondos de Celda Uniformes (Sin solapamientos de color) */}
+                                             {Array.from(reachableCells.values()).map((cell) => {
+                                                 const rect = getGridCellWorldRect(cell, gridConfig);
+                                                 return (
+                                                     <div
+                                                         key={`reachable-cell-${cell.x}-${cell.y}`}
+                                                         className="absolute border border-rose-500/10 bg-rose-500/10 rounded-sm pointer-events-none"
+                                                         style={{
+                                                             left: rect.x + 1,
+                                                             top: rect.y + 1,
+                                                             width: rect.width - 2,
+                                                             height: rect.height - 2,
+                                                         }}
+                                                     />
+                                                 );
+                                             })}
+                                            {/* Se eliminó la insignia de movimiento con icono de huellas sobre el token */}
 
                                             {isPlayerView && hasPendingMovement && (
                                                 <button
-                                                    type="button"
-                                                    onMouseDown={consumeMobileMoveTemplateEvent}
-                                                    onTouchStart={(event) => consumeMobileMoveTemplateEvent(event, { preventDefault: false })}
-                                                    onClick={(event) => handleCancelMobileTacticalMove(event, token.id)}
-                                                    className="absolute z-[18] pointer-events-auto flex h-8 w-8 -translate-x-1/2 -translate-y-[calc(100%+0.75rem)] items-center justify-center rounded-full border border-slate-200/35 bg-black/90 text-slate-100 shadow-[0_0_16px_rgba(15,23,42,0.5)] transition-colors hover:border-red-200/70 hover:text-red-100 focus:outline-none"
-                                                    style={{ left: tokenCenterX + 34, top: tokenCenterY }}
-                                                    title="Cancelar movimiento"
-                                                >
-                                                    <X size={14} strokeWidth={2.5} />
-                                                </button>
+                                                     type="button"
+                                                     onMouseDown={consumeMobileMoveTemplateEvent}
+                                                     onTouchStart={(event) => consumeMobileMoveTemplateEvent(event, { preventDefault: false })}
+                                                     onClick={(event) => handleCancelMobileTacticalMove(event, token.id)}
+                                                     className="absolute z-[18] pointer-events-auto flex h-8 w-8 -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] items-center justify-center rounded-full border border-slate-200/35 bg-black/90 text-slate-100 shadow-[0_0_16px_rgba(15,23,42,0.5)] transition-colors hover:border-red-200/70 hover:text-red-100 focus:outline-none"
+                                                     style={{ left: tokenCenterX, top: token.y }}
+                                                     title="Cancelar movimiento"
+                                                 >
+                                                     <X size={14} strokeWidth={2.5} />
+                                                 </button>
                                             )}
 
                                             {moveOptions.map((option) => {
-                                                const rect = getGridCellWorldRect(option.cell, gridConfig);
-                                                const tokenBounds = getTokenGridBounds(token, gridConfig);
-                                                const footprintWidth = Math.max(1, tokenBounds.w) * rect.width;
-                                                const footprintHeight = Math.max(1, tokenBounds.h) * rect.height;
-                                                const cellKey = `${option.cell.x}:${option.cell.y}`;
-                                                const isHovered = mobileMoveHoverCellKey === cellKey;
+                                                 const rect = getGridCellWorldRect(option.cell, gridConfig);
+                                                 const footprintWidth = Math.max(1, tokenBounds.w) * rect.width;
+                                                 const footprintHeight = Math.max(1, tokenBounds.h) * rect.height;
+                                                 const cellKey = `${option.cell.x}:${option.cell.y}`;
+                                                 const isHovered = mobileMoveHoverCellKey === cellKey;
 
-                                                return (
-                                                    <button
-                                                        key={`mobile-move-cell-${token.id}-${cellKey}`}
-                                                        type="button"
-                                                        onMouseEnter={() => setMobileMoveHoverCellKey(cellKey)}
-                                                        onMouseLeave={() => setMobileMoveHoverCellKey(prev => prev === cellKey ? null : prev)}
-                                                        onMouseDown={consumeMobileMoveTemplateEvent}
-                                                        onTouchStart={(event) => consumeMobileMoveTemplateEvent(event, { preventDefault: false })}
-                                                        onClick={(event) => (
-                                                            isBoardMobileMove
-                                                                ? handleBoardMobileTacticalMoveCell(event, token.id, option.cell)
-                                                                : handleMobileTacticalMoveCell(event, token.id, option.cell)
-                                                        )}
-                                                        className={`absolute z-[16] overflow-hidden rounded-md border transition-all duration-150 pointer-events-auto focus:outline-none ${
-                                                            isHovered
-                                                                ? 'border-red-200/95 bg-red-500/25 shadow-[0_0_20px_rgba(239,68,68,0.45)]'
-                                                                : 'border-red-400/60 bg-red-500/10 shadow-[inset_0_0_12px_rgba(239,68,68,0.12)]'
-                                                        }`}
-                                                        style={{
-                                                            left: rect.x + 3,
-                                                            top: rect.y + 3,
-                                                            width: Math.max(10, footprintWidth - 6),
-                                                            height: Math.max(10, footprintHeight - 6),
-                                                        }}
-                                                        title="Mover"
-                                                    >
-                                                        <span className="absolute inset-1 rounded border border-red-200/15" />
-                                                        {Array.from({ length: Math.max(0, tokenBounds.w - 1) }).map((_, index) => (
-                                                            <span
-                                                                key={`move-footprint-v-${index}`}
-                                                                className="absolute top-1 bottom-1 border-l border-red-200/20"
-                                                                style={{ left: `${((index + 1) / Math.max(1, tokenBounds.w)) * 100}%` }}
-                                                            />
-                                                        ))}
-                                                        {Array.from({ length: Math.max(0, tokenBounds.h - 1) }).map((_, index) => (
-                                                            <span
-                                                                key={`move-footprint-h-${index}`}
-                                                                className="absolute left-1 right-1 border-t border-red-200/20"
-                                                                style={{ top: `${((index + 1) / Math.max(1, tokenBounds.h)) * 100}%` }}
-                                                            />
-                                                        ))}
-                                                        <span className={`absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-100 transition-opacity ${isHovered ? 'opacity-95' : 'opacity-65'}`} />
-                                                        <span className={`absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-red-100/40 transition-transform ${isHovered ? 'scale-125' : 'scale-100'}`} />
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
+                                                 return (
+                                                     <button
+                                                         key={`mobile-move-cell-${token.id}-${cellKey}`}
+                                                         type="button"
+                                                         onMouseEnter={() => setMobileMoveHoverCellKey(cellKey)}
+                                                         onMouseLeave={() => setMobileMoveHoverCellKey(prev => prev === cellKey ? null : prev)}
+                                                         onMouseDown={consumeMobileMoveTemplateEvent}
+                                                         onTouchStart={(event) => consumeMobileMoveTemplateEvent(event, { preventDefault: false })}
+                                                         onClick={(event) => (
+                                                             isBoardMobileMove
+                                                                 ? handleBoardMobileTacticalMoveCell(event, token.id, option.cell)
+                                                                 : handleMobileTacticalMoveCell(event, token.id, option.cell)
+                                                         )}
+                                                         className={`absolute z-[16] overflow-hidden rounded-lg border transition-all duration-300 pointer-events-auto focus:outline-none ${
+                                                             isHovered
+                                                                 ? 'border-rose-400 bg-gradient-to-br from-rose-500/20 via-red-500/10 to-rose-600/25 shadow-[0_0_20px_rgba(244,63,94,0.4),inset_0_0_10px_rgba(244,63,94,0.15)] scale-[1.02]'
+                                                                 : 'border-transparent bg-rose-500/[0.001]'
+                                                         }`}
+                                                         style={{
+                                                             left: rect.x + 3,
+                                                             top: rect.y + 3,
+                                                             width: Math.max(10, footprintWidth - 6),
+                                                             height: Math.max(10, footprintHeight - 6),
+                                                         }}
+                                                         title="Mover"
+                                                     >
+                                                         {/* Borde punteado técnico interno (solo en hover) */}
+                                                         {isHovered && <span className="absolute inset-1 rounded-md border border-dashed border-rose-300/30" />}
+
+                                                         {/* Corchetes/Esquinas Tácticas (siempre visibles, se agrandan en hover) */}
+                                                         <span className={`absolute left-1 top-1 w-2 h-2 border-t border-l transition-all duration-300 ${isHovered ? 'border-rose-200 w-3 h-3' : 'border-rose-500/30'}`} />
+                                                         <span className={`absolute right-1 top-1 w-2 h-2 border-t border-r transition-all duration-300 ${isHovered ? 'border-rose-200 w-3 h-3' : 'border-rose-500/30'}`} />
+                                                         <span className={`absolute left-1 bottom-1 w-2 h-2 border-b border-l transition-all duration-300 ${isHovered ? 'border-rose-200 w-3 h-3' : 'border-rose-500/30'}`} />
+                                                         <span className={`absolute right-1 bottom-1 w-2 h-2 border-b border-r transition-all duration-300 ${isHovered ? 'border-rose-200 w-3 h-3' : 'border-rose-500/30'}`} />
+
+                                                         {/* Retículas horizontales y verticales (solo en hover) */}
+                                                         {isHovered && Array.from({ length: Math.max(0, tokenBounds.w - 1) }).map((_, index) => (
+                                                             <span
+                                                                 key={`move-footprint-v-${index}`}
+                                                                 className="absolute top-1 bottom-1 border-l border-rose-400/20"
+                                                                 style={{ left: `${((index + 1) / Math.max(1, tokenBounds.w)) * 100}%` }}
+                                                             />
+                                                         ))}
+                                                         {isHovered && Array.from({ length: Math.max(0, tokenBounds.h - 1) }).map((_, index) => (
+                                                             <span
+                                                                 key={`move-footprint-h-${index}`}
+                                                                 className="absolute left-1 right-1 border-t border-rose-400/20"
+                                                                 style={{ top: `${((index + 1) / Math.max(1, tokenBounds.h)) * 100}%` }}
+                                                             />
+                                                         ))}
+
+                                                         {/* Icono de Huellas de Movimiento Centrado */}
+                                                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                             <Footprints
+                                                                 size={Math.min(28, Math.min(footprintWidth, footprintHeight) * 0.4)}
+                                                                 className={`transition-all duration-300 ${
+                                                                     isHovered
+                                                                         ? 'text-rose-100 drop-shadow-[0_0_8px_rgba(244,63,94,0.85)] scale-110 opacity-100'
+                                                                         : 'text-rose-400/70 drop-shadow-[0_0_2px_rgba(244,63,94,0.35)] opacity-80'
+                                                                 }`}
+                                                                 strokeWidth={1.8}
+                                                             />
+                                                         </div>
+
+                                                         {/* Efecto Sonar (solo en hover) */}
+                                                         {isHovered && (
+                                                             <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-rose-400/35 w-10 h-10 opacity-0 scale-150 animate-ping pointer-events-none" />
+                                                         )}
+                                                     </button>
+                                                 );
+                                             })}</div>
                                     );
                                 })()}
 

@@ -2669,4 +2669,19 @@ Guía rápida: ver `docs/Minimapa.md`.
 - **Límite Estético Capped**: El espaciado automático está limitado a un máximo de `65px` para conservar la cohesión del diseño y evitar distanciamientos exagerados cuando hay muy pocos contenedores.
 - **Divisores Centrados Simétricos**: Las líneas divisorias rústicas se posicionan exactamente en el centro geométrico de la separación calculada entre bloques, asegurando simetría perfecta en la distribución de aire visual.
 
+## Novedades: Rediseño de Indicadores de Movimiento Móvil (v2.4.58)
+
+- **Estética de Tablero Táctico**: Se rediseñó por completo el aspecto de los indicadores de movimiento de token en la vista móvil. Las casillas rojas de movimiento fueron reemplazadas por una interfaz premium inspirada en rejillas tácticas de rol.
+- **Icono de Movimiento Dedicado**: Se integró el icono `Footprints` (huellas/pasos) en el centro de cada casilla, sirviendo como un indicador explícito e intuitivo de que la casilla representa una opción de movimiento.
+- **Borde Técnico y Gradientes**: Se aplica una línea interna punteada (`border-dashed`) y un gradiente de alta definición al hacer hover, logrando una apariencia de HUD de ciencia ficción/fantasía.
+- **Animación de Pulso (Efecto Sonar)**: Al interactuar con una casilla de movimiento, se activa un efecto de pulso expansivo circular (`animate-ping`) en el centro que refuerza la retroalimentación táctil y dinamismo visual en móviles.
+- **Limpieza de UI en Movimiento**: Se eliminó la insignia con el icono de huellas que flotaba sobre el token para evitar ruidos visuales sobre la ilustración de la ficha.
+- **Botón de Cancelación Optimizado**: El botón circular de cancelar (`X`) se posicionó centrado y flotando exactamente sobre la coordenada del borde superior del token (`token.y`), adaptándose de manera ergonómica e inteligente sin importar el tamaño del token.
+- **Escalado de Tamaño Real para Tokens Grandes**: Cada indicador de movimiento móvil se escala dinámicamente según las dimensiones del token (ej. 2x2 o 3x3 celdas). Se agregaron retículas internas sutiles para delimitar la cuadrícula de la ficha en el destino.
+- **Prevención de Solapamientos de Color**: Se introdujo una capa base que dibuja de manera uniforme cada celda transitable exactamente una vez (`reachableCells`), logrando un fondo rojo translúcido (`bg-rose-500/10`) perfectamente visible, limpio y libre de solapamientos de color.
+- **Limpieza de Estado al Cambiar Selección o Posición**: Se solucionó un bug donde la última casilla interactuada en móvil quedaba permanentemente activa (con el brillo de hover). Ahora, un `useEffect` monitorea la selección, la posición del token (`x`/`y`) y el estado del turno para limpiar el estado de hover táctil en cualquier tipo de movimiento (arrastre, táctico, teclado o combate).
+- **Rango de Movimiento Acotado**: Se redujo el rango máximo de opciones de movimiento táctico de 4 a **2 casillas** de distancia.
+- **Remoción Completa de Insignias Redundantes**: Se eliminó de forma definitiva la insignia circular negra con el icono de huellas que flotaba sobre la cabeza del token seleccionado.
+- **Corchetes Tácticos de Esquina**: Los corchetes decorativos (L-brackets) en las cuatro esquinas de cada casilla se renderizan de forma permanente. En reposo tienen un aspecto discreto (`border-rose-500/30 w-2 h-2`) que simula pequeñas flechas que señalan las casillas adyacentes a las que te puedes mover. Al hacer hover se expanden y brillan (`border-rose-200 w-3 h-3`).
+
 
