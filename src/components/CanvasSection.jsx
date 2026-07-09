@@ -5263,7 +5263,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const onWheel = (e) => {
             e.preventDefault();
             const delta = e.deltaY > 0 ? -0.1 : 0.1;
-            setZoom(prev => Math.min(Math.max(0.1, prev + delta), 5));
+            setZoom(prev => Math.min(Math.max(0.25, prev + delta), 5));
         };
 
         container.addEventListener('wheel', onWheel, { passive: false });
@@ -5325,7 +5325,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const zoomDelta = delta * 0.005;
 
             setZoom(prevZoom => {
-                const newZoom = Math.min(Math.max(0.1, prevZoom + zoomDelta), 4);
+                const newZoom = Math.min(Math.max(0.25, prevZoom + zoomDelta), 4);
                 if (newZoom === prevZoom) return prevZoom;
 
                 const ratio = newZoom / prevZoom;
