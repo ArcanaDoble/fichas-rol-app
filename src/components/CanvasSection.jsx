@@ -16063,8 +16063,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                      <button
                                                          key={`mobile-move-cell-${token.id}-${cellKey}`}
                                                          type="button"
-                                                         onMouseEnter={() => setMobileMoveHoverCellKey(cellKey)}
-                                                         onMouseLeave={() => setMobileMoveHoverCellKey(prev => prev === cellKey ? null : prev)}
+                                                         onMouseEnter={() => {
+                                                             if (!window.matchMedia('(pointer: coarse)').matches) {
+                                                                 setMobileMoveHoverCellKey(cellKey);
+                                                             }
+                                                         }}
+                                                         onMouseLeave={() => {
+                                                             if (!window.matchMedia('(pointer: coarse)').matches) {
+                                                                 setMobileMoveHoverCellKey(prev => prev === cellKey ? null : prev);
+                                                             }
+                                                         }}
                                                          onMouseDown={consumeMobileMoveTemplateEvent}
                                                          onTouchStart={(event) => {
                                                              const touch = event.touches[0];
