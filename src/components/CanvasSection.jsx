@@ -5263,7 +5263,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const onWheel = (e) => {
             e.preventDefault();
             const delta = e.deltaY > 0 ? -0.1 : 0.1;
-            setZoom(prev => Math.min(Math.max(0.25, prev + delta), 5));
+            setZoom(prev => Math.min(Math.max(0.1, prev + delta), 5));
         };
 
         container.addEventListener('wheel', onWheel, { passive: false });
@@ -5325,7 +5325,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const zoomDelta = delta * 0.005;
 
             setZoom(prevZoom => {
-                const newZoom = Math.min(Math.max(0.25, prevZoom + zoomDelta), 4);
+                const newZoom = Math.min(Math.max(0.1, prevZoom + zoomDelta), 4);
                 if (newZoom === prevZoom) return prevZoom;
 
                 const ratio = newZoom / prevZoom;
@@ -15897,7 +15897,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         width="100%"
                                         height="100%"
                                         xmlns="http://www.w3.org/2000/svg"
-                                        className="overflow-visible pointer-events-none transition-all duration-300 relative"
+                                        className="overflow-visible pointer-events-none relative"
                                     >
                                         {/* IMAGEN DE FONDO (Solo si es finito y existe) */}
                                         {!gridConfig.isInfinite && gridConfig.backgroundImage && (
@@ -16273,7 +16273,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 {/* --- CAPA SUPERIOR: NIEBLA Y OSCURIDAD (SVG) --- */}
                                 {/* Movemos la niebla aquí para que tape a los tokens y muros también */}
                                 <div className="absolute inset-0 z-20 pointer-events-none" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
-                                    <svg width="100%" height="100%" className="overflow-visible pointer-events-none transition-all duration-300 relative">
+                                    <svg width="100%" height="100%" className="overflow-visible pointer-events-none relative">
                                         {/* CAPA 1: ILUMINACIÓN AMBIENTAL (Atmósfera) */}
                                         <rect
                                             x={mapX - bleed}
