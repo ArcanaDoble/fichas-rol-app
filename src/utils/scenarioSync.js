@@ -1,4 +1,4 @@
-export const RECENT_LOCAL_WRITE_PROTECTION_MS = 5000;
+export const RECENT_LOCAL_WRITE_PROTECTION_MS = 12000;
 
 const areValuesEqual = (left, right) => {
   if (left === right) return true;
@@ -54,11 +54,21 @@ export const mergeScenarioItemsForPersist = (
 ) => {
   const modifiedMap = new Map((modifiedOrAdded || []).map(item => [item.id, item]));
   const deletedIdSet = new Set(deletedIds || []);
+  const originalMap = new Map((originalItems || []).map(item => [item.id, item]));
 
   const nextItems = (currentItems || [])
     .map(item => {
       if (deletedIdSet.has(item.id)) return null;
-      return modifiedMap.get(item.id) || item;
+      const modifiedItem = modifiedMap.get(item.id);
+      if (!modifiedItem) return item;
+
+      const changedFields = getChangedItemFields(modifiedItem, originalMap.get(item.id));
+      if (Object.keys(changedFields).length === 0) return item;
+
+      return {
+        ...item,
+        ...changedFields,
+      };
     })
     .filter(Boolean);
 

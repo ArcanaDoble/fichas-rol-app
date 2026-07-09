@@ -5819,6 +5819,35 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         dragStartRef.current = { x: curX, y: curY };
     };
 
+    const getItemInteractionSnapshot = (item, extraFields = []) => {
+        const snapshot = {};
+        ['x', 'y', 'rotation', 'width', 'height', ...extraFields].forEach(field => {
+            if (Object.prototype.hasOwnProperty.call(item, field)) {
+                snapshot[field] = item[field];
+            }
+        });
+        return snapshot;
+    };
+
+    const applyItemInteractionSnapshot = (item, original) => {
+        if (!original) return item;
+
+        return {
+            ...item,
+            ...Object.keys(original).reduce((fields, field) => {
+                fields[field] = original[field];
+                return fields;
+            }, {})
+        };
+    };
+
+    const startWallHandleDrag = (item, handleIndex) => {
+        setTokenOriginalPos({
+            [item.id]: getItemInteractionSnapshot(item, ['x1', 'y1', 'x2', 'y2'])
+        });
+        setDraggingWallHandle({ id: item.id, handleIndex });
+    };
+
     const handleMouseUp = (e) => {
         if (cardPreviewSuppressTouchEndRef.current) {
             setDraggedTokenId(null);
@@ -5943,8 +5972,20 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }
 
         if (draggingWallHandle && activeScenario) {
-            safePersistItems(activeScenario.id, activeScenario.items, activeScenario.items);
+            const currentScenario = activeScenarioRef.current || activeScenario;
+            const originalItems = currentScenario.items.map(item => {
+                const original = tokenOriginalPos[item.id];
+                return applyItemInteractionSnapshot(item, original);
+            });
+            safePersistItems(currentScenario.id, currentScenario.items, originalItems, [draggingWallHandle.id]);
+            setDraggedTokenId(null);
+            setRotatingTokenId(null);
+            setResizingTokenId(null);
             setDraggingWallHandle(null);
+            setTokenOriginalPos({});
+            setDragVisualOrigin({});
+            setCombatOccupancyFeedback(null);
+            document.body.style.cursor = 'default';
             return;
         }
 
@@ -5953,6 +5994,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const currentScenario = activeScenarioRef.current;
             let finalItems = currentScenario.items;
             let didReorderBoardMarkerStack = false;
+            const interactionOriginalItems = currentScenario.items.map(item => {
+                const original = tokenOriginalPos[item.id];
+                return applyItemInteractionSnapshot(item, original);
+            });
 
             if (draggedTokenId) {
                 const { x: releaseX, y: releaseY } = getEventCoords(e, tokenDragStart.identifier);
@@ -6074,12 +6119,20 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     const stackTarget = findCardStackDropTarget(movedCard, finalItems);
 
                     if (stackTarget) {
+                        const sourceStackIds = getCardStackIds(movedCard);
+                        const targetStackIds = getCardStackIds(stackTarget);
+                        const stackModifiedIds = [
+                            draggedTokenId,
+                            stackTarget.id,
+                            ...sourceStackIds,
+                            ...targetStackIds
+                        ];
                         finalItems = stackCardOnTarget(finalItems, draggedTokenId, stackTarget.id);
                         setActiveScenario(prev => prev ? { ...prev, items: finalItems } : prev);
                         setSelectedTokenIds([draggedTokenId]);
                         lastSelectedIdRef.current = draggedTokenId;
 
-                        safePersistItems(currentScenario.id, finalItems, currentScenario.items);
+                        safePersistItems(currentScenario.id, finalItems, interactionOriginalItems, stackModifiedIds);
 
                         setDraggedTokenId(null);
                         setRotatingTokenId(null);
@@ -6094,12 +6147,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     const containerTarget = findCardContainerDropTarget(movedCard, finalItems);
 
                     if (containerTarget) {
+                        const containerModifiedIds = [
+                            draggedTokenId,
+                            ...getCardStackIds(movedCard)
+                        ];
                         finalItems = moveCardIntoContainer(finalItems, draggedTokenId, containerTarget.id);
                         setActiveScenario(prev => prev ? { ...prev, items: finalItems } : prev);
                         setSelectedTokenIds([containerTarget.id]);
                         lastSelectedIdRef.current = containerTarget.id;
 
-                        safePersistItems(currentScenario.id, finalItems, currentScenario.items);
+                        safePersistItems(currentScenario.id, finalItems, interactionOriginalItems, containerModifiedIds);
 
                         setDraggedTokenId(null);
                         setRotatingTokenId(null);
@@ -6371,7 +6428,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     ...Object.keys(tokenOriginalPos || {})
                 ].filter(Boolean)));
 
-                safePersistItems(currentScenario.id, finalItems, currentScenario.items, draggedItemIds);
+                safePersistItems(currentScenario.id, finalItems, interactionOriginalItems, draggedItemIds);
             }
 
             setDraggedTokenId(null);
@@ -7743,7 +7800,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setSelectedTokenIds([cardId]);
         lastSelectedIdRef.current = cardId;
         cardStackQuickActionBlockUntilRef.current = Date.now() + 220;
-        safePersistItems(currentScenario.id, finalItems, currentScenario.items);
+        safePersistItems(currentScenario.id, finalItems, currentScenario.items, Array.from(movingIds));
     };
 
     const moveBoardCardToHand = (cardId) => {
@@ -7789,7 +7846,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
         setSelectedTokenIds(prev => prev.filter(id => !movingIds.has(id)));
-        safePersistItems(currentScenario.id, nextItems, currentScenario.items);
+        safePersistItems(currentScenario.id, nextItems, currentScenario.items, Array.from(movingIds));
     };
 
     const playHandCardToBoard = (card, clientPoint = null) => {
@@ -7848,7 +7905,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }));
 
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
-        safePersistItems(currentScenario.id, nextItems, currentScenario.items);
+        safePersistItems(
+            currentScenario.id,
+            nextItems,
+            currentScenario.items,
+            [card.id, promotedId, ...remainingStackIds].filter(Boolean)
+        );
     };
 
     const getBoardCardPreviewImage = (card) => (
@@ -8069,7 +8131,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
         setSelectedTokenIds([topCardId]);
         lastSelectedIdRef.current = topCardId;
-        safePersistItems(currentScenario.id, nextItems, currentScenario.items);
+        safePersistItems(currentScenario.id, nextItems, currentScenario.items, [stackParentId, topCardId]);
     };
 
     const unstackAllCards = (stackParentId) => {
@@ -8107,7 +8169,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }));
 
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
-        safePersistItems(currentScenario.id, nextItems, currentScenario.items);
+        safePersistItems(currentScenario.id, nextItems, currentScenario.items, [stackParentId, ...stackIds]);
     };
 
     const consumeCardStackQuickActionEvent = (event) => {
@@ -8161,7 +8223,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
         setSelectedTokenIds([cardId]);
         lastSelectedIdRef.current = cardId;
-        safePersistItems(currentScenario.id, nextItems, currentScenario.items);
+        safePersistItems(currentScenario.id, nextItems, currentScenario.items, [stackParentId, cardId]);
     };
 
     const addTokenToCanvas = (tokenUrl) => {
@@ -8412,6 +8474,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             setRotatingTokenId(token.id);
             // Para rotación, forzamos selección única del token rotado para evitar confusiones visuales
             setSelectedTokenIds([token.id]);
+            setTokenOriginalPos({
+                [token.id]: getItemInteractionSnapshot(token)
+            });
         }
     };
 
@@ -8891,12 +8956,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         onMouseDown={(e) => {
                                             if (!canInteract) return;
                                             handleTokenMouseDown(e, item); // Seleccionar el muro al coger el extremo
-                                            setDraggingWallHandle({ id: item.id, handleIndex: 1 });
+                                            startWallHandleDrag(item, 1);
                                         }}
                                         onTouchStart={(e) => {
                                             if (!canInteract) return;
                                             handleTokenMouseDown(e, item);
-                                            setDraggingWallHandle({ id: item.id, handleIndex: 1 });
+                                            startWallHandleDrag(item, 1);
                                         }}
                                     />
                                 )}
@@ -8911,12 +8976,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     onMouseDown={(e) => {
                                         if (!canInteract) return;
                                         handleTokenMouseDown(e, item); // Seleccionar el muro al coger el extremo
-                                        setDraggingWallHandle({ id: item.id, handleIndex: 1 });
+                                        startWallHandleDrag(item, 1);
                                     }}
                                     onTouchStart={(e) => {
                                         if (!canInteract) return;
                                         handleTokenMouseDown(e, item);
-                                        setDraggingWallHandle({ id: item.id, handleIndex: 1 });
+                                        startWallHandleDrag(item, 1);
                                     }}
                                 />
 
@@ -8929,12 +8994,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                         onMouseDown={(e) => {
                                             if (!canInteract) return;
                                             handleTokenMouseDown(e, item); // Seleccionar el muro al coger el extremo
-                                            setDraggingWallHandle({ id: item.id, handleIndex: 2 });
+                                            startWallHandleDrag(item, 2);
                                         }}
                                         onTouchStart={(e) => {
                                             if (!canInteract) return;
                                             handleTokenMouseDown(e, item);
-                                            setDraggingWallHandle({ id: item.id, handleIndex: 2 });
+                                            startWallHandleDrag(item, 2);
                                         }}
                                     />
                                 )}
@@ -8949,12 +9014,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     onMouseDown={(e) => {
                                         if (!canInteract) return;
                                         handleTokenMouseDown(e, item); // Seleccionar el muro al coger el extremo
-                                        setDraggingWallHandle({ id: item.id, handleIndex: 2 });
+                                        startWallHandleDrag(item, 2);
                                     }}
                                     onTouchStart={(e) => {
                                         if (!canInteract) return;
                                         handleTokenMouseDown(e, item);
-                                        setDraggingWallHandle({ id: item.id, handleIndex: 2 });
+                                        startWallHandleDrag(item, 2);
                                     }}
                                 />
                             </>
@@ -9772,9 +9837,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const writerId = getLocalSyncActorId();
             const writerRole = isPlayerView ? 'player' : 'master';
             const retryDelay = (ms) => new Promise(resolve => globalThis.setTimeout(resolve, ms));
+            const maxPersistAttempts = 8;
             let lastError = null;
 
-            for (let attempt = 0; attempt < 3; attempt += 1) {
+            for (let attempt = 0; attempt < maxPersistAttempts; attempt += 1) {
                 try {
                     await runTransaction(db, async (transaction) => {
                         const sfDoc = await transaction.get(docRef);
@@ -9800,8 +9866,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     return;
                 } catch (error) {
                     lastError = error;
-                    if (attempt < 2) {
-                        await retryDelay(120 * (attempt + 1));
+                    if (attempt < maxPersistAttempts - 1) {
+                        const jitter = Math.floor(Math.random() * 90);
+                        await retryDelay((110 * ((attempt + 1) ** 2)) + jitter);
                     }
                 }
             }
@@ -9918,6 +9985,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         if (e.cancelable) e.preventDefault();
 
         setResizingTokenId(item.id);
+        setTokenOriginalPos({
+            [item.id]: getItemInteractionSnapshot(item)
+        });
         const { x, y } = getEventCoords(e);
         const touchId = e.type.startsWith('touch') && e.touches?.[0]
             ? e.touches[0].identifier

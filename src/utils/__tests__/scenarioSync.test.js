@@ -34,6 +34,178 @@ test('mergeScenarioItemsForPersist only replaces locally modified items', () => 
   ]);
 });
 
+test('mergeScenarioItemsForPersist preserves concurrent structural card fields', () => {
+  const originalItems = [
+    {
+      id: 'card-1',
+      type: 'card',
+      x: 10,
+      y: 10,
+      zone: 'board',
+      containerId: null,
+      containerOrder: null,
+    },
+  ];
+  const staleMoveWrite = [
+    {
+      id: 'card-1',
+      type: 'card',
+      x: 80,
+      y: 90,
+      zone: 'board',
+      containerId: null,
+      containerOrder: null,
+    },
+  ];
+  const latestRemoteItems = [
+    {
+      id: 'card-1',
+      type: 'card',
+      x: 22,
+      y: 24,
+      zone: 'board',
+      containerId: 'board-1',
+      containerOrder: 100,
+    },
+  ];
+
+  const { modifiedOrAdded, deletedIds } = buildScenarioItemChanges(staleMoveWrite, originalItems);
+  const merged = mergeScenarioItemsForPersist(
+    latestRemoteItems,
+    modifiedOrAdded,
+    deletedIds,
+    originalItems
+  );
+
+  expect(merged).toEqual([
+    {
+      id: 'card-1',
+      type: 'card',
+      x: 80,
+      y: 90,
+      zone: 'board',
+      containerId: 'board-1',
+      containerOrder: 100,
+    },
+  ]);
+});
+
+test('mergeScenarioItemsForPersist preserves concurrent card movement during structural updates', () => {
+  const originalItems = [
+    {
+      id: 'card-1',
+      type: 'card',
+      x: 80,
+      y: 90,
+      zone: 'board',
+      containerId: null,
+      containerOrder: null,
+    },
+  ];
+  const containerDropWrite = [
+    {
+      id: 'card-1',
+      type: 'card',
+      x: 80,
+      y: 90,
+      zone: 'board',
+      containerId: 'board-1',
+      containerOrder: 100,
+    },
+  ];
+  const latestRemoteItems = [
+    {
+      id: 'card-1',
+      type: 'card',
+      x: 120,
+      y: 135,
+      zone: 'board',
+      containerId: null,
+      containerOrder: null,
+    },
+  ];
+
+  const { modifiedOrAdded, deletedIds } = buildScenarioItemChanges(containerDropWrite, originalItems);
+  const merged = mergeScenarioItemsForPersist(
+    latestRemoteItems,
+    modifiedOrAdded,
+    deletedIds,
+    originalItems
+  );
+
+  expect(merged).toEqual([
+    {
+      id: 'card-1',
+      type: 'card',
+      x: 120,
+      y: 135,
+      zone: 'board',
+      containerId: 'board-1',
+      containerOrder: 100,
+    },
+  ]);
+});
+
+test('mergeScenarioItemsForPersist persists card drop position from the drag-start baseline', () => {
+  const dragStartItems = [
+    {
+      id: 'card-1',
+      type: 'card',
+      x: 10,
+      y: 10,
+      zone: 'board',
+      containerId: null,
+      containerOrder: null,
+    },
+  ];
+  const containerDropWrite = [
+    {
+      id: 'card-1',
+      type: 'card',
+      x: 80,
+      y: 90,
+      zone: 'board',
+      containerId: 'board-1',
+      containerOrder: 100,
+    },
+  ];
+  const latestRemoteItems = [
+    {
+      id: 'card-1',
+      type: 'card',
+      x: 10,
+      y: 10,
+      zone: 'board',
+      containerId: null,
+      containerOrder: null,
+    },
+  ];
+
+  const { modifiedOrAdded, deletedIds } = buildScenarioItemChanges(
+    containerDropWrite,
+    dragStartItems,
+    ['card-1']
+  );
+  const merged = mergeScenarioItemsForPersist(
+    latestRemoteItems,
+    modifiedOrAdded,
+    deletedIds,
+    dragStartItems
+  );
+
+  expect(merged).toEqual([
+    {
+      id: 'card-1',
+      type: 'card',
+      x: 80,
+      y: 90,
+      zone: 'board',
+      containerId: 'board-1',
+      containerOrder: 100,
+    },
+  ]);
+});
+
 test('shouldTreatRemotePositionAsConflict ignores snapshots that did not modify the dragged item', () => {
   const conflict = shouldTreatRemotePositionAsConflict({
     itemId: 'player-card',
