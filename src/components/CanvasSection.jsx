@@ -1562,6 +1562,15 @@ const isHandCardItem = (item) => isCardItem(item) && item.zone === 'hand';
 const isStackedCardItem = (item) => isCardItem(item) && !!item.stackParentId;
 const isContainedCardItem = (item) => isCardItem(item) && !!item.containerId;
 const isCombatTokenItem = (item) => !!item && item.type !== 'light' && item.type !== 'wall' && item.type !== 'geometry' && !isCardItem(item) && !isCardContainerItem(item) && !isBoardMarkerItem(item) && !isBoardDieItem(item);
+const isMobileTacticalMoveToken = (item) => (
+    isCombatTokenItem(item) &&
+    !!(
+        item.stats ||
+        item.linkedCharacterId ||
+        (Array.isArray(item.equippedItems) && item.equippedItems.length > 0) ||
+        (Array.isArray(item.inventory) && item.inventory.length > 0)
+    )
+);
 const getCombatSpeedTokens = (items = []) => (
     (items || []).filter(item => isCombatTokenItem(item) && (item.isCircular || item.stats))
 );
@@ -2428,8 +2437,8 @@ const getCombatRenderPlacementAtPosition = (token, position = {}, items = [], co
     return getCombatRenderPlacement(simulatedToken, simulatedItems, config);
 };
 
-const getCombatCellOccupancyIssue = ({ movingToken, nextX, nextY, items = [], config = {}, excludeIds = [] }) => {
-    if (!config?.isCombatActive || !isCombatTokenItem(movingToken)) return null;
+const getCombatCellOccupancyIssue = ({ movingToken, nextX, nextY, items = [], config = {}, excludeIds = [], allowInactiveCombat = false }) => {
+    if ((!config?.isCombatActive && !allowInactiveCombat) || !isCombatTokenItem(movingToken)) return null;
 
     const movedToken = { ...movingToken, x: nextX, y: nextY };
     const movedBounds = getTokenGridBounds(movedToken, config);
@@ -2471,6 +2480,8 @@ const getCombatCellOccupancyIssue = ({ movingToken, nextX, nextY, items = [], co
 
 const canOccupyCombatCell = (params) => !getCombatCellOccupancyIssue(params);
 
+const MOBILE_TACTICAL_MOVE_RANGE = 4;
+
 const getCombatGridCenter = (token, config = {}) => {
     const bounds = getTokenGridBounds(token, config);
     return {
@@ -2488,6 +2499,102 @@ const getPlacementCenter = (token, placement = {}) => ({
     x: (Number(placement?.x) || 0) + ((Number(token?.width) || 0) / 2),
     y: (Number(placement?.y) || 0) + ((Number(token?.height) || 0) / 2),
 });
+
+const getCombatTokenPositionForPrimaryCell = (token, cell, config = {}) => {
+    const cellRect = getGridCellWorldRect(cell, config);
+    const cellW = Number(config.cellWidth) || DEFAULT_GRID_CONFIG.cellWidth;
+    const cellH = Number(config.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight;
+    const width = Number(token?.width) || cellW;
+    const height = Number(token?.height) || cellH;
+    const bounds = getTokenGridBounds(token, config);
+    const occupiesSingleCell = bounds.w === 1 && bounds.h === 1;
+
+    return occupiesSingleCell
+        ? {
+            x: cellRect.x + ((cellW - width) / 2),
+            y: cellRect.y + ((cellH - height) / 2),
+        }
+        : {
+            x: cellRect.x,
+            y: cellRect.y,
+        };
+};
+
+const getTokenOccupiedCellsAtPosition = (token, position = {}, config = {}) => (
+    getTokenOccupiedGridCells({
+        ...token,
+        x: Number(position?.x) || 0,
+        y: Number(position?.y) || 0,
+    }, config)
+);
+
+const isCombatMoveBlockedByWall = (token, nextPosition, items = [], config = {}) => {
+    const cellW = Number(config.cellWidth) || DEFAULT_GRID_CONFIG.cellWidth;
+    const cellH = Number(config.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight;
+    const tokenWidth = Number(token?.width) || cellW;
+    const tokenHeight = Number(token?.height) || cellH;
+    const startCenter = {
+        x: (Number(token?.x) || 0) + (tokenWidth / 2),
+        y: (Number(token?.y) || 0) + (tokenHeight / 2),
+    };
+    const endCenter = {
+        x: (Number(nextPosition?.x) || 0) + (tokenWidth / 2),
+        y: (Number(nextPosition?.y) || 0) + (tokenHeight / 2),
+    };
+
+    return (items || [])
+        .filter(item => item.type === 'wall' && !(item.wallType === 'door' && item.isOpen))
+        .some(wall => (
+            linesIntersect(startCenter.x, startCenter.y, endCenter.x, endCenter.y, wall.x1, wall.y1, wall.x2, wall.y2) ||
+            lineRectIntersect(wall.x1, wall.y1, wall.x2, wall.y2, nextPosition.x + 2, nextPosition.y + 2, tokenWidth - 4, tokenHeight - 4)
+        ));
+};
+
+const getMobileTacticalMoveOptions = (token, items = [], config = {}, range = MOBILE_TACTICAL_MOVE_RANGE, options = {}) => {
+    const {
+        requireCombatActive = true,
+        validateOccupancy = true,
+        validateWalls = true,
+        allowInactiveOccupancy = false,
+    } = options || {};
+
+    if ((requireCombatActive && !config?.isCombatActive) || !isMobileTacticalMoveToken(token)) return [];
+
+    const originCell = getTokenPrimaryGridCell(token, config);
+    const moveOptions = [];
+
+    for (let dx = -range; dx <= range; dx += 1) {
+        for (let dy = -range; dy <= range; dy += 1) {
+            const cost = Math.max(Math.abs(dx), Math.abs(dy));
+            if (cost <= 0 || cost > range) continue;
+
+            const cell = { x: originCell.x + dx, y: originCell.y + dy };
+            if (!isGridCellInsideBounds(cell, config)) continue;
+
+            const nextPosition = getCombatTokenPositionForPrimaryCell(token, cell, config);
+            const occupiedCells = getTokenOccupiedCellsAtPosition(token, nextPosition, config);
+            if (occupiedCells.some((occupiedCell) => !isGridCellInsideBounds(occupiedCell, config))) continue;
+
+            if (validateOccupancy && !canOccupyCombatCell({
+                movingToken: token,
+                nextX: nextPosition.x,
+                nextY: nextPosition.y,
+                items,
+                config,
+                excludeIds: [token.id],
+                allowInactiveCombat: allowInactiveOccupancy,
+            })) {
+                continue;
+            }
+
+            if (validateWalls && isCombatMoveBlockedByWall(token, nextPosition, items, config)) continue;
+
+            moveOptions.push({ cell, cost, nextPosition, occupiedCells });
+        }
+    }
+
+    return moveOptions.sort((a, b) => a.cost - b.cost || a.cell.y - b.cell.y || a.cell.x - b.cell.x);
+};
 
 const getEmpujeDirection = (sourceToken, pushedToken, config = {}, items = []) => {
     if (!sourceToken || !pushedToken) return null;
@@ -4422,6 +4529,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const [targetingState, setTargetingState] = useState(null);
     // { attackerId, actionId, data, phase: 'targeting' | 'weapon_selection' | 'sweep_selection' }
     const [sweepHoverSide, setSweepHoverSide] = useState(null);
+    const [mobileMoveHoverCellKey, setMobileMoveHoverCellKey] = useState(null);
 
     const [focusedTargetId, setFocusedTargetId] = useState(null); // ID del token fijado como objetivo
 
@@ -8268,6 +8376,208 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         }));
     };
 
+    const consumeMobileMoveTemplateEvent = (event, options = {}) => {
+        event?.stopPropagation?.();
+        if (options.preventDefault !== false) {
+            event?.preventDefault?.();
+        }
+        event?.nativeEvent?.stopImmediatePropagation?.();
+    };
+
+    const shouldUseMobileTacticalMove = (token, items = []) => (
+        isMobile &&
+        !isBoardMode &&
+        gridConfig.isCombatActive &&
+        activeLayer === 'TABLETOP' &&
+        isMobileTacticalMoveToken(token) &&
+        !isTokenDerribado(token) &&
+        canCombatTokenActNow(token, items)
+    );
+
+    const canUseBoardMobileTacticalMove = (token) => (
+        isMobile &&
+        isBoardMode &&
+        activeLayer === 'TABLETOP' &&
+        isMobileTacticalMoveToken(token) &&
+        (
+            !isPlayerView ||
+            (Array.isArray(token?.controlledBy) && token.controlledBy.includes(playerName))
+        )
+    );
+
+    const getBoardMobileTacticalMoveOptions = (token, items = []) => (
+        getMobileTacticalMoveOptions(token, items, gridConfig, MOBILE_TACTICAL_MOVE_RANGE, {
+            requireCombatActive: false,
+            validateOccupancy: true,
+            validateWalls: true,
+            allowInactiveOccupancy: true,
+        })
+    );
+
+    const handleMobileTacticalMoveCell = (event, tokenId, targetCell) => {
+        consumeMobileMoveTemplateEvent(event);
+
+        const scenario = activeScenarioRef.current || activeScenario;
+        if (!scenario || !tokenId || !targetCell) return;
+
+        const token = scenario.items.find(item => item.id === tokenId);
+        if (!shouldUseMobileTacticalMove(token, scenario.items)) {
+            triggerToast("Movimiento no disponible", "Este token no puede desplazarse ahora", 'warning');
+            return;
+        }
+
+        const option = getMobileTacticalMoveOptions(token, scenario.items, gridConfig)
+            .find(candidate => candidate.cell.x === targetCell.x && candidate.cell.y === targetCell.y);
+        if (!option) return;
+
+        const nextPosition = option.nextPosition;
+
+        if (isPlayerView) {
+            const pending = isUsablePendingTurnState(pendingTurnStateRef.current) && pendingTurnStateRef.current.tokenId === tokenId
+                ? pendingTurnStateRef.current
+                : null;
+            const turnStartX = pending ? pending.startX : token.x;
+            const turnStartY = pending ? pending.startY : token.y;
+            const cellW = gridConfig.cellWidth || 50;
+            const cellH = gridConfig.cellHeight || 50;
+            const moveCost = Math.max(
+                Math.round(Math.abs(nextPosition.x - turnStartX) / cellW),
+                Math.round(Math.abs(nextPosition.y - turnStartY) / cellH)
+            );
+
+            const nextItems = scenario.items.map(item => (
+                item.id === tokenId
+                    ? { ...item, x: nextPosition.x, y: nextPosition.y }
+                    : item
+            ));
+
+            setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
+            setSelectedTokenIds([tokenId]);
+            lastSelectedIdRef.current = tokenId;
+            setPendingTurnState(prev => {
+                const isSameToken = prev && prev.tokenId === tokenId;
+                const actionCost = isSameToken ? (Number(prev.actionCost) || 0) : 0;
+                const hasActions = isSameToken && Array.isArray(prev.actions) && prev.actions.length > 0;
+
+                if (moveCost <= 0 && actionCost <= 0 && !hasActions) return null;
+
+                return {
+                    ...(isSameToken ? prev : {
+                        tokenId,
+                        startX: token.x,
+                        startY: token.y,
+                        actionCost: 0,
+                        actions: []
+                    }),
+                    tokenId,
+                    x: nextPosition.x,
+                    y: nextPosition.y,
+                    moveCost
+                };
+            });
+            return;
+        }
+
+        const stepCost = Math.max(1, option.cost || 1);
+        let movedToken = {
+            ...token,
+            x: nextPosition.x,
+            y: nextPosition.y,
+            velocidad: (Number(token.velocidad) || 0) + stepCost
+        };
+        let sangradoAnimation = null;
+
+        if (gridConfig.isCombatActive) {
+            const sangradoPenalty = applySangradoSpeedPenalty(movedToken, stepCost);
+            movedToken = sangradoPenalty.token;
+            if (sangradoPenalty.lostVida > 0) {
+                sangradoAnimation = {
+                    token: movedToken,
+                    lostVida: sangradoPenalty.lostVida
+                };
+            }
+        }
+
+        const nextItems = scenario.items.map(item => (
+            item.id === tokenId ? movedToken : item
+        ));
+
+        setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
+        setSelectedTokenIds([tokenId]);
+        lastSelectedIdRef.current = tokenId;
+        setPendingTurnState(null);
+        safePersistItems(scenario.id, nextItems, scenario.items, [tokenId]);
+
+        if (sangradoAnimation) {
+            queueSangradoSpeedAnimation(sangradoAnimation.token, sangradoAnimation.lostVida, { shared: true });
+        }
+    };
+
+    const handleBoardMobileTacticalMoveCell = (event, tokenId, targetCell) => {
+        consumeMobileMoveTemplateEvent(event);
+
+        const scenario = activeScenarioRef.current || activeScenario;
+        if (!scenario || !tokenId || !targetCell) return;
+
+        const token = scenario.items.find(item => item.id === tokenId);
+        if (!canUseBoardMobileTacticalMove(token)) {
+            triggerToast("Movimiento no disponible", "No puedes desplazar este token", 'warning');
+            return;
+        }
+
+        const option = getBoardMobileTacticalMoveOptions(token, scenario.items)
+            .find(candidate => candidate.cell.x === targetCell.x && candidate.cell.y === targetCell.y);
+        if (!option) return;
+
+        const nextItems = scenario.items.map(item => (
+            item.id === tokenId
+                ? { ...item, x: option.nextPosition.x, y: option.nextPosition.y }
+                : item
+        ));
+
+        setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
+        setSelectedTokenIds([tokenId]);
+        setActiveBoardHandTokenId(tokenId);
+        lastSelectedIdRef.current = tokenId;
+        safePersistItems(scenario.id, nextItems, scenario.items, [tokenId]);
+    };
+
+    const handleCancelMobileTacticalMove = (event, tokenId) => {
+        consumeMobileMoveTemplateEvent(event);
+
+        const scenario = activeScenarioRef.current || activeScenario;
+        const pending = isUsablePendingTurnState(pendingTurnStateRef.current) && pendingTurnStateRef.current.tokenId === tokenId
+            ? pendingTurnStateRef.current
+            : null;
+        if (!scenario || !pending) return;
+
+        const startX = Number.isFinite(Number(pending.startX)) ? Number(pending.startX) : pending.x;
+        const startY = Number.isFinite(Number(pending.startY)) ? Number(pending.startY) : pending.y;
+        const nextItems = scenario.items.map(item => (
+            item.id === tokenId ? { ...item, x: startX, y: startY } : item
+        ));
+
+        setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
+        setSelectedTokenIds([tokenId]);
+        lastSelectedIdRef.current = tokenId;
+        setMobileMoveHoverCellKey(null);
+        setPendingTurnState(prev => {
+            if (!prev || prev.tokenId !== tokenId) return prev;
+
+            const actionCost = Number(prev.actionCost) || 0;
+            const hasActions = Array.isArray(prev.actions) && prev.actions.length > 0;
+            if (actionCost <= 0 && !hasActions) return null;
+
+            return {
+                ...prev,
+                x: startX,
+                y: startY,
+                moveCost: 0
+            };
+        });
+        triggerToast("Movimiento cancelado", "La previsualización vuelve al inicio del turno", 'info');
+    };
+
     const handleTokenMouseDown = (e, token) => {
         const { x: curX, y: curY } = getEventCoords(e);
         const isTouch = e.type.startsWith('touch');
@@ -8367,6 +8677,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             // Si estamos redimensionando, no iniciar arrastre
             if (resizingTokenId) return;
 
+            const currentScenario = activeScenarioRef.current || activeScenario;
             let newSelection = [...selectedTokenIds];
 
             // Si el token NO está ya seleccionado, lo añadimos o reemplazamos
@@ -8385,7 +8696,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 return; // No iniciamos drag si estamos deseleccionando
             }
 
-            const currentScenario = activeScenarioRef.current || activeScenario;
             if (gridConfig.isCombatActive && activeLayer === 'TABLETOP' && currentScenario) {
                 const hasProneTokenInSelection = currentScenario.items.some(item =>
                     newSelection.includes(item.id) && isTokenDerribado(item)
@@ -8402,6 +8712,42 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     );
                     return;
                 }
+            }
+
+            if (
+                isTouch &&
+                isBoardMode &&
+                isMobileTacticalMoveToken(token) &&
+                canUseBoardMobileTacticalMove(token)
+            ) {
+                setDraggedTokenId(null);
+                setRotatingTokenId(null);
+                setResizingTokenId(null);
+                setTokenOriginalPos({});
+                setDragVisualOrigin({});
+                setCombatOccupancyFeedback(null);
+                return;
+            }
+
+            if (
+                isTouch &&
+                isMobile &&
+                !isBoardMode &&
+                gridConfig.isCombatActive &&
+                activeLayer === 'TABLETOP' &&
+                isMobileTacticalMoveToken(token)
+            ) {
+                setDraggedTokenId(null);
+                setRotatingTokenId(null);
+                setResizingTokenId(null);
+                setTokenOriginalPos({});
+                setDragVisualOrigin({});
+                setCombatOccupancyFeedback(null);
+
+                if (!shouldUseMobileTacticalMove(token, currentScenario?.items || [])) {
+                    triggerToast("Movimiento no disponible", "Este token no puede desplazarse ahora", 'warning');
+                }
+                return;
             }
 
             setDraggedTokenId(token.id);
@@ -8808,6 +9154,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             !!(draggedTokenId || rotatingTokenId || resizingTokenId) &&
             selectedTokenIds.includes(item.id);
         const isInstantBoardDieMove = isBoardDie && instantBoardDieMoveIdsRef.current.has(item.id);
+        const canShowResizeHandle = isSelected && !rotatingTokenId && !isBoardDie && !isCard;
         const itemMotionTransition = isBoardMarker || isBoardDie
             ? (isLocallyInteracting || isInstantBoardDieMove ? { duration: 0 } : { type: 'spring', stiffness: 520, damping: 28, mass: 0.55 })
             : (isToken || isCard || isCardContainer) && !isLocallyInteracting
@@ -9772,7 +10119,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         )}
 
                         {/* Resize Handle */}
-                        {isSelected && !rotatingTokenId && !isBoardDie && (
+                        {canShowResizeHandle && (
                             <>
                                 <div
                                     onMouseDown={(e) => handleResizeMouseDown(e, item)}
@@ -9981,6 +10328,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     }, [getBoardDieRollBounds]);
 
     const handleResizeMouseDown = (e, item) => {
+        if (isCardItem(item)) return;
         e.stopPropagation();
         if (e.cancelable) e.preventDefault();
 
@@ -15591,6 +15939,110 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                     {canvasRenderItemGroups.lights.map(item => renderItemJSX(item))}
                                     {canvasRenderItemGroups.others.map(item => renderItemJSX(item))}
                                 </div>
+
+                                {!targetingState && (() => {
+                                    const items = activeScenario?.items || [];
+                                    const selectedTokenId = selectedTokenIds.length === 1 ? selectedTokenIds[0] : null;
+                                    const token = selectedTokenId
+                                        ? items.find(item => item.id === selectedTokenId)
+                                        : null;
+                                    const isCanvasMobileMove = shouldUseMobileTacticalMove(token, items);
+                                    const isBoardMobileMove = canUseBoardMobileTacticalMove(token);
+                                    if (!isCanvasMobileMove && !isBoardMobileMove) return null;
+
+                                    const pendingMove = isUsablePendingTurnState(pendingTurnState) && pendingTurnState.tokenId === token.id
+                                        ? pendingTurnState
+                                        : null;
+                                    const hasPendingMovement = isCanvasMobileMove && Math.max(0, Number(pendingMove?.moveCost) || 0) > 0;
+                                    const moveOptions = isBoardMobileMove
+                                        ? getBoardMobileTacticalMoveOptions(token, items)
+                                        : getMobileTacticalMoveOptions(token, items, gridConfig);
+                                    if (moveOptions.length === 0 && !hasPendingMovement) return null;
+
+                                    const tokenCenterX = token.x + ((Number(token.width) || gridConfig.cellWidth || 50) / 2);
+                                    const tokenCenterY = token.y + ((Number(token.height) || gridConfig.cellHeight || 50) / 2);
+
+                                    return (
+                                        <div className="absolute inset-0 z-[15] pointer-events-none" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
+                                            <div
+                                                className="absolute z-[17] pointer-events-none flex h-9 w-9 -translate-x-1/2 -translate-y-[calc(100%+0.75rem)] items-center justify-center rounded-full border border-red-300/40 bg-black/85 text-red-100 shadow-[0_0_16px_rgba(239,68,68,0.25)]"
+                                                style={{ left: tokenCenterX, top: tokenCenterY }}
+                                                title="Movimiento"
+                                            >
+                                                <Footprints size={15} strokeWidth={2.2} />
+                                            </div>
+
+                                            {isPlayerView && hasPendingMovement && (
+                                                <button
+                                                    type="button"
+                                                    onMouseDown={consumeMobileMoveTemplateEvent}
+                                                    onTouchStart={(event) => consumeMobileMoveTemplateEvent(event, { preventDefault: false })}
+                                                    onClick={(event) => handleCancelMobileTacticalMove(event, token.id)}
+                                                    className="absolute z-[18] pointer-events-auto flex h-8 w-8 -translate-x-1/2 -translate-y-[calc(100%+0.75rem)] items-center justify-center rounded-full border border-slate-200/35 bg-black/90 text-slate-100 shadow-[0_0_16px_rgba(15,23,42,0.5)] transition-colors hover:border-red-200/70 hover:text-red-100 focus:outline-none"
+                                                    style={{ left: tokenCenterX + 34, top: tokenCenterY }}
+                                                    title="Cancelar movimiento"
+                                                >
+                                                    <X size={14} strokeWidth={2.5} />
+                                                </button>
+                                            )}
+
+                                            {moveOptions.map((option) => {
+                                                const rect = getGridCellWorldRect(option.cell, gridConfig);
+                                                const tokenBounds = getTokenGridBounds(token, gridConfig);
+                                                const footprintWidth = Math.max(1, tokenBounds.w) * rect.width;
+                                                const footprintHeight = Math.max(1, tokenBounds.h) * rect.height;
+                                                const cellKey = `${option.cell.x}:${option.cell.y}`;
+                                                const isHovered = mobileMoveHoverCellKey === cellKey;
+
+                                                return (
+                                                    <button
+                                                        key={`mobile-move-cell-${token.id}-${cellKey}`}
+                                                        type="button"
+                                                        onMouseEnter={() => setMobileMoveHoverCellKey(cellKey)}
+                                                        onMouseLeave={() => setMobileMoveHoverCellKey(prev => prev === cellKey ? null : prev)}
+                                                        onMouseDown={consumeMobileMoveTemplateEvent}
+                                                        onTouchStart={(event) => consumeMobileMoveTemplateEvent(event, { preventDefault: false })}
+                                                        onClick={(event) => (
+                                                            isBoardMobileMove
+                                                                ? handleBoardMobileTacticalMoveCell(event, token.id, option.cell)
+                                                                : handleMobileTacticalMoveCell(event, token.id, option.cell)
+                                                        )}
+                                                        className={`absolute z-[16] overflow-hidden rounded-md border transition-all duration-150 pointer-events-auto focus:outline-none ${
+                                                            isHovered
+                                                                ? 'border-red-200/95 bg-red-500/25 shadow-[0_0_20px_rgba(239,68,68,0.45)]'
+                                                                : 'border-red-400/60 bg-red-500/10 shadow-[inset_0_0_12px_rgba(239,68,68,0.12)]'
+                                                        }`}
+                                                        style={{
+                                                            left: rect.x + 3,
+                                                            top: rect.y + 3,
+                                                            width: Math.max(10, footprintWidth - 6),
+                                                            height: Math.max(10, footprintHeight - 6),
+                                                        }}
+                                                        title="Mover"
+                                                    >
+                                                        <span className="absolute inset-1 rounded border border-red-200/15" />
+                                                        {Array.from({ length: Math.max(0, tokenBounds.w - 1) }).map((_, index) => (
+                                                            <span
+                                                                key={`move-footprint-v-${index}`}
+                                                                className="absolute top-1 bottom-1 border-l border-red-200/20"
+                                                                style={{ left: `${((index + 1) / Math.max(1, tokenBounds.w)) * 100}%` }}
+                                                            />
+                                                        ))}
+                                                        {Array.from({ length: Math.max(0, tokenBounds.h - 1) }).map((_, index) => (
+                                                            <span
+                                                                key={`move-footprint-h-${index}`}
+                                                                className="absolute left-1 right-1 border-t border-red-200/20"
+                                                                style={{ top: `${((index + 1) / Math.max(1, tokenBounds.h)) * 100}%` }}
+                                                            />
+                                                        ))}
+                                                        <span className={`absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-100 transition-opacity ${isHovered ? 'opacity-95' : 'opacity-65'}`} />
+                                                        <span className={`absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-red-100/40 transition-transform ${isHovered ? 'scale-125' : 'scale-100'}`} />
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                })()}
 
                                 {targetingState?.phase === 'sweep_selection' && (() => {
                                     const items = activeScenario?.items || [];
