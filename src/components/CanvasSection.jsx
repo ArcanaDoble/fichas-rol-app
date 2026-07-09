@@ -6661,6 +6661,21 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const bleed = 4;
     const mapX = (WORLD_SIZE - mapBounds.width) / 2;
     const mapY = (WORLD_SIZE - mapBounds.height) / 2;
+    const mapLayerBounds = gridConfig.isInfinite
+        ? { x: 0, y: 0, width: WORLD_SIZE, height: WORLD_SIZE }
+        : {
+            x: mapX - bleed,
+            y: mapY - bleed,
+            width: mapBounds.width + bleed * 2,
+            height: mapBounds.height + bleed * 2,
+        };
+    const mapLayerStyle = {
+        left: `${mapLayerBounds.x}px`,
+        top: `${mapLayerBounds.y}px`,
+        width: `${mapLayerBounds.width}px`,
+        height: `${mapLayerBounds.height}px`,
+    };
+    const mapLayerViewBox = `${mapLayerBounds.x} ${mapLayerBounds.y} ${mapLayerBounds.width} ${mapLayerBounds.height}`;
 
     // Calculamos los "Observadores" activos (tokens seleccionados con visión)
     // Para jugadores: SOLO se activa cuando seleccionan tokens específicos (no hay fallback)
@@ -9170,6 +9185,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const isLocallyInteracting =
             !!(draggedTokenId || rotatingTokenId || resizingTokenId) &&
             selectedTokenIds.includes(item.id);
+        const shouldPromoteItemLayer = isLocallyInteracting || draggedTokenId === item.id;
         const isInstantBoardDieMove = isBoardDie && instantBoardDieMoveIdsRef.current.has(item.id);
         const canShowResizeHandle = isSelected && !rotatingTokenId && !isBoardDie && !isCard;
         const itemMotionTransition = isBoardMarker || isBoardDie
@@ -9713,7 +9729,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 ? 18
                                                 : 20,
                         transformOrigin: 'center center',
-                        willChange: 'transform, opacity'
+                        willChange: shouldPromoteItemLayer ? 'transform, opacity' : 'auto'
                     }}
                     className="group"
                 >
@@ -16272,8 +16288,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                 {/* --- CAPA SUPERIOR: NIEBLA Y OSCURIDAD (SVG) --- */}
                                 {/* Movemos la niebla aquí para que tape a los tokens y muros también */}
-                                <div className="absolute inset-0 z-20 pointer-events-none" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
-                                    <svg width="100%" height="100%" className="overflow-visible pointer-events-none relative">
+                                <div className="absolute z-20 pointer-events-none" style={mapLayerStyle}>
+                                    <svg width="100%" height="100%" viewBox={mapLayerViewBox} className="overflow-visible pointer-events-none relative">
                                         {/* CAPA 1: ILUMINACIÓN AMBIENTAL (Atmósfera) */}
                                         <rect
                                             x={mapX - bleed}
@@ -16334,8 +16350,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 )}
 
                                 {/* DARKNESS OVERLAY (SVG Masked) */}
-                                <div className="absolute inset-0 pointer-events-none z-30" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
-                                    <svg width="100%" height="100%" className="overflow-visible">
+                                <div className="absolute pointer-events-none z-30" style={mapLayerStyle}>
+                                    <svg width="100%" height="100%" viewBox={mapLayerViewBox} className="overflow-visible">
                                         <defs>
                                             {/* MÁSCARA 1: ILUMINACIÓN (Solo Luces) */}
                                             <mask id="lighting-mask">
@@ -16624,7 +16640,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                                                     // Generar un ID único para la máscara basado en la versión del escenario
                                                     // Esto fuerza al navegador (especialmente en móvil/Chrome) a repintar la máscara cuando cambia algo (ej. abrir puerta)
-                                                    const maskVer = activeScenario?.lastModified || Date.now();
+                                                    const maskVer = activeScenario?.lastModified || maskVersion;
                                                     const maskId = `player-vision-mask-lights-${maskVer}`;
 
                                                     return (
@@ -16870,15 +16886,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                 </div>
 
                                 {/* LIGHT VISUAL GLOWS (Efecto visual del resplandor en la capa superior) */}
-                                <div className="absolute inset-0 pointer-events-none z-[45] overflow-visible" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
-                                    <svg width="100%" height="100%" className="overflow-visible">
+                                <div className="absolute pointer-events-none z-[45] overflow-visible" style={mapLayerStyle}>
+                                    <svg width="100%" height="100%" viewBox={mapLayerViewBox} className="overflow-visible">
                                         {isPlayerView && selectedTokenIds.length === 0 && (
                                             <defs>
                                                 <mask id="player-global-perspective-mask">
-                                                    <rect x={0} y={0} width={WORLD_SIZE} height={WORLD_SIZE} fill="black" />
+                                                    <rect x={mapLayerBounds.x} y={mapLayerBounds.y} width={mapLayerBounds.width} height={mapLayerBounds.height} fill="black" />
                                                     {(activeScenario?.items || []).filter(t => t && t.controlledBy?.includes(playerName) && t.hasVision).map(token => (
                                                         <g key={`global-p-mask-${token.id}`} mask={`url(#shadow-mask-${token.id}-${maskVersion})`}>
-                                                            <rect x={0} y={0} width={WORLD_SIZE} height={WORLD_SIZE} fill="white" />
+                                                            <rect x={mapLayerBounds.x} y={mapLayerBounds.y} width={mapLayerBounds.width} height={mapLayerBounds.height} fill="white" />
                                                         </g>
                                                     ))}
                                                 </mask>
@@ -16917,7 +16933,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     <>
                                                         <defs>
                                                             <mask id="player-vision-mask-glows">
-                                                                <rect x={0} y={0} width={WORLD_SIZE} height={WORLD_SIZE} fill="black" />
+                                                                <rect x={mapLayerBounds.x} y={mapLayerBounds.y} width={mapLayerBounds.width} height={mapLayerBounds.height} fill="black" />
                                                                 {myVisionTokens.map(token => {
                                                                     const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
                                                                     const original = tokenOriginalPos[token.id];
@@ -17048,7 +17064,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                     <g key={`multi-glow-pov-${token.id}`} mask={`url(#shadow-mask-${token.id}-${maskVersion})`}>
                                                         <defs>
                                                             <mask id={`multi-vision-mask-glows-${token.id}`}>
-                                                                <rect x={0} y={0} width={WORLD_SIZE} height={WORLD_SIZE} fill="black" />
+                                                                <rect x={mapLayerBounds.x} y={mapLayerBounds.y} width={mapLayerBounds.width} height={mapLayerBounds.height} fill="black" />
                                                                 <g mask={`url(#shadow-mask-${token.id}-${maskVersion})`}>
                                                                     <circle
                                                                         cx={x + (token.width / 2)}
