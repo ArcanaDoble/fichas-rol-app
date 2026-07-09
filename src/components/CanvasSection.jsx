@@ -16044,7 +16044,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                          }
                                                          handleCancelMobileTacticalMove(event, token.id);
                                                      }}
-                                                     className="absolute z-[18] pointer-events-auto flex h-8 w-8 -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] items-center justify-center rounded-full border border-slate-200/35 bg-black/90 text-slate-100 shadow-[0_0_16px_rgba(15,23,42,0.5)] transition-colors hover:border-red-200/70 hover:text-red-100 focus:outline-none"
+                                                     className="absolute z-[18] pointer-events-auto touch-none flex h-8 w-8 -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] items-center justify-center rounded-full border border-slate-200/35 bg-black/90 text-slate-100 shadow-[0_0_16px_rgba(15,23,42,0.5)] transition-colors hover:border-red-200/70 hover:text-red-100 focus:outline-none"
                                                      style={{ left: tokenCenterX, top: token.y }}
                                                      title="Cancelar movimiento"
                                                  >
@@ -16104,7 +16104,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                  handleMobileTacticalMoveCell(event, token.id, option.cell);
                                                              }
                                                          }}
-                                                         className={`absolute z-[16] overflow-hidden rounded-lg border transition-all duration-300 pointer-events-auto focus:outline-none ${
+                                                         className={`absolute z-[16] overflow-hidden rounded-lg border transition-all duration-300 pointer-events-auto touch-none focus:outline-none ${
                                                              isHovered
                                                                  ? 'border-rose-400 bg-gradient-to-br from-rose-500/20 via-red-500/10 to-rose-600/25 shadow-[0_0_20px_rgba(244,63,94,0.4),inset_0_0_10px_rgba(244,63,94,0.15)] scale-[1.02]'
                                                                  : 'border-transparent bg-rose-500/[0.001]'
