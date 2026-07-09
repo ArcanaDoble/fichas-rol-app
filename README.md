@@ -2683,5 +2683,7 @@ Guía rápida: ver `docs/Minimapa.md`.
 - **Rango de Movimiento Acotado**: Se redujo el rango máximo de opciones de movimiento táctico de 4 a **2 casillas** de distancia.
 - **Remoción Completa de Insignias Redundantes**: Se eliminó de forma definitiva la insignia circular negra con el icono de huellas que flotaba sobre la cabeza del token seleccionado.
 - **Corchetes Tácticos de Esquina**: Los corchetes decorativos (L-brackets) en las cuatro esquinas de cada casilla se renderizan de forma permanente. En reposo tienen un aspecto discreto (`border-rose-500/30 w-2 h-2`) que simula pequeñas flechas que señalan las casillas adyacentes a las que te puedes mover. Al hacer hover se expanden y brillan (`border-rose-200 w-3 h-3`).
+- **Gestos de Cámara Fluidos sobre Botones**: Se habilitó la propagación de eventos táctiles en los botones de movimiento, permitiendo arrastrar (panear) o hacer zoom en la cámara del mapa incluso si el gesto se inicia sobre un botón. Si el arrastre es mayor a 10px, la acción de mover el token se cancela de forma automática.
+- **Prevención de Click Fantasma (Tap-through)**: Para evitar movimientos accidentales inmediatamente después de seleccionar una ficha, el sistema bloquea y descarta cualquier click sobre las opciones de movimiento recibidos en menos de 350ms desde el cambio de selección.
 
 

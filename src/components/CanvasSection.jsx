@@ -4551,6 +4551,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         setMobileMoveHoverCellKey(null);
     }, [selectedTokenIds, selectedTokenForHoverX, selectedTokenForHoverY, pendingTurnState]);
 
+    const mobileMoveTouchStartRef = useRef(null);
+    const lastSelectionTimeRef = useRef(0);
+    useEffect(() => {
+        lastSelectionTimeRef.current = Date.now();
+    }, [selectedTokenIds]);
+
     useEffect(() => {
         if (!isBoardMode || !activeScenario?.items) return;
         const selectedCombatToken = activeScenario.items.find(item => (
@@ -5276,13 +5282,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     };
 
     const handleTouchStart = (e) => {
+        const isButton = e.target.closest('button');
         if (e.touches.length === 2) {
-            if (e.cancelable) e.preventDefault();
+            if (e.cancelable && !isButton) e.preventDefault();
             // Start Pinch
             setIsDragging(false);
             lastPinchDist.current = getTouchDistance(e.touches);
         } else if (e.touches.length === 1) {
-            if (e.cancelable) e.preventDefault();
+            if (e.cancelable && !isButton) e.preventDefault();
             // Start Pan
             const touch = e.touches[0];
             setIsDragging(true);
@@ -16011,8 +16018,32 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                 <button
                                                      type="button"
                                                      onMouseDown={consumeMobileMoveTemplateEvent}
-                                                     onTouchStart={(event) => consumeMobileMoveTemplateEvent(event, { preventDefault: false })}
-                                                     onClick={(event) => handleCancelMobileTacticalMove(event, token.id)}
+                                                     onTouchStart={(event) => {
+                                                         const touch = event.touches[0];
+                                                         mobileMoveTouchStartRef.current = { x: touch.clientX, y: touch.clientY };
+                                                     }}
+                                                     onClick={(event) => {
+                                                         if (Date.now() - lastSelectionTimeRef.current < 350) {
+                                                             return;
+                                                         }
+                                                         if (mobileMoveTouchStartRef.current) {
+                                                             const touch = event.changedTouches?.[0] || event;
+                                                             const clientX = touch.clientX ?? event.clientX;
+                                                             const clientY = touch.clientY ?? event.clientY;
+                                                             if (clientX !== undefined && clientY !== undefined) {
+                                                                 const dragDist = Math.hypot(
+                                                                     clientX - mobileMoveTouchStartRef.current.x,
+                                                                     clientY - mobileMoveTouchStartRef.current.y
+                                                                 );
+                                                                 if (dragDist > 10) {
+                                                                     mobileMoveTouchStartRef.current = null;
+                                                                     return;
+                                                                 }
+                                                             }
+                                                             mobileMoveTouchStartRef.current = null;
+                                                         }
+                                                         handleCancelMobileTacticalMove(event, token.id);
+                                                     }}
                                                      className="absolute z-[18] pointer-events-auto flex h-8 w-8 -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] items-center justify-center rounded-full border border-slate-200/35 bg-black/90 text-slate-100 shadow-[0_0_16px_rgba(15,23,42,0.5)] transition-colors hover:border-red-200/70 hover:text-red-100 focus:outline-none"
                                                      style={{ left: tokenCenterX, top: token.y }}
                                                      title="Cancelar movimiento"
@@ -16035,12 +16066,36 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                          onMouseEnter={() => setMobileMoveHoverCellKey(cellKey)}
                                                          onMouseLeave={() => setMobileMoveHoverCellKey(prev => prev === cellKey ? null : prev)}
                                                          onMouseDown={consumeMobileMoveTemplateEvent}
-                                                         onTouchStart={(event) => consumeMobileMoveTemplateEvent(event, { preventDefault: false })}
-                                                         onClick={(event) => (
-                                                             isBoardMobileMove
-                                                                 ? handleBoardMobileTacticalMoveCell(event, token.id, option.cell)
-                                                                 : handleMobileTacticalMoveCell(event, token.id, option.cell)
-                                                         )}
+                                                         onTouchStart={(event) => {
+                                                             const touch = event.touches[0];
+                                                             mobileMoveTouchStartRef.current = { x: touch.clientX, y: touch.clientY };
+                                                         }}
+                                                         onClick={(event) => {
+                                                             if (Date.now() - lastSelectionTimeRef.current < 350) {
+                                                                 return;
+                                                             }
+                                                             if (mobileMoveTouchStartRef.current) {
+                                                                 const touch = event.changedTouches?.[0] || event;
+                                                                 const clientX = touch.clientX ?? event.clientX;
+                                                                 const clientY = touch.clientY ?? event.clientY;
+                                                                 if (clientX !== undefined && clientY !== undefined) {
+                                                                     const dragDist = Math.hypot(
+                                                                         clientX - mobileMoveTouchStartRef.current.x,
+                                                                         clientY - mobileMoveTouchStartRef.current.y
+                                                                     );
+                                                                     if (dragDist > 10) {
+                                                                         mobileMoveTouchStartRef.current = null;
+                                                                         return;
+                                                                     }
+                                                                 }
+                                                                 mobileMoveTouchStartRef.current = null;
+                                                             }
+                                                             if (isBoardMobileMove) {
+                                                                 handleBoardMobileTacticalMoveCell(event, token.id, option.cell);
+                                                             } else {
+                                                                 handleMobileTacticalMoveCell(event, token.id, option.cell);
+                                                             }
+                                                         }}
                                                          className={`absolute z-[16] overflow-hidden rounded-lg border transition-all duration-300 pointer-events-auto focus:outline-none ${
                                                              isHovered
                                                                  ? 'border-rose-400 bg-gradient-to-br from-rose-500/20 via-red-500/10 to-rose-600/25 shadow-[0_0_20px_rgba(244,63,94,0.4),inset_0_0_10px_rgba(244,63,94,0.15)] scale-[1.02]'
