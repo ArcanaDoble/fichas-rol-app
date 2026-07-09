@@ -5282,14 +5282,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     };
 
     const handleTouchStart = (e) => {
-        const isButton = e.target.closest('button');
         if (e.touches.length === 2) {
-            if (e.cancelable && !isButton) e.preventDefault();
+            if (e.cancelable) e.preventDefault();
             // Start Pinch
             setIsDragging(false);
             lastPinchDist.current = getTouchDistance(e.touches);
         } else if (e.touches.length === 1) {
-            if (e.cancelable && !isButton) e.preventDefault();
+            if (e.cancelable) e.preventDefault();
             // Start Pan
             const touch = e.touches[0];
             setIsDragging(true);
@@ -16022,26 +16021,23 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                          const touch = event.touches[0];
                                                          mobileMoveTouchStartRef.current = { x: touch.clientX, y: touch.clientY };
                                                      }}
-                                                     onClick={(event) => {
-                                                         if (Date.now() - lastSelectionTimeRef.current < 350) {
-                                                             return;
-                                                         }
+                                                     onTouchEnd={(event) => {
+                                                         if (Date.now() - lastSelectionTimeRef.current < 350) return;
                                                          if (mobileMoveTouchStartRef.current) {
                                                              const touch = event.changedTouches?.[0] || event;
-                                                             const clientX = touch.clientX ?? event.clientX;
-                                                             const clientY = touch.clientY ?? event.clientY;
-                                                             if (clientX !== undefined && clientY !== undefined) {
-                                                                 const dragDist = Math.hypot(
-                                                                     clientX - mobileMoveTouchStartRef.current.x,
-                                                                     clientY - mobileMoveTouchStartRef.current.y
-                                                                 );
-                                                                 if (dragDist > 10) {
-                                                                     mobileMoveTouchStartRef.current = null;
-                                                                     return;
-                                                                 }
+                                                             const dragDist = Math.hypot(
+                                                                 touch.clientX - mobileMoveTouchStartRef.current.x,
+                                                                 touch.clientY - mobileMoveTouchStartRef.current.y
+                                                             );
+                                                             if (dragDist < 10) {
+                                                                 event.preventDefault();
+                                                                 event.stopPropagation();
+                                                                 handleCancelMobileTacticalMove(event, token.id);
                                                              }
-                                                             mobileMoveTouchStartRef.current = null;
                                                          }
+                                                     }}
+                                                     onClick={(event) => {
+                                                         if (Date.now() - lastSelectionTimeRef.current < 350) return;
                                                          handleCancelMobileTacticalMove(event, token.id);
                                                      }}
                                                      className="absolute z-[18] pointer-events-auto touch-none flex h-8 w-8 -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] items-center justify-center rounded-full border border-slate-200/35 bg-black/90 text-slate-100 shadow-[0_0_16px_rgba(15,23,42,0.5)] transition-colors hover:border-red-200/70 hover:text-red-100 focus:outline-none"
@@ -16078,26 +16074,27 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                              const touch = event.touches[0];
                                                              mobileMoveTouchStartRef.current = { x: touch.clientX, y: touch.clientY };
                                                          }}
-                                                         onClick={(event) => {
-                                                             if (Date.now() - lastSelectionTimeRef.current < 350) {
-                                                                 return;
-                                                             }
+                                                         onTouchEnd={(event) => {
+                                                             if (Date.now() - lastSelectionTimeRef.current < 350) return;
                                                              if (mobileMoveTouchStartRef.current) {
                                                                  const touch = event.changedTouches?.[0] || event;
-                                                                 const clientX = touch.clientX ?? event.clientX;
-                                                                 const clientY = touch.clientY ?? event.clientY;
-                                                                 if (clientX !== undefined && clientY !== undefined) {
-                                                                     const dragDist = Math.hypot(
-                                                                         clientX - mobileMoveTouchStartRef.current.x,
-                                                                         clientY - mobileMoveTouchStartRef.current.y
-                                                                     );
-                                                                     if (dragDist > 10) {
-                                                                         mobileMoveTouchStartRef.current = null;
-                                                                         return;
+                                                                 const dragDist = Math.hypot(
+                                                                     touch.clientX - mobileMoveTouchStartRef.current.x,
+                                                                     touch.clientY - mobileMoveTouchStartRef.current.y
+                                                                 );
+                                                                 if (dragDist < 10) {
+                                                                     event.preventDefault();
+                                                                     event.stopPropagation();
+                                                                     if (isBoardMobileMove) {
+                                                                         handleBoardMobileTacticalMoveCell(event, token.id, option.cell);
+                                                                     } else {
+                                                                         handleMobileTacticalMoveCell(event, token.id, option.cell);
                                                                      }
                                                                  }
-                                                                 mobileMoveTouchStartRef.current = null;
                                                              }
+                                                         }}
+                                                         onClick={(event) => {
+                                                             if (Date.now() - lastSelectionTimeRef.current < 350) return;
                                                              if (isBoardMobileMove) {
                                                                  handleBoardMobileTacticalMoveCell(event, token.id, option.cell);
                                                              } else {
