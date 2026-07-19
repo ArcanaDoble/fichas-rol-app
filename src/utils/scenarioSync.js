@@ -1,5 +1,18 @@
 export const RECENT_LOCAL_WRITE_PROTECTION_MS = 12000;
 
+export const createSerialPersistQueue = () => {
+  let tail = Promise.resolve();
+
+  return (persistTask) => {
+    const queuedTask = tail
+      .catch(() => undefined)
+      .then(() => persistTask());
+
+    tail = queuedTask.catch(() => undefined);
+    return queuedTask;
+  };
+};
+
 const areValuesEqual = (left, right) => {
   if (left === right) return true;
 

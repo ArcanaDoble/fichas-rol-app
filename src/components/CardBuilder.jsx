@@ -4,6 +4,8 @@ import {
   ChevronLeft,
   Database,
   Download,
+  FileDown,
+  FileUp,
   Image as ImageIcon,
   Loader2,
   Palette,
@@ -26,6 +28,12 @@ import {
 import { db } from '../firebase';
 import { uploadDataUrl } from '../utils/storage';
 import sanitize from '../utils/sanitize';
+import {
+  createCardBuilderProject,
+  embedCardBuilderProjectInPng,
+  extractCardBuilderProjectFromPng,
+  parseCardBuilderProject,
+} from '../utils/cardBuilderProject';
 import HexColorInput from './HexColorInput';
 
 export const CARD_BACKGROUNDS = [
@@ -4699,6 +4707,28 @@ const getSafeFileSlug = (value) => (
     .replace(/(^-|-$)/g, '') || 'carta'
 );
 
+const dataUrlToBytes = async (dataUrl) => {
+  const response = await fetch(dataUrl);
+  if (!response.ok) throw new Error('PNG_EXPORT_READ_FAILED');
+  return new Uint8Array(await response.arrayBuffer());
+};
+
+const bytesToDataUrl = (bytes, mimeType = 'image/png') => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = () => reject(reader.error || new Error('FILE_READ_FAILED'));
+  reader.readAsDataURL(new Blob([bytes], { type: mimeType }));
+});
+
+const downloadBlob = (blob, fileName) => {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.download = fileName;
+  link.href = url;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+};
+
 const fitsTraitWidth = (text) => {
   if (!text) return true;
   try {
@@ -4725,6 +4755,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const imageLoadCacheRef = useRef(new Map());
   const activeImageRef = useRef(null);
   const headerImageInputRef = useRef(null);
+  const projectImportInputRef = useRef(null);
   const headerImagePreviewCanvasRef = useRef(null);
   const fontLoadPromiseRef = useRef(null);
   const drawSequenceRef = useRef(0);
@@ -4764,6 +4795,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const [descriptionFormatColor, setDescriptionFormatColor] = useState('#ffffff');
   const [isUploadingCharacterCard, setIsUploadingCharacterCard] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
+  const [projectStatus, setProjectStatus] = useState('');
 
   // New states for Weapon properties
   const [weaponType, setWeaponType] = useState('Cuerpo a cuerpo');
@@ -5515,6 +5547,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     setSingleTextStyle('principal');
     setActiveDescriptionKey(null);
     setFocusedDescriptionKey(null);
+    setProjectStatus('');
   };
 
   const handleTraitChange = (index, value) => {
@@ -6210,7 +6243,145 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const renderExportDataUrl = async () => {
     const exportCanvas = document.createElement('canvas');
     await drawCard(exportCanvas, 1, false);
-    return exportCanvas.toDataURL('image/png');
+    const rawDataUrl = exportCanvas.toDataURL('image/png');
+    const project = createCardBuilderProject(getCardProjectConfig());
+    const pngBytes = await dataUrlToBytes(rawDataUrl);
+    const editablePngBytes = embedCardBuilderProjectInPng(pngBytes, project);
+    return bytesToDataUrl(editablePngBytes);
+  };
+
+  const getCardProjectConfig = () => ({
+    cardName,
+    description,
+    flavorText,
+    hyphenate,
+    singleTextStyle,
+    cardType,
+    showTraits,
+    visibleTraitRows,
+    traits,
+    containerTraits,
+    containerDescriptions,
+    containerDescriptionSizes,
+    containerDescriptionStyles,
+    containerDescriptionCentered,
+    containerDamage,
+    containerConsumptions,
+    selectedBackground,
+    headerImageSrc,
+    headerImageTransform,
+    cardContainers,
+    selectedElement,
+    customColorActive,
+    customColor,
+    headerColorActive,
+    headerColor,
+    bodyColorActive,
+    bodyColor,
+    descriptionFormatColor,
+    weaponType,
+    alcance,
+    diceType,
+    diceQty,
+    chargeSlots,
+    consumptionSlots,
+    resourceMode,
+    consumptionSlotTypes,
+    minionAttributes,
+    actionCenterMode,
+    actionSpeedId,
+    attributeType,
+  });
+
+  const applyCardProjectConfig = (config) => {
+    const asRecord = (value) => (
+      value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+    );
+    const normalizeSlots = (value, fallback, count) => {
+      const next = Array.isArray(value) ? [...value].slice(0, count) : [...fallback];
+      while (next.length < count) next.push(EMPTY_SLOT);
+      return next;
+    };
+    const supportedContainerIds = new Set(CARD_CONTAINER_TYPES.map((container) => container.id));
+    const importedType = CARD_TYPES.some((type) => type.id === config.cardType)
+      ? config.cardType
+      : 'general';
+    const importedContainers = Array.isArray(config.cardContainers)
+      ? config.cardContainers
+        .slice(0, MAX_CARD_CONTAINERS)
+        .map((container, index) => normalizeCardContainer(container, index))
+        .filter((container) => supportedContainerIds.has(container.id))
+      : [];
+    const nextContainers = importedContainers.length > 0
+      ? importedContainers
+      : getDefaultCardContainers(importedType);
+    const backgroundExists = CARD_BACKGROUNDS.some((background) => background.file === config.selectedBackground);
+    const importedHeaderTransform = asRecord(config.headerImageTransform);
+
+    setCardName(typeof config.cardName === 'string' ? config.cardName : DEFAULT_CARD_NAME);
+    setDescription(typeof config.description === 'string' ? config.description : DEFAULT_DESCRIPTION);
+    setFlavorText(typeof config.flavorText === 'string' ? config.flavorText : DEFAULT_FLAVOR_TEXT);
+    setHyphenate(config.hyphenate !== false);
+    setSingleTextStyle(config.singleTextStyle === 'narrative' ? 'narrative' : 'principal');
+    setCardType(importedType);
+    setCardContainers(nextContainers);
+    setShowTraits(config.showTraits !== false);
+    setVisibleTraitRows(clampNumber(Number(config.visibleTraitRows) || 3, 1, 3));
+    setTraits(Array.isArray(config.traits) ? config.traits : DEFAULT_TRAITS);
+    setContainerTraits(asRecord(config.containerTraits));
+    setContainerDescriptions(asRecord(config.containerDescriptions));
+    setContainerDescriptionSizes(asRecord(config.containerDescriptionSizes));
+    setContainerDescriptionStyles(asRecord(config.containerDescriptionStyles));
+    setContainerDescriptionCentered(asRecord(config.containerDescriptionCentered));
+    setContainerDamage(asRecord(config.containerDamage));
+    setContainerConsumptions(asRecord(config.containerConsumptions));
+    setSelectedBackground(backgroundExists ? config.selectedBackground : 'Gris.webp');
+    setHeaderImageSrc(typeof config.headerImageSrc === 'string' ? config.headerImageSrc : '');
+    setHeaderImageTransform({
+      zoom: clampNumber(Number(importedHeaderTransform.zoom) || 1, 1, 2.5),
+      x: clampNumber(Number(importedHeaderTransform.x) || 0, -100, 100),
+      y: clampNumber(Number(importedHeaderTransform.y) || 0, -100, 100),
+    });
+    setSelectedElement(typeof config.selectedElement === 'string' ? config.selectedElement : 'Ninguno');
+    setCustomColorActive(config.customColorActive === true);
+    setCustomColor(typeof config.customColor === 'string' ? config.customColor : '#c8aa6e');
+    setHeaderColorActive(config.headerColorActive === true);
+    setHeaderColor(typeof config.headerColor === 'string' ? config.headerColor : DEFAULT_HEADER_BACKDROP_COLOR);
+    setBodyColorActive(config.bodyColorActive === true);
+    setBodyColor(typeof config.bodyColor === 'string' ? config.bodyColor : DEFAULT_BODY_BACKDROP_COLOR);
+    setDescriptionFormatColor(typeof config.descriptionFormatColor === 'string' ? config.descriptionFormatColor : '#ffffff');
+    setWeaponType(typeof config.weaponType === 'string' ? config.weaponType : 'Cuerpo a cuerpo');
+    setAlcance(clampNumber(Number(config.alcance) || 0, 0, 4));
+    setDiceType(typeof config.diceType === 'string' ? config.diceType : 'D6');
+    setDiceQty(clampNumber(Number(config.diceQty) || 1, 1, 99));
+    setChargeSlots(normalizeSlots(config.chargeSlots, DEFAULT_CHARGE_SLOTS, CHARGE_SLOT_COUNT));
+    setConsumptionSlots(normalizeSlots(config.consumptionSlots, DEFAULT_CONSUMPTION_SLOTS, RESOURCE_SLOT_COUNT));
+    setResourceMode([
+      RESOURCE_MODE_BOTH,
+      RESOURCE_MODE_CHARGE_ONLY,
+      RESOURCE_MODE_CONSUMPTION_ONLY,
+      RESOURCE_MODE_NONE,
+    ].includes(config.resourceMode) ? config.resourceMode : RESOURCE_MODE_BOTH);
+    setConsumptionSlotTypes(normalizeSlots(
+      config.consumptionSlotTypes,
+      DEFAULT_CONTAINER_CONSUMPTION_TYPES,
+      RESOURCE_SLOT_COUNT,
+    ).map((type) => (type === 'element' ? 'element' : 'consumption')));
+    setMinionAttributes({ ...DEFAULT_MINION_ATTRIBUTES, ...asRecord(config.minionAttributes) });
+    setActionCenterMode(['dado', 'Mente', 'Cuerpo', 'Hambre'].includes(config.actionCenterMode)
+      ? config.actionCenterMode
+      : 'dado');
+    setActionSpeedId(typeof config.actionSpeedId === 'string' ? config.actionSpeedId : 'rapida');
+    setAttributeType(['Cuerpo', 'Hambre', 'Mente'].includes(config.attributeType)
+      ? config.attributeType
+      : 'Cuerpo');
+    setActiveDescriptionKey(null);
+    setFocusedDescriptionKey(null);
+    setFocusedField(null);
+    setImageStatus('loading');
+    descriptionHistoryRef.current = { past: [], future: [] };
+    flavorTextHistoryRef.current = { past: [], future: [] };
+    containerDescriptionHistoryRef.current = {};
   };
 
   const handleDownload = async () => {
@@ -6220,6 +6391,45 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     link.download = `${safeName}.png`;
     link.href = dataUrl;
     link.click();
+    setProjectStatus('PNG editable descargado');
+  };
+
+  const handleDownloadProjectJson = () => {
+    const project = createCardBuilderProject(getCardProjectConfig());
+    const safeName = getSafeFileSlug(cardName);
+    downloadBlob(
+      new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' }),
+      `${safeName}.carta.json`,
+    );
+    setProjectStatus('Proyecto JSON descargado');
+  };
+
+  const handleImportProject = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setProjectStatus('Cargando proyecto editable…');
+    try {
+      const isPng = file.type === 'image/png' || file.name.toLowerCase().endsWith('.png');
+      const project = isPng
+        ? extractCardBuilderProjectFromPng(new Uint8Array(await file.arrayBuffer()))
+        : parseCardBuilderProject(await file.text());
+      applyCardProjectConfig(project.card);
+      setProjectStatus(isPng
+        ? 'Carta editable recuperada desde el PNG'
+        : 'Carta editable recuperada desde el JSON');
+    } catch (error) {
+      console.error('Could not import editable card project:', error);
+      setProjectStatus('No se pudo recuperar la carta editable');
+      if (error?.message === 'CARD_PROJECT_NOT_FOUND') {
+        alert('Este PNG no contiene datos editables. Solo pueden recuperarse los PNG exportados con la nueva versión del constructor.');
+      } else if (error?.message === 'CARD_PROJECT_VERSION_TOO_NEW') {
+        alert('La carta fue creada con una versión más nueva del constructor. Actualiza la aplicación para abrirla.');
+      } else {
+        alert('El archivo no contiene un proyecto de carta válido. Usa un PNG editable o un archivo .carta.json.');
+      }
+    } finally {
+      event.target.value = '';
+    }
   };
 
   const findOrCreateCharacterLibrary = async (ownerName) => {
@@ -6477,6 +6687,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       }, 0);
     }
   };
+  const hasLibraryUpload = mode === 'master' || (mode === 'player' && Boolean(characterName));
 
   return (
     <div className="h-screen max-h-screen overflow-y-auto bg-[#09090b] text-[#e2e8f0] font-['Lato'] selection:bg-[#c8aa6e]/30 selection:text-[#f0e6d2] custom-scrollbar">
@@ -6497,8 +6708,8 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       </style>
 
       <div className="mx-auto flex min-h-full w-full max-w-[1680px] flex-col gap-5 p-4 pb-24 md:p-8">
-        <div className="flex flex-col gap-4 border-b border-[#c8aa6e]/20 pb-5 md:flex-row md:items-end md:justify-between">
-          <div>
+        <div className="flex flex-col gap-4 border-b border-[#c8aa6e]/20 pb-5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="min-w-0">
             <div className="mb-3 inline-flex items-center gap-3 text-xs font-bold uppercase tracking-[0.25em] text-[#c8aa6e]">
               <span className="opacity-70">ARCANA VAULT</span>
               <span className="h-px w-4 bg-[#c8aa6e]/40" />
@@ -6509,42 +6720,23 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
             </h1>
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center xl:flex-nowrap xl:justify-end">
             {onBack && (
               <button
                 type="button"
                 onClick={onBack}
-                className="group inline-flex items-center justify-center gap-2 border border-[#c8aa6e]/30 bg-[#c8aa6e]/5 px-4 py-2.5 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e] transition-all hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10"
+                className={`group inline-flex h-10 items-center justify-center gap-2 border border-[#c8aa6e]/30 bg-[#c8aa6e]/5 px-4 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e] transition-all hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 ${hasLibraryUpload ? '' : 'col-span-2'} sm:w-auto`}
               >
                 <ChevronLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
                 Volver
               </button>
             )}
-            <button
-              type="button"
-              onClick={handleReset}
-              className="inline-flex h-10 w-10 items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
-              title="Restablecer"
-              aria-label="Restablecer"
-            >
-              <RotateCcw className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={handleDownload}
-              disabled={imageStatus !== 'ready'}
-              className="inline-flex h-10 w-10 items-center justify-center border border-[#c8aa6e]/40 bg-[#c8aa6e]/10 text-[#c8aa6e] transition hover:bg-[#c8aa6e]/20 disabled:cursor-not-allowed disabled:opacity-40"
-              title="Exportar PNG"
-              aria-label="Exportar PNG"
-            >
-              <Download className="h-4 w-4" />
-            </button>
             {mode === 'player' && characterName && (
               <button
                 type="button"
                 onClick={handleUploadToCharacterLibrary}
                 disabled={imageStatus !== 'ready' || isUploadingCharacterCard}
-                className="inline-flex h-10 items-center justify-center gap-2 border border-emerald-400/35 bg-emerald-950/25 px-3 font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200 transition hover:border-emerald-300/70 hover:bg-emerald-900/30 disabled:cursor-wait disabled:opacity-45"
+                className="inline-flex h-10 w-full items-center justify-center gap-2 border border-emerald-400/35 bg-emerald-950/25 px-3 font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200 transition hover:border-emerald-300/70 hover:bg-emerald-900/30 disabled:cursor-wait disabled:opacity-45 sm:w-auto"
                 title={`Subir a la colección ${characterName}`}
               >
                 {isUploadingCharacterCard ? (
@@ -6552,6 +6744,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                 ) : (
                   <UploadCloud className="h-4 w-4" />
                 )}
+                <span className="sm:hidden">Subir</span>
                 <span className="hidden sm:inline">Subir a colección</span>
               </button>
             )}
@@ -6560,7 +6753,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                 type="button"
                 onClick={handleUploadToMasterLibrary}
                 disabled={imageStatus !== 'ready' || isUploadingCharacterCard}
-                className="inline-flex h-10 items-center justify-center gap-2 border border-emerald-400/35 bg-emerald-950/25 px-3 font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200 transition hover:border-emerald-300/70 hover:bg-emerald-900/30 disabled:cursor-wait disabled:opacity-45"
+                className="inline-flex h-10 w-full items-center justify-center gap-2 border border-emerald-400/35 bg-emerald-950/25 px-3 font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200 transition hover:border-emerald-300/70 hover:bg-emerald-900/30 disabled:cursor-wait disabled:opacity-45 sm:w-auto"
                 title="Subir a colección base por tipo"
               >
                 {isUploadingCharacterCard ? (
@@ -6568,11 +6761,68 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                 ) : (
                   <UploadCloud className="h-4 w-4" />
                 )}
+                <span className="sm:hidden">Subir</span>
                 <span className="hidden sm:inline">Subir a base</span>
               </button>
             )}
+            <input
+              ref={projectImportInputRef}
+              type="file"
+              accept=".png,.json,.carta.json,image/png,application/json"
+              onChange={handleImportProject}
+              className="hidden"
+            />
+            <div className="col-span-2 grid grid-cols-4 gap-2 sm:flex sm:gap-2">
+              <button
+                type="button"
+                onClick={() => projectImportInputRef.current?.click()}
+                className="inline-flex h-10 w-full items-center justify-center border border-sky-400/35 bg-sky-950/20 text-sky-200 transition hover:border-sky-300/70 hover:bg-sky-900/30 sm:w-10"
+                title="Importar carta editable desde PNG o JSON"
+                aria-label="Importar carta editable"
+              >
+                <FileUp className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleReset}
+                className="inline-flex h-10 w-full items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e] sm:w-10"
+                title="Restablecer"
+                aria-label="Restablecer"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleDownload}
+                disabled={imageStatus !== 'ready'}
+                className="inline-flex h-10 w-full items-center justify-center border border-[#c8aa6e]/40 bg-[#c8aa6e]/10 text-[#c8aa6e] transition hover:bg-[#c8aa6e]/20 disabled:cursor-not-allowed disabled:opacity-40 sm:w-10"
+                title="Exportar PNG editable"
+                aria-label="Exportar PNG editable"
+              >
+                <Download className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadProjectJson}
+                className="inline-flex h-10 w-full items-center justify-center border border-[#c8aa6e]/25 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e] sm:w-10"
+                title="Exportar proyecto JSON"
+                aria-label="Exportar proyecto JSON"
+              >
+                <FileDown className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
+
+        {projectStatus && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="-mt-2 border border-sky-400/15 bg-sky-950/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-sky-100/85"
+          >
+            {projectStatus}
+          </div>
+        )}
 
         {((mode === 'player' && characterName) || mode === 'master') && (
           <div className="flex flex-wrap items-center gap-2 border border-emerald-400/15 bg-emerald-950/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-100/80">

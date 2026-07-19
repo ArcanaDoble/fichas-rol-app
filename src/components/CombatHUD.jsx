@@ -5,6 +5,7 @@ import { parseAttrBonuses, getSpeedConsumption } from '../utils/combatSystem';
 import CombatModifiersPanel, { applyModifiersToWeapon } from './CombatModifiersPanel';
 import { getCustomImage, useCustomEquipmentImages } from '../hooks/useCustomEquipmentImages';
 import { PRONE_STATUS_IDS } from '../utils/statusEffects';
+import { getCardDisplayImage } from '../utils/cardImages';
 
 const RANGE_MAP = {
     toque: 0,
@@ -146,7 +147,7 @@ const ItemImage = ({ src, type, name }) => {
 };
 
 const HudCardImage = ({ card }) => {
-    const image = card?.faceDown ? (card?.backImage || card?.frontImage) : card?.frontImage;
+    const image = getCardDisplayImage(card);
     const [status, setStatus] = React.useState(image ? (isImageUrlLoaded(image) ? 'loaded' : 'loading') : 'idle');
 
     React.useEffect(() => {

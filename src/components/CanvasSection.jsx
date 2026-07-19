@@ -26,9 +26,11 @@ import { nanoid } from 'nanoid';
 import { getCustomImage, useCustomEquipmentImages } from '../hooks/useCustomEquipmentImages';
 import { parseDieValue } from '../utils/damage';
 import { getCombatQueueDisplayState, sortCombatQueueEntries } from '../utils/combatQueue';
+import { DEFAULT_CARD_BACK_URL, getCardDisplayImage } from '../utils/cardImages';
 import {
     RECENT_LOCAL_WRITE_PROTECTION_MS,
     buildScenarioItemChanges,
+    createSerialPersistQueue,
     getChangedItemFields,
     getRemoteModifiedItemIds,
     mergeScenarioItemsForPersist,
@@ -36,6 +38,19 @@ import {
     shouldTreatRemotePositionAsConflict,
 } from '../utils/scenarioSync';
 import DiceSvg from './DiceSvg';
+import {
+    BOARD_DIE_MAX_ROLL_MS,
+    applyBoardDieRolls,
+    getBoardDieAngularVelocity,
+    getBoardDieCollisionMass,
+    getBoardDieCollisionResponse,
+    getBoardDieLaunchGesture,
+    getBoardDiePhysicsMetrics,
+    getBoardDieReferenceDiameter,
+    getBoardDieWorldBounds,
+    isBoardDieMotionSettled,
+    shouldFinishBoardDieRoll,
+} from '../utils/boardDicePhysics';
 
 // --- Constants ---
 const STATUS_EFFECT_IDS = [
@@ -67,6 +82,8 @@ const D4_VERTEX_VALUES = [
     { value: 3, vertex: { x: -1, y: 1, z: -1 } },
     { value: 4, vertex: { x: 1, y: -1, z: -1 } },
 ];
+const ACTIVE_BOARD_DIE_ROLL_IDS = new Set();
+const BOARD_DIE_RUNTIME_REGISTRY = new Map();
 
 const areScenarioFieldValuesEqual = (left, right) => {
     if (left === right) return true;
@@ -289,40 +306,6 @@ const applyQuaternionToVec3 = (v, q) => {
     );
 };
 
-const getElementTranslate = (element) => {
-    if (!element) return { x: 0, y: 0 };
-    const transform = window.getComputedStyle(element).transform;
-    if (!transform || transform === 'none') return { x: 0, y: 0 };
-
-    try {
-        const matrix = new DOMMatrixReadOnly(transform);
-        return {
-            x: Number(matrix.m41) || 0,
-            y: Number(matrix.m42) || 0,
-        };
-    } catch {
-        const match = transform.match(/matrix\(([^)]+)\)/);
-        if (!match) return { x: 0, y: 0 };
-        const values = match[1].split(',').map(value => Number(value.trim()));
-        return {
-            x: Number(values[4]) || 0,
-            y: Number(values[5]) || 0,
-        };
-    }
-};
-
-const getRandomUnitQuaternion = (CANNON) => {
-    const u1 = Math.random();
-    const u2 = Math.random();
-    const u3 = Math.random();
-    return new CANNON.Quaternion(
-        Math.sqrt(1 - u1) * Math.sin(2 * Math.PI * u2),
-        Math.sqrt(1 - u1) * Math.cos(2 * Math.PI * u2),
-        Math.sqrt(u1) * Math.sin(2 * Math.PI * u3),
-        Math.sqrt(u1) * Math.cos(2 * Math.PI * u3)
-    );
-};
-
 const createDieConvexDefinition = (sides, scale = 1) => {
     const dieSides = Number(sides) || 20;
     const geometry = createDieGeometry(null, dieSides);
@@ -432,16 +415,16 @@ const createDieConvexDefinition = (sides, scale = 1) => {
     geometry.dispose();
     return { vertices, faces, faceData };
 };
-const createCannonDieShape = (CANNON, sides) => {
+const createCannonDieShape = (CANNON, sides, scale = 0.78) => {
     const dieSides = Number(sides) || 20;
     if (dieSides === 6) {
-        return new CANNON.Box(new CANNON.Vec3(0.78, 0.78, 0.78));
+        return new CANNON.Box(new CANNON.Vec3(scale, scale, scale));
     }
 
     // Dados poliédricos reales: d4 tetraedro, d8 octaedro, d10 trapezoedro,
     // d12 dodecaedro y d20 icosaedro. No se usa collider esférico, cilíndrico
     // ni caja genérica para estos dados.
-    const definition = createDieConvexDefinition(dieSides, 0.78);
+    const definition = createDieConvexDefinition(dieSides, scale);
     return new CANNON.ConvexPolyhedron({
         vertices: definition.vertices.map(vertex => new CANNON.Vec3(vertex.x, vertex.y, vertex.z)),
         faces: definition.faces,
@@ -644,7 +627,7 @@ const createNumberedFaces = (geometry, sides, textColor, renderer) => {
     return facesGroup;
 };
 
-const BoardDie3d = ({ sides = 20, color = '#c8aa6e', rotationRef }) => {
+const BoardDie3d = ({ sides = 20, color = '#c8aa6e', rotationRef, renderRequestRef }) => {
     const canvasRef = useRef(null);
 
     useEffect(() => {
@@ -655,14 +638,12 @@ const BoardDie3d = ({ sides = 20, color = '#c8aa6e', rotationRef }) => {
         let edgeGeometry = null;
         let edgeMaterial = null;
         let numberedFaces = null;
+        let resizeObserver = null;
 
-        import('three').then((THREE) => {
-            
+        const setupRenderer = () => {
             if (disposed || !canvasRef.current) return;
 
             const canvas = canvasRef.current;
-            const width = Math.max(32, Math.round(canvas.clientWidth || 96));
-            const height = Math.max(32, Math.round(canvas.clientHeight || 96));
 
             renderer = new ThreeModule.WebGLRenderer({
                 canvas,
@@ -671,7 +652,6 @@ const BoardDie3d = ({ sides = 20, color = '#c8aa6e', rotationRef }) => {
                 premultipliedAlpha: false,
             });
             renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-            renderer.setSize(width, height, false);
             renderer.setClearColor(0x000000, 0);
             renderer.setClearAlpha(0);
 
@@ -692,7 +672,11 @@ const BoardDie3d = ({ sides = 20, color = '#c8aa6e', rotationRef }) => {
             });
 
             const die = new ThreeModule.Mesh(geometry, material);
-            die.rotation.set(0, 0.25, 0);
+            die.rotation.set(
+                rotationRef?.current?.x || 0,
+                rotationRef?.current?.y ?? 0.25,
+                rotationRef?.current?.z || 0
+            );
             scene.add(die);
             
             edgeGeometry = new ThreeModule.EdgesGeometry(geometry, 18);
@@ -713,16 +697,14 @@ const BoardDie3d = ({ sides = 20, color = '#c8aa6e', rotationRef }) => {
             );
             die.add(numberedFaces);
 
-            const renderLoop = () => {
+            const renderFrame = () => {
                 if (disposed) return;
                 if (rotationRef && rotationRef.current) {
                     die.rotation.set(rotationRef.current.x, rotationRef.current.y, rotationRef.current.z);
                     edges.rotation.copy(die.rotation);
                 }
                 renderer.render(scene, camera);
-                requestAnimationFrame(renderLoop);
             };
-            renderLoop();
 
             const ambient = new ThreeModule.AmbientLight(0xffffff, 1.35);
             scene.add(ambient);
@@ -733,12 +715,32 @@ const BoardDie3d = ({ sides = 20, color = '#c8aa6e', rotationRef }) => {
             fill.position.set(1.6, 3.2, 1.4);
             scene.add(fill);
 
-            // The render loop replaces the single static render
-            // renderer.render(scene, camera);
-        });
+            const resizeAndRender = () => {
+                if (disposed || !canvasRef.current || !renderer) return;
+                const width = Math.max(32, Math.round(canvasRef.current.clientWidth || 96));
+                const height = Math.max(32, Math.round(canvasRef.current.clientHeight || 96));
+                renderer.setSize(width, height, false);
+                renderFrame();
+            };
+
+            if (renderRequestRef) renderRequestRef.current = renderFrame;
+            if (typeof ResizeObserver !== 'undefined') {
+                resizeObserver = new ResizeObserver(resizeAndRender);
+                resizeObserver.observe(canvas);
+            }
+            resizeAndRender();
+        };
+
+        try {
+            setupRenderer();
+        } catch (error) {
+            console.error('Error rendering board die', error);
+        }
 
         return () => {
             disposed = true;
+            resizeObserver?.disconnect();
+            if (renderRequestRef) renderRequestRef.current = null;
             geometry?.dispose();
             material?.dispose();
             edgeGeometry?.dispose();
@@ -750,7 +752,7 @@ const BoardDie3d = ({ sides = 20, color = '#c8aa6e', rotationRef }) => {
             });
             renderer?.dispose();
         };
-    }, [sides, color]);
+    }, [sides, color, renderRequestRef, rotationRef]);
 
     return (
         <canvas
@@ -765,7 +767,7 @@ const BoardDie3d = ({ sides = 20, color = '#c8aa6e', rotationRef }) => {
     );
 };
 
-const getDieTopFaceValue = (sides, quaternionLike) => {
+const getDieTopFaceResult = (sides, quaternionLike) => {
     const dieSides = Number(sides) || 20;
     const worldUp = makeVec3(0, 1, 0);
 
@@ -776,7 +778,7 @@ const getDieTopFaceValue = (sides, quaternionLike) => {
             return upAlignment > best.upAlignment
                 ? { value: getD4VertexValue(vertex), upAlignment }
                 : best;
-        }, { value: 1, upAlignment: -Infinity }).value;
+        }, { value: 1, upAlignment: -Infinity });
     }
 
     const geometry = createDieGeometry(null, sides);
@@ -788,11 +790,30 @@ const getDieTopFaceValue = (sides, quaternionLike) => {
         return upAlignment > best.upAlignment
             ? { value: face.value, upAlignment }
             : best;
-    }, { value: 1, upAlignment: -Infinity }).value;
+    }, { value: 1, upAlignment: -Infinity });
 };
+const getDieTopFaceValue = (sides, quaternionLike) => getDieTopFaceResult(sides, quaternionLike).value;
+
+const getCannonShapeRestingHeight = (CANNON, shape, quaternion) => {
+    const convexShape = shape?.vertices?.length ? shape : shape?.convexPolyhedronRepresentation;
+    if (!convexShape?.vertices?.length) {
+        return Math.max(0.55, (Number(shape?.boundingSphereRadius) || 1) * 0.64);
+    }
+
+    const transformed = new CANNON.Vec3();
+    const lowestY = convexShape.vertices.reduce((lowest, vertex) => {
+        quaternion.vmult(vertex, transformed);
+        return Math.min(lowest, transformed.y);
+    }, Infinity);
+    return Number.isFinite(lowestY) ? Math.max(0.05, -lowestY) : 0.62;
+};
+
 const BoardDieVisual = ({ die, className = '', isDragging = false, currentDieRollSpeed = 0, dragDirection = 0, enableRollPhysics = true }) => {
     const rotationRef = useRef({ x: 0, y: 0.25, z: 0 });
+    const renderRequestRef = useRef(null);
+    const animationFrameRef = useRef(null);
     const [localValue, setLocalValue] = useState(null);
+    const [isRolling, setIsRolling] = useState(false);
 
     useEffect(() => {
         setLocalValue(null);
@@ -806,44 +827,122 @@ const BoardDieVisual = ({ die, className = '', isDragging = false, currentDieRol
             z: Number(die.dieRotation3d.z) || 0,
         };
         rotationRef.current = nextRotation;
+        renderRequestRef.current?.();
     }, [die?.dieRotation3d?.x, die?.dieRotation3d?.y, die?.dieRotation3d?.z]);
 
     useEffect(() => {
+        if (!enableRollPhysics || !die?.id) return undefined;
+        const runtime = {
+            rotationRef,
+            renderRequestRef,
+            setRolling: setIsRolling,
+            setValue: setLocalValue,
+        };
+        BOARD_DIE_RUNTIME_REGISTRY.set(die.id, runtime);
+        return () => {
+            if (BOARD_DIE_RUNTIME_REGISTRY.get(die.id) === runtime) {
+                BOARD_DIE_RUNTIME_REGISTRY.delete(die.id);
+            }
+        };
+    }, [die?.id, enableRollPhysics]);
+
+    useEffect(() => {
         if (!enableRollPhysics) return undefined;
-        let isRolling = false;
+        let disposed = false;
+        let rolling = false;
+        const controlledDieIds = new Set();
+
+        const setDieRolling = (id, nextRolling) => {
+            const runtime = BOARD_DIE_RUNTIME_REGISTRY.get(id);
+            const wrapper = document.getElementById(`token-inner-wrapper-${id}`);
+            if (nextRolling) {
+                controlledDieIds.add(id);
+                ACTIVE_BOARD_DIE_ROLL_IDS.add(id);
+                runtime?.setRolling(true);
+                if (wrapper) wrapper.style.willChange = 'transform';
+                return;
+            }
+
+            controlledDieIds.delete(id);
+            ACTIVE_BOARD_DIE_ROLL_IDS.delete(id);
+            runtime?.setRolling(false);
+            if (wrapper) {
+                wrapper.style.transform = 'translate(0px, 0px) translateY(0px) scale(1)';
+                wrapper.style.willChange = '';
+            }
+        };
+
+        const stopRolling = () => {
+            rolling = false;
+            if (animationFrameRef.current !== null) {
+                cancelAnimationFrame(animationFrameRef.current);
+                animationFrameRef.current = null;
+            }
+            [...controlledDieIds].forEach(id => setDieRolling(id, false));
+        };
+
         const handleRoll = async (e) => {
-            if (e.detail.id !== die.id || isRolling) return;
-            isRolling = true;
-            const { velocity = {}, settleInPlace = false, bounds = null } = e.detail;
+            if (e.detail.id !== die.id || rolling || ACTIVE_BOARD_DIE_ROLL_IDS.has(die.id)) return;
+            rolling = true;
+            setDieRolling(die.id, true);
+            const {
+                velocity = {},
+                settleInPlace = false,
+                bounds = null,
+                obstacles = [],
+                zoom = 1,
+                width = die.width,
+                height = die.height,
+            } = e.detail;
             const dieSides = Number(die.dieSides) || 20;
+
+            obstacles.forEach((obstacle) => {
+                if (!obstacle?.id) return;
+                controlledDieIds.add(obstacle.id);
+                ACTIVE_BOARD_DIE_ROLL_IDS.add(obstacle.id);
+            });
 
             setLocalValue('');
 
             try {
-                const [CANNON, THREE] = await Promise.all([
-                    import('cannon-es'),
-                    import('three'),
-                ]);
-                
+                const CANNON = await import('cannon-es');
+                if (disposed) return;
                 const innerWrapper = document.getElementById(`token-inner-wrapper-${die.id}`);
                 if (!innerWrapper) {
-                    isRolling = false;
+                    stopRolling();
                     return;
                 }
 
-                const pxPerMeter = 42;
+                const physicsMetrics = getBoardDiePhysicsMetrics({
+                    sides: dieSides,
+                    width,
+                    height,
+                    zoom,
+                });
+                const pxPerMeter = physicsMetrics.localPixelsPerMeter;
+                const worldBounds = getBoardDieWorldBounds(bounds, physicsMetrics.screenPixelsPerMeter);
                 const world = new CANNON.World({
-                    gravity: new CANNON.Vec3(0, -28, 0),
+                    gravity: new CANNON.Vec3(0, -26, 0),
                 });
                 world.allowSleep = true;
-                world.defaultContactMaterial.friction = 0.86;
-                world.defaultContactMaterial.restitution = 0.14;
+                world.solver.iterations = 12;
+                world.solver.tolerance = 0.001;
+                world.defaultContactMaterial.friction = 0.28;
+                world.defaultContactMaterial.restitution = 0.24;
 
                 const dieMaterial = new CANNON.Material('die');
                 const tableMaterial = new CANNON.Material('table');
                 world.addContactMaterial(new CANNON.ContactMaterial(dieMaterial, tableMaterial, {
-                    friction: 0.92,
-                    restitution: 0.12,
+                    friction: 0.36,
+                    restitution: 0.2,
+                    contactEquationStiffness: 1e8,
+                    contactEquationRelaxation: 3,
+                }));
+                world.addContactMaterial(new CANNON.ContactMaterial(dieMaterial, dieMaterial, {
+                    friction: 0.24,
+                    restitution: 0.38,
+                    contactEquationStiffness: 1e8,
+                    contactEquationRelaxation: 3,
                 }));
 
                 let dieShape;
@@ -857,54 +956,53 @@ const BoardDieVisual = ({ die, className = '', isDragging = false, currentDieRol
                 const body = new CANNON.Body({
                     mass: 1.35,
                     material: dieMaterial,
-                    linearDamping: 0.42,
-                    angularDamping: 0.54,
-                    position: new CANNON.Vec3(0, 1.55, 0),
+                    linearDamping: 0.13,
+                    angularDamping: 0.2,
+                    position: new CANNON.Vec3(0, 1.7, 0),
                     shape: dieShape,
                 });
                 body.allowSleep = true;
-                body.sleepSpeedLimit = 0.22;
-                body.sleepTimeLimit = 0.42;
-                if (dieSides === 4) {
-                    body.quaternion.copy(getRandomUnitQuaternion(CANNON));
-                } else {
-                    const randomRollOffset = new CANNON.Quaternion();
-                    randomRollOffset.setFromEuler(
-                        (Math.random() - 0.5) * Math.PI,
-                        Math.random() * Math.PI * 2,
-                        (Math.random() - 0.5) * Math.PI,
-                        'XYZ'
-                    );
-                    const baseRotation = new CANNON.Quaternion();
-                    baseRotation.setFromEuler(rotationRef.current.x, rotationRef.current.y, rotationRef.current.z, 'XYZ');
-                    body.quaternion.copy(baseRotation.mult(randomRollOffset));
-                }
+                body.sleepSpeedLimit = 0.16;
+                body.sleepTimeLimit = 0.5;
+                const baseRotation = new CANNON.Quaternion();
+                baseRotation.setFromEuler(rotationRef.current.x, rotationRef.current.y, rotationRef.current.z, 'XYZ');
+                body.quaternion.copy(baseRotation);
+                body.position.y = getCannonShapeRestingHeight(CANNON, dieShape, body.quaternion) + 0.12;
 
                 const launchX = Number(velocity.x) || 0;
                 const launchZ = Number(velocity.y) || 0;
-                const launchPower = Math.max(0.28, Math.min(1.35, Math.hypot(launchX, launchZ)));
-                const d4Boost = dieSides === 4 ? 1.55 : 1;
-                const randomD4NudgeX = dieSides === 4 ? (Math.random() - 0.5) * 2.4 : 0;
-                const randomD4NudgeZ = dieSides === 4 ? (Math.random() - 0.5) * 2.4 : 0;
-                body.velocity.set(launchX * 11, 7.5 + (launchPower * 2.4 * d4Boost), launchZ * 11);
-                body.angularVelocity.set(
-                    ((Math.random() < 0.5 ? -1 : 1) * (6 + (Math.random() * 5) + Math.abs(launchZ * 8)) * d4Boost) + randomD4NudgeX,
-                    (Math.random() < 0.5 ? -1 : 1) * (5 + (Math.random() * 6)) * d4Boost,
-                    ((Math.random() < 0.5 ? -1 : 1) * (6 + (Math.random() * 5) + Math.abs(launchX * 8)) * d4Boost) + randomD4NudgeZ,
-                );
+                const launchPower = Math.max(0.26, Math.min(1.3, Math.hypot(launchX, launchZ)));
+                const d4Boost = dieSides === 4 ? 1.22 : 1;
+                body.velocity.set(launchX * 8.6, 3.4 + (launchPower * 1.8 * d4Boost), launchZ * 8.6);
+                const angularVelocity = getBoardDieAngularVelocity({ launchX, launchZ, sides: dieSides });
+                body.angularVelocity.set(angularVelocity.x, angularVelocity.y, angularVelocity.z);
                 world.addBody(body);
+                const simulatedDice = [{
+                    id: die.id,
+                    sides: dieSides,
+                    body,
+                    shape: dieShape,
+                    wrapper: innerWrapper,
+                    runtime: BOARD_DIE_RUNTIME_REGISTRY.get(die.id),
+                    startX: 0,
+                    startZ: 0,
+                    lastDx: 0,
+                    lastDy: 0,
+                    affected: true,
+                    primary: true,
+                    cockedRetries: 0,
+                }];
 
                 const floor = new CANNON.Body({ mass: 0, material: tableMaterial });
                 floor.addShape(new CANNON.Plane());
                 floor.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
                 world.addBody(floor);
 
-                if (!settleInPlace) {
-                    const safeBounds = bounds || { left: 240, right: 240, top: 180, bottom: 180 };
-                    const left = -Math.max(1.5, safeBounds.left / pxPerMeter);
-                    const right = Math.max(1.5, safeBounds.right / pxPerMeter);
-                    const top = -Math.max(1.5, safeBounds.top / pxPerMeter);
-                    const bottom = Math.max(1.5, safeBounds.bottom / pxPerMeter);
+                if (!settleInPlace && worldBounds) {
+                    const left = -worldBounds.left;
+                    const right = worldBounds.right;
+                    const top = -worldBounds.top;
+                    const bottom = worldBounds.bottom;
                     const wallSpecs = [
                         { x: left, z: 0, rotY: Math.PI / 2 },
                         { x: right, z: 0, rotY: -Math.PI / 2 },
@@ -920,66 +1018,250 @@ const BoardDieVisual = ({ die, className = '', isDragging = false, currentDieRol
                     });
                 }
 
+                if (!settleInPlace) {
+                    obstacles.forEach((obstacle) => {
+                        try {
+                            const obstacleRuntime = BOARD_DIE_RUNTIME_REGISTRY.get(obstacle.id);
+                            const obstacleWrapper = document.getElementById(`token-inner-wrapper-${obstacle.id}`);
+                            if (!obstacleRuntime || !obstacleWrapper) return;
+                            const obstacleDiameterMeters = Math.max(
+                                0.5,
+                                Math.min(Number(obstacle.width) || 48, Number(obstacle.height) || Number(obstacle.width) || 48) / pxPerMeter
+                            );
+                            const obstacleScale = 0.78 * (obstacleDiameterMeters / getBoardDieReferenceDiameter(obstacle.sides));
+                            const obstacleShape = createCannonDieShape(CANNON, obstacle.sides, obstacleScale);
+                            const obstacleBody = new CANNON.Body({
+                                mass: getBoardDieCollisionMass({
+                                    diameter: obstacleDiameterMeters,
+                                    referenceDiameter: physicsMetrics.referenceDiameter,
+                                }),
+                                material: dieMaterial,
+                                shape: obstacleShape,
+                                linearDamping: 0.13,
+                                angularDamping: 0.2,
+                            });
+                            obstacleBody.allowSleep = true;
+                            obstacleBody.sleepSpeedLimit = 0.16;
+                            obstacleBody.sleepTimeLimit = 0.5;
+                            const rotation = obstacle.rotation3d || {};
+                            obstacleBody.quaternion.setFromEuler(
+                                Number(rotation.x) || 0,
+                                Number(rotation.y) || 0,
+                                Number(rotation.z) || 0,
+                                'XYZ'
+                            );
+                            obstacleBody.position.set(
+                                (Number(obstacle.dx) || 0) / pxPerMeter,
+                                getCannonShapeRestingHeight(CANNON, obstacleShape, obstacleBody.quaternion),
+                                (Number(obstacle.dy) || 0) / pxPerMeter
+                            );
+                            world.addBody(obstacleBody);
+                            obstacleBody.sleep();
+                            simulatedDice.push({
+                                id: obstacle.id,
+                                sides: Number(obstacle.sides) || 20,
+                                body: obstacleBody,
+                                shape: obstacleShape,
+                                wrapper: obstacleWrapper,
+                                runtime: obstacleRuntime,
+                                startX: obstacleBody.position.x,
+                                startZ: obstacleBody.position.z,
+                                lastDx: 0,
+                                lastDy: 0,
+                                affected: false,
+                                primary: false,
+                                cockedRetries: 0,
+                            });
+                        } catch (obstacleError) {
+                            console.warn('Could not create dynamic die collider', obstacleError);
+                        }
+                    });
+                }
+
+                const diceByBodyId = new Map(simulatedDice.map(entry => [entry.body.id, entry]));
+                const collisionPairsThisStep = new Set();
+                simulatedDice.forEach((sourceEntry) => {
+                    sourceEntry.body.addEventListener('collide', (event) => {
+                        const targetEntry = diceByBodyId.get(event.body?.id);
+                        if (!targetEntry || targetEntry.id === sourceEntry.id) return;
+                        const pairKey = [sourceEntry.id, targetEntry.id].sort().join(':');
+                        if (collisionPairsThisStep.has(pairKey)) return;
+                        collisionPairsThisStep.add(pairKey);
+
+                        const deltaX = targetEntry.body.position.x - sourceEntry.body.position.x;
+                        const deltaZ = targetEntry.body.position.z - sourceEntry.body.position.z;
+                        const horizontalDistance = Math.hypot(deltaX, deltaZ);
+                        if (horizontalDistance < 0.001) return;
+                        const normalX = deltaX / horizontalDistance;
+                        const normalZ = deltaZ / horizontalDistance;
+                        const impactSpeed = Math.max(0,
+                            ((sourceEntry.body.velocity.x - targetEntry.body.velocity.x) * normalX)
+                            + ((sourceEntry.body.velocity.z - targetEntry.body.velocity.z) * normalZ)
+                        );
+                        const response = getBoardDieCollisionResponse({
+                            impactSpeed,
+                            sourceMass: sourceEntry.body.mass,
+                            targetMass: targetEntry.body.mass,
+                        });
+                        if (!response.active) return;
+
+                        const impulse = new CANNON.Vec3(
+                            normalX * response.impulse,
+                            0,
+                            normalZ * response.impulse
+                        );
+                        const oppositeImpulse = new CANNON.Vec3(-impulse.x, 0, -impulse.z);
+                        const contact = event.contact;
+                        const sourceContact = contact?.bi === sourceEntry.body
+                            ? contact.ri
+                            : contact?.bj === sourceEntry.body ? contact.rj : null;
+                        const targetContact = contact?.bi === targetEntry.body
+                            ? contact.ri
+                            : contact?.bj === targetEntry.body ? contact.rj : null;
+
+                        sourceEntry.body.wakeUp();
+                        targetEntry.body.wakeUp();
+                        sourceEntry.body.applyImpulse(
+                            oppositeImpulse,
+                            sourceContact
+                                ? new CANNON.Vec3(sourceContact.x, sourceContact.y, sourceContact.z)
+                                : new CANNON.Vec3()
+                        );
+                        targetEntry.body.applyImpulse(
+                            impulse,
+                            targetContact
+                                ? new CANNON.Vec3(targetContact.x, targetContact.y, targetContact.z)
+                                : new CANNON.Vec3()
+                        );
+                    });
+                });
+
                 const startTime = performance.now();
                 let lastTime = startTime;
                 let settledFrames = 0;
-                let lastX = 0;
-                let lastY = 0;
 
                 const loop = (time) => {
+                    if (disposed || !rolling) return;
                     const delta = Math.min((time - lastTime) / 1000, 1 / 30);
                     lastTime = time;
+                    collisionPairsThisStep.clear();
                     world.step(1 / 60, delta, 4);
 
-                    const speed = body.velocity.length();
-                    const spin = body.angularVelocity.length();
                     const elapsed = time - startTime;
-                    const isSleeping = body.sleepState === CANNON.Body.SLEEPING;
-                    if (isSleeping || (elapsed > 900 && speed < 0.34 && spin < 0.42)) {
+                    const allDiceSettled = simulatedDice.every((entry) => {
+                        const speed = entry.body.velocity.length();
+                        const spin = entry.body.angularVelocity.length();
+                        const isSleeping = entry.body.sleepState === CANNON.Body.SLEEPING;
+
+                        if (!entry.primary && !entry.affected && !isSleeping) {
+                            entry.affected = true;
+                            setDieRolling(entry.id, true);
+                            entry.runtime?.setValue('');
+                        }
+                        if (!entry.primary && !entry.affected) return true;
+
+                        const euler = new ThreeModule.Euler().setFromQuaternion(
+                            new ThreeModule.Quaternion(
+                                entry.body.quaternion.x,
+                                entry.body.quaternion.y,
+                                entry.body.quaternion.z,
+                                entry.body.quaternion.w
+                            ),
+                            'XYZ'
+                        );
+                        const nextRotation = { x: euler.x, y: euler.y, z: euler.z };
+                        if (entry.runtime?.rotationRef) {
+                            entry.runtime.rotationRef.current = nextRotation;
+                            entry.runtime.renderRequestRef.current?.();
+                        }
+
+                        entry.lastDx = (entry.body.position.x - entry.startX) * pxPerMeter;
+                        entry.lastDy = (entry.body.position.z - entry.startZ) * pxPerMeter;
+                        const restingHeight = getCannonShapeRestingHeight(
+                            CANNON,
+                            entry.shape,
+                            entry.body.quaternion
+                        );
+                        const lift = Math.max(0, (entry.body.position.y - restingHeight) * pxPerMeter);
+                        entry.wrapper.style.transform = `translate(${entry.lastDx}px, ${entry.lastDy}px) translateY(${-lift}px) scale(${1 + Math.min(0.08, lift / 900)})`;
+
+                        return isBoardDieMotionSettled({ elapsedMs: elapsed, speed, spin, sleeping: isSleeping });
+                    });
+
+                    if (allDiceSettled) {
                         settledFrames += 1;
                     } else {
                         settledFrames = 0;
                     }
 
-                    const euler = new ThreeModule.Euler().setFromQuaternion(
-                        new ThreeModule.Quaternion(body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w),
-                        'XYZ'
-                    );
-                    rotationRef.current = { x: euler.x, y: euler.y, z: euler.z };
+                    if (shouldFinishBoardDieRoll({ elapsedMs: elapsed, settledFrames })) {
+                        const timedOut = elapsed >= BOARD_DIE_MAX_ROLL_MS;
+                        const participatingDice = simulatedDice.filter(entry => entry.primary || entry.affected);
+                        const cockedDice = timedOut
+                            ? []
+                            : participatingDice.filter((entry) => (
+                                getDieTopFaceResult(entry.sides, entry.body.quaternion).upAlignment < 0.78
+                                && entry.cockedRetries < 2
+                            ));
 
-                    lastX = body.position.x * pxPerMeter;
-                    lastY = body.position.z * pxPerMeter;
-                    const lift = Math.max(0, (body.position.y - 0.62) * pxPerMeter);
-                    innerWrapper.style.transform = `translate(${lastX}px, ${lastY}px) translateY(${-lift}px) scale(${1 + Math.min(0.08, lift / 900)})`;
+                        if (cockedDice.length > 0) {
+                            settledFrames = 0;
+                            cockedDice.forEach((entry) => {
+                                entry.cockedRetries += 1;
+                                entry.body.wakeUp();
+                                entry.body.position.y += 0.16;
+                                entry.body.velocity.set(0, 1.15, 0);
+                                entry.body.angularVelocity.set(
+                                    (Math.random() - 0.5) * 3.5,
+                                    (Math.random() - 0.5) * 2.5,
+                                    (Math.random() - 0.5) * 3.5
+                                );
+                            });
+                            animationFrameRef.current = requestAnimationFrame(loop);
+                            return;
+                        }
 
-                    if (settledFrames >= 14) {
-                        const settledEuler = new ThreeModule.Euler().setFromQuaternion(
-                            new ThreeModule.Quaternion(body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w),
-                            'XYZ'
-                        );
-                        rotationRef.current = { x: settledEuler.x, y: settledEuler.y, z: settledEuler.z };
-                        const rolledValue = getDieTopFaceValue(dieSides, body.quaternion);
-                        const finalVisualTranslate = getElementTranslate(innerWrapper);
-                        const finalDx = settleInPlace ? 0 : finalVisualTranslate.x;
-                        const finalDy = settleInPlace ? 0 : finalVisualTranslate.y;
-                        setLocalValue(rolledValue);
-                        window.dispatchEvent(new CustomEvent('save-die-roll', {
-                            detail: {
-                                id: die.id,
-                                dx: finalDx,
-                                dy: finalDy,
-                                value: rolledValue,
-                                rotation3d: rotationRef.current,
-                                instant: true
+                        const rolls = participatingDice.map((entry) => {
+                            const settledEuler = new ThreeModule.Euler().setFromQuaternion(
+                                new ThreeModule.Quaternion(
+                                    entry.body.quaternion.x,
+                                    entry.body.quaternion.y,
+                                    entry.body.quaternion.z,
+                                    entry.body.quaternion.w
+                                ),
+                                'XYZ'
+                            );
+                            const settledRotation = {
+                                x: settledEuler.x,
+                                y: settledEuler.y,
+                                z: settledEuler.z,
+                            };
+                            const rolledValue = getDieTopFaceResult(entry.sides, entry.body.quaternion).value;
+                            if (entry.runtime?.rotationRef) {
+                                entry.runtime.rotationRef.current = settledRotation;
+                                entry.runtime.renderRequestRef.current?.();
+                                entry.runtime.setValue(rolledValue);
                             }
+                            return {
+                                id: entry.id,
+                                dx: entry.primary && settleInPlace ? 0 : entry.lastDx,
+                                dy: entry.primary && settleInPlace ? 0 : entry.lastDy,
+                                value: rolledValue,
+                                rotation3d: settledRotation,
+                                instant: true,
+                            };
+                        });
+
+                        window.dispatchEvent(new CustomEvent('save-die-roll', {
+                            detail: { rolls }
                         }));
-                        isRolling = false;
+                        stopRolling();
                         return;
                     }
 
-                    requestAnimationFrame(loop);
+                    animationFrameRef.current = requestAnimationFrame(loop);
                 };
-                requestAnimationFrame(loop);
+                animationFrameRef.current = requestAnimationFrame(loop);
             } catch (err) {
                 console.error("Error rolling board die", err);
                 let rolledValue = Number(die.dieValue) || 1;
@@ -993,16 +1275,20 @@ const BoardDieVisual = ({ die, className = '', isDragging = false, currentDieRol
                     console.error("Error reading board die result from orientation", resultError);
                 }
                 setLocalValue(rolledValue);
+                stopRolling();
                 window.dispatchEvent(new CustomEvent('save-die-roll', {
                     detail: { id: die.id, dx: 0, dy: 0, value: rolledValue, rotation3d: rotationRef.current }
                 }));
-                isRolling = false;
             }
         };
         
         window.addEventListener('roll-die', handleRoll);
-        return () => window.removeEventListener('roll-die', handleRoll);
-    }, [enableRollPhysics, die.id, die.dieSides, die.x, die.y, die.rotation]);
+        return () => {
+            disposed = true;
+            window.removeEventListener('roll-die', handleRoll);
+            stopRolling();
+        };
+    }, [enableRollPhysics, die.id, die.dieSides, die.width, die.height]);
 
     const sides = Number(die?.dieSides) || 20;
     const color = die?.dieColor || '#c8aa6e';
@@ -1010,7 +1296,11 @@ const BoardDieVisual = ({ die, className = '', isDragging = false, currentDieRol
     const showD4FloatingResult = sides === 4 && displayValue !== null && displayValue !== undefined && !isDragging;
 
     return (
-        <div className={`relative h-full w-full overflow-visible bg-transparent ${className}`} style={{ perspective: 420 }}>
+        <div
+            className={`relative h-full w-full overflow-visible bg-transparent ${className}`}
+            style={{ perspective: 420 }}
+            data-die-rolling={isRolling ? 'true' : 'false'}
+        >
             {/* --- INDICADOR DE TIRACHINAS (NUEVO) --- */}
             {isDragging && currentDieRollSpeed > 0.02 && (
                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-[60]" style={{ transform: 'translateZ(100px)' }}>
@@ -1080,7 +1370,7 @@ const BoardDieVisual = ({ die, className = '', isDragging = false, currentDieRol
                     transformStyle: 'preserve-3d',
                 }}
             >
-                <BoardDie3d sides={sides} color={color} rotationRef={rotationRef} />
+                <BoardDie3d sides={sides} color={color} rotationRef={rotationRef} renderRequestRef={renderRequestRef} />
             </div>
             {showD4FloatingResult && (
                 <div className="absolute inset-0 z-[70] pointer-events-none flex items-center justify-center">
@@ -4239,11 +4529,46 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     useEffect(() => { activeScenarioRef.current = activeScenario; }, [activeScenario]);
     const lastRemoteScenarioItemsRef = useRef([]);
     const localUnsavedEditsRef = useRef({}); // { [itemId]: { [key]: value } }
+    const localUnsavedConfigEditsRef = useRef({}); // { [configKey]: value }
+    const localUnsavedScenarioEditsRef = useRef({}); // { name, allowedPlayers, ... }
     const recentLocalWritesRef = useRef({}); // { [itemId]: { fields: { [key]: value }, time } }
     const lastFlipTimesRef = useRef({}); // { [cardId]: timestamp }
-    const activePersistPromiseRef = useRef(null);
-    const nextPersistRequestRef = useRef(null); // { scenarioId, finalItems, originalItems, explicitModifiedIds }
+    const persistQueueRef = useRef(null);
+    if (!persistQueueRef.current) {
+        persistQueueRef.current = createSerialPersistQueue();
+    }
     const instantBoardDieMoveIdsRef = useRef(new Set());
+
+    const registerLocalConfigDraft = (previousConfig, nextConfig) => {
+        const changedFields = getChangedItemFields(nextConfig, previousConfig);
+        if (Object.keys(changedFields).length === 0) return;
+
+        localUnsavedConfigEditsRef.current = {
+            ...localUnsavedConfigEditsRef.current,
+            ...changedFields,
+        };
+    };
+
+    const registerLocalScenarioDraft = (updates) => {
+        localUnsavedScenarioEditsRef.current = {
+            ...localUnsavedScenarioEditsRef.current,
+            ...(updates || {}),
+        };
+    };
+
+    const registerLocalItemDraftChanges = (previousItems = [], nextItems = []) => {
+        const previousMap = new Map((previousItems || []).map(item => [item.id, item]));
+
+        (nextItems || []).forEach(item => {
+            const changedFields = getChangedItemFields(item, previousMap.get(item.id));
+            if (Object.keys(changedFields).length === 0) return;
+
+            localUnsavedEditsRef.current[item.id] = {
+                ...(localUnsavedEditsRef.current[item.id] || {}),
+                ...changedFields,
+            };
+        });
+    };
 
     const [viewMode, setViewMode] = useState('LIBRARY'); // 'LIBRARY' | 'EDIT'
     const lastActionTimeRef = useRef(0);
@@ -4251,33 +4576,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     // Escuchar rolls de dados para actualizar firebase al terminar
     useEffect(() => {
         const handleSaveDieRoll = (e) => {
-            const { id, dx, dy, value, rotation3d = null, instant = false } = e.detail;
             const currentScenario = activeScenarioRef.current;
             if (!currentScenario) return;
-            const item = currentScenario.items?.find(i => i.id === id);
-            if (!item) return;
+            const rolls = (Array.isArray(e.detail?.rolls) ? e.detail.rolls : [e.detail])
+                .filter(roll => roll?.id && currentScenario.items?.some(item => item.id === roll.id));
+            if (rolls.length === 0) return;
 
-            const safeDx = Number.isFinite(Number(dx)) ? Number(dx) : 0;
-            const safeDy = Number.isFinite(Number(dy)) ? Number(dy) : 0;
-            if (instant) {
-                instantBoardDieMoveIdsRef.current.add(id);
-            }
-            const nextItems = currentScenario.items.map(i => 
-                i.id === id ? {
-                    ...i,
-                    x: i.x + safeDx,
-                    y: i.y + safeDy,
-                    dieValue: value,
-                    dieRotation3d: rotation3d
-                        ? {
-                            x: Number(rotation3d.x) || 0,
-                            y: Number(rotation3d.y) || 0,
-                            z: Number(rotation3d.z) || 0,
-                        }
-                        : i.dieRotation3d
-                } : i
-            );
-            if (instant) {
+            const rollsById = new Map(rolls.map(roll => [roll.id, roll]));
+            const hasInstantRoll = rolls.some(roll => roll.instant);
+            rolls.forEach((roll) => {
+                if (roll.instant) instantBoardDieMoveIdsRef.current.add(roll.id);
+            });
+            const nextItems = applyBoardDieRolls(currentScenario.items, [...rollsById.values()]);
+            if (hasInstantRoll) {
                 flushSync(() => {
                     setActiveScenario(prev => ({ ...prev, items: nextItems }));
                 });
@@ -4285,19 +4596,19 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 setActiveScenario(prev => ({ ...prev, items: nextItems }));
             }
 
-            if (instant) {
-                const innerWrapper = document.getElementById(`token-inner-wrapper-${id}`);
+            rolls.filter(roll => roll.instant).forEach((roll) => {
+                const innerWrapper = document.getElementById(`token-inner-wrapper-${roll.id}`);
                 if (innerWrapper) {
                     innerWrapper.style.transition = 'none';
                     innerWrapper.style.transform = 'translate(0px, 0px) translateY(0px) scale(1)';
                 }
                 window.setTimeout(() => {
-                    instantBoardDieMoveIdsRef.current.delete(id);
+                    instantBoardDieMoveIdsRef.current.delete(roll.id);
                     if (innerWrapper) {
                         innerWrapper.style.transition = '';
                     }
                 }, 500);
-            }
+            });
 
             safePersistItems(currentScenario.id, nextItems, currentScenario.items);
         };
@@ -4799,6 +5110,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 const remoteData = docSnap.data();
                 const remoteItems = remoteData.items || [];
                 lastRemoteScenarioItemsRef.current = remoteItems;
+                const normalizedRemoteConfig = remoteData.config
+                    ? normalizeGridConfig(remoteData.config)
+                    : null;
+                const localConfigDraft = isPlayerView
+                    ? {}
+                    : localUnsavedConfigEditsRef.current;
+                const synchronizedConfig = normalizedRemoteConfig
+                    ? normalizeGridConfig({ ...normalizedRemoteConfig, ...localConfigDraft })
+                    : null;
+                const localScenarioDraft = isPlayerView
+                    ? {}
+                    : localUnsavedScenarioEditsRef.current;
 
                 // --- DETECCIÓN DE CONFLICTOS PARA JUGADORES ---
                 // Si el Master mueve una ficha que nosotros estamos manipulando, cancelamos nuestra interacción
@@ -4987,6 +5310,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                     });
                     const protectedLocalOnlyItems = localItems.filter(localItem => {
                         if (remoteItemIds.has(localItem.id)) return false;
+                        const localDraft = localUnsavedEditsRef.current[localItem.id];
+                        if (localDraft && Object.keys(localDraft).length > 0) return true;
                         const recentWrite = normalizeRecentLocalWrite(recentLocalWritesRef.current[localItem.id]);
                         return !!recentWrite && mergeTime - recentWrite.time < RECENT_LOCAL_WRITE_PROTECTION_MS;
                     });
@@ -4996,26 +5321,41 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                     const itemsChanged = JSON.stringify(nextMergedItems) !== JSON.stringify(localItems);
                     const lastModifiedChanged = remoteData.lastModified !== current.lastModified;
+                    const nextName = Object.prototype.hasOwnProperty.call(localScenarioDraft, 'name')
+                        ? localScenarioDraft.name
+                        : (remoteData.name ?? current.name);
+                    const nextAllowedPlayers = Object.prototype.hasOwnProperty.call(localScenarioDraft, 'allowedPlayers')
+                        ? localScenarioDraft.allowedPlayers
+                        : (remoteData.allowedPlayers ?? current.allowedPlayers);
+                    const configChanged = synchronizedConfig && (
+                        JSON.stringify(synchronizedConfig) !== JSON.stringify(current.config)
+                    );
+                    const scenarioFieldsChanged = (
+                        nextName !== current.name ||
+                        JSON.stringify(nextAllowedPlayers || []) !== JSON.stringify(current.allowedPlayers || [])
+                    );
 
-                    if (itemsChanged || lastModifiedChanged) {
+                    if (itemsChanged || lastModifiedChanged || configChanged || scenarioFieldsChanged) {
                         console.log("Sincronizando tablero con datos remotos (Merging local locks)...");
                         return {
                             ...current,
                             items: nextMergedItems,
-                            lastModified: remoteData.lastModified
+                            lastModified: remoteData.lastModified,
+                            name: nextName,
+                            allowedPlayers: nextAllowedPlayers,
+                            ...(synchronizedConfig ? { config: synchronizedConfig } : {}),
                         };
                     }
                     return current;
                 });
 
                 // --- Sincronización de Configuración (Oscuridad, Grid, Fondo) ---
-                if (remoteData.config) {
+                if (synchronizedConfig) {
                     setGridConfig(currentConfig => {
-                        const normalizedRemoteConfig = normalizeGridConfig(remoteData.config);
                         // Comprobación profunda simple para evitar re-renders innecesarios
-                        if (JSON.stringify(normalizedRemoteConfig) !== JSON.stringify(currentConfig)) {
+                        if (JSON.stringify(synchronizedConfig) !== JSON.stringify(currentConfig)) {
                             console.log("🌑 Sincronizando configuración (oscuridad/grid) remota...");
-                            return normalizedRemoteConfig;
+                            return synchronizedConfig;
                         }
                         return currentConfig;
                     });
@@ -5696,13 +6036,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const draggedItem = currentScenario.items.find(item => item.id === draggedTokenId);
             if (isBoardMode && isBoardDieItem(draggedItem) && draggedItem.dieLaunchMode) {
                 if (e.cancelable) e.preventDefault();
-                const screenDeltaX = curX - tokenDragStart.x;
-                const screenDeltaY = curY - tokenDragStart.y;
-                const dragDistance = Math.hypot(screenDeltaX, screenDeltaY);
-                const cancelRadius = Math.max(20, Math.min(draggedItem.width || 48, draggedItem.height || 48) * 0.42);
-                const tension = Math.min(Math.max((dragDistance - cancelRadius) / 220, 0), 1);
-                const direction = Math.atan2(screenDeltaY, screenDeltaX) * 180 / Math.PI + 90;
-                queueDieLaunchFeedback(tension, direction);
+                const gesture = getBoardDieLaunchGesture({
+                    deltaX: curX - tokenDragStart.x,
+                    deltaY: curY - tokenDragStart.y,
+                    dieWidth: (draggedItem.width || 48) * zoom,
+                    dieHeight: (draggedItem.height || 48) * zoom,
+                });
+                queueDieLaunchFeedback(gesture.tension, gesture.directionDegrees);
                 return;
             }
         }
@@ -5863,12 +6203,15 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             if (isBoardMode && draggedTokenId) {
                 const draggedItem = newItems.find(i => i.id === draggedTokenId);
                 if (isBoardDieItem(draggedItem) && draggedItem.dieLaunchMode) {
-                    const dragDistance = Math.hypot(curX - tokenDragStart.x, curY - tokenDragStart.y);
-                    const cancelRadius = Math.max(20, Math.min(draggedItem.width || 48, draggedItem.height || 48) * 0.42);
-                    const tension = Math.min(Math.max((dragDistance - cancelRadius) / 220, 0), 1);
+                    const gesture = getBoardDieLaunchGesture({
+                        deltaX: curX - tokenDragStart.x,
+                        deltaY: curY - tokenDragStart.y,
+                        dieWidth: (draggedItem.width || 48) * zoom,
+                        dieHeight: (draggedItem.height || 48) * zoom,
+                    });
                     queueDieLaunchFeedback(
-                        tension,
-                        Math.atan2(curY - tokenDragStart.y, curX - tokenDragStart.x) * 180 / Math.PI + 90
+                        gesture.tension,
+                        gesture.directionDegrees
                     );
                 } else if (currentDieRollSpeed !== 0) {
                     resetDieLaunchFeedback();
@@ -6131,9 +6474,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 if (isBoardMode && isBoardDieItem(draggedItem) && draggedItem.dieLaunchMode) {
                     const screenDeltaX = releaseX - tokenDragStart.x;
                     const screenDeltaY = releaseY - tokenDragStart.y;
-                    const dragDistance = Math.hypot(screenDeltaX, screenDeltaY);
-                    const cancelRadius = Math.max(20, Math.min(draggedItem.width || 48, draggedItem.height || 48) * 0.42);
-                    if (dragDistance <= cancelRadius) {
+                    const gesture = getBoardDieLaunchGesture({
+                        deltaX: screenDeltaX,
+                        deltaY: screenDeltaY,
+                        dieWidth: (draggedItem.width || 48) * zoom,
+                        dieHeight: (draggedItem.height || 48) * zoom,
+                    });
+                    if (gesture.cancelled) {
                         setActiveScenario(prev => ({
                             ...prev,
                             items: prev.items.map(item => (
@@ -6153,21 +6500,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         return;
                     }
 
-                    const tension = Math.min(Math.max((dragDistance - cancelRadius) / 220, 0), 1);
-                    const angle = Math.atan2(screenDeltaY, screenDeltaX);
-                    const throwPower = 0.28 + (tension * 1.18);
-                    const velocity = {
-                        x: Math.cos(angle) * throwPower,
-                        y: Math.sin(angle) * throwPower,
-                    };
-                    window.dispatchEvent(new CustomEvent('roll-die', {
-                        detail: {
-                            id: draggedTokenId,
-                            velocity,
-                            settleInPlace: false,
-                            bounds: getBoardDieRollBounds(draggedItem),
-                        }
-                    }));
+                    rollBoardDie(draggedItem, {
+                        velocity: gesture.velocity,
+                        settleInPlace: false,
+                        bounds: getBoardDieRollBounds(draggedItem),
+                    });
 
                     setDraggedTokenId(null);
                     setRotatingTokenId(null);
@@ -6710,25 +7047,42 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 const matchedPreset = findClosestBackgroundGridPreset(exactPresets, 'cellSize', TARGET_GRID_CELL_SIZE)
                     || buildBackgroundGridPreset(img.width, img.height, DEFAULT_FINITE_COLUMNS, DEFAULT_FINITE_ROWS);
 
-                setGridConfig(prev => ({
-                    ...prev,
-                    backgroundImage: event.target.result, // Local preview
-                    imageWidth: img.width,
-                    imageHeight: img.height,
-                    isInfinite: false,
-                    lockFiniteMapSize: false,
-                    columns: matchedPreset.columns,
-                    rows: matchedPreset.rows,
-                    cellWidth: matchedPreset.cellSize,
-                    cellHeight: matchedPreset.cellSize,
-                }));
+                setGridConfig(prev => {
+                    const nextConfig = {
+                        ...prev,
+                        backgroundImage: event.target.result, // Local preview
+                        imageWidth: img.width,
+                        imageHeight: img.height,
+                        isInfinite: false,
+                        lockFiniteMapSize: false,
+                        columns: matchedPreset.columns,
+                        rows: matchedPreset.rows,
+                        cellWidth: matchedPreset.cellSize,
+                        cellHeight: matchedPreset.cellSize,
+                    };
+                    registerLocalConfigDraft(prev, nextConfig);
+                    setActiveScenario(current => current ? { ...current, config: nextConfig } : current);
+                    return nextConfig;
+                });
             };
         };
         reader.readAsDataURL(file);
     };
 
     const clearBackgroundImage = () => {
-        setGridConfig(prev => ({ ...prev, backgroundImage: null, imageWidth: null, imageHeight: null }));
+        setPendingImageFile(null);
+        setGridConfig(prev => {
+            const nextConfig = {
+                ...prev,
+                backgroundImage: null,
+                backgroundImageHash: null,
+                imageWidth: null,
+                imageHeight: null,
+            };
+            registerLocalConfigDraft(prev, nextConfig);
+            setActiveScenario(current => current ? { ...current, config: nextConfig } : current);
+            return nextConfig;
+        });
     };
 
     // --- LOGICA DE BIBLIOTECA (Firebase) ---
@@ -6806,7 +7160,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
             // PASTE (Ctrl+V)
             if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-                if (clipboard.length > 0 && activeScenario) {
+                const currentScenario = activeScenarioRef.current || activeScenario;
+                if (clipboard.length > 0 && currentScenario) {
                     e.preventDefault();
                     const newTokens = clipboard.map(originalItem => {
                         const newId = crypto.randomUUID();
@@ -6820,9 +7175,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             status: [...(originalItem.status || [])]
                         };
                     });
-                    const updatedItems = [...(activeScenario.items || []), ...newTokens];
-                    setActiveScenario(prev => ({ ...prev, items: updatedItems }));
-                    safePersistItems(activeScenario.id, updatedItems, activeScenario.items);
+                    const updatedItems = [...(currentScenario.items || []), ...newTokens];
+                    setActiveScenario(prev => (
+                        prev?.id === currentScenario.id
+                            ? { ...prev, items: updatedItems }
+                            : prev
+                    ));
+                    safePersistItems(
+                        currentScenario.id,
+                        updatedItems,
+                        currentScenario.items,
+                        newTokens.map(token => token.id)
+                    );
                     setSelectedTokenIds(newTokens.map(t => t.id));
                     setToastType('success');
                     setShowToast(true);
@@ -6868,6 +7232,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     const loadScenario = (scenario) => {
         lastRemoteScenarioItemsRef.current = scenario.items || [];
         localUnsavedEditsRef.current = {};
+        localUnsavedConfigEditsRef.current = {};
+        localUnsavedScenarioEditsRef.current = {};
+        recentLocalWritesRef.current = {};
+        setPendingImageFile(null);
         setActiveScenario(scenario);
         if (scenario.config) setGridConfig(normalizeGridConfig(scenario.config));
 
@@ -7077,6 +7445,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 acc[itemId] = { ...(edits || {}) };
                 return acc;
             }, {});
+        let pendingConfigEdits = { ...(localUnsavedConfigEditsRef.current || {}) };
+        const pendingScenarioEdits = { ...(localUnsavedScenarioEditsRef.current || {}) };
         const pendingEditedItemIds = Object.keys(pendingLocalEdits);
         const explicitModifiedIds = pendingEditedItemIds.length > 0
             ? pendingEditedItemIds
@@ -7134,6 +7504,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                     finalBackgroundImage = url;
                     finalImageHash = hash;
+                    localUnsavedConfigEditsRef.current = {
+                        ...localUnsavedConfigEditsRef.current,
+                        backgroundImage: url,
+                        backgroundImageHash: hash,
+                    };
+                    pendingConfigEdits = {
+                        ...pendingConfigEdits,
+                        backgroundImage: url,
+                        backgroundImageHash: hash,
+                    };
 
                     // Actualizamos el estado local
                     setGridConfig(prev => ({
@@ -7197,6 +7577,18 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
                 if (Object.keys(currentEdits).length === 0) {
                     delete localUnsavedEditsRef.current[itemId];
+                }
+            });
+
+            Object.entries(pendingConfigEdits).forEach(([key, value]) => {
+                if (areScenarioFieldValuesEqual(localUnsavedConfigEditsRef.current[key], value)) {
+                    delete localUnsavedConfigEditsRef.current[key];
+                }
+            });
+
+            Object.entries(pendingScenarioEdits).forEach(([key, value]) => {
+                if (areScenarioFieldValuesEqual(localUnsavedScenarioEditsRef.current[key], value)) {
+                    delete localUnsavedScenarioEditsRef.current[key];
                 }
             });
 
@@ -8050,11 +8442,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         );
     };
 
-    const getBoardCardPreviewImage = (card) => (
-        card?.faceDown
-            ? (card.backImage || card.frontImage || card.img)
-            : (card?.frontImage || card?.img || card?.backImage)
-    );
+    const getBoardCardPreviewImage = (card) => getCardDisplayImage(card);
 
     const clearCardPreviewHold = () => {
         const hold = cardPreviewHoldRef.current;
@@ -8182,7 +8570,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         const point = getEventCoords(event);
         event.stopPropagation();
         if (event.cancelable) event.preventDefault();
-        const previewSrc = card.faceDown ? (card.backImage || card.frontImage) : card.frontImage;
+        const previewSrc = getCardDisplayImage(card);
         if (previewSrc) {
             const preload = new globalThis.Image();
             preload.onload = () => markImageUrlLoaded(previewSrc);
@@ -8364,7 +8752,8 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
     };
 
     const addTokenToCanvas = (tokenUrl) => {
-        if (!activeScenario) return;
+        const currentScenario = activeScenarioRef.current || activeScenario;
+        if (!currentScenario) return;
 
         // Calcular posición central basada en el offset actual y zoom para que aparezca en el centro de la pantalla visible
         // Calcular posición central basada en el offset actual y zoom para que aparezca en el centro de la pantalla visible
@@ -8385,7 +8774,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             : centeredSpawn;
 
         const newToken = {
-            id: `token-${Date.now()}`,
+            id: `token-${nanoid()}`,
             x: spawnPosition.x,
             y: spawnPosition.y,
             width: w,
@@ -8399,10 +8788,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             visionRadius: 300,
         };
 
-        setActiveScenario(prev => ({
-            ...prev,
-            items: [...(prev.items || []), newToken]
-        }));
+        const nextItems = [...(currentScenario.items || []), newToken];
+        setActiveScenario(prev => (
+            prev?.id === currentScenario.id
+                ? { ...prev, items: nextItems }
+                : prev
+        ));
+        safePersistItems(currentScenario.id, nextItems, currentScenario.items, [newToken.id]);
     };
 
     const consumeMobileMoveTemplateEvent = (event, options = {}) => {
@@ -8616,6 +9008,10 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
 
         e.stopPropagation(); // Evitar que el canvas inicie pan
         if (isTouch) e.preventDefault(); // Evitar double-firing y emulación de mouse
+
+        if (isBoardDieItem(token) && ACTIVE_BOARD_DIE_ROLL_IDS.has(token.id)) {
+            return;
+        }
 
         if (isCardItem(token) && cardStackQuickActionBlockUntilRef.current > Date.now()) {
             e.nativeEvent?.stopImmediatePropagation?.();
@@ -8957,15 +9353,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         if (now - lastActionTimeRef.current < 300) return;
         lastActionTimeRef.current = now;
 
-        setActiveScenario(prev => ({
-            ...prev,
-            items: prev.items.map(i => {
-                if (i.id === itemId) {
-                    return { ...i, rotation: (i.rotation || 0) + angle };
-                }
-                return i;
-            })
-        }));
+        const item = activeScenarioRef.current?.items?.find(candidate => candidate.id === itemId);
+        if (!item) return;
+        updateItem(itemId, { rotation: (item.rotation || 0) + angle }, true);
     };
 
     const toggleWallType = (wallId) => {
@@ -8973,20 +9363,14 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         if (now - lastActionTimeRef.current < 300) return;
         lastActionTimeRef.current = now;
 
-        setActiveScenario(prev => ({
-            ...prev,
-            items: prev.items.map(i => {
-                if (i.id === wallId) {
-                    // Ciclo: solid -> door -> window -> solid
-                    let nextType = 'door';
-                    if (i.wallType === 'door') nextType = 'window';
-                    else if (i.wallType === 'window') nextType = 'solid';
+        const wall = activeScenarioRef.current?.items?.find(item => item.id === wallId);
+        if (!wall) return;
 
-                    return { ...i, wallType: nextType, isOpen: false, isSecret: false };
-                }
-                return i;
-            })
-        }));
+        let nextType = 'door';
+        if (wall.wallType === 'door') nextType = 'window';
+        else if (wall.wallType === 'window') nextType = 'solid';
+
+        updateItem(wallId, { wallType: nextType, isOpen: false, isSecret: false });
     };
 
     const toggleDoorOpen = (doorId) => {
@@ -9025,15 +9409,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         if (now - lastActionTimeRef.current < 300) return;
         lastActionTimeRef.current = now;
 
-        setActiveScenario(prev => ({
-            ...prev,
-            items: prev.items.map(i => {
-                if (i.id === wallId) {
-                    return { ...i, isSecret: !i.isSecret };
-                }
-                return i;
-            })
-        }));
+        const wall = activeScenarioRef.current?.items?.find(item => item.id === wallId);
+        if (!wall) return;
+        updateItem(wallId, { isSecret: !wall.isSecret });
     };
 
     const addLightToCanvas = async (color = '#fff1ae') => {
@@ -9933,16 +10311,12 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             transform: 'rotateY(180deg)'
                                         }}
                                     >
-                                        {item.backImage ? (
-                                            <CardImageWithLoader
-                                                src={item.backImage}
-                                                label={`${item.name || 'Carta'} reverso`}
-                                                className="absolute inset-0 w-full h-full"
-                                                imageClassName="w-full h-full object-cover"
-                                            />
-                                        ) : (
-                                            <div className="absolute inset-0 bg-slate-500" />
-                                        )}
+                                        <CardImageWithLoader
+                                            src={item.backImage || DEFAULT_CARD_BACK_URL}
+                                            label={`${item.name || 'Carta'} reverso`}
+                                            className="absolute inset-0 w-full h-full"
+                                            imageClassName="w-full h-full object-cover"
+                                        />
                                         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-1.5 pb-1 pt-5 pointer-events-none">
                                             <div className="text-[7px] font-black uppercase tracking-[0.18em] text-[#f8e7b9] truncate text-center drop-shadow">
                                                 Carta oculta
@@ -10022,7 +10396,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             <div className={`absolute top-[calc(100%+0.75rem)] left-1/2 -translate-x-1/2 z-[70] w-[calc((22px*6)+(0.375rem*5))] max-w-[calc(100vw-2rem)] transition-opacity ${isSelected || 'group-hover:opacity-100 opacity-0'}`}>
                                 <div className="flex flex-wrap items-center justify-center gap-1.5">
                                     {containerCardItems.map((containedCard) => {
-                                        const cardImage = containedCard.faceDown ? (containedCard.backImage || containedCard.frontImage) : containedCard.frontImage;
+                                        const cardImage = getCardDisplayImage(containedCard);
                                         return (
                                             <button
                                                 key={containedCard.id}
@@ -10063,7 +10437,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                             <div className={`absolute top-[calc(100%+0.75rem)] left-1/2 -translate-x-1/2 z-[70] w-[calc((22px*6)+(0.375rem*5))] max-w-[calc(100vw-2rem)] transition-opacity ${isSelected || 'group-hover:opacity-100 opacity-0'}`}>
                                 <div className="flex flex-wrap items-center justify-center gap-1.5">
                                     {cardStackItems.map((stackCard) => {
-                                        const stackImage = stackCard.faceDown ? (stackCard.backImage || stackCard.frontImage) : stackCard.frontImage;
+                                        const stackImage = getCardDisplayImage(stackCard);
                                         return (
                                             <button
                                                 key={stackCard.id}
@@ -10184,6 +10558,16 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 const changedFields = getChangedItemFields(item, originalMap.get(item.id));
                 if (Object.keys(changedFields).length === 0) return;
 
+                const localDraft = localUnsavedEditsRef.current[item.id];
+                if (localDraft) {
+                    Object.keys(changedFields).forEach(key => {
+                        delete localDraft[key];
+                    });
+                    if (Object.keys(localDraft).length === 0) {
+                        delete localUnsavedEditsRef.current[item.id];
+                    }
+                }
+
                 const existingWrite = normalizeRecentLocalWrite(recentLocalWritesRef.current[item.id]);
                 recentLocalWritesRef.current[item.id] = {
                     time: writeTime,
@@ -10196,12 +10580,6 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         };
 
         registerRecentPersistedFields(finalItems, originalItems, explicitModifiedIds);
-
-        // Si ya hay una persistencia en curso, encolamos esta petición (que sobrescribirá cualquier petición previa en espera)
-        if (activePersistPromiseRef.current) {
-            nextPersistRequestRef.current = { scenarioId, finalItems, originalItems, explicitModifiedIds };
-            return;
-        }
 
         // Definimos la función interna que ejecuta el guardado
         const executePersist = async (reqId, itemsToPersist, origItems, explicitIds) => {
@@ -10254,21 +10632,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             }
 
             console.error("Error in safePersistItems transaction after retries:", lastError);
+            return false;
         };
 
-        // Creamos la promesa de ejecución secuencial
-        activePersistPromiseRef.current = (async () => {
-            try {
-                await executePersist(scenarioId, finalItems, originalItems, explicitModifiedIds);
-            } finally {
-                activePersistPromiseRef.current = null;
-                const nextReq = nextPersistRequestRef.current;
-                if (nextReq) {
-                    nextPersistRequestRef.current = null;
-                    safePersistItems(nextReq.scenarioId, nextReq.finalItems, nextReq.originalItems, nextReq.explicitModifiedIds);
-                }
-            }
-        })();
+        // Cada delta conserva su turno: ninguna acción rápida reemplaza a otra pendiente.
+        return persistQueueRef.current(() => (
+            executePersist(scenarioId, finalItems, originalItems, explicitModifiedIds)
+        ));
     };
 
     const updateItem = (itemId, updates, persist = false) => {
@@ -10340,8 +10710,32 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
         };
     }, [offset.x, offset.y, zoom]);
 
+    const getBoardDieRollObstacles = useCallback((die) => {
+        const currentScenario = activeScenarioRef.current;
+        if (!die || !currentScenario?.items) return [];
+        const dieCenterX = Number(die.x) + ((Number(die.width) || 48) / 2);
+        const dieCenterY = Number(die.y) + ((Number(die.height) || 48) / 2);
+
+        return currentScenario.items
+            .filter(item => (
+                isBoardDieItem(item)
+                && item.id !== die.id
+                && item.zone !== 'hand'
+                && !ACTIVE_BOARD_DIE_ROLL_IDS.has(item.id)
+            ))
+            .map(item => ({
+                id: item.id,
+                sides: Number(item.dieSides) || 20,
+                width: Number(item.width) || 48,
+                height: Number(item.height) || 48,
+                dx: (Number(item.x) + ((Number(item.width) || 48) / 2)) - dieCenterX,
+                dy: (Number(item.y) + ((Number(item.height) || 48) / 2)) - dieCenterY,
+                rotation3d: item.dieRotation3d || { x: 0, y: 0.25, z: 0 },
+            }));
+    }, []);
+
     const rollBoardDie = useCallback((die, options = {}) => {
-        if (!die || !isBoardDieItem(die)) return;
+        if (!die || !isBoardDieItem(die) || ACTIVE_BOARD_DIE_ROLL_IDS.has(die.id)) return;
 
         const angle = Math.random() * Math.PI * 2;
         const force = options.force ?? 0.45;
@@ -10356,9 +10750,13 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 velocity,
                 settleInPlace: options.settleInPlace ?? false,
                 bounds: options.bounds || getBoardDieRollBounds(die),
+                obstacles: options.obstacles || getBoardDieRollObstacles(die),
+                zoom,
+                width: Number(die.width) || 48,
+                height: Number(die.height) || 48,
             }
         }));
-    }, [getBoardDieRollBounds]);
+    }, [getBoardDieRollBounds, getBoardDieRollObstacles, zoom]);
 
     const handleResizeMouseDown = (e, item) => {
         if (isCardItem(item)) return;
@@ -10516,16 +10914,22 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
             const cellSizeChanged =
                 Math.abs((Number(prev.cellWidth) || 0) - (Number(newConfig.cellWidth) || 0)) >= 0.001 ||
                 Math.abs((Number(prev.cellHeight) || 0) - (Number(newConfig.cellHeight) || 0)) >= 0.001;
+            registerLocalConfigDraft(prev, newConfig);
 
             setActiveScenario(currentScenario => {
                 if (!currentScenario) return currentScenario;
 
+                const nextItems = cellSizeChanged
+                    ? adjustItemsForGridChange(currentScenario.items || [], prev, newConfig)
+                    : currentScenario.items;
+                if (cellSizeChanged) {
+                    registerLocalItemDraftChanges(currentScenario.items || [], nextItems);
+                }
+
                 return {
                     ...currentScenario,
                     config: newConfig,
-                    items: cellSizeChanged
-                        ? adjustItemsForGridChange(currentScenario.items || [], prev, newConfig)
-                        : currentScenario.items,
+                    items: nextItems,
                 };
             });
 
@@ -10589,6 +10993,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                 cellWidth: preset.cellSize,
                 cellHeight: preset.cellSize,
             };
+            registerLocalConfigDraft(prev, newConfig);
 
             setActiveScenario(currentScenario => {
                 if (!currentScenario) return currentScenario;
@@ -12828,7 +13233,11 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                             <input
                                                 type="text"
                                                 value={activeScenario?.name || ''}
-                                                onChange={(e) => setActiveScenario(prev => ({ ...prev, name: e.target.value }))}
+                                                onChange={(e) => {
+                                                    const name = e.target.value;
+                                                    registerLocalScenarioDraft({ name });
+                                                    setActiveScenario(prev => ({ ...prev, name }));
+                                                }}
                                                 className="bg-transparent border-none outline-none font-fantasy text-[#f0e6d2] text-lg tracking-widest uppercase w-48 focus:bg-white/5 rounded px-1"
                                             />
                                         )}
@@ -13514,6 +13923,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                             const nextAllowed = hasAccess
                                                                 ? currentAllowed.filter(p => p !== player)
                                                                 : [...currentAllowed, player];
+                                                            registerLocalScenarioDraft({ allowedPlayers: nextAllowed });
                                                             setActiveScenario(prev => ({ ...prev, allowedPlayers: nextAllowed }));
                                                         }}
                                                         className={`w-full flex items-center justify-between p-3 rounded border cursor-pointer transition-all ${hasAccess ? 'bg-[#c8aa6e]/10 border-[#c8aa6e]/50 text-[#f0e6d2]' : 'bg-slate-900/50 border-slate-800 text-slate-500'}`}
@@ -14530,7 +14940,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                         token.shapeType === 'circle' ? <Circle className="w-10 h-10 drop-shadow-[0_0_12px_currentColor]" /> : <Square className="w-10 h-10 drop-shadow-[0_0_12px_currentColor]" />
                                                     ) : token.type === 'card' ? (
                                                         <CardImageWithLoader
-                                                            src={token.faceDown ? (token.backImage || token.frontImage) : token.frontImage}
+                                                            src={getCardDisplayImage(token)}
                                                             label={token.name || 'Carta'}
                                                             className="w-full h-full"
                                                             imageClassName="w-full h-full object-contain p-1"
@@ -14796,7 +15206,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                                 </div>
                                                                 <div className="grid grid-cols-3 gap-2">
                                                                     {tokenStackItems.map((stackCard) => {
-                                                                        const stackImage = stackCard.faceDown ? (stackCard.backImage || stackCard.frontImage) : stackCard.frontImage;
+                                                                        const stackImage = getCardDisplayImage(stackCard);
                                                                         return (
                                                                             <button
                                                                                 key={stackCard.id}
@@ -14837,7 +15247,7 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                                                             <input
                                                                 type="number"
                                                                 value={Math.round(token.rotation || 0)}
-                                                                onChange={(e) => updateItem(token.id, { rotation: Number(e.target.value) })}
+                                                                onChange={(e) => updateItem(token.id, { rotation: Number(e.target.value) }, true)}
                                                                 className="w-full h-full py-0 min-h-0 bg-transparent border-none px-3 text-sm text-slate-200 outline-none"
                                                                 style={{ minHeight: 'unset' }}
                                                             />
@@ -17362,9 +17772,9 @@ const CanvasSection = ({ onBack, currentUserId = 'user-dm', isMaster = true, pla
                         transform: 'translate(-50%, -50%) rotate(-2deg)',
                     }}
                 >
-                    {(draggingHandCard.card.faceDown ? draggingHandCard.card.backImage : draggingHandCard.card.frontImage) ? (
+                    {getCardDisplayImage(draggingHandCard.card) ? (
                         <CardImageWithLoader
-                            src={draggingHandCard.card.faceDown ? draggingHandCard.card.backImage : draggingHandCard.card.frontImage}
+                            src={getCardDisplayImage(draggingHandCard.card)}
                             label={draggingHandCard.card.name || 'Carta'}
                             className="w-full h-full"
                             imageClassName="w-full h-full object-cover"

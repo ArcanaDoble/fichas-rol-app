@@ -1,10 +1,40 @@
 import {
   buildScenarioItemChanges,
+  createSerialPersistQueue,
   getChangedItemFields,
   mergeScenarioItemsForPersist,
   normalizeRecentLocalWrite,
   shouldTreatRemotePositionAsConflict,
 } from '../scenarioSync';
+
+test('serial persist queue keeps every rapid request in order', async () => {
+  const enqueuePersist = createSerialPersistQueue();
+  const started = [];
+  let releaseFirst;
+  const firstGate = new Promise(resolve => {
+    releaseFirst = resolve;
+  });
+
+  const first = enqueuePersist(async () => {
+    started.push('first');
+    await firstGate;
+  });
+  const second = enqueuePersist(async () => {
+    started.push('second');
+  });
+  const third = enqueuePersist(async () => {
+    started.push('third');
+  });
+
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(started).toEqual(['first']);
+
+  releaseFirst();
+  await Promise.all([first, second, third]);
+
+  expect(started).toEqual(['first', 'second', 'third']);
+});
 
 test('mergeScenarioItemsForPersist only replaces locally modified items', () => {
   const originalItems = [
