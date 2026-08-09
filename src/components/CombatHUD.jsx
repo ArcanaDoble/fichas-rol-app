@@ -6,6 +6,7 @@ import CombatModifiersPanel, { applyModifiersToWeapon } from './CombatModifiersP
 import { getCustomImage, useCustomEquipmentImages } from '../hooks/useCustomEquipmentImages';
 import { PRONE_STATUS_IDS } from '../utils/statusEffects';
 import { getCardDisplayImage } from '../utils/cardImages';
+import { reorderCardItems } from '../utils/cardBoard';
 
 const RANGE_MAP = {
     toque: 0,
@@ -242,7 +243,9 @@ const CombatHUD = ({
     onPlayCard = null,
     onFlipHandCard = null,
     onHandCardDragStart = null,
-    onCardPreviewStart = null
+    onCardPreviewStart = null,
+    handDragPreview = null,
+    suppressHandHover = false
 }) => {
     const customEquipmentImages = useCustomEquipmentImages();
     const isBoardMode = mode === 'board';
@@ -303,6 +306,10 @@ const CombatHUD = ({
     const hasControllableStatus = tokenStatus.includes('sangrado');
     const isProne = PRONE_STATUS_IDS.some((statusId) => tokenStatus.includes(statusId));
     const cardsInHand = Array.isArray(handCards) ? handCards : [];
+    const displayedHandCards = useMemo(() => {
+        if (!handDragPreview?.overHand || !handDragPreview?.cardId) return cardsInHand;
+        return reorderCardItems(cardsInHand, handDragPreview.cardId, handDragPreview.dropIndex);
+    }, [cardsInHand, handDragPreview?.cardId, handDragPreview?.dropIndex, handDragPreview?.overHand]);
 
     React.useEffect(() => {
         if (!isProne) return;
@@ -491,6 +498,25 @@ const CombatHUD = ({
                 .board-hand-card:active {
                     transform: translateY(-12px) scale(1.04) rotate(0deg);
                 }
+                .board-hand-card.is-hand-dragging,
+                .board-hand-card.is-hand-dragging:hover,
+                .board-hand-card.is-hand-dragging:active {
+                    transform: rotate(var(--card-tilt));
+                    filter: saturate(0.55) brightness(0.72);
+                    box-shadow: none;
+                }
+                [data-board-hand-reordering="true"] .board-hand-card,
+                [data-board-hand-reordering="true"] .board-hand-card:hover,
+                [data-board-hand-reordering="true"] .board-hand-card:active,
+                [data-board-hand-hover-suppressed="true"] .board-hand-card,
+                [data-board-hand-hover-suppressed="true"] .board-hand-card:hover,
+                [data-board-hand-hover-suppressed="true"] .board-hand-card:active {
+                    transform: rotate(var(--card-tilt));
+                    filter: none;
+                    box-shadow: 0 16px 28px rgba(0, 0, 0, 0.42);
+                    border-color: rgba(200, 170, 110, 0.35);
+                    pointer-events: none;
+                }
                 @media (min-width: 768px) {
                     .board-hand-card:hover {
                         transform: translateY(var(--board-hand-hover-lift, -44px)) scale(1.16) rotate(0deg);
@@ -500,6 +526,8 @@ const CombatHUD = ({
 
             <div
                 data-board-hand-drop-zone="true"
+                data-board-hand-reordering={handDragPreview?.cardId ? 'true' : 'false'}
+                data-board-hand-hover-suppressed={suppressHandHover ? 'true' : 'false'}
                 className="pointer-events-auto w-full max-w-full md:max-w-6xl bg-transparent border-0 shadow-none relative min-h-[172px] overflow-visible"
                 style={{
                     '--board-hand-hover-lift': `-${desktopHoverLift}px`,
@@ -523,7 +551,7 @@ const CombatHUD = ({
                             height: isCompactHandViewport ? undefined : `${desktopHandHeight}px`,
                         }}
                     >
-                        {cardsInHand.map((card, index) => {
+                        {displayedHandCards.map((card, index) => {
                             const count = Math.max(cardsInHand.length, 1);
                             const isCompactHand = handViewportWidth < 768;
                             const handScale = isCompactHand ? 1 : desktopHandScale;
@@ -555,21 +583,40 @@ const CombatHUD = ({
                             const baseBottom = isCompactHand ? 40 : Math.round(48 * handScale);
                             const bottomOffset = baseBottom - arc;
                             const zIndex = 100 - Math.round(distanceFromCenter * 10);
+                            const isDraggedCard = handDragPreview?.cardId === card.id;
+                            const showInsertionSlot = isDraggedCard && handDragPreview?.overHand;
 
                             return (
-                                <div
+                                <motion.div
                                     key={card.id}
-                                    className="absolute left-1/2 bottom-8 md:bottom-12 group"
+                                    data-board-hand-card-slot="true"
+                                    data-board-hand-card-id={card.id}
+                                    data-board-hand-card-index={index}
+                                    className="absolute left-1/2 bottom-0 group"
+                                    initial={false}
+                                    animate={{
+                                        x: xOffset,
+                                        y: -bottomOffset,
+                                        scale: isDraggedCard ? 0.97 : 1,
+                                        opacity: isDraggedCard && !showInsertionSlot ? 0.32 : 1,
+                                    }}
+                                    transition={{
+                                        x: { type: 'spring', stiffness: 560, damping: 46, mass: 0.62 },
+                                        y: { type: 'spring', stiffness: 560, damping: 46, mass: 0.62 },
+                                        scale: { duration: 0.12 },
+                                        opacity: { duration: 0.1 },
+                                    }}
                                     style={{
                                         width: cardWidth,
                                         height: cardHeight,
-                                        left: `calc(50% + ${xOffset}px)`,
-                                        bottom: bottomOffset,
                                         marginLeft: -(cardWidth / 2),
                                         '--card-tilt': `${tilt}deg`,
-                                        zIndex
+                                        zIndex: isDraggedCard ? 130 : zIndex,
                                     }}
                                 >
+                                    {showInsertionSlot && (
+                                        <div className="absolute inset-0 z-20 rounded-md border border-[#c8aa6e]/40 bg-black/10 pointer-events-none" />
+                                    )}
                                     <button
                                         type="button"
                                         onMouseDown={(event) => onHandCardDragStart && onHandCardDragStart(card, event)}
@@ -578,14 +625,19 @@ const CombatHUD = ({
                                         ) && (onCardPreviewStart || onHandCardDragStart)(card, event)}
                                         onClick={(event) => event.preventDefault()}
                                         onContextMenu={(event) => event.preventDefault()}
-                                        className="board-hand-card relative w-full h-full rounded-md overflow-hidden bg-[#111827] border border-[#c8aa6e]/35 hover:border-[#f0e6d2] shadow-xl hover:shadow-[0_0_28px_rgba(200,170,110,0.36)]"
+                                        className={`board-hand-card relative w-full h-full rounded-md overflow-hidden bg-[#111827] border border-[#c8aa6e]/35 hover:border-[#f0e6d2] shadow-xl hover:shadow-[0_0_28px_rgba(200,170,110,0.36)] transition-opacity duration-100 ${
+                                            isDraggedCard
+                                                ? 'is-hand-dragging opacity-0 pointer-events-none'
+                                                : 'opacity-100'
+                                        }`}
                                         style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
-                                        title="Arrastrar al tablero"
+                                        title="Arrastra dentro de la mano para ordenar o hacia el tablero para jugar"
+                                        aria-grabbed={isDraggedCard}
                                     >
                                         <HudCardImage card={card} />
                                         <div className="absolute inset-0 ring-inset ring-1 ring-black/45 pointer-events-none" />
                                     </button>
-                                </div>
+                                </motion.div>
                             );
                         })}
                     </div>

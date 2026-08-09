@@ -185,33 +185,56 @@ body {
 
 /* Animación de Parpadeo Orgánico para Antorchas/Luces */
 @keyframes light-flicker {
-
   0%,
   100% {
+    opacity: 0.97;
+  }
+
+  8% {
+    opacity: 0.9;
+  }
+
+  14% {
     opacity: 1;
-    transform: scale(1);
   }
 
-  25% {
-    opacity: 0.92;
-    transform: scale(0.98);
+  29% {
+    opacity: 0.94;
   }
 
-  50% {
+  33% {
+    opacity: 0.87;
+  }
+
+  39% {
     opacity: 0.98;
-    transform: scale(1.04);
   }
 
-  75% {
-    opacity: 0.95;
-    transform: scale(0.99);
+  61% {
+    opacity: 0.93;
+  }
+
+  74% {
+    opacity: 1;
+  }
+
+  86% {
+    opacity: 0.91;
   }
 }
 
 .animate-flicker {
-  animation: light-flicker 3s infinite ease-in-out;
-  transform-box: fill-box;
-  transform-origin: center;
+  animation-name: light-flicker;
+  animation-duration: 3s;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+  will-change: opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-flicker {
+    animation: none;
+  }
 }
 
 .font-fantasy {

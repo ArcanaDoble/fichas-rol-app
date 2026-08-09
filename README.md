@@ -68,7 +68,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Cartas exportadas reeditables**: cada PNG descargado desde el constructor conserva dentro de sus metadatos un proyecto versionado con toda la configuración de la carta, incluida la imagen y el encuadre de cabecera, colores, textos con formato, contenedores y orden, rasgos, dados, alcance y recursos. El mismo PNG puede importarse después para continuar editándolo; también puede descargarse e importarse un archivo `.carta.json` como copia de respaldo.
 - **Cabecera responsive del constructor de cartas**: en móvil, las acciones principales comparten una primera fila y las cuatro utilidades se distribuyen de forma uniforme debajo; en ventanas intermedias permanecen agrupadas en una sola fila compacta y en escritorio se alinean junto al título sin generar huecos ni saltos irregulares.
 - **Agrupaciones libres de cartas**: cada baraja puede crear carpetas persistentes con el nombre que quiera y guardar dentro cualquier combinación de cartas arrastrándolas sobre la agrupación. La carta frontal se conserva completa y hasta dos cartas reales forman detrás una corona escalonada, neutra y contenida para comunicar la pila sin invadir agrupaciones vecinas; un clic abre la carpeta y arrastrar cualquier zona levanta una copia flotante completa, marca el destino y anima el intercambio de posición sin recargar las imágenes. Las carpetas pueden vaciarse carta a carta o eliminarse sin borrar su contenido. El selector `Agrupadas / Todas` alterna entre la organización y la cuadrícula completa, y `Agrupar atributos` sigue disponible como atajo opcional para crear `Cuerpo`, `Mente` y `Hambre` sin convertirlas en categorías exclusivas.
-- **Arrastre e índice de cartas refinados**: las cartas normales comparten con las agrupaciones una copia flotante semitransparente y una transición de posición con muelle que conserva las imágenes montadas. El fantasma de una carta individual no incorpora ningún rótulo, ni durante el movimiento libre ni al señalar un destino; los estados de intercambio o guardado se comunican únicamente sobre la carta o agrupación receptora, sin halos ni marcos exteriores. El orden optimista queda protegido frente a snapshots remotos antiguos. Los filtros de tipo abandonan las píldoras multicolor y se presentan como un índice de archivo arcano de placas recortadas, latón, carbón y tipografía Cinzel; cada categoría imprime su color sobre una superficie SVG con grano, trama diagonal y remates de marco. Al señalar una agrupación, su frontal y las cartas posteriores se elevan, oscurecen y desaturan como una sola pila visual.
+- **Arrastre e índice de cartas refinados**: las cartas normales comparten con las agrupaciones una copia flotante semitransparente y una transición de posición con muelle que conserva las imágenes montadas. El fantasma de una carta individual no incorpora ningún rótulo, ni durante el movimiento libre ni al señalar un destino; los estados de intercambio o guardado se comunican únicamente sobre la carta o agrupación receptora, sin halos ni marcos exteriores. El orden optimista queda protegido frente a snapshots remotos antiguos. Los filtros de tipo abandonan las píldoras multicolor y se presentan como un índice de archivo arcano de placas recortadas, latón, carbón y tipografía Cinzel; cada categoría imprime su color sobre una superficie SVG con grano, trama diagonal y remates de marco. Filtrar compacta directamente la cuadrícula final sin activar el muelle reservado a intercambios reales, evitando movimientos intermedios y parpadeos. Al señalar una agrupación, su frontal y las cartas posteriores se elevan, oscurecen y desaturan como una sola pila visual.
 - **Cabecera de baraja optimizada para móvil**: el título y el propietario comparten una ficha horizontal compacta, el índice evita separadores duplicados y la barra de organización reúne contador, modos y acciones en una sola fila. `Nueva agrupación` y `Agrupar atributos` se convierten en controles cuadrados accesibles en pantallas pequeñas y recuperan su texto desde `sm`.
 - **Controles e inspección de cartas**: las acciones superpuestas forman una familia de placas opacas y de alto contraste. El selector de tipo y eliminar permanecen siempre compactos y sin desplegables; en las cartas convencionales conservan los recortes inferiores que acompañan el marco. En las cartas de atributo, el selector recorta sus esquinas superior izquierda e inferior derecha, mientras eliminar recorta la superior derecha y la inferior izquierda, incluyendo sus filetes interiores. El selector convencional usa un inset afinado de 9 px en horizontal y 10 px en vertical. En atributos, el selector entra 4 px desde la izquierda y 9 px desde arriba; eliminar entra 6,5 px desde la derecha y 9 px desde arriba; inspeccionar entra 6 px desde la derecha y conserva sus 9 px inferiores. La visibilidad distingue publicación y ocultación mediante verde o pizarra. `Inspeccionar` conserva su despliegue y también admite pulsación prolongada. En móvil, los controles superiores mantienen objetivos táctiles de 40 px. Dentro de una agrupación, cada carta adopta una acción ligera inspirada en el pie de las carpetas: `Sacar carta` y `de <agrupación>` a la izquierda, más un icono circular de salida a la derecha; toda la franja es pulsable y la reclasificación de atributo permanece disponible fuera de las carpetas. La vista ampliada muestra únicamente la carta sobre el fondo difuminado y la rueda regula su tamaño de forma continua. El archivo lateral de cartas disponibles utiliza marcos recortados, textura SVG y acentos por categoría; su búsqueda ignora tildes, mayúsculas y puntuación, admite términos en cualquier orden y consulta nombre, tipo y colección de origen.
 - **Constructor de cartas por contenedores**: el diseño de carta deja de depender de fondos completos por tipo y pasa a usar una plantilla generada en canvas cuyo marco ocupa todo el tamaño exportable, con cabecera de imagen/título, zona beige con textura de papel y contenedores reordenables para alcance, consumo, daño, rasgos, minion y descripción; carga y consumo usan cuatro slots fijos con estados vacíos visibles, nuevos iconos de consumo tintados por tipo de recurso, elementos con iconos dedicados y color propio, y `Variable` dibujado en canvas. El menú de contenedores concentra la gestión con un máximo de seis por carta, alcance y minion limitados a una instancia, consumo/daño/rasgos/descripción repetibles, y cada contenedor repetido de daño, consumo, rasgos o descripción dispone de su propia caja de edición independiente para configurar valores distintos. Las descripciones pueden ajustar su tamaño según el espacio real disponible, insertar iconos desde un compendio visual con los assets nuevos y ya no convierten palabras clave automáticamente en iconos. Los rasgos se editan por bloque con un máximo de tres etiquetas. Si no queda ningún contenedor activo, el cuerpo de la carta muestra un aviso centrado de `Sin contenedores habilitados`. El contenedor `Minion` queda disponible como estructura de menú sin renderizarse todavía en la carta, y el icono de cabecera puede dejarse vacío o elegirse entre los iconos de cabecera dedicados, que se dibujan junto al título con un tamaño equivalente al texto, además de presets de acento más un color hexadecimal personalizado.
@@ -83,6 +83,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Subida directa a colección de personaje**: desde el constructor, un jugador puede subir el PNG final a una colección base con el nombre exacto del personaje; si no existe se crea con permisos de edición para ese jugador, y si existe oculta se muestra un aviso para contactar con el Master.
 - **Subida automática del Master por tipo**: el constructor del Master puede enviar la carta creada a una colección base oculta según su tipo (`Acciones`, `Estados`, `Armas`, etc.); si existe una colección equivalente la reutiliza y, si no existe, la crea sin permisos visibles para jugadores.
 - **Cartas disponibles con descarga PNG**: las barajas muestran el lateral como `Cartas disponibles` y cada carta importable incluye un icono para descargar su imagen en PNG sin pasar por el constructor. El archivo usa una barra de desplazamiento propia con carril oscuro, latón envejecido y compatibilidad temática tanto en Chromium como en Firefox.
+- **Entrada cohesionada a las colecciones**: al señalar o pulsar una colección se precargan y decodifican las imágenes que aparecerán primero en la baraja y en el archivo lateral. El estado local de cartas y agrupaciones se prepara en el mismo render que abre la colección, evitando el fotograma vacío y la aparición escalonada de imágenes y controles; un límite breve mantiene la navegación disponible aun con recursos remotos lentos o rotos.
 - **Borrado visual de barajas y colecciones**: eliminar una baraja o colección base abre un aviso personalizado con la misma estética del borrado de cartas base.
 - **Barajas en el tablero de cartas**: en encuentros de tablero, la biblioteca de cartas muestra las barajas normales disponibles para Master o jugador. Al seleccionarlas se crea un tablero con el nombre de la baraja y sus cartas distribuidas con holgura, manteniendo el orden original para poder moverlas juntas y reorganizarlas luego en mesa.
 - **Ocultación de cartas dentro de tableros**: el Master puede marcar un tablero de cartas desde el inspector para que los jugadores vean solo el tablero, sin revelar las cartas contenidas ni sus posiciones hasta que se saquen o se elimine el tablero.
@@ -127,8 +128,12 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Modo "hot seat"** - Alterna entre fichas controladas con Tab o el selector
 - **Selector de ficha centrado** - Muestra el nombre personalizado de cada token
 - **Canvas táctico integrado** - VTT principal con escenarios, grid, tokens y combate automatizado
+- **Iluminación orgánica y escalable** - Las luces emitidas por fichas y focos independientes usan una caída progresiva de núcleo, penumbra y borde, con color concentrado dentro de su alcance. El parpadeo afecta solo al resplandor, se desfasa por foco y se limita a diez luces animadas; el resto mantiene iluminación estática sin sumar animaciones costosas.
 - **Zonas del canvas con anclaje de rotación** - Las zonas rectangulares, circulares, de peligro y de escalera/desnivel se ajustan suavemente a 0°, 90°, 180° y 270° al rotarlas libremente.
 - **Tablero de cartas** - El modo Tablero permite crear tableros transparentes y redimensionables para ordenar cartas en mesa, apilar cartas y mantener manos separadas por jugador para que la iniciativa y el HUD muestren la mano real de cada token.
+- **Motor de cartas desacoplado** - Las reglas puras de pilas, desapilado, manos, contenedores, visibilidad y ajuste de rotación viven en un módulo independiente de `CanvasSection`; las operaciones devuelven además los identificadores modificados para conservar la persistencia transaccional. Una batería dedicada cubre reparación de pilas inválidas, movimientos entre contenedores, combinación y separación de montones, orden de manos y ocultación para jugadores.
+- **Orden manual de la mano en Tablero** - Las cartas se pueden recolocar al principio, al final o en cualquier posición arrastrándolas horizontalmente tanto con ratón como con pantalla táctil. El abanico anticipa la posición con un hueco discreto y muelles estables, sin textos, halos ni estados `hover` competidores durante el gesto; si la carta sale de la mano, conserva el comportamiento de jugarla hacia el tablero.
+- **Recogida inmediata de cartas** - Al llevar una carta de la mesa a la mano, el estado local corta el arrastre antes de que pueda entrar un snapshot remoto antiguo y actualiza mesa y abanico en una sola transición. Un bloqueo temporal descarta por completo cualquier escritura retrasada que todavía sitúe la carta en mesa, conservando la misma instancia local en la mano sin mezclar campos visuales ni volver a montar su imagen; se libera al jugarla de nuevo o al vencer la protección. Los cierres duplicados del mismo gesto se ignoran, una carta pendiente nunca vuelve a renderizarse en mesa y el `hover` del abanico permanece neutral hasta que el ratón termina la entrega y vuelve a moverse. Los toques sobre cartas quedan además aislados del paneo del fondo, eliminando pausas y parpadeos tanto en PC como en móvil.
 - **Mano contextual en Tablero** - La mano de cartas se escala en escritorio según la resolución disponible y se oculta al deseleccionar el token haciendo clic en una zona vacía del tablero.
 - **Fichas de recurso en Tablero** - Añade marcadores circulares compactos en 3D real con valor y color editable para representar costes, recuperación de velocidad u otros recursos sandbox directamente sobre la mesa; los tableros suman su valor, las arrastran consigo al moverlos y todos los participantes pueden manipularlas.
 - **Dados 3D en Tablero** - Permite generar dados D4, D6, D8, D10, D12 y D20 como objetos compartidos con color y tamaño configurables. El lanzamiento por tirachinas adapta tensión, impulso y límites al tamaño del dado y al zoom; usa gravedad, fricción, rebote, amortiguación y reposo estables, con un giro controlado alineado con la trayectoria. Los dados chocan entre sí como cuerpos dinámicos y transfieren movimiento y giro según la velocidad relativa, la dirección y la masa: los roces suaves no se amplifican, mientras que un impacto con fuerza suficiente desplaza y hace rodar al dado receptor y puede provocar colisiones en cadena. Todos los desplazamientos, caras y orientaciones afectados se guardan juntos. También recupera tiradas ladeadas y detiene la simulación de forma segura, manteniendo intacta la estética existente.
@@ -1566,10 +1571,76 @@ firebase deploy    # Despliega a Firebase Hosting
 src/
 ├── components/
 │   ├── inventory/             # Inventario tradicional
+│   ├── CanvasSection.jsx      # Entrada raíz exclusiva del canvas
+│   ├── BoardSection.jsx       # Entrada raíz exclusiva del tablero
 │   └── [otros componentes]    # UI general
+├── features/
+│   ├── board/
+│   │   ├── boardModeDefinition.js      # Contrato y colecciones del tablero
+│   │   ├── boardInitiative.js          # Iniciativa basada en cartas
+│   │   ├── createBoardCombatController.js # Extensión de combate del tablero
+│   │   ├── components/BoardObjects.jsx # Dados 3D y marcadores físicos
+│   │   └── useBoardController.js       # Cartas, manos, pilas y tiradas
+│   ├── canvas/
+│   │   ├── canvasModeDefinition.js     # Contrato y colecciones del canvas
+│   │   ├── canvasInitiative.js         # Cronología basada en velocidad
+│   │   ├── components/         # Entrada de UI, viewport, render y feedback
+│       │   └── sidebar/        # Paneles independientes por pestaña
+│       ├── combatRules.jsx     # Reglas puras de combate del canvas
+│       ├── createCanvasCombatController.js   # Turnos y reacciones
+│       ├── createCanvasScenarioController.js # CRUD y persistencia
+│       ├── createCanvasTokenController.js    # Tokens y movimiento táctico
+│       ├── useCanvasInteractionController.js # Puntero, touch y arrastre
+│       ├── grid.js             # Configuración de cuadrícula
+│       ├── spatial.js          # Coordenadas, snap y colisiones
+│       ├── tokenSheetSync.js   # Sincronización token ↔ ficha
+│       └── useCanvasGridController.js # Estado editable de cuadrícula
+│   └── tactical-shared/
+│       ├── TacticalSectionCore.jsx     # Sesión, cámara y persistencia comunes
+│       ├── createTacticalCombatController.js # Base de combate reutilizable
+│       └── components/TacticalWorkspaceShell.jsx # Composición neutral
 ├── firebase.js                # Configuración Firebase
 └── App.js                     # Componente principal
 ```
+
+### Separación entre canvas y tablero
+
+`CanvasSection` y `BoardSection` son entradas raíz diferentes. `App` ya no abre
+el tablero pasando `mode="board"` al canvas: cada sección inyecta su propio
+contrato de colecciones, iniciativa, controlador de funciones específicas,
+adaptador de combate y entrada de interfaz.
+
+Los dos modos comparten `features/tactical-shared` exclusivamente para la sesión,
+cámara, persistencia y composición que deben comportarse igual. La regla de
+mantenimiento es que una modificación solicitada solo para canvas o tablero no
+debe implementarse en ese núcleo compartido. Cada sistema dispone de puntos de
+extensión propios para poder divergir sin afectar al otro:
+
+- Las reglas deterministas pertenecen a `features/canvas/combatRules.jsx`,
+  `grid.js` o `spatial.js` y deben cubrirse con pruebas unitarias.
+- La resolución del canvas entra por `createCanvasCombatController.js` y la del
+  tablero por `createBoardCombatController.js`; ambos pueden evolucionar por separado.
+- La iniciativa del canvas vive en `canvasInitiative.js` y cuenta velocidad; la
+  del tablero vive en `boardInitiative.js` y cuenta las cartas de cada mano.
+- El guardado
+  de escenarios, en `createCanvasScenarioController.js`; los comandos de tokens,
+  en `createCanvasTokenController.js`.
+- Los gestos, selección y arrastre se modifican en
+  `useCanvasInteractionController.js`.
+- El mapa visible se modifica en `components/CanvasViewport.jsx`; el ensamblaje,
+  en `CanvasWorkspaceShell.jsx`; y cada pestaña del inspector dispone de su propio
+  archivo bajo `components/sidebar/`.
+- La sincronización de equipamiento y ficha se mantiene en `tokenSheetSync.js`.
+- `features/board` contiene cartas, manos, dados, marcadores e iniciativa. El
+  canvas utiliza un controlador de funciones específicas inerte y no inicializa
+  `useBoardController`.
+
+Esta reorganización convierte el antiguo `CanvasSection.jsx` de unas 18.100 líneas
+en dos entradas mínimas y un núcleo táctico compartido de unas 2.600 líneas, sin
+cambiar las colecciones Firebase ni el comportamiento visible. Las pruebas de
+frontera comprueban que los contratos, controladores, interfaces e iniciativas
+son distintos, y la prueba de humo abre biblioteca y escenario activo desde ambas
+secciones.
 
 ## 🎯 Últimas mejoras implementadas
 

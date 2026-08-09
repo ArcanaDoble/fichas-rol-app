@@ -76,6 +76,63 @@ const CARD_TYPES = [
 
 const FILTER_PLAQUE_CLIP = 'polygon(7px 0, calc(100% - 7px) 0, 100% 7px, 100% calc(100% - 7px), calc(100% - 7px) 100%, 7px 100%, 0 calc(100% - 7px), 0 7px)';
 const ARCHIVE_PANEL_CLIP = 'polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px)';
+const COLLECTION_IMAGE_PRELOAD_TIMEOUT = 1400;
+const COLLECTION_PRIMARY_CARD_LIMIT = 18;
+const COLLECTION_PRIMARY_TEMPLATE_LIMIT = 10;
+const collectionImagePreloadCache = new Map();
+
+const preloadCollectionImage = (url) => {
+    if (!url || typeof Image === 'undefined') return Promise.resolve();
+    if (collectionImagePreloadCache.has(url)) return collectionImagePreloadCache.get(url);
+
+    const preloadPromise = new Promise((resolve) => {
+        const image = new Image();
+        let settled = false;
+
+        const finish = () => {
+            if (settled) return;
+            settled = true;
+            image.onload = null;
+            image.onerror = null;
+            resolve();
+        };
+
+        const decodeAndFinish = () => {
+            if (typeof image.decode !== 'function') {
+                finish();
+                return;
+            }
+            image.decode().catch(() => {}).finally(finish);
+        };
+
+        image.decoding = 'async';
+        image.onload = decodeAndFinish;
+        image.onerror = finish;
+        image.src = url;
+
+        if (image.complete) decodeAndFinish();
+    });
+
+    collectionImagePreloadCache.set(url, preloadPromise);
+    return preloadPromise;
+};
+
+const preloadCollectionImages = (urls, timeout = COLLECTION_IMAGE_PRELOAD_TIMEOUT) => {
+    const uniqueUrls = [...new Set(urls.filter(Boolean))];
+    if (uniqueUrls.length === 0) return Promise.resolve();
+
+    return new Promise((resolve) => {
+        let settled = false;
+        const finish = () => {
+            if (settled) return;
+            settled = true;
+            window.clearTimeout(timer);
+            resolve();
+        };
+        const timer = window.setTimeout(finish, timeout);
+        Promise.allSettled(uniqueUrls.map(preloadCollectionImage)).then(finish);
+    });
+};
 
 const AvailableCardsTexture = () => (
     <svg
@@ -551,6 +608,7 @@ const DeckCardItem = ({
     card,
     cardGroup,
     resolvedAttributeType,
+    layoutDependency,
     draggedCardId,
     dropTargetCardId,
     canEdit = true,
@@ -577,11 +635,12 @@ const DeckCardItem = ({
             data-deck-card-id={card.id}
             onPointerDown={(event) => handleCardPointerDown(event, card)}
             layout="position"
+            layoutDependency={layoutDependency}
             initial={false}
             transition={{
                 layout: { type: 'spring', stiffness: 420, damping: 34 }
             }}
-            className={`flex touch-none flex-col gap-2.5 z-10 w-full max-w-[240px] mx-auto relative transition-all duration-200 ${canEdit ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} ${isDragging ? 'opacity-35 scale-[0.985]' : 'opacity-100'} ${isDropTarget ? 'scale-[1.02]' : ''} ${isHiddenForPlayers ? 'opacity-75' : ''}`}
+            className={`relative z-10 mx-auto flex w-full max-w-[240px] touch-none flex-col gap-2.5 transition-[opacity,scale] duration-200 ${canEdit ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} ${isDragging ? 'opacity-35 scale-[0.985]' : 'opacity-100'} ${isDropTarget ? 'scale-[1.02]' : ''} ${isHiddenForPlayers ? 'opacity-75' : ''}`}
         >
             <TiltCard frontUrl={card.frontUrl} name={card.name} active={!isDragging && !isDropTarget}>
                 {isMasterLibrary && (
@@ -747,6 +806,7 @@ DeckCardItem.propTypes = {
     card: PropTypes.object.isRequired,
     cardGroup: PropTypes.object,
     resolvedAttributeType: PropTypes.string,
+    layoutDependency: PropTypes.string,
     draggedCardId: PropTypes.string,
     dropTargetCardId: PropTypes.string,
     canEdit: PropTypes.bool,
@@ -765,6 +825,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, currentUserId, knownPlayer
     const [decks, setDecks] = useState([]);
     const [masterLibraryDecks, setMasterLibraryDecks] = useState([]);
     const [activeDeck, setActiveDeck] = useState(null);
+    const [openingDeckId, setOpeningDeckId] = useState(null);
     const [searchTemplate, setSearchTemplate] = useState('');
     const [newDeckModal, setNewDeckModal] = useState(false);
     const [newDeckName, setNewDeckName] = useState('');
@@ -808,6 +869,8 @@ export const DeckBuilderView = ({ ownerId, ownerName, currentUserId, knownPlayer
     const libraryDragStateRef = useRef(null);
     const libraryDragClickBlockedRef = useRef(false);
     const libraryCardFileInputRef = useRef(null);
+    const deckOpenRequestRef = useRef(0);
+    const deckWarmupPromisesRef = useRef(new Map());
     const viewerId = currentUserId || ownerId;
 
     useEffect(() => {
@@ -916,6 +979,84 @@ export const DeckBuilderView = ({ ownerId, ownerName, currentUserId, knownPlayer
         ...libraryDecks
     ], [normalDecks, libraryDecks]);
 
+    const getDeckViewImagePlan = (deck) => {
+        const deckAccess = getDeckAccessForViewer(deck, viewerId);
+        const canSeeHiddenDeckCards = !isPlayer
+            || !isMasterLibraryDeck(deck)
+            || deckAccess === COLLECTION_ACCESS.EDIT;
+        const deckCards = (deck.cards || []).filter((card) => (
+            canSeeHiddenDeckCards || card.visibleToPlayers !== false
+        ));
+        const deckCardsById = new Map(deckCards.map((card) => [card.id, card]));
+        const groupPreviewCards = normalizeCardGroups(deck.cardGroups || [], deckCards)
+            .slice(0, 6)
+            .flatMap((group) => group.cardIds.slice(0, 3).map((cardId) => deckCardsById.get(cardId)))
+            .filter(Boolean);
+        const orderedDeckUrls = [...groupPreviewCards, ...deckCards]
+            .map((card) => card.frontUrl)
+            .filter(Boolean);
+
+        const templateUrls = visibleDecks
+            .filter((candidate) => isMasterLibraryDeck(candidate) && candidate.id !== deck.id)
+            .flatMap((candidate) => {
+                const access = getDeckAccessForViewer(candidate, viewerId);
+                const canSeeHiddenCards = !isPlayer || access === COLLECTION_ACCESS.EDIT;
+                return (candidate.cards || [])
+                    .filter((card) => canSeeHiddenCards || card.visibleToPlayers !== false)
+                    .map((card) => card.frontUrl)
+                    .filter(Boolean);
+            });
+
+        const allUrls = [...new Set([...orderedDeckUrls, ...templateUrls])];
+        const criticalUrls = [...new Set([
+            ...orderedDeckUrls.slice(0, COLLECTION_PRIMARY_CARD_LIMIT),
+            ...templateUrls.slice(0, COLLECTION_PRIMARY_TEMPLATE_LIMIT)
+        ])];
+        const criticalUrlSet = new Set(criticalUrls);
+
+        return {
+            criticalUrls,
+            deferredUrls: allUrls.filter((url) => !criticalUrlSet.has(url))
+        };
+    };
+
+    const warmDeckViewImages = (deck) => {
+        const { criticalUrls, deferredUrls } = getDeckViewImagePlan(deck);
+        const signature = `${deck.id}:${criticalUrls.join('|')}:${deferredUrls.join('|')}`;
+        const cachedWarmup = deckWarmupPromisesRef.current.get(signature);
+        if (cachedWarmup) return cachedWarmup;
+
+        const warmup = preloadCollectionImages(criticalUrls).then(() => {
+            if (deferredUrls.length > 0) {
+                window.setTimeout(() => {
+                    preloadCollectionImages(deferredUrls, 5000);
+                }, 0);
+            }
+        });
+        deckWarmupPromisesRef.current.set(signature, warmup);
+        return warmup;
+    };
+
+    const handleOpenDeck = async (deck) => {
+        const requestId = deckOpenRequestRef.current + 1;
+        deckOpenRequestRef.current = requestId;
+        setOpeningDeckId(deck.id);
+
+        await warmDeckViewImages(deck);
+        if (deckOpenRequestRef.current !== requestId) return;
+
+        const nextCards = deck.cards || [];
+        activeDeckSyncIdRef.current = deck.id;
+        pendingCardsSignatureRef.current = null;
+        pendingCardGroupsSignatureRef.current = null;
+        setLocalCards(nextCards);
+        setLocalCardGroups(normalizeCardGroups(deck.cardGroups || [], nextCards));
+        setActiveCardTypeFilter(null);
+        setExpandedCardGroupId(null);
+        setActiveDeck(deck);
+        setOpeningDeckId(null);
+    };
+
     const canReorderNormalDecks = normalDecks.length > 1;
     const canReorderLibraryDecks = !isPlayer && libraryDecks.length > 1;
 
@@ -980,6 +1121,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, currentUserId, knownPlayer
     }, [activeCardTypeFilter]);
 
     useEffect(() => () => {
+        deckOpenRequestRef.current += 1;
         clearDragListeners();
         clearCardGroupDragListeners();
         clearNormalDeckDragListeners();
@@ -1939,6 +2081,11 @@ export const DeckBuilderView = ({ ownerId, ownerName, currentUserId, knownPlayer
             ? expandedCardGroup.cards
             : displayedCards.filter((card) => !groupedCardIds.has(card.id)))
         : displayedCards;
+    // Filter changes should snap directly to the final grid. Only real order or
+    // grouping mutations advance this key and trigger Framer's layout animation.
+    const cardLayoutDependency = `${localCards.map((card) => card.id).join('|')}::${localCardGroups
+        .map((group) => `${group.id}:${group.cardIds.join(',')}`)
+        .join('|')}`;
     const ungroupedAttributeCount = visibleActiveCards.filter((card) => (
         (card.type || 'action') === 'attribute' && !groupedCardIds.has(card.id)
     )).length;
@@ -2111,12 +2258,15 @@ export const DeckBuilderView = ({ ownerId, ownerName, currentUserId, knownPlayer
                                                 data-normal-deck-id={!isLibrary ? deck.id : undefined}
                                                 data-library-deck-id={isLibrary ? deck.id : undefined}
                                                 onPointerDown={(event) => {
+                                                    warmDeckViewImages(deck);
                                                     if (isLibrary) {
                                                         handleLibraryDeckPointerDown(event, deck);
                                                     } else {
                                                         handleNormalDeckPointerDown(event, deck);
                                                     }
                                                 }}
+                                                onPointerEnter={() => warmDeckViewImages(deck)}
+                                                onFocusCapture={() => warmDeckViewImages(deck)}
                                                 onClick={() => {
                                                     if (normalDeckDragClickBlockedRef.current) {
                                                         normalDeckDragClickBlockedRef.current = false;
@@ -2126,9 +2276,10 @@ export const DeckBuilderView = ({ ownerId, ownerName, currentUserId, knownPlayer
                                                         libraryDragClickBlockedRef.current = false;
                                                         return;
                                                     }
-                                                    if (!isEditingName) setActiveDeck(deck);
+                                                    if (!isEditingName) handleOpenDeck(deck);
                                                 }}
-                                                className={`group relative flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 ${(canReorderLibraryDecks && isLibrary) || (canReorderNormalDecks && !isLibrary) ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${isDraggingLibraryDeck || isDraggingNormalDeck ? 'opacity-45 scale-[0.985]' : ''} ${isDropTargetDeck ? 'scale-[1.02]' : ''}`}
+                                                aria-busy={openingDeckId === deck.id}
+                                                className={`group relative flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 ${(canReorderLibraryDecks && isLibrary) || (canReorderNormalDecks && !isLibrary) ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${isDraggingLibraryDeck || isDraggingNormalDeck ? 'opacity-45 scale-[0.985]' : ''} ${isDropTargetDeck ? 'scale-[1.02]' : ''} ${openingDeckId === deck.id ? 'pointer-events-none scale-[0.99] brightness-90' : ''}`}
                                             >
                                                 <AnimatePresence>
                                                     {isDropTargetDeck && (
@@ -2576,6 +2727,7 @@ export const DeckBuilderView = ({ ownerId, ownerName, currentUserId, knownPlayer
                                                         card={card}
                                                         cardGroup={cardGroup}
                                                         resolvedAttributeType={resolveAttributeCardType(card, masterLibraryTemplates)}
+                                                        layoutDependency={cardLayoutDependency}
                                                         draggedCardId={draggedCardId}
                                                         dropTargetCardId={dropTargetCardId}
                                                         canEdit={canEditActiveDeck}
