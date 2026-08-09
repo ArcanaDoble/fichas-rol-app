@@ -64,9 +64,16 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Editor de retratos integrado** con recorte y zoom para ajustar la miniatura de cada clase antes de guardarla.
 - **Panel de detalle interactivo** al pulsar una clase, con pestañas de Resumen, Inspiración (Hitos), Nivel de Campeón, Reglas y Equipación.
 - **Acceso directo** desde el menú Máster mediante la nueva opción «Lista de Clases».
-- **Constructor de cartas**: la antigua pestaña «Tienda» de la ficha pasa a ser «Cartas» y abre un canvas para previsualizar una carta con textos guía, escribir su nombre, descripción y texto narrativo cuando el formato lo requiere, cambiar entre los 15 fondos base WebP incluidos en `public/cards`, definir rasgos por tipo de carta con letreros generados en canvas y configurar cartas de arma con dados, alcance, tipo de arma, cargas y consumos con ranuras táctiles; sus fondos e iconos propios cargan en WebP optimizado y el Máster también dispone de acceso directo desde su menú principal.
+- **Constructor de cartas**: la antigua pestaña «Tienda» de la ficha pasa a ser «Cartas» y abre un canvas para previsualizar una carta con textos guía, escribir su nombre, descripción y texto narrativo, subir una imagen de cabecera, definir rasgos y configurar dados, alcance, tipo de combate, cargas y consumos con ranuras táctiles; sus iconos propios cargan en WebP optimizado y el Máster también dispone de acceso directo desde su menú principal.
+- **Cartas exportadas reeditables**: cada PNG descargado desde el constructor conserva dentro de sus metadatos un proyecto versionado con toda la configuración de la carta, incluida la imagen y el encuadre de cabecera, colores, textos con formato, contenedores y orden, rasgos, dados, alcance y recursos. El mismo PNG puede importarse después para continuar editándolo; también puede descargarse e importarse un archivo `.carta.json` como copia de respaldo.
+- **Cabecera responsive del constructor de cartas**: en móvil, las acciones principales comparten una primera fila y las cuatro utilidades se distribuyen de forma uniforme debajo; en ventanas intermedias permanecen agrupadas en una sola fila compacta y en escritorio se alinean junto al título sin generar huecos ni saltos irregulares.
+- **Agrupaciones libres de cartas**: cada baraja puede crear carpetas persistentes con el nombre que quiera y guardar dentro cualquier combinación de cartas arrastrándolas sobre la agrupación. La carta frontal se conserva completa y hasta dos cartas reales forman detrás una corona escalonada, neutra y contenida para comunicar la pila sin invadir agrupaciones vecinas; un clic abre la carpeta y arrastrar cualquier zona levanta una copia flotante completa, marca el destino y anima el intercambio de posición sin recargar las imágenes. Las carpetas pueden vaciarse carta a carta o eliminarse sin borrar su contenido. El selector `Agrupadas / Todas` alterna entre la organización y la cuadrícula completa, y `Agrupar atributos` sigue disponible como atajo opcional para crear `Cuerpo`, `Mente` y `Hambre` sin convertirlas en categorías exclusivas.
+- **Arrastre e índice de cartas refinados**: las cartas normales comparten con las agrupaciones una copia flotante semitransparente y una transición de posición con muelle que conserva las imágenes montadas. El fantasma de una carta individual no incorpora ningún rótulo, ni durante el movimiento libre ni al señalar un destino; los estados de intercambio o guardado se comunican únicamente sobre la carta o agrupación receptora, sin halos ni marcos exteriores. El orden optimista queda protegido frente a snapshots remotos antiguos. Los filtros de tipo abandonan las píldoras multicolor y se presentan como un índice de archivo arcano de placas recortadas, latón, carbón y tipografía Cinzel; cada categoría imprime su color sobre una superficie SVG con grano, trama diagonal y remates de marco. Filtrar compacta directamente la cuadrícula final sin activar el muelle reservado a intercambios reales, evitando movimientos intermedios y parpadeos. Al señalar una agrupación, su frontal y las cartas posteriores se elevan, oscurecen y desaturan como una sola pila visual.
+- **Cabecera de baraja optimizada para móvil**: el título y el propietario comparten una ficha horizontal compacta, el índice evita separadores duplicados y la barra de organización reúne contador, modos y acciones en una sola fila. `Nueva agrupación` y `Agrupar atributos` se convierten en controles cuadrados accesibles en pantallas pequeñas y recuperan su texto desde `sm`.
+- **Controles e inspección de cartas**: las acciones superpuestas forman una familia de placas opacas y de alto contraste. El selector de tipo y eliminar permanecen siempre compactos y sin desplegables; en las cartas convencionales conservan los recortes inferiores que acompañan el marco. En las cartas de atributo, el selector recorta sus esquinas superior izquierda e inferior derecha, mientras eliminar recorta la superior derecha y la inferior izquierda, incluyendo sus filetes interiores. El selector convencional usa un inset afinado de 9 px en horizontal y 10 px en vertical. En atributos, el selector entra 4 px desde la izquierda y 9 px desde arriba; eliminar entra 6,5 px desde la derecha y 9 px desde arriba; inspeccionar entra 6 px desde la derecha y conserva sus 9 px inferiores. La visibilidad distingue publicación y ocultación mediante verde o pizarra. `Inspeccionar` conserva su despliegue y también admite pulsación prolongada. En móvil, los controles superiores mantienen objetivos táctiles de 40 px. Dentro de una agrupación, cada carta adopta una acción ligera inspirada en el pie de las carpetas: `Sacar carta` y `de <agrupación>` a la izquierda, más un icono circular de salida a la derecha; toda la franja es pulsable y la reclasificación de atributo permanece disponible fuera de las carpetas. La vista ampliada muestra únicamente la carta sobre el fondo difuminado y la rueda regula su tamaño de forma continua. El archivo lateral de cartas disponibles utiliza marcos recortados, textura SVG y acentos por categoría; su búsqueda ignora tildes, mayúsculas y puntuación, admite términos en cualquier orden y consulta nombre, tipo y colección de origen.
+- **Constructor de cartas por contenedores**: el diseño de carta deja de depender de fondos completos por tipo y pasa a usar una plantilla generada en canvas cuyo marco ocupa todo el tamaño exportable, con cabecera de imagen/título, zona beige con textura de papel y contenedores reordenables para alcance, consumo, daño, rasgos, minion y descripción; carga y consumo usan cuatro slots fijos con estados vacíos visibles, nuevos iconos de consumo tintados por tipo de recurso, elementos con iconos dedicados y color propio, y `Variable` dibujado en canvas. El menú de contenedores concentra la gestión con un máximo de seis por carta, alcance y minion limitados a una instancia, consumo/daño/rasgos/descripción repetibles, y cada contenedor repetido de daño, consumo, rasgos o descripción dispone de su propia caja de edición independiente para configurar valores distintos. Las descripciones pueden ajustar su tamaño según el espacio real disponible, insertar iconos desde un compendio visual con los assets nuevos y ya no convierten palabras clave automáticamente en iconos. Los rasgos se editan por bloque con un máximo de tres etiquetas. Si no queda ningún contenedor activo, el cuerpo de la carta muestra un aviso centrado de `Sin contenedores habilitados`. El contenedor `Minion` queda disponible como estructura de menú sin renderizarse todavía en la carta, y el icono de cabecera puede dejarse vacío o elegirse entre los iconos de cabecera dedicados, que se dibujan junto al título con un tamaño equivalente al texto, además de presets de acento más un color hexadecimal personalizado.
 - **Tipos de arma simplificados en cartas**: el constructor de cartas usa solo tres iconos WebP para `Cuerpo a cuerpo`, `Distancia` y `Magia`, reemplazando el catálogo anterior de iconos de armas específicas.
-- **Recursos en trampas y minions**: las cartas de `Trampa` y `Minion` pueden usar cargas y consumos como armas y armaduras, con un modo de solo carga que centra el raíl de cargas en el canvas.
+- **Recursos en cartas modulares**: las cargas y consumos se gestionan desde sus propios contenedores, sin el selector lateral antiguo de modos de recursos.
 - **Dado Variable y Elementos en Armas**:
   - Se añade el dado **DX** (dado variable) al final de la selección de dados de daño para armas. Al activarse, se oculta la cantidad numérica en la carta y se sustituye la celda de cantidad en el editor por el aviso: *"Dado variable. Depende de otros factores."*
   - Se agrega el icono **Variable** al final de la pool de consumos para su selección y asignación en ranuras.
@@ -75,13 +82,16 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Previsualización del constructor más pulida**: el halo detrás de la carta usa luces elípticas difuminadas y una sombra más suave para evitar cortes visibles alrededor de la previsualización.
 - **Subida directa a colección de personaje**: desde el constructor, un jugador puede subir el PNG final a una colección base con el nombre exacto del personaje; si no existe se crea con permisos de edición para ese jugador, y si existe oculta se muestra un aviso para contactar con el Master.
 - **Subida automática del Master por tipo**: el constructor del Master puede enviar la carta creada a una colección base oculta según su tipo (`Acciones`, `Estados`, `Armas`, etc.); si existe una colección equivalente la reutiliza y, si no existe, la crea sin permisos visibles para jugadores.
-- **Cartas disponibles con descarga PNG**: las barajas muestran el lateral como `Cartas disponibles` y cada carta importable incluye un icono para descargar su imagen en PNG sin pasar por el constructor.
+- **Cartas disponibles con descarga PNG**: las barajas muestran el lateral como `Cartas disponibles` y cada carta importable incluye un icono para descargar su imagen en PNG sin pasar por el constructor. El archivo usa una barra de desplazamiento propia con carril oscuro, latón envejecido y compatibilidad temática tanto en Chromium como en Firefox.
+- **Entrada cohesionada a las colecciones**: al señalar o pulsar una colección se precargan y decodifican las imágenes que aparecerán primero en la baraja y en el archivo lateral. El estado local de cartas y agrupaciones se prepara en el mismo render que abre la colección, evitando el fotograma vacío y la aparición escalonada de imágenes y controles; un límite breve mantiene la navegación disponible aun con recursos remotos lentos o rotos.
 - **Borrado visual de barajas y colecciones**: eliminar una baraja o colección base abre un aviso personalizado con la misma estética del borrado de cartas base.
 - **Barajas en el tablero de cartas**: en encuentros de tablero, la biblioteca de cartas muestra las barajas normales disponibles para Master o jugador. Al seleccionarlas se crea un tablero con el nombre de la baraja y sus cartas distribuidas con holgura, manteniendo el orden original para poder moverlas juntas y reorganizarlas luego en mesa.
 - **Ocultación de cartas dentro de tableros**: el Master puede marcar un tablero de cartas desde el inspector para que los jugadores vean solo el tablero, sin revelar las cartas contenidas ni sus posiciones hasta que se saquen o se elimine el tablero.
 - **Ajustes de trampa y armadura en cartas**: las trampas y armaduras amplían el cuadro de texto al ocultar sus rasgos, y las armaduras usan ranuras específicas sin selector de consumo/elemento.
 - **Separación de reglas y lore en cartas**: el cuadro de texto permite insertar separadores con `---` y marcar bloques narrativos con `[lore]...[/lore]`, con botones directos en la barra de formato del editor.
 - **Cartas de Minion**: el antiguo tipo `Habilidad` del constructor pasa a `Minion`, con dado, cantidad, alcance/regla, tipo de arma, una fila superior de atributos `Hambre`, `Cuerpo` y `Mente` con iconos y valores editables, y hasta 4 rasgos en las dos filas inferiores.
+- **Descripciones auto en cartas modulares**: cuando varias descripciones comparten el tramo final de la carta, el render reparte el alto disponible entre los contenedores para evitar cortes prematuros y aprovechar el espacio restante; los valores manuales de espacio actúan como reserva mínima, no como una caja rígida si todavía queda cuerpo libre.
+- **Paleta de formato de descripciones**: los colores rápidos de las barras de descripción usan tonos coherentes con el compendio visual de iconos (`Cuerpo`, `Hambre`, `Mente`, `Oscuridad` y `Luz`) para evitar colores demasiado saturados.
 - **Rendimiento del constructor de cartas**: el canvas agrupa redibujos rápidos, reutiliza cargas de imágenes en curso, precarga recursos comunes en segundo plano y usa una previsualización interna más ligera en móvil sin perder resolución al exportar.
 - **Edición directa de todos los campos**: haz clic en título, subtítulo, descripción, etiquetas, reglas o listas para actualizar la clase y guarda los cambios con un solo botón.
 - **Hitos con seguimiento**: marca la inspiración completada mediante checks persistentes y resaltados que mantienen el estilo luminiscente del panel.
@@ -118,11 +128,15 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Modo "hot seat"** - Alterna entre fichas controladas con Tab o el selector
 - **Selector de ficha centrado** - Muestra el nombre personalizado de cada token
 - **Canvas táctico integrado** - VTT principal con escenarios, grid, tokens y combate automatizado
+- **Iluminación orgánica y escalable** - Las luces emitidas por fichas y focos independientes usan una caída progresiva de núcleo, penumbra y borde, con color concentrado dentro de su alcance. El parpadeo afecta solo al resplandor, se desfasa por foco y se limita a diez luces animadas; el resto mantiene iluminación estática sin sumar animaciones costosas.
 - **Zonas del canvas con anclaje de rotación** - Las zonas rectangulares, circulares, de peligro y de escalera/desnivel se ajustan suavemente a 0°, 90°, 180° y 270° al rotarlas libremente.
 - **Tablero de cartas** - El modo Tablero permite crear tableros transparentes y redimensionables para ordenar cartas en mesa, apilar cartas y mantener manos separadas por jugador para que la iniciativa y el HUD muestren la mano real de cada token.
+- **Motor de cartas desacoplado** - Las reglas puras de pilas, desapilado, manos, contenedores, visibilidad y ajuste de rotación viven en un módulo independiente de `CanvasSection`; las operaciones devuelven además los identificadores modificados para conservar la persistencia transaccional. Una batería dedicada cubre reparación de pilas inválidas, movimientos entre contenedores, combinación y separación de montones, orden de manos y ocultación para jugadores.
+- **Orden manual de la mano en Tablero** - Las cartas se pueden recolocar al principio, al final o en cualquier posición arrastrándolas horizontalmente tanto con ratón como con pantalla táctil. El abanico anticipa la posición con un hueco discreto y muelles estables, sin textos, halos ni estados `hover` competidores durante el gesto; si la carta sale de la mano, conserva el comportamiento de jugarla hacia el tablero.
+- **Recogida inmediata de cartas** - Al llevar una carta de la mesa a la mano, el estado local corta el arrastre antes de que pueda entrar un snapshot remoto antiguo y actualiza mesa y abanico en una sola transición. Un bloqueo temporal descarta por completo cualquier escritura retrasada que todavía sitúe la carta en mesa, conservando la misma instancia local en la mano sin mezclar campos visuales ni volver a montar su imagen; se libera al jugarla de nuevo o al vencer la protección. Los cierres duplicados del mismo gesto se ignoran, una carta pendiente nunca vuelve a renderizarse en mesa y el `hover` del abanico permanece neutral hasta que el ratón termina la entrega y vuelve a moverse. Los toques sobre cartas quedan además aislados del paneo del fondo, eliminando pausas y parpadeos tanto en PC como en móvil.
 - **Mano contextual en Tablero** - La mano de cartas se escala en escritorio según la resolución disponible y se oculta al deseleccionar el token haciendo clic en una zona vacía del tablero.
 - **Fichas de recurso en Tablero** - Añade marcadores circulares compactos en 3D real con valor y color editable para representar costes, recuperación de velocidad u otros recursos sandbox directamente sobre la mesa; los tableros suman su valor, las arrastran consigo al moverlos y todos los participantes pueden manipularlas.
-- **Dados 3D en Tablero** - Permite generar dados D4, D6, D8, D10, D12 y D20 como objetos compartidos con color y tamaño configurables. Incluye la mecánica premium de **Lanzamiento por Tirachinas con Tensión Elástica**, donde el arrastre limitado a 150px renderiza una banda elástica rúnica y brillante que transita dinámicamente de Amarillo/Ámbar a Carmesí mediante HSL. Al soltar, el dado es disparado físicamente con precisión sincrónica (vía `flushSync`) en la dirección contraria al vector de arrastre.
+- **Dados 3D en Tablero** - Permite generar dados D4, D6, D8, D10, D12 y D20 como objetos compartidos con color y tamaño configurables. El lanzamiento por tirachinas adapta tensión, impulso y límites al tamaño del dado y al zoom; usa gravedad, fricción, rebote, amortiguación y reposo estables, con un giro controlado alineado con la trayectoria. Los dados chocan entre sí como cuerpos dinámicos y transfieren movimiento y giro según la velocidad relativa, la dirección y la masa: los roces suaves no se amplifican, mientras que un impacto con fuerza suficiente desplaza y hace rodar al dado receptor y puede provocar colisiones en cadena. Todos los desplazamientos, caras y orientaciones afectados se guardan juntos. También recupera tiradas ladeadas y detiene la simulación de forma segura, manteniendo intacta la estética existente.
 - **Registro de tiradas en Tablero** - La pestaña Logs incorpora un lanzador múltiple de D4, D6, D8, D10, D12 y D20 con historial compartido, total de la reserva y desglose visual de cada dado usando la misma estética del inspector; cada tipo de dado puede marcarse como crítico/explosivo y cada dado del registro puede anularse o reactivarse para recalcular el total.
 - **Fichas de token personalizadas** - Cada token puede tener su propia hoja de personaje
 - **Copiar tokens conserva su hoja personalizada** - Al duplicar un token se clona su ficha con todos los valores (base, total y modificados), colores y visibilidad de estadísticas manteniendo IDs independientes en los mapas del máster y del jugador
@@ -176,13 +190,281 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Exploración compartida persistente** - Las casillas reveladas en el modo explorador se sincronizan al instante entre máster y jugadores y se conservan al recargar o cambiar de dispositivo
 - **Compartición instantánea de cuadrantes** - Al añadir o quitar jugadores compartidos desde el máster, los permisos se guardan automáticamente en Firebase y llegan al instante a los clientes autorizados
 - **Permisos entre jugadores** - Los jugadores pueden compartir cuadrantes guardados con otros jugadores disponibles (sin incluirse a sí mismos) y, al editar uno ajeno, siempre se muestra quién es el creador original
-- **Permisos de cuadrantes reforzados** - Los jugadores compartidos se almacenan normalizados en Firebase para que los navegadores de escritorio reciban los cuadrantes asignados sin inconsistencias
+- **Permisos de cuadrantes reforzados** - Los navegadores de escritorio reciben los cuadrantes asignados sin inconsistencias
 - **Anotaciones por cuadrante** - Cada cuadrante guarda sus notas con un identificador persistente en Firestore y las migraciones de datos antiguos se aplican automáticamente en memoria
 - **Panel maestro de notas** - Revisa y gestiona todas las anotaciones de un cuadrante desde un resumen consolidado
 
 ### 🎲 **Gestión de Personajes**
 
-> **Versión actual: 2.6.0**
+> **Versión actual: 2.7.25**
+
+**Resumen de cambios v2.7.25:**
+
+- **Sincronización robusta con transacciones atómicas**:
+  - Implementación de guardado transaccional a nivel de elementos (`safePersistItems`) para todas las acciones del canvas (arrastre, rotación, redimensionamiento, unstacking, eliminación, enlace de personajes, reinicio de velocidad, reacciones de combate y fin de turno).
+  - Fusión inteligente en tiempo real que previene que los movimientos simultáneos de jugadores se pisen o que cartas y elementos eliminados vuelvan a aparecer (snapback).
+  - El tablero de cartas etiqueta cada escritura con los elementos modificados y ya no usa escrituras completas de emergencia, evitando falsos avisos de "Movimiento Interrumpido" cuando Master y jugadores mueven cartas o tableros grandes a la vez.
+  - Las operaciones de meter, sacar, apilar y mover cartas en tableros se fusionan por campos modificados, evitando que un movimiento concurrente restaure un `containerId` antiguo y expulse la carta del tablero.
+  - Los arrastres, rotaciones y redimensiones se persisten contra la captura inicial de la interacción, evitando que un movimiento local ya renderizado se guarde como cambio vacío.
+  - El inspector del tablero confirma permisos, visibilidad y otros ajustes contra la última versión remota recibida, por lo que los cambios ya no necesitan mover el token para persistirse.
+  - Los ajustes del escenario del Máster (nombre, accesos, cuadrícula, fondo, oscuridad, niebla y modo de combate) se conservan como borradores locales frente a cambios remotos hasta pulsar **Confirmar cambios**; los reajustes de posición provocados por cambiar el tamaño de la cuadrícula quedan protegidos del mismo modo.
+  - Convertir muros en puertas o ventanas y marcar puertas secretas también permanece como borrador hasta la confirmación manual, mientras que crear o pegar tokens y cualquier vía de rotación se persisten inmediatamente.
+  - Las cartas sin reverso personalizado usan un SVG predeterminado sobrio y universal: fondo carbón, marco dorado fino y un único sello geométrico central. Se aplica de forma coherente en el tablero, las manos, pilas, HUD, arrastre e inspección sin mostrar el frontal de una carta oculta.
+  - Los tableros de cartas creados por el Máster desde colecciones o como tablero vacío vuelven a ocultar sus cartas internas para jugadores de forma predeterminada, mientras que los creados por jugadores nacen visibles.
+  - Las subidas y ediciones de cartas en colecciones base limpian campos indefinidos antes de guardar en Firestore, evitando que una carta antigua bloquee nuevas subidas a la colección.
+  - El despliegue de Firebase incluye ahora `storage.rules`, corrigiendo el bloqueo `storage/unauthorized` que impedía subir imágenes de cartas tanto en local como en producción.
+  - Transacción atómica en el guardado manual del escenario para fusionar metadatos del Máster con las posiciones actualizadas por jugadores concurrentes.
+  - La cola secuencial conserva todas las escrituras rápidas en orden, sin reemplazar una creación, pegado o movimiento pendiente por la acción siguiente.
+
+**Resumen de cambios v2.7.24:**
+
+- **Ajuste del contenedor modular Minion en CardBuilder**:
+  - Al añadir el contenedor `Minion` desde el menú de contenedores, ahora se inserta directamente como primer bloque del cuerpo de la carta, por encima de `Alcance`, tal como se muestra en la referencia.
+  - El panel interno de atributos del minion se desplaza `15px` hacia arriba dentro de su propio contenedor para quedar alineado con la composición marcada en la referencia visual.
+  - El orden visual de atributos en el render del panel de minion queda como `Hambre`, `Cuerpo` y `Mente` de izquierda a derecha.
+  - Se eliminó la función antigua de dibujo de atributos de minion que pertenecía al diseño previo y ya no se usaba en el renderizado modular.
+- **Límite de párrafo narrativo en descripciones**:
+  - El texto narrativo se mide ahora con el mismo peso tipográfico con el que se renderiza, evitando que sus líneas sobrepasen el límite de párrafo usado por el texto principal.
+- **Altura automática en descripciones**:
+  - Los contenedores de descripción nuevos usan `Auto` por defecto, midiendo el texto conforme se escribe para cerrar o abrir gradualmente el bloque según el contenido real; los tamaños manuales (`1`, `2`, etc.) siguen disponibles.
+- **Centrado narrativo configurable**:
+  - El estilo `Narrativo` mantiene siempre el texto alineado al centro horizontalmente. La opción `Centrar bloque` viene activada por defecto y, cuando el narrativo es el último bloque, coloca el conjunto de texto en el centro del espacio restante; al desactivarla, el bloque queda ajustado al texto sin perder la alineación centrada.
+
+**Resumen de cambios v2.7.23:**
+
+- **Corrección de la distribución visual de márgenes de Minion**:
+  - Se ajustaron los desplazamientos de los elementos en el panel del minion (`diamondX = colCenterX - 95` y `textX = colCenterX + 75`).
+  - Esto compensa la asimetría visual producida por el espacio transparente del icono del corazón y la anchura de la palabra "HAMBRE", igualando de forma impecable el aire libre a la izquierda del corazón y a la derecha de la etiqueta de Hambre.
+
+**Resumen de cambios v2.7.22:**
+
+- **Distribución de espacio simétrica y equidistante en Minion**:
+  - Se implementó un desplazamiento simétrico constante de `85px` a la izquierda para el icono (`colCenterX - 85`) y a la derecha para el texto y número (`colCenterX + 85`) respecto al centro geométrico de cada columna.
+  - Esto equilibra perfectamente todos los márgenes y vacíos del panel, garantizando que el espacio a la izquierda del corazón y a la derecha del letrero de Hambre sean matemáticamente idénticos (`46.3px`).
+
+**Resumen de cambios v2.7.21:**
+
+- **Centrado matemático de etiquetas y valores de Minion**:
+  - Se actualizó el cálculo de la coordenada horizontal `textX` de los letreros y números en el panel de minion.
+  - Ahora se centran dinámicamente en el punto medio del espacio disponible entre el borde derecho del icono y la línea divisoria correspondiente (o límite derecho de la columna), logrando una simetría visual perfecta.
+
+**Resumen de cambios v2.7.20:**
+
+- **Aumento del tamaño de los iconos de atributos de Minion**:
+  - Se incrementó el tamaño de los iconos sueltos de Cuerpo, Mente y Hambre de `96px` a `120px` dentro del panel del minion, mejorando su visibilidad y balance estético con los valores numéricos y letreros correspondientes.
+
+**Resumen de cambios v2.7.19:**
+
+- **Eliminación de los contenedores de diamantes del Minion e iconos a tamaño completo**:
+  - Se eliminaron por completo las formas de rombo coloreadas (rojo, azul, verde) con bordes gruesos de la parte trasera de los atributos.
+  - Los iconos de Cuerpo, Mente y Hambre se dibujan ahora sueltos directamente sobre el panel y a tamaño completo (`96px`), igualando el tamaño diagonal que ocupaba el rombo eliminado, y conservando su tinte de color plano e integrado del compendio.
+
+**Resumen de cambios v2.7.18:**
+
+- **Color de iconos de Minion unificado con el Compendio Visual**:
+  - Se modificó la renderización en lienzo (canvas) de los iconos de Cuerpo, Mente y Hambre dentro del contenedor modular del minion.
+  - Ahora se dibujan con colores planos y sólidos extraídos de las configuraciones de la leyenda visual del compendio (`#a93832` para Cuerpo, `#2f6fb3` para Mente y `#3d7d45` para Hambre) en lugar de pintar las imágenes WebP a todo color originales.
+
+**Resumen de cambios v2.7.17:**
+
+- **Actualización de iconos, controles y estética del contenedor de Minion**:
+  - Se sustituyeron los iconos del minion por los de la librería de compendio visual bajo `/interfaz/consumo_new/`.
+  - Se habilitó la edición y controles de "Atributos del Minion" en la barra lateral para cualquier tipo de carta (ej. general, armas, etc.) siempre que el contenedor de `minion` esté presente (`cardType === 'skill' || hasContainer('minion')`).
+  - Se alineó estéticamente el panel unificado con el slot de consumo vacío, usando un fondo de `rgba(32, 35, 33, 0.08)` y bordes dobles de `rgba(32, 35, 33, 0.45)` (exterior) y `rgba(32, 35, 33, 0.20)` (interior).
+
+**Resumen de cambios v2.7.16:**
+
+- **Alineación y centrado del primer bloque modular**:
+  - Se implementó un desplazamiento dinámico en la coordenada central (`centerY`) del primer contenedor (`index === 0`).
+  - Al no contar con línea divisoria superior, se aplica un ajuste de `-34px` (frente a los `-14px` normales) que desplaza la barra de rango o el panel del minion `20px` hacia arriba. Esto balancea simétricamente el aire superior libre bajo el encabezado dorado y la separación con respecto a la primera divisoria inferior.
+
+**Resumen de cambios v2.7.15:**
+
+- **Limpieza de etiqueta y holgura en el contenedor de Minion**:
+  - Se eliminó la etiqueta lateral `◆ MINION` para ofrecer una estética despejada.
+  - Se incrementó el alto total asignado al bloque del minion en la carta de `190px` a `240px` (y su espacio libre/padding correspondiente a `49px`), separando el panel de forma equilibrada de las líneas divisorias superior e inferior y previniendo colisiones visuales con los diamantes centrales decorativos.
+
+**Resumen de cambios v2.7.14:**
+
+- **Rediseño premium del contenedor de Minion**:
+  - Se unificaron los 3 bloques independientes de Cuerpo, Mente y Hambre en un único panel horizontal unificado de `1148px` de ancho con bordes dobles dorados/bronce y esquinas biseladas.
+  - Cada atributo ahora cuenta con una insignia de rombo/diamante con esquinas redondeadas y rotación de 45 grados, teñida con su color táctico y borde oscuro (Cuerpo en rojo, Mente en azul, Hambre en verde), conteniendo el icono correspondiente perfectamente centrado y sin rotación.
+  - Se añadieron divisores verticales estilizados de color bronce translúcido con un rombo decorativo central de `18px` para separar simétricamente las columnas de cada atributo.
+
+**Resumen de cambios v2.7.13:**
+
+- **Optimización de espacio y ajuste de márgenes en última descripción**:
+  - Se redujo el margen superior (`top` a `y + 96` para el estilo principal) y se extendió el límite inferior de renderizado (`bottom`) hasta la frontera física del indicador de carga (`2328 - 20px`) o el borde inferior de la carta (`2386 - 55px`) cuando la descripción es el último bloque.
+  - Esto aprovecha dinámicamente el espacio residual al final del pergamino para permitir que quepan hasta 1 o 2 líneas adicionales de texto (párrafos más largos) sin chocar con los diamantes del footer.
+
+**Resumen de cambios v2.7.12:**
+
+- **Presupuesto dinámico de altura física en contenedores**:
+  - Se implementó un control dinámico basado en la altura física disponible de `1581px` (`2386px` de alto total - `805px` de inicio modular `MODULAR_CONTENT_TOP`) para la adición de contenedores modulares.
+  - Tanto la función `addCardContainer` como los botones "+ Contenedor" de la interfaz se deshabilitan dinámicamente si añadir un contenedor causaría un desbordamiento visual.
+  - Esto permite combinar hasta 10 contenedores si son de tipo compacto (daño, consumo, rasgos), o menos si se configuran bloques de mayor altura física (minions, descripciones grandes).
+
+**Resumen de cambios v2.7.11:**
+
+- **Ajuste de límites en el lateral izquierdo del cuerpo**:
+  - Se desplazó la coordenada de inicio horizontal del filtro del cuerpo y del texturizado procedimental a `x = 152` con un ancho de `1584px` (alcanzando el límite derecho en `1736px`).
+  - Esto desplaza la cobertura hacia la izquierda para eliminar por completo la holgura lateral izquierda observada en la plantilla de la carta, manteniendo la simetría con respecto a los bordes exteriores de madera de la carta.
+
+**Resumen de cambios v2.7.10:**
+
+- **Restauración de cabecera y corrección de límites del cuerpo**:
+  - Se revirtió el filtro de la cabecera (`applyHeaderColorFilter`) a su diseño original con opacidades originales y sin capa de mezcla normal (según preferencia del usuario).
+  - Se amplió el ancho horizontal del filtro del cuerpo de la carta (`applyBodyColorFilter` y texturizado procedimental) a `1576px` para que el color se extienda de forma óptima bajo el borde derecho y elimine cualquier holgura o franja sin pintar detectada.
+
+**Resumen de cambios v2.7.9:**
+
+- **Sincronización del filtro de color de la cabecera**:
+  - Se actualizó el filtro de la cabecera (`applyHeaderColorFilter`) para utilizar la misma fórmula de mezcla que el cuerpo (opacidades del `color` a `0.55`, `multiply` a `0.20`, y adición de la capa `source-over` al `10%`).
+  - Esto garantiza que tanto la cabecera como el cuerpo tengan la misma intensidad de coloración y respondan de forma idéntica a tonalidades neutras/negras/grises.
+
+**Resumen de cambios v2.7.8:**
+
+- **Intensidad de coloración de Fondo cuerpo y soporte de Negro/Gris**:
+  - Se incrementaron los valores de opacidad de las capas de fusión en el cuerpo para equipararlos con los de la cabecera (`color` a `0.55` y `multiply` a `0.20`).
+  - Se agregó una tercera capa de fusión normal (`source-over` con opacidad `0.10`) que proyecta pigmento directo sobre el pergamino base. Esto permite que colores neutros/acromáticos (como negro, ceniza y gris) tiñan y oscurezcan adecuadamente el fondo sin perder las imperfecciones de la textura original.
+
+**Resumen de cambios v2.7.7:**
+
+- **Ajuste de límites horizontales del color de Fondo cuerpo**:
+  - Se ampliaron los límites horizontales de la coloración y el pergamino procedimental del cuerpo (de `x = 168` y ancho `1552` a `x = 160` y ancho `1568`) para que cubran completamente la superficie del papel de izquierda a derecha.
+  - Se incrementó el radio de esquina del recorte cóncavo (notched corners) a `52` para ajustarse perfectamente al marco de madera exterior y bordes dorados del pergamino.
+
+**Resumen de cambios v2.7.6:**
+
+- **Máscara de recorte con esquinas cóncavas en Fondo cuerpo**:
+  - Se sustituyó el recorte de rectángulo redondeado por un trazado vectorial personalizado que replica de forma milimétrica las esquinas cóncavas decorativas (notched corners, radio `44`) del pergamino interior de la plantilla base.
+  - Se ajustaron los límites de coloración (de `y = 752` a `y = 2420`, y de `x = 168` a `x = 1720`) para alinearlos exactamente dentro de las líneas negras del marco, evitando pintar el divisor superior, el marco inferior de madera y las esquinas biseladas.
+
+**Resumen de cambios v2.7.5:**
+
+- **Alineación y recorte de bordes en Fondo cuerpo**:
+  - Se extendieron los límites del filtro del cuerpo de la carta (de `y = 740` a `y = 2440`) para rellenar completamente la zona de pergamino eliminando la franja sin teñir bajo la cabecera.
+  - Se aplicó una máscara de recorte (`clip()`) al contorno del rectángulo redondeado del pergamino (`drawRoundRectPath`) para que la coloración no se desborde del contorno ni pinte el marco exterior de madera o las esquinas de la carta.
+
+**Resumen de cambios v2.7.4:**
+
+- **Corrección en la aplicación del filtro de color en Fondo cuerpo**:
+  - Se corrigió un error que impedía que se tiñera el cuerpo de la carta al editar cartas de tipo General / Armas / Habilidades / etc., debido a que la carga del asset base (`general.png`) omitía la etapa del canvas de dibujo procedimental del papel.
+  - Ahora el filtro de color del cuerpo se aplica correctamente superpuesto a la zona de pergamino de la plantilla base cargada.
+
+**Resumen de cambios v2.7.3:**
+
+- **Menú dedicado "Fondo cuerpo" para la Carta**:
+  - Se añadió un panel de control independiente "Fondo cuerpo" en el editor lateral (con presets y selector hexadecimal) igual al de "Fondo cabecera".
+  - Esto permite personalizar el filtro de color de la textura del cuerpo de la carta de forma independiente del color del acento de la carta.
+
+**Resumen de cambios v2.7.2:**
+
+- **Filtro de color tipo Photoshop para el Cuerpo de la Carta**:
+  - Se implementó el mismo sistema de filtro de color dinámico (modos de mezcla `color` y `multiply`) para la textura de papel del cuerpo de la carta, en reemplazo del anterior filtro de color sólido de baja opacidad.
+  - Ahora, al seleccionar colores de acento personalizados o preestablecidos (como Verde, Rojo, Azul, etc.), la textura del papel, imperfecciones y partículas del fondo se tiñen de manera orgánica y realista.
+  - La selección de la base ("Base", color `#c46f1f`) muestra la textura cálida de papel beige original sin filtros.
+
+**Resumen de cambios v2.7.1:**
+
+- **Botones de Estilo Individuales para Contenedores de Descripción**:
+  - Reemplazamos los botones globales de estilo de texto del pie de página por selectores individuales e independientes para cada contenedor de descripción.
+  - Ahora cada bloque de descripción dispone de su propio par de botones interactivos ("Narrativo" / "Principal") colocados en su cabecera dentro del editor lateral. Esto permite tener, por ejemplo, una descripción principal y otra de lore/narrativa coexistiendo y configuradas de manera independiente dentro de la misma carta.
+
+**Resumen de cambios v2.7.0:**
+
+- **Ampliación de Límite de Caracteres en Descripción**:
+  - Elevamos el límite máximo de caracteres (`descriptionMaxLength`) a un valor generoso y fijo de `4000` (anteriormente limitado dinámicamente a valores bajos como ~500-1000). Esto elimina la restricción del navegador que impedía escribir descripciones largas en la caja de edición lateral.
+- **Auto-crecimiento del Último Contenedor de la Carta**:
+  - Modificamos el cálculo del alto modular (`getModularContainerHeight`) para que, si el bloque de descripción es el último contenedor renderizable de la carta, este crezca dinámicamente y ocupe el 100% del espacio vertical restante disponible hasta el límite inferior (`contentBottom`), permitiendo visualizar descripciones extensas sin solapamiento con los slots de carga del pie.
+
+**Resumen de cambios v2.6.9:**
+
+- **Rediseño de Slots de Carga en Menú y Rombos Clicables**:
+  - Reemplazamos los dropdowns `<select>` del editor lateral por 5 rombos SVG interactivos y del mismo tamaño (38px).
+  - Estos rombos ciclan dinámicamente entre Vacío, Hambre (verde), Cuerpo (rojo) y Mente (azul) al hacer click sobre ellos, y muestran abreviaturas claras ("HAM", "CUE", "MEN") en su interior para evitar textos truncados.
+- **Justificado del Texto de Descripción Principal**:
+  - Implementamos la alineación justificada para el bloque principal de descripciones de la carta. Las líneas intermedias distribuyen su espaciado de forma uniforme, mientras que la última línea de cada párrafo se alinea a la izquierda de forma limpia.
+- **Optimización de Espacio y Eliminación de Divisor Redundante**:
+  - Eliminamos la línea divisora rústica con rombo que se dibujaba de manera redundante tras el último contenedor activo de la carta.
+  - Redujimos el espacio reservada para el pie de página de cargas de `170px` a `110px` (`CHARGE_FOOTER_RESERVED_HEIGHT`), ampliando el espacio vertical disponible para descripciones en la carta.
+
+**Resumen de cambios v2.6.8:**
+
+- **Revertido de Slot 3 y Contenedor de Carga Inline**:
+  - Habilitamos nuevamente la edición del tercer slot de carga en el panel lateral (removiendo el divisor estático) para que sea completamente interactivo e igual al resto de slots de carga.
+  - Modificamos el flujo de renderizado en `drawCardCanvas` para dibujar el bloque de cargas `charge` de forma inline como un bloque modular estándar en lugar de forzarlo como un pie de página fijo. Esto evita que el bloque de descripción se comprima en exceso y cause guionizados antiestéticos en el texto.
+  - Calculamos centros de rombos en `drawInlineChargeContainer` (`[areaCenterX - 186, areaCenterX - 102, areaCenterX, areaCenterX + 102, areaCenterX + 186]`) para que la separación física libre (de borde a borde) entre todos los rombos sea exactamente la misma (~20.5px).
+
+**Resumen de cambios v2.6.7:**
+
+- **Alineación de Estilo de Cargas Modulares y Pintado de Color**:
+  - Modificamos `drawModularChargeFooter` para usar el mismo grosor de línea (`lineWidth = 3`) y color (`rgba(181,92,18,0.58)`) de los divisores estándar del cuerpo de la carta (`drawContainerDivider`).
+  - Rediseñamos los rombos del pie de cargas para que utilicen `drawSectionDiamond` con rellenos de colores sólidos correspondientes a cada tipo de carga (verde para Hambre, rojo para Cuerpo, azul para Mente y el color de acento de la carta para ranuras vacías), eliminando por completo los iconos y bordes oscuros en el pie de página.
+  - Aseguramos que el tercer rombo central actúe de forma puramente decorativa (siempre pintado con el color base `accent`), y deshabilitamos su edición en el panel lateral mostrando un casillero estático con la etiqueta "Divisor".
+  - Ajustamos los tamaños de los rombos: el central conserva su escala destacada (`70px`), mientras que los otros cuatro se adaptan a un tamaño de `45px` y se redistribuyen de forma equidistante (`[764, 848, 944, 1040, 1124]`) para equilibrar perfectamente los espacios vacíos intermedios.
+  - Implementamos la función `drawBlackIcon` y actualizamos `drawSlotIcon` para pintar las siluetas de los iconos de consumo en negro sólido dentro de los carriles/ranuras de las cabeceras.
+
+**Resumen de cambios v2.6.6:**
+
+- **Iconos de Cabecera Dinámicos a Escala del Título**:
+  - Los iconos de tipo de arma y de elemento de la cabecera se escalan de forma dinámica para coincidir exactamente con el tamaño de fuente calculado para el título de la carta (`iconSize = titleSize`).
+  - Habilitamos que se rendericen tanto el icono del elemento (`elementIconImg`) como el del tipo de arma (`weaponIconImg`) de forma contigua en la esquina superior derecha si ambos están presentes, organizándose de derecha a izquierda.
+  - El algoritmo de ajuste del ancho del título (`fitModularTitleFont`) se ha refinado para contemplar el espacio ocupado por ambos iconos a su escala correspondiente, previniendo cualquier desbordamiento visual.
+
+**Resumen de cambios v2.6.5:**
+
+- **Restauración del Alineamiento de Precisión de Combate**:
+  - Implementamos la medición de sub-cadenas mediante `measureText` usando la fuente activa para determinar el desplazamiento X necesario.
+  - Esto asegura la alineación horizontal de cada tipo de combate con el rombo divisor central (`x = 944`):
+    - *Cuerpo a cuerpo*: Centra la letra **"A"** intermedia en el rombo.
+    - *Distancia*: Centra la **primera letra "A"** (izquierda) en el rombo.
+    - *Magia*: Alinea el límite de división **entre las letras "A" y "G"** en el rombo.
+  - Mantiene el espaciado correcto de `34px` hacia el icono de arma.
+
+**Resumen de cambios v2.6.4:**
+
+- **Refinamiento de la Textura de Polvo y Partículas (Stardust)**:
+  - Incorporamos la carga local y asíncrona de `stardust.png` (ubicado en `public/interfaz/stardust.png`) para integrarla como un patrón repetitivo en el canvas sin tildar el origen, permitiendo exportar las cartas como PNG de forma segura.
+  - Fusionamos el patrón de stardust con partículas procedimentales optimizadas: motas oscivas/cálidas (`rgba(70, 55, 40)`) y brillantes con opacidades y tamaños calibrados para que la textura sea visible pero extremadamente sutil y elegante.
+- **Atenuación Extrema de Puntos de Acento**:
+  - Redujimos el tamaño de los 120 puntos de la cuadrícula del color de acento a `1.2px` con una opacidad de tan solo el `4%` (antes `16%`) para que se fundan delicadamente con el fondo rústico sin simular ruido digital.
+
+**Resumen de cambios v2.6.3:**
+
+- **Rediseño del Icono de Mente (Cerebro) Blanco y Detallado**:
+  - Implementamos el color **blanco sólido (`#ffffff`)** en todos los lóbulos del cerebro de Mente para asegurar que el icono se vea predominantemente blanco y claro.
+  - Evitamos el empastado/oscurecimiento del icono reduciendo el trazo interno de las arrugas a un grosor fino (0.8px en pantalla).
+  - Extrajimos y aplicamos el trazo exterior grueso reglamentario (6px en pantalla) de manera exclusiva sobre las siluetas exteriores (sin agujeros internos) de los hemisferios izquierdo y derecho, preservando la nitidez de los surcos internos.
+- **Alineación de Precisión en Tipos de Combate**:
+  - Ajustamos la alineación de las etiquetas de tipo de combate respecto al rombo central del divisor (`x = 944`):
+    - *Cuerpo a cuerpo*: El centro de la letra **"A"** se alinea exactamente en el rombo.
+    - *Distancia*: El centro de la **primera letra "A"** (izquierda) se alinea en el rombo.
+    - *Magia*: El límite divisorio **entre la "A" y la "G"** se sitúa exactamente en el rombo.
+- **Rediseño del Flujo de Carga de Imagen de Portada**:
+  - Eliminamos la barra de botones externos de carga y borrado para compactar y limpiar el formulario lateral, renombrando la sección como **"Imagen portada"**.
+  - Habilitamos que el propio recuadro de la imagen (tanto con imagen cargada como con el marcador de posición) responda al click para abrir el selector de archivos locales.
+  - Añadimos la opción de eliminar la imagen mediante un botón flotante sutil de cruz ("X") en la esquina superior derecha (`h-6 w-6`), de tono gris atenuado (`text-slate-500`) por defecto para mezclarse con el fondo, y que se resalta vívidamente en rojo al pasar el cursor, deteniendo la propagación del click.
+- **Textura de Polvo y Partículas de Estrellas (Stardust)**:
+  - Reemplazamos la textura plana o de papiro por un algoritmo procedimental de polvo de estrellas y partículas de stardust (con semilla determinista `2026`).
+  - Dibuja 1800 micro-partículas de ruido fino, 600 partículas medianas simulando motas y 80 partículas grandes y difuminadas tipo glow sobre el fondo beige de los contenedores, logrando una estética rica en partículas similar al stardust del panel de resumen de clases.
+
+**Resumen de cambios v2.6.2:**
+
+- **Integración y Ajuste del Icono de Mente SVG**: Integramos el nuevo diseño vectorial personalizado para el recurso **Mente** utilizando los caminos vectoriales de `mente.svg` (un cerebro detallado visto desde arriba).
+  - **Estilo Sincronizado Homogéneo**: Se adaptó el renderizado de forma uniforme para todos los caminos del SVG (hemisferios y surcos internos), rellenándolos con `iconFill` (color translúcido de fondo) y contorneándolos con `tint` (color de contorno del tema), sin aplicar tintados parciales selectivos.
+  - **Resolución de Errores de Sintaxis**: Corregimos los delimitadores de cadenas (errores de comillas y acentos graves) en el canvas del constructor de cartas (`CardBuilder.jsx`).
+
+**Resumen de cambios v2.6.1:**
+
+- **Rediseño de los Iconos Vectoriales de Consumo**: Rediseñamos y actualizamos visualmente todos los iconos vectoriales dibujados en el canvas de la carta en `CardBuilder.jsx` para ofrecer una estética premium y semánticamente alineada a cada recurso:
+  - **Mente**: Rediseñado para soportar el renderizado dinámico de caminos vectoriales complejos.
+  - **Cuerpo**: Sustituido el monigote de palo por un corazón estilizado con un destello decorativo de luz.
+  - **Hambre**: Sustituido el letrero/estómago por un muslo de carne/hueso de alta calidad (drumstick) con marcas de parrilla.
+  - **Armadura**: Escudo reducido de 100px a 68px de alto y refinado internamente para un encaje perfecto en la ranura.
+  - **Recurso**: Reemplazada la caja 3D abstracta por un saco de monedas con un lazo superior, nudos y una moneda con grabado rúnico.
+  - **Variable**: Signo de interrogación ajustado a 64px y removido el círculo interno redundante para una diagramación más limpia.
+  - **Tiempo**: Reloj de arena enriquecido con depósitos de arena arriba y abajo y un chorro cayendo por el centro.
 
 **Resumen de cambios v2.6.0:**
 
@@ -211,7 +493,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 **Resumen de cambios v2.5.1:**
 
-- **Modos de Recursos Personalizados para Cartas de Trampa**: Ampliamos el panel de control de "Recursos" en la barra lateral de [CardBuilder.jsx](file:///c:/Users/Arcana/Documents/Proyectos/fichas-rol-app/src/components/CardBuilder.jsx) cuando se diseña una carta de tipo Trampa. Añadimos soporte completo para cuatro modos de renderizado interactivos: `Carga + consumo`, `Solo carga`, `Solo consumo` y `Sin recursos` (esta última opción elimina por completo todos los rieles de recursos del canvas). Al seleccionar `Solo consumo`, la carta de Trampa adopta dinámicamente el comportamiento de una carta de Acción, habilitando la botonera de cantidad de ranuras de tiempo (`5`, `6` y `7` slots) y dibujando el riel de consumo centrado y autocalibrado de forma simétrica sobre el canvas.
+- **Modos de Recursos Personalizados para Cartas de Trampa**: Este comportamiento pertenece al diseño anterior del constructor de cartas. En el diseño modular actual, los recursos se añaden y ordenan mediante contenedores dedicados, sin el bloque lateral de modos `Carga + consumo`, `Solo carga`, `Solo consumo` o `Sin recursos`.
 
 **Resumen de cambios v2.5.0:**
 
@@ -1289,10 +1571,76 @@ firebase deploy    # Despliega a Firebase Hosting
 src/
 ├── components/
 │   ├── inventory/             # Inventario tradicional
+│   ├── CanvasSection.jsx      # Entrada raíz exclusiva del canvas
+│   ├── BoardSection.jsx       # Entrada raíz exclusiva del tablero
 │   └── [otros componentes]    # UI general
+├── features/
+│   ├── board/
+│   │   ├── boardModeDefinition.js      # Contrato y colecciones del tablero
+│   │   ├── boardInitiative.js          # Iniciativa basada en cartas
+│   │   ├── createBoardCombatController.js # Extensión de combate del tablero
+│   │   ├── components/BoardObjects.jsx # Dados 3D y marcadores físicos
+│   │   └── useBoardController.js       # Cartas, manos, pilas y tiradas
+│   ├── canvas/
+│   │   ├── canvasModeDefinition.js     # Contrato y colecciones del canvas
+│   │   ├── canvasInitiative.js         # Cronología basada en velocidad
+│   │   ├── components/         # Entrada de UI, viewport, render y feedback
+│       │   └── sidebar/        # Paneles independientes por pestaña
+│       ├── combatRules.jsx     # Reglas puras de combate del canvas
+│       ├── createCanvasCombatController.js   # Turnos y reacciones
+│       ├── createCanvasScenarioController.js # CRUD y persistencia
+│       ├── createCanvasTokenController.js    # Tokens y movimiento táctico
+│       ├── useCanvasInteractionController.js # Puntero, touch y arrastre
+│       ├── grid.js             # Configuración de cuadrícula
+│       ├── spatial.js          # Coordenadas, snap y colisiones
+│       ├── tokenSheetSync.js   # Sincronización token ↔ ficha
+│       └── useCanvasGridController.js # Estado editable de cuadrícula
+│   └── tactical-shared/
+│       ├── TacticalSectionCore.jsx     # Sesión, cámara y persistencia comunes
+│       ├── createTacticalCombatController.js # Base de combate reutilizable
+│       └── components/TacticalWorkspaceShell.jsx # Composición neutral
 ├── firebase.js                # Configuración Firebase
 └── App.js                     # Componente principal
 ```
+
+### Separación entre canvas y tablero
+
+`CanvasSection` y `BoardSection` son entradas raíz diferentes. `App` ya no abre
+el tablero pasando `mode="board"` al canvas: cada sección inyecta su propio
+contrato de colecciones, iniciativa, controlador de funciones específicas,
+adaptador de combate y entrada de interfaz.
+
+Los dos modos comparten `features/tactical-shared` exclusivamente para la sesión,
+cámara, persistencia y composición que deben comportarse igual. La regla de
+mantenimiento es que una modificación solicitada solo para canvas o tablero no
+debe implementarse en ese núcleo compartido. Cada sistema dispone de puntos de
+extensión propios para poder divergir sin afectar al otro:
+
+- Las reglas deterministas pertenecen a `features/canvas/combatRules.jsx`,
+  `grid.js` o `spatial.js` y deben cubrirse con pruebas unitarias.
+- La resolución del canvas entra por `createCanvasCombatController.js` y la del
+  tablero por `createBoardCombatController.js`; ambos pueden evolucionar por separado.
+- La iniciativa del canvas vive en `canvasInitiative.js` y cuenta velocidad; la
+  del tablero vive en `boardInitiative.js` y cuenta las cartas de cada mano.
+- El guardado
+  de escenarios, en `createCanvasScenarioController.js`; los comandos de tokens,
+  en `createCanvasTokenController.js`.
+- Los gestos, selección y arrastre se modifican en
+  `useCanvasInteractionController.js`.
+- El mapa visible se modifica en `components/CanvasViewport.jsx`; el ensamblaje,
+  en `CanvasWorkspaceShell.jsx`; y cada pestaña del inspector dispone de su propio
+  archivo bajo `components/sidebar/`.
+- La sincronización de equipamiento y ficha se mantiene en `tokenSheetSync.js`.
+- `features/board` contiene cartas, manos, dados, marcadores e iniciativa. El
+  canvas utiliza un controlador de funciones específicas inerte y no inicializa
+  `useBoardController`.
+
+Esta reorganización convierte el antiguo `CanvasSection.jsx` de unas 18.100 líneas
+en dos entradas mínimas y un núcleo táctico compartido de unas 2.600 líneas, sin
+cambiar las colecciones Firebase ni el comportamiento visible. Las pruebas de
+frontera comprueban que los contratos, controladores, interfaces e iniciativas
+son distintos, y la prueba de humo abre biblioteca y escenario activo desde ambas
+secciones.
 
 ## 🎯 Últimas mejoras implementadas
 
@@ -2255,8 +2603,11 @@ Guía rápida: ver `docs/Minimapa.md`.
 - La mano del `Tablero` queda asociada al último token activo y solo se oculta al pulsar en vacío, permitiendo seleccionar o arrastrar cartas de la mesa sin perder el destino de mano.
 - En móvil, mantener pulsada una carta del `Tablero` o de la mano abre una previsualización ampliada; en PC/escritorio, hacer clic con el botón central del ratón/rueda sobre una carta del tablero de cartas abre la misma previsualización ampliada de forma instantánea, previniendo el cursor de autoscroll por defecto del navegador. Si el dedo se desplaza en móvil, se cancela la lectura y continúa el arrastre normal.
 - El tirador amarillo de redimensionado del canvas usa ahora un área táctil ampliada en móvil y bloquea los gestos nativos mientras se arrastra, manteniendo el mismo aspecto visual.
+- Las cartas individuales del `Tablero` ya no muestran tirador de redimensionado al seleccionarlas; los tableros contenedores siguen siendo redimensionables.
+- En móvil, los tokens de combate de personaje/enemigo se mueven seleccionando una casilla roja de desplazamiento de hasta 4 celdas, evitando el drag accidental durante el turno; la previsualización del canvas calcula el coste desde el inicio del turno y puede cancelarse antes de confirmar, mientras que en el `Tablero` el movimiento se aplica directamente sin consumo de velocidad y respeta tamaño, ocupación, `Duelo` y `Formación`.
 - La barra de iniciativa/velocidad del canvas se convierte en un carrusel compacto cuando no caben todos los tokens: oculta la barra de scroll, muestra un contador `+N` y permite deslizar con ratón o dedo.
 - Las cartas del `Tablero` pueden apilarse arrastrando una sobre otra; la carta arrastrada queda arriba, la pila sustituye el nombre inferior por miniaturas de las cartas ocultas y el inspector permite sacar una carta concreta.
+- El zoom bajo del `Tablero` en móvil deja de promover cada token, carta y marcador a una capa GPU permanente; las capas SVG de niebla/iluminación se acotan al área real del mapa finito y las máscaras usan ids estables, evitando parpadeos sin limitar el zoom por debajo del 25%.
 - Las cartas nuevas de la mano se ordenan al extremo derecho del abanico, desplazando las anteriores hacia la izquierda.
 - Se perfeccionó el flujo de animaciones en el Gestor de Combate (`CombatTrackerView.jsx`), logrando transiciones de redimensionamiento y colapso de estados completamente fluidas y libres de tirones.
 - Se implementó la clase `min-w-0` en los botones de alteraciones activas para sobreescribir el ancho mínimo por defecto de flexbox, permitiendo que Framer Motion colapse su ancho de forma 100% progresiva.
@@ -2316,6 +2667,105 @@ Guía rápida: ver `docs/Minimapa.md`.
   - **Limpieza del Canvas**: Se eliminaron las barras de herramientas y etiquetas inferiores de la carta, permitiendo que la ilustración base y los textos ocupen todo el espacio visible sin recuadros redundantes.
 - **Desactivación inteligente de Tilt**: El efecto de rotación 3D se deshabilita temporalmente sobre la tarjeta que se está arrastrando en ese instante, previniendo distorsiones angulares mientras se desplaza bajo el cursor.
 
+## Novedades: Centrado y Alineación de la Regla de Alcance en el Constructor de Cartas (v2.4.50)
 
+- **Eliminación del título redundante**: Se quitó la etiqueta del contenedor de alcance (el título "ALCANCE") en el canvas de previsualización para despejar el espacio superior.
+- **Reducción del padding superior inicial**: Se ajustó la coordenada inicial de renderizado de los contenedores (`y`) a `805` (antes `835`), eliminando el exceso de espacio vacío entre la cabecera de la carta y el primer contenedor.
+- **Optimización de altura y márgenes del bloque**: Se estableció la altura del contenedor de alcance en `290px` (y la regla a `trackY = y + 130`), dejando suficiente espacio libre arriba y abajo para que las líneas divisorias respiren y no queden demasiado pegadas al contenido.
+- **Alineación horizontal simétrica**: Se desplazaron las coordenadas del raíl (`startX` a `370` y `endX` a `1518`), centrando la regla en el eje `X = 944` para que el círculo de "Intermedio" se alinee de manera idéntica con los rombos/diamantes de las líneas divisorias.
+
+## Novedades: Cartas de Acciones en el Constructor
+
+- **Tipos simplificados**: El constructor muestra los tipos `General`, `Acciones` y `Atributo`.
+- **Diseño dedicado**: `General` mantiene el canvas modular editable, `Acciones` usa la plantilla visual específica de acciones y `Atributo` renderiza una base propia.
+- **Bases de Atributo**: El tipo `Atributo` permite alternar entre `Cuerpo`, `Mente` y `Hambre`, usando `public/interfaz/atributos/Cuerpo.png`, `Mente.png` y `Hambre.png` como bases dedicadas y colocando el título con sus líneas divisorias en la misma posición visual que las cartas de `Acciones`.
+- **Base integrada para General**: Las cartas `General` usan `public/interfaz/general.png` como fondo completo del marco modular, manteniendo encima las posiciones existentes de título, iconos y contenedores.
+- **Cabecera integrada en General**: Las imágenes personalizadas de la cabecera se recortan al recuadro real de `general.png` y reciben un difuminado oscuro interior para integrarse con el marco.
+- **Encuadre manual de cabecera**: Las imágenes personalizadas permiten ajustar zoom y desplazamiento horizontal/vertical con sliders y botones táctiles, partiendo del mismo autoencuadre que usa la carta renderizada y con opción de volver al autoajuste con `Reajustar`.
+- **Color de fondo de cabecera**: Cuando una carta no tiene imagen de portada, el constructor permite elegir un color para el fondo generado de la cabecera con presets y valor hexadecimal independiente del acento.
+- **Acciones rápidas a pesadas**: El diseño dedicado añade controles para `Rápida`, `Ligera`, `Estándar` y `Pesada`, generando automáticamente cartas de coste `1` a `4`.
+- **Plantilla visual dedicada**: La plantilla de acciones usa una base completa con marco negro y pergamino envejecido, manteniendo por código el título, las líneas y rombos de acento, el selector de tipo de acción y el texto inferior editable.
+- **Base integrada para acciones**: Las cartas de `Acciones` usan `public/interfaz/base.png` como fondo completo, ajustado al rectángulo visible real del canvas (`1888x2624`), equivalente al ratio de las cartas exportadas (`737x1024`).
+- **Tipografías de acciones**: El título usa `Bebas Neue Regular`, el texto de tiempo usa `Oswald Bold` y el texto inferior usa `Roboto Condensed Regular`.
+- **Coste visual de acciones**: El coste central usa `public/interfaz/acciones/numero.webp` y `public/interfaz/acciones/reloj.webp`, escalados y agrupados según el coste de la acción.
+
+## Novedades: Ajuste de Proporción, Alineación y Ornamentos en Cartas de Acción
+
+- **Proporción y alineación de coste**: Se ajustó la altura del reloj de arena (`reloj.webp`) a 610 unidades para una relación de aspecto del 67.5% con el número "1", con un gap de -104 y offset vertical de 40 para alineación perfecta por la base.
+- **Rombos uniformes**: Se estandarizó el tamaño del rombo (`diamondSize`) a 30 en todas las líneas divisoras del canvas para mantener una coherencia visual impecable.
+- **Línea del título más corta**: Se recortó la longitud de la línea divisora inferior del título (a 1015 de ancho), haciéndola coincidir simétricamente con el tamaño de la línea superior del indicador de tiempo.
+- **Centrado del indicador de tiempo**: El texto de tiempo (`X TIEMPO`) y sus chevrons se desplazaron verticalmente a `y = 1875`, quedando exactamente equidistantes y centrados entre la línea divisora superior (`y = 1760`) y la inferior (`y = 1990`).
+- **Punteros hacia dentro**: Se invirtieron las direcciones de los chevrons laterales del indicador de tiempo para que apunten hacia dentro (`> X TIEMPOS <`) en lugar de hacia fuera.
+
+## Novedades: Números de Coste Dinámicos en Cartas de Acción (v2.4.51)
+
+- **Números de coste dedicados**: Se sustituyó el número estático por el renderizado dinámico de los dígitos correspondientes para cada tipo de acción:
+  - Acción Ligera (Coste 2) -> `2.webp`
+  - Acción Estándar (Coste 3) -> `3.webp`
+  - Acción Pesada (Coste 4) -> `4.webp`
+  - Acción Rápida (Coste 1) -> Mantiene el uso de `numero.webp`.
+- **Estandarización de posición del número**: Todos los números de coste (`1`, `2`, `3`, `4`) se dibujan en la misma posición horizontal absoluta (`startX = 400`), previniendo desvíos o saltos del dígito principal.
+- **Alineación y escalado de relojes**:
+  - **Eje horizontal y solapamiento**: Para costes 1, 2 y 3, el primer reloj se mantiene a un gap relativo al número de `numberHourglassGap = -120`. Para coste 4, el grupo se desplaza un poco a la derecha (`numberHourglassGap = -90`). Todos los relojes mantienen un gap de solapamiento uniforme de `-100` entre sí.
+  - **Eje vertical y tamaño**: Los relojes tienen un tamaño proporcional al de coste 2 (`702`): en coste 3 miden `520` de alto y en coste 4 miden `420`. Todos se centran verticalmente en `yOffset = 46`, a excepción de coste 3, donde se elevan un poco (`yOffset = 20`) según lo requerido.
+- **Pre-carga optimizada**: Se añadieron los recursos `2.webp`, `3.webp` y `4.webp` al sistema de preloading asíncrono en segundo plano, evitando cualquier parpadeo de carga visual al alternar dinámicamente entre las distintas velocidades de acción.
+
+## Novedades: Filtros de Color y Texturas en la Cabecera de Cartas (v2.4.52)
+
+- **Unificación de diseño en controles**: Se rediseñó por completo el selector de "Fondo cabecera" en el panel lateral para tener la misma estructura, botones con texto, cuadrícula y gradientes estéticos que la sección de "Acento". Se reubicó "Base" como el primer botón de la rejilla y el panel se mantiene visible en todo momento.
+- **Filtros de color reales en imágenes**: El selector de color de cabecera ahora funciona como un verdadero filtro de color (mezcla de capas `color` y `multiply` en el canvas) que se aplica sobre la imagen de portada subida, mostrándose dinámicamente tanto en el canvas principal como en la previsualización del panel lateral.
+- **Backdrop generado con textura**: Cuando no hay imagen de portada, en lugar de incrustar una capa oscura degradada plana, el generador ahora renderiza la misma textura de pergamino envejecido y polvo de estrellas que el cuerpo del documento, tintado con el filtro del color seleccionado.
+
+## Novedades: Reemplazo de Imágenes de Dados en el Constructor de Cartas (v2.4.53)
+
+- **Optimización de formato y resolución**: Se convirtieron los nuevos dados proporcionados en formato PNG a formato WebP de alta definición y con canal de transparencia (conservando transparencias originales).
+- **Estandarización de assets**: Los nuevos dados (`D4`, `D6`, `D8`, `D10`, `D12`, `DX`) se renombraron y reemplazaron en la ubicación del constructor de cartas (`public/dados/cartas/`) para actualizar automáticamente el visualizador del canvas en `CardBuilder.jsx` sin requerir modificaciones en el código fuente.
+- **Tinte dinámico con color de acento**: Se implementó el soporte para tintar dinámicamente las imágenes de los dados usando el color de acento seleccionado para la carta (`accent`). El motor de dibujo del canvas en `CardBuilder.jsx` aplica un filtro de mezcla por canal alfa (`source-in`) sobre los trazados del dado antes de renderizarlos, garantizando una perfecta consistencia cromática con la temática de cada carta.
+- **Estandarización de ranuras de carga**: Se unificó el tamaño de los rombos de carga en el pie de página de la carta (`drawModularChargeFooter` en `CardBuilder.jsx`), reduciendo el tamaño del tercer rombo (el central) de 70 a 45 píxeles para que sea idéntico y simétrico al de las otras cuatro ranuras. Asimismo, se reajustó la separación horizontal de sus centros (`[764, 854, 944, 1034, 1124]`) para que el espacio y distancia entre cada una de las 5 ranuras sea perfectamente uniforme y equidistante (separadas por exactamente 90 píxeles).
+- **Alineación de coste de acción pesada**: Se ajustó la alineación vertical de los relojes de arena en el coste de acción pesada (coste 4) en `drawActionCostAssets` de `CardBuilder.jsx` cambiando su `yOffset` a 20 (idéntico al de coste 3) para subirlos y centrarlos verticalmente con el número 4.
+- **Escalado automático de texto de rasgos**: Se implementó un algoritmo de ajuste dinámico de tamaño de letra en `drawModularTraits` para los rasgos de la carta. Si el texto introducido es demasiado largo y supera el espacio útil horizontal de la chapa del rasgo (ancho del badge menos los márgenes del contorno y el bisel de la flecha), el sistema reduce de forma reactiva el tamaño de la fuente paso a paso (de 34px hasta un mínimo de 24px) para garantizar que todo el texto encaje perfectamente sin perder legibilidad ni salirse de los bordes. Adicionalmente, se integró una validación en tiempo real en los campos de entrada de texto (`onChange`) del panel lateral que mide el ancho visual del texto (usando una métrica de canvas a 24px) y bloquea la escritura (no permite introducir más caracteres) en el momento exacto en que la palabra alcanzaría el límite físico del rasgo, ofreciendo una experiencia de usuario impecable que previene de forma activa cualquier desbordamiento.
+- **Inserción de iconos en el cursor**: Se actualizó el comportamiento del compendio visual en `insertDescriptionIcon` para que al pulsar sobre cualquier icono de recurso, este se inserte exactamente en la posición del cursor (caret/selección) del área de texto enfocada en lugar de añadirse al final de la descripción. El sistema gestiona automáticamente el espaciado inteligente alrededor del icono insertado y restaura el foco y la posición del cursor inmediatamente después de actualizar el estado de React.
+
+## Novedades: Soporte para Deshacer y Rehacer (Undo/Redo) en Descripciones (v2.4.54)
+
+- **Undo y Redo personalizados (`Ctrl + Z` / `Ctrl + Y`)**: Se implementó un sistema de control de historial personalizado para los campos de texto (`<textarea>`) de descripción de las cartas en `CardBuilder.jsx`. Esto anula el comportamiento nativo del navegador que a veces falla con los componentes controlados de React, permitiendo al usuario volver atrás y adelante en sus cambios de texto de manera fluida y sin perder el foco.
+- **Soporte para Contenedores Modulares**: El historial de cambios se mantiene de forma independiente para cada contenedor de descripción utilizando pilas de historial mapeadas por clave única de contenedor (`containerKey`), evitando mezclas de cambios entre distintos contenedores.
+
+## Novedades: Nuevos Iconos de Cabecera y Compendio Visual (v2.4.55)
+
+- **Nuevos iconos de combate y tipo**: Se han agregado los iconos de `Magia`, `Distancia` y `Espada` como opciones seleccionables para el icono de cabecera y ranuras de la carta.
+- **Integración con el Compendio Visual**: Estos tres nuevos iconos están ahora disponibles en la paleta del compendio visual, permitiendo insertarlos dinámicamente en cualquier descripción del constructor de cartas en el cursor de forma fluida.
+- **Estilos y Tinte de Ranuras**: Se definieron los colores de trazo y fondo rúnico personalizados en `ELEMENT_CONSUMPTION_STYLES` para los tres nuevos iconos (`Magia` en tono violeta, `Distancia` en tono ámbar y `Espada` en tono slate/plata) para su visualización y resaltado coherente en el canvas.
+
+## Novedades: Renderizado del Contenedor de Minion (v2.4.56)
+
+- **Renderizado Premium de Minions**: Se activó la visualización del contenedor `Minion` en el canvas. Dibuja de forma simétrica tres cajas de atributos alineadas horizontalmente correspondientes a `Cuerpo`, `Mente` y `Hambre`.
+- **Estructura Rúnica y Biseles**: Cada contenedor de atributo posee un fondo oscuro translúcido (`rgba(9, 9, 11, 0.65)`), un contorno exterior de `3.5px` en el color de acento de la carta y un borde de detalle interior dorado en `rgba(200, 170, 110, 0.25)`.
+- **Indicadores de Alta Visibilidad**: Las cajas muestran el icono a color a la izquierda (`64x64px`) y los textos a la derecha (etiqueta superior en `Cinzel` de `16px` y el número indicador en `Oswald` / `Bebas Neue` de `48px` para máxima visibilidad).
+- **Precarga en Segundo Plano**: El motor del canvas detecta el uso del bloque de minion y precarga asíncronamente las imágenes oficiales de cargas (`/interfaz/cargas/`) para garantizar un redibujado instantáneo.
+
+## Novedades: Distribución Inteligente de Espacio Vertical (v2.4.57)
+
+- **Distribución de Espacio Equitativa (`space-evenly`)**: Se implementó un algoritmo dinámico que calcula el espacio sobrante en el canvas de la carta y lo distribuye de forma proporcional arriba, abajo y entre los contenedores habilitados, optimizando la composición estética general de la carta.
+- **Límite Estético Capped**: El espaciado automático está limitado a un máximo de `65px` para conservar la cohesión del diseño y evitar distanciamientos exagerados cuando hay muy pocos contenedores.
+- **Divisores Centrados Simétricos**: Las líneas divisorias rústicas se posicionan exactamente en el centro geométrico de la separación calculada entre bloques, asegurando simetría perfecta en la distribución de aire visual.
+
+## Novedades: Rediseño de Indicadores de Movimiento Móvil (v2.4.58)
+
+- **Estética de Tablero Táctico**: Se rediseñó por completo el aspecto de los indicadores de movimiento de token en la vista móvil. Las casillas rojas de movimiento fueron reemplazadas por una interfaz premium inspirada en rejillas tácticas de rol.
+- **Icono de Movimiento Dedicado**: Se integró el icono `Footprints` (huellas/pasos) en el centro de cada casilla, sirviendo como un indicador explícito e intuitivo de que la casilla representa una opción de movimiento.
+- **Borde Técnico y Gradientes**: Se aplica una línea interna punteada (`border-dashed`) y un gradiente de alta definición al hacer hover, logrando una apariencia de HUD de ciencia ficción/fantasía.
+- **Animación de Pulso (Efecto Sonar)**: Al interactuar con una casilla de movimiento, se activa un efecto de pulso expansivo circular (`animate-ping`) en el centro que refuerza la retroalimentación táctil y dinamismo visual en móviles.
+- **Limpieza de UI en Movimiento**: Se eliminó la insignia con el icono de huellas que flotaba sobre el token para evitar ruidos visuales sobre la ilustración de la ficha.
+- **Botón de Cancelación Optimizado**: El botón circular de cancelar (`X`) se posicionó centrado y flotando exactamente sobre la coordenada del borde superior del token (`token.y`), adaptándose de manera ergonómica e inteligente sin importar el tamaño del token.
+- **Escalado de Tamaño Real para Tokens Grandes**: Cada indicador de movimiento móvil se escala dinámicamente según las dimensiones del token (ej. 2x2 o 3x3 celdas). Se agregaron retículas internas sutiles para delimitar la cuadrícula de la ficha en el destino.
+- **Prevención de Solapamientos de Color**: Se introdujo una capa base que dibuja de manera uniforme cada celda transitable exactamente una vez (`reachableCells`), logrando un fondo rojo translúcido (`bg-rose-500/10`) perfectamente visible, limpio y libre de solapamientos de color.
+- **Limpieza de Estado al Cambiar Selección o Posición**: Se solucionó un bug donde la última casilla interactuada en móvil quedaba permanentemente activa (con el brillo de hover). Ahora, un `useEffect` monitorea la selección, la posición del token (`x`/`y`) y el estado del turno para limpiar el estado de hover táctil en cualquier tipo de movimiento (arrastre, táctico, teclado o combate).
+- **Rango de Movimiento Acotado**: Se redujo el rango máximo de opciones de movimiento táctico de 4 a **2 casillas** de distancia.
+- **Remoción Completa de Insignias Redundantes**: Se eliminó de forma definitiva la insignia circular negra con el icono de huellas que flotaba sobre la cabeza del token seleccionado.
+- **Corchetes Tácticos de Esquina**: Los corchetes decorativos (L-brackets) en las cuatro esquinas de cada casilla se renderizan de forma permanente. En reposo tienen un aspecto discreto (`border-rose-500/30 w-2 h-2`) que simula pequeñas flechas que señalan las casillas adyacentes a las que te puedes mover. Al hacer hover se expanden y brillan (`border-rose-200 w-3 h-3`).
+- **Gestos de Cámara Fluidos y Sin Parpadeos**: Se restauró la prevención de gestos nativos del navegador en el viewport del mapa y se implementó un flujo alternativo usando `onTouchEnd` en los botones táctiles. Esto previene que el navegador confunda los deslizamientos de cámara con interacciones del botón, eliminando cualquier tipo de parpadeo, desconfiguración del SVG o desaparición de interfaces al hacer zoom/deslizar en móviles.
+- **Prevención de Click Fantasma (Tap-through)**: Para evitar movimientos accidentales inmediatamente después de seleccionar una ficha, el sistema bloquea y descarta cualquier click sobre las opciones de movimiento recibidos en menos de 350ms desde el cambio de selección.
+- **Optimización del Rendimiento SVG (Resolución de Parpadeo en Zoom)**: Se eliminó la clase `transition-all` de los componentes SVG de la rejilla de fondo y de la niebla/iluminación. Esto detiene el recálculo e interpolación de vectores en cada frame de paneo o zoom (manteniendo los límites de zoom originales de 10% a 500%), eliminando de raíz las desapariciones de componentes e interfaces en dispositivos móviles.
 
 

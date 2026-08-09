@@ -4,11 +4,18 @@ import {
   ChevronLeft,
   Database,
   Download,
+  FileDown,
+  FileUp,
+  Image as ImageIcon,
   Loader2,
   Palette,
+  Plus,
   RotateCcw,
   Tag,
   Type,
+  X,
+  ArrowDown,
+  ArrowUp,
   UploadCloud
 } from 'lucide-react';
 import {
@@ -20,6 +27,13 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { uploadDataUrl } from '../utils/storage';
+import sanitize from '../utils/sanitize';
+import {
+  createCardBuilderProject,
+  embedCardBuilderProjectInPng,
+  extractCardBuilderProjectFromPng,
+  parseCardBuilderProject,
+} from '../utils/cardBuilderProject';
 import HexColorInput from './HexColorInput';
 
 export const CARD_BACKGROUNDS = [
@@ -47,6 +61,8 @@ export const CARD_BACKGROUNDS = [
 const CANVAS_WIDTH = 1888;
 const CANVAS_HEIGHT = 2624;
 const MOBILE_PREVIEW_RENDER_SCALE = 0.25;
+const HEADER_IMAGE_PREVIEW_WIDTH = 1548;
+const HEADER_IMAGE_PREVIEW_HEIGHT = 638;
 const DEFAULT_CARD_NAME = 'NOMBRE DE CARTA';
 const DEFAULT_DESCRIPTION = '';
 const DEFAULT_FLAVOR_TEXT = '';
@@ -56,13 +72,83 @@ const FLAVOR_DESCRIPTION_PREVIEW_TEXT = 'Descripción narrativa';
 const EMPTY_SLOT = '';
 
 const CARD_TYPES = [
-  { id: 'weapon', label: 'Arma', maxTraits: 6, layout: 'weapon' },
-  { id: 'armor', label: 'Armadura', maxTraits: 8, layout: 'armor' },
-  { id: 'trap', label: 'Trampa', maxTraits: 1, layout: 'trap' },
-  { id: 'action', label: 'Acción', maxTraits: 0, layout: 'none' },
-  { id: 'skill', label: 'Minion', maxTraits: 4, layout: 'weapon' },
-  { id: 'status', label: 'Estado', maxTraits: 1, layout: 'trap' },
+  { id: 'general', label: 'General', containerId: 'damage', maxTraits: 6, layout: 'general' },
+  { id: 'actions', label: 'Acciones', containerId: 'description', maxTraits: 0, layout: 'actions' },
+  { id: 'attribute', label: 'Atributo', containerId: 'description', maxTraits: 0, layout: 'attribute' },
 ];
+
+const CARD_CONTAINER_TYPES = [
+  { id: 'range', label: 'Alcance' },
+  { id: 'consumption', label: 'Consumo' },
+  { id: 'damage', label: 'Daño' },
+  { id: 'traits', label: 'Rasgos' },
+  { id: 'minion', label: 'Minion' },
+  { id: 'charge', label: 'Carga' },
+  { id: 'description', label: 'Descripción' },
+];
+
+const DEFAULT_CARD_CONTAINERS_BY_TYPE = {
+  general: ['range', 'consumption', 'damage', 'traits', 'description', 'charge'],
+  weapon: ['range', 'consumption', 'damage', 'traits', 'description', 'charge'],
+  armor: ['consumption', 'traits', 'description', 'charge'],
+  trap: ['range', 'consumption', 'traits', 'description', 'charge'],
+  action: ['consumption', 'damage', 'description', 'charge'],
+  actions: ['description'],
+  attribute: [],
+  skill: ['range', 'damage', 'traits', 'minion', 'description', 'charge'],
+  status: ['description', 'charge'],
+};
+
+const MAX_CARD_CONTAINERS = 10;
+const MAX_TRAITS_PER_CONTAINER = 3;
+const SINGLE_INSTANCE_CARD_CONTAINERS = new Set(['range', 'minion', 'charge']);
+
+const createCardContainer = (id) => ({
+  id,
+  key: `${id}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+});
+
+const normalizeCardContainer = (container, fallbackIndex = 0) => {
+  if (typeof container === 'string') {
+    return { id: container, key: `${container}-legacy-${fallbackIndex}` };
+  }
+  return {
+    id: container?.id || 'description',
+    key: container?.key || `${container?.id || 'description'}-legacy-${fallbackIndex}`,
+  };
+};
+
+const getContainerId = (container, fallbackIndex = 0) => normalizeCardContainer(container, fallbackIndex).id;
+const getContainerKey = (container, fallbackIndex = 0) => normalizeCardContainer(container, fallbackIndex).key;
+
+const getDefaultCardContainers = (typeId) => (
+  DEFAULT_CARD_CONTAINERS_BY_TYPE[typeId] || DEFAULT_CARD_CONTAINERS_BY_TYPE.general
+).map((id) => createCardContainer(id));
+
+const DESCRIPTION_SPACE_AUTO = 'auto';
+const DESCRIPTION_SPACE_UNITS = [1, 2, 3, 4, 5, 6];
+const MODULAR_DESCRIPTION_UNIT_HEIGHT = 240;
+const DESCRIPTION_AUTO_BUDGET_UNITS = 1;
+const DEFAULT_NARRATIVE_CENTERING = true;
+
+const normalizeDescriptionUnits = (value) => {
+  const parsed = Number.parseFloat(value);
+  return DESCRIPTION_SPACE_UNITS.includes(parsed) ? parsed : 1;
+};
+
+const isAutoDescriptionUnits = (value) => value === DESCRIPTION_SPACE_AUTO;
+
+const getDescriptionBudgetUnits = (value) => (
+  isAutoDescriptionUnits(value) ? DESCRIPTION_AUTO_BUDGET_UNITS : normalizeDescriptionUnits(value)
+);
+
+const clampDescriptionUnitOption = (value, maxUnits = 6) => {
+  if (isAutoDescriptionUnits(value)) return DESCRIPTION_SPACE_AUTO;
+  const normalized = normalizeDescriptionUnits(value);
+  const allowedUnits = DESCRIPTION_SPACE_UNITS.filter((unit) => unit <= maxUnits);
+  const maxAllowedUnit = allowedUnits[allowedUnits.length - 1] || 1;
+  return Math.min(normalized, maxAllowedUnit);
+};
 
 export const ELEMENT_TYPES = [
   { id: 'Ninguno', label: 'Ninguno' },
@@ -74,8 +160,88 @@ export const ELEMENT_TYPES = [
   { id: 'Rayo', label: 'Rayo' },
   { id: 'Tierra', label: 'Tierra' },
   { id: 'Veneno', label: 'Veneno' },
-  { id: 'Viento', label: 'Viento' }
+  { id: 'Viento', label: 'Viento' },
+  { id: 'Magia', label: 'Magia' },
+  { id: 'Distancia', label: 'Distancia' },
+  { id: 'Espada', label: 'Espada' }
 ];
+
+const HEADER_ICON_SOURCES = {
+  Agua: '/cabecera/agua.webp',
+  Fuego: '/cabecera/fuego.webp',
+  Hielo: '/cabecera/hielo.webp',
+  Luz: '/cabecera/luz.webp',
+  Oscuridad: '/cabecera/oscuridad.webp',
+  Rayo: '/cabecera/rayo.webp',
+  Tierra: '/cabecera/tierra.webp',
+  Veneno: '/cabecera/veneno.webp',
+  Viento: '/cabecera/viento.webp',
+  Magia: '/cabecera/magia.webp',
+  Distancia: '/cabecera/distancia.webp',
+  Espada: '/cabecera/espada.webp',
+};
+
+const ELEMENT_CONSUMPTION_ICON_SOURCES = {
+  Agua: '/elementos_new/agua.webp',
+  Fuego: '/elementos_new/fuego.webp',
+  Hielo: '/elementos_new/hielo.webp',
+  Luz: '/elementos_new/luz.webp',
+  Oscuridad: '/elementos_new/oscuridad.webp',
+  Rayo: '/elementos_new/rayo.webp',
+  Tierra: '/elementos_new/tierra.webp',
+  Veneno: '/elementos_new/veneno.webp',
+  Viento: '/elementos_new/viento.webp',
+  Magia: '/elementos_new/magia.webp',
+  Distancia: '/elementos_new/distancia.webp',
+  Espada: '/elementos_new/espada.webp',
+};
+
+const ELEMENT_CONSUMPTION_STYLES = {
+  Agua: { stroke: '#3f7f9f', fill: 'rgba(63,127,159,0.15)' },
+  Fuego: { stroke: '#c46f1f', fill: 'rgba(196,111,31,0.15)' },
+  Hielo: { stroke: '#79a6b5', fill: 'rgba(121,166,181,0.16)' },
+  Luz: { stroke: '#b99a55', fill: 'rgba(185,154,85,0.15)' },
+  Oscuridad: { stroke: '#5f5873', fill: 'rgba(95,88,115,0.16)' },
+  Rayo: { stroke: '#b1832f', fill: 'rgba(177,131,47,0.15)' },
+  Tierra: { stroke: '#827044', fill: 'rgba(130,112,68,0.15)' },
+  Veneno: { stroke: '#668f4f', fill: 'rgba(102,143,79,0.15)' },
+  Viento: { stroke: '#6d958a', fill: 'rgba(109,149,138,0.15)' },
+  Magia: { stroke: '#374151', fill: 'rgba(55,65,81,0.15)' },
+  Distancia: { stroke: '#374151', fill: 'rgba(55,65,81,0.15)' },
+  Espada: { stroke: '#374151', fill: 'rgba(55,65,81,0.15)' },
+};
+
+const DESCRIPTION_ICON_STYLES = {
+  Tiempo: { stroke: '#c46f1f', fill: 'rgba(196,111,31,0.14)' },
+  Mente: { stroke: '#2f6fb3', fill: 'rgba(47,111,179,0.14)' },
+  Cuerpo: { stroke: '#a93832', fill: 'rgba(169,56,50,0.14)' },
+  Hambre: { stroke: '#3d7d45', fill: 'rgba(61,125,69,0.14)' },
+  Recurso: { stroke: '#6f716c', fill: 'rgba(111,113,108,0.14)' },
+  Armadura: { stroke: '#60798f', fill: 'rgba(96,121,143,0.15)' },
+  ...ELEMENT_CONSUMPTION_STYLES,
+};
+
+const DESCRIPTION_FORMAT_PRESET_COLORS = [
+  { name: 'Dorado', value: '#b99a55' },
+  { name: 'Rojo', value: '#a93832' },
+  { name: 'Verde', value: '#3d7d45' },
+  { name: 'Azul', value: '#2f6fb3' },
+  { name: 'Morado', value: '#5f5873' },
+];
+
+const ACCENT_PRESET_COLORS = [
+  { id: 'default', label: 'Base', value: '#c46f1f' },
+  { id: 'gold', label: 'Dorado', value: '#c8aa6e' },
+  { id: 'red', label: 'Rojo', value: '#ad5134' },
+  { id: 'green', label: 'Verde', value: '#73824f' },
+  { id: 'blue', label: 'Azul', value: '#52758a' },
+  { id: 'purple', label: 'Morado', value: '#765d86' },
+  { id: 'bone', label: 'Hueso', value: '#d8d0bd' },
+  { id: 'ashen', label: 'Ceniza', value: '#747168' },
+];
+
+const DEFAULT_HEADER_BACKDROP_COLOR = '#2a251e';
+const DEFAULT_BODY_BACKDROP_COLOR = '#f3e6cf';
 
 const DEFAULT_TRAITS = ['-', '-', '-', '-', '-', '-', '-', '-'];
 const MINION_ATTRIBUTE_TYPES = ['Hambre', 'Cuerpo', 'Mente'];
@@ -86,30 +252,77 @@ const DEFAULT_MINION_ATTRIBUTES = {
 };
 
 const CHARGE_TYPES = [
-  { id: 'Hambre', label: 'Hambre', src: '/interfaz/cargas/Hambre.webp' },
-  { id: 'Cuerpo', label: 'Cuerpo', src: '/interfaz/cargas/Cuerpo.webp' },
-  { id: 'Mente', label: 'Mente', src: '/interfaz/cargas/Mente.webp' },
+  { id: 'Hambre', label: 'Hambre', src: '/interfaz/consumo_new/Hambre.webp' },
+  { id: 'Cuerpo', label: 'Cuerpo', src: '/interfaz/consumo_new/Cuerpo.webp' },
+  { id: 'Mente', label: 'Mente', src: '/interfaz/consumo_new/Mente.webp' },
 ];
 
 const CONSUMPTION_TYPES = [
-  { id: 'Tiempo', label: 'Tiempo', src: '/interfaz/consumos/Tiempo.webp' },
-  { id: 'Mente', label: 'Mente', src: '/interfaz/consumos/Mente.webp' },
-  { id: 'Cuerpo', label: 'Cuerpo', src: '/interfaz/consumos/Cuerpo.webp' },
-  { id: 'Hambre', label: 'Hambre', src: '/interfaz/consumos/Hambre.webp' },
-  { id: 'Armadura_1', label: 'Armadura', src: '/interfaz/consumos/Armadura_1.webp' },
-  { id: 'Recurso', label: 'Recurso', src: '/interfaz/consumos/Recurso.webp' },
+  { id: 'Tiempo', label: 'Tiempo', src: '/interfaz/consumo_new/Tiempo.webp' },
+  { id: 'Mente', label: 'Mente', src: '/interfaz/consumo_new/Mente.webp' },
+  { id: 'Cuerpo', label: 'Cuerpo', src: '/interfaz/consumo_new/Cuerpo.webp' },
+  { id: 'Hambre', label: 'Hambre', src: '/interfaz/consumo_new/Hambre.webp' },
+  { id: 'Armadura_1', label: 'Armadura', src: '/interfaz/consumo_new/Armadura.png' },
+  { id: 'Recurso', label: 'Recurso', src: '/interfaz/consumo_new/Recurso.webp' },
   { id: 'Variable', label: 'Variable', src: '/interfaz/consumos/Variable.webp' },
 ];
 
-const DEFAULT_CHARGE_SLOTS = ['Hambre', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
-const DEFAULT_CONSUMPTION_SLOTS = ['Tiempo', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
+const RESOURCE_SLOT_COUNT = 4;
+const CHARGE_SLOT_COUNT = 5;
+const DEFAULT_CHARGE_SLOTS = Array.from({ length: CHARGE_SLOT_COUNT }, () => EMPTY_SLOT);
+const DEFAULT_CONSUMPTION_SLOTS = ['Tiempo', EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT];
+const MAX_DAMAGE_DICE_QTY = 7;
+const DEFAULT_CONTAINER_DAMAGE = { diceType: 'D6', diceQty: 1 };
+const DEFAULT_CONTAINER_CONSUMPTION_TYPES = Array.from({ length: RESOURCE_SLOT_COUNT }, () => 'consumption');
+const createDefaultContainerConsumption = () => ({
+  slots: [...DEFAULT_CONSUMPTION_SLOTS],
+  slotTypes: [...DEFAULT_CONTAINER_CONSUMPTION_TYPES],
+});
+const ACTION_SPEED_OPTIONS = [
+  {
+    id: 'rapida',
+    label: 'Rápida',
+    title: 'ACCIÓN RÁPIDA',
+    cost: 1,
+    description: 'Permite jugar una carta de coste 1.',
+  },
+  {
+    id: 'ligera',
+    label: 'Ligera',
+    title: 'ACCIÓN LIGERA',
+    cost: 2,
+    description: 'Permite jugar una carta de coste 2.',
+  },
+  {
+    id: 'estandar',
+    label: 'Estándar',
+    title: 'ACCIÓN ESTÁNDAR',
+    cost: 3,
+    description: 'Permite jugar una carta de coste 3.',
+  },
+  {
+    id: 'pesada',
+    label: 'Pesada',
+    title: 'ACCIÓN PESADA',
+    cost: 4,
+    description: 'Permite jugar una carta de coste 4.',
+  },
+];
+const ATTRIBUTE_CARD_OPTIONS = [
+  { id: 'Cuerpo', label: 'Cuerpo', title: 'CUERPO', asset: 'Cuerpo.png' },
+  { id: 'Mente', label: 'Mente', title: 'MENTE', asset: 'Mente.png' },
+  { id: 'Hambre', label: 'Hambre', title: 'HAMBRE', asset: 'Hambre.png' },
+];
 const RESOURCE_MODE_BOTH = 'charge-consumption';
 const RESOURCE_MODE_CHARGE_ONLY = 'charge-only';
 const RESOURCE_MODE_CONSUMPTION_ONLY = 'consumption-only';
 const RESOURCE_MODE_NONE = 'none';
-const RESOURCE_CARD_TYPES = new Set(['weapon', 'armor', 'trap', 'skill']);
+const RESOURCE_CARD_TYPES = new Set(['general', 'weapon', 'armor', 'trap', 'skill']);
 const COLLECTION_ACCESS_EDIT = 'edit';
 const COLLECTION_ACCESS_HIDDEN = 'hidden';
+const DEFAULT_HEADER_IMAGE_TRANSFORM = { zoom: 1, x: 0, y: 0 };
+
+const clampNumber = (value, min, max) => Math.min(max, Math.max(min, value));
 
 export const WEAPON_TYPES = [
   'Cuerpo a cuerpo',
@@ -535,13 +748,98 @@ const drawEmptyCircleSlot = (context, x, y, size) => {
   context.restore();
 };
 
-const drawSlotIcon = (context, iconImage, x, y, size, shape) => {
+const drawBlackIcon = (context, iconImage, x, y, size) => {
+  if (!iconImage) return;
+  context.save();
+  try {
+    const buffer = document.createElement('canvas');
+    buffer.width = size;
+    buffer.height = size;
+    const bufferCtx = buffer.getContext('2d');
+    if (bufferCtx) {
+      bufferCtx.drawImage(iconImage, 0, 0, size, size);
+      bufferCtx.globalCompositeOperation = 'source-in';
+      bufferCtx.fillStyle = '#000000';
+      bufferCtx.fillRect(0, 0, size, size);
+      context.drawImage(buffer, x - size / 2, y - size / 2);
+    } else {
+      context.drawImage(iconImage, x - size / 2, y - size / 2, size, size);
+    }
+  } catch (e) {
+    context.drawImage(iconImage, x - size / 2, y - size / 2, size, size);
+  }
+  context.restore();
+};
+
+const drawSlotIcon = (context, iconImage, x, y, size, shape, forceBlack = false) => {
   if (!iconImage) return;
   context.save();
   // Dibujamos el icono completo a 0.98 del tamaño para lucir su propio contorno nativo sin recortes ni bordes superpuestos
   const iconSize = size * 0.98;
-  context.drawImage(iconImage, x - iconSize / 2, y - iconSize / 2, iconSize, iconSize);
+  if (forceBlack) {
+    drawBlackIcon(context, iconImage, x, y, iconSize);
+  } else {
+    context.drawImage(iconImage, x - iconSize / 2, y - iconSize / 2, iconSize, iconSize);
+  }
   context.restore();
+};
+
+const VISIBLE_IMAGE_BOUNDS_CACHE = new WeakMap();
+
+const getVisibleImageBounds = (image) => {
+  if (!image) return null;
+  const imageWidth = image.naturalWidth || image.width || 0;
+  const imageHeight = image.naturalHeight || image.height || 0;
+  if (!imageWidth || !imageHeight) return null;
+  if (VISIBLE_IMAGE_BOUNDS_CACHE.has(image)) {
+    return VISIBLE_IMAGE_BOUNDS_CACHE.get(image);
+  }
+
+  const fallbackBounds = { sx: 0, sy: 0, sw: imageWidth, sh: imageHeight };
+  if (typeof document === 'undefined') return fallbackBounds;
+
+  try {
+    const buffer = document.createElement('canvas');
+    buffer.width = imageWidth;
+    buffer.height = imageHeight;
+    const bufferContext = buffer.getContext('2d', { willReadFrequently: true });
+    bufferContext.drawImage(image, 0, 0);
+    const pixels = bufferContext.getImageData(0, 0, imageWidth, imageHeight).data;
+    let minX = imageWidth;
+    let minY = imageHeight;
+    let maxX = -1;
+    let maxY = -1;
+
+    for (let py = 0; py < imageHeight; py += 1) {
+      for (let px = 0; px < imageWidth; px += 1) {
+        const alpha = pixels[(py * imageWidth + px) * 4 + 3];
+        if (alpha > 10) {
+          minX = Math.min(minX, px);
+          minY = Math.min(minY, py);
+          maxX = Math.max(maxX, px);
+          maxY = Math.max(maxY, py);
+        }
+      }
+    }
+
+    if (maxX < minX || maxY < minY) {
+      VISIBLE_IMAGE_BOUNDS_CACHE.set(image, fallbackBounds);
+      return fallbackBounds;
+    }
+
+    const padding = 2;
+    const bounds = {
+      sx: Math.max(0, minX - padding),
+      sy: Math.max(0, minY - padding),
+      sw: Math.min(imageWidth, maxX + padding + 1) - Math.max(0, minX - padding),
+      sh: Math.min(imageHeight, maxY + padding + 1) - Math.max(0, minY - padding),
+    };
+    VISIBLE_IMAGE_BOUNDS_CACHE.set(image, bounds);
+    return bounds;
+  } catch (error) {
+    VISIBLE_IMAGE_BOUNDS_CACHE.set(image, fallbackBounds);
+    return fallbackBounds;
+  }
 };
 
 const drawWeaponResourceRails = (context, chargeSlots, consumptionSlots, resourceImages) => {
@@ -564,7 +862,7 @@ const drawWeaponResourceRails = (context, chargeSlots, consumptionSlots, resourc
     const x = chargeStartX + index * (slotSize + slotGap);
     const slotY = chargeRail.y + chargeRail.height / 2;
     drawEmptyDiamondSlot(context, x, slotY, slotSize);
-    drawSlotIcon(context, resourceImages[`charge:${slot}`], x, slotY, slotSize, 'diamond');
+    drawSlotIcon(context, resourceImages[`charge:${slot}`], x, slotY, slotSize, 'diamond', true);
   });
 
   const displayConsumptionSlots = [...consumptionSlots].reverse();
@@ -593,7 +891,7 @@ const drawCenteredChargeRail = (context, chargeSlots, resourceImages) => {
   chargeSlots.forEach((slot, index) => {
     const x = chargeStartX + index * (slotSize + slotGap);
     drawEmptyDiamondSlot(context, x, slotY, slotSize);
-    drawSlotIcon(context, resourceImages[`charge:${slot}`], x, slotY, slotSize, 'diamond');
+    drawSlotIcon(context, resourceImages[`charge:${slot}`], x, slotY, slotSize, 'diamond', true);
   });
 };
 
@@ -957,44 +1255,58 @@ const getSyllables = (word) => {
   return syllables;
 };
 
-const KEYWORD_ICONS = {
-  'Tiempo': '/interfaz/consumos/Tiempo.webp',
-  'Mente': '/interfaz/consumos/Mente.webp',
-  'Cuerpo': '/interfaz/consumos/Cuerpo.webp',
-  'Hambre': '/interfaz/consumos/Hambre.webp',
-  'Armadura': '/interfaz/consumos/Armadura_1.webp',
-  'Recurso': '/interfaz/consumos/Recurso.webp',
-  'Variable': '/interfaz/consumos/Variable.webp',
-  'Agua': '/elementos/Agua.webp',
-  'Fuego': '/elementos/Fuego.webp',
-  'Hielo': '/elementos/Hielo.webp',
-  'Luz': '/elementos/Luz.webp',
-  'Oscuridad': '/elementos/Oscuridad.webp',
-  'Rayo': '/elementos/Rayo.webp',
-  'Tierra': '/elementos/Tierra.webp',
-  'Veneno': '/elementos/Veneno.webp',
-  'Viento': '/elementos/Viento.webp',
-  'Cuerpo a cuerpo': '/tipo/Cuerpo a cuerpo.webp',
-  'Distancia': '/tipo/Distancia.webp',
-  'Magia': '/tipo/Magia.webp',
-  'D4': '/dados/cartas/D4.webp',
-  'D6': '/dados/cartas/D6.webp',
-  'D8': '/dados/cartas/D8.webp',
-  'D10': '/dados/cartas/D10.webp',
-  'D12': '/dados/cartas/D12.webp',
-  'DX': '/dados/cartas/DX.webp',
-  'Dado': '/dados/cartas/DX.webp',
-};
+const DESCRIPTION_ICON_LIBRARY = [
+  { id: 'Tiempo', label: 'Tiempo', src: '/interfaz/consumo_new/Tiempo.webp' },
+  { id: 'Mente', label: 'Mente', src: '/interfaz/consumo_new/Mente.webp' },
+  { id: 'Cuerpo', label: 'Cuerpo', src: '/interfaz/consumo_new/Cuerpo.webp' },
+  { id: 'Hambre', label: 'Hambre', src: '/interfaz/consumo_new/Hambre.webp' },
+  { id: 'Armadura', label: 'Armadura', src: '/interfaz/consumo_new/Armadura.png' },
+  { id: 'Recurso', label: 'Recurso', src: '/interfaz/consumo_new/Recurso.webp' },
+  { id: 'Agua', label: 'Agua', src: '/elementos_new/agua.webp' },
+  { id: 'Fuego', label: 'Fuego', src: '/elementos_new/fuego.webp' },
+  { id: 'Hielo', label: 'Hielo', src: '/elementos_new/hielo.webp' },
+  { id: 'Luz', label: 'Luz', src: '/elementos_new/luz.webp' },
+  { id: 'Oscuridad', label: 'Oscuridad', src: '/elementos_new/oscuridad.webp' },
+  { id: 'Rayo', label: 'Rayo', src: '/elementos_new/rayo.webp' },
+  { id: 'Tierra', label: 'Tierra', src: '/elementos_new/tierra.webp' },
+  { id: 'Veneno', label: 'Veneno', src: '/elementos_new/veneno.webp' },
+  { id: 'Viento', label: 'Viento', src: '/elementos_new/viento.webp' },
+  { id: 'Magia', label: 'Magia', src: '/elementos_new/magia.webp' },
+  { id: 'Distancia', label: 'Distancia', src: '/elementos_new/distancia.webp' },
+  { id: 'Espada', label: 'Espada', src: '/elementos_new/espada.webp' },
+];
 
-const KEYWORD_REGEX = new RegExp(
-  '\\b(' + 
-  Object.keys(KEYWORD_ICONS)
-    .sort((a, b) => b.length - a.length)
-    .map(kw => kw.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'))
-    .join('|') + 
-  ')\\b',
-  'gi'
+const KEYWORD_ICONS = Object.fromEntries(
+  DESCRIPTION_ICON_LIBRARY.map((icon) => [icon.id, icon.src]),
 );
+
+const DESCRIPTION_ICON_LOOKUP = Object.fromEntries(
+  DESCRIPTION_ICON_LIBRARY.map((icon) => [icon.id.toLowerCase(), icon.id]),
+);
+
+const DESCRIPTION_ICON_TOKEN_REGEX = /\[icon:([^\]\r\n]+)\]/gi;
+
+const normalizeDescriptionIconId = (value = '') => (
+  DESCRIPTION_ICON_LOOKUP[value.trim().toLowerCase()] || null
+);
+
+const createDescriptionIconToken = (iconId) => `[icon:${iconId}]`;
+
+const extractDescriptionIconIds = (text = '') => {
+  const ids = [];
+  const seen = new Set();
+  DESCRIPTION_ICON_TOKEN_REGEX.lastIndex = 0;
+  let match = DESCRIPTION_ICON_TOKEN_REGEX.exec(text);
+  while (match) {
+    const iconId = normalizeDescriptionIconId(match[1]);
+    if (iconId && !seen.has(iconId)) {
+      seen.add(iconId);
+      ids.push(iconId);
+    }
+    match = DESCRIPTION_ICON_TOKEN_REGEX.exec(text);
+  }
+  return ids;
+};
 
 const getActiveFontSize = (context) => {
   const fontStr = context.font;
@@ -1002,16 +1314,70 @@ const getActiveFontSize = (context) => {
   return match ? parseInt(match[1], 10) : 60;
 };
 
-const measureTextWithIcons = (context, text, ignoreIcons = false) => {
-  const baseWidth = context.measureText(text).width;
-  if (!text || ignoreIcons) return baseWidth;
-  KEYWORD_REGEX.lastIndex = 0;
-  const matches = text.match(KEYWORD_REGEX);
-  if (!matches) return baseWidth;
-  
+const getInlineIconMetrics = (context) => {
   const fontSize = getActiveFontSize(context);
-  const extraWidthPerMatch = fontSize * 1.20; // 0.9 * size for icon + 0.15 * size * 2 for padding
-  return baseWidth + matches.length * extraWidthPerMatch;
+  return {
+    fontSize,
+    iconSize: fontSize,
+    iconPadding: fontSize * 0.12,
+  };
+};
+
+const drawInlineDescriptionIcon = (context, iconImage, iconId, x, y, size) => {
+  if (!iconImage) return;
+
+  const imageWidth = iconImage.naturalWidth || iconImage.width || 0;
+  const imageHeight = iconImage.naturalHeight || iconImage.height || 0;
+  if (!imageWidth || !imageHeight || typeof document === 'undefined') {
+    context.drawImage(iconImage, x, y, size, size);
+    return;
+  }
+
+  const bounds = getVisibleImageBounds(iconImage) || { sx: 0, sy: 0, sw: imageWidth, sh: imageHeight };
+  const scale = Math.min(size / bounds.sw, size / bounds.sh);
+  const drawWidth = bounds.sw * scale;
+  const drawHeight = bounds.sh * scale;
+  const drawX = x + (size - drawWidth) / 2;
+  const drawY = y + (size - drawHeight) / 2;
+  const buffer = document.createElement('canvas');
+  buffer.width = Math.max(1, Math.ceil(drawWidth));
+  buffer.height = Math.max(1, Math.ceil(drawHeight));
+  const bufferContext = buffer.getContext('2d');
+  if (!bufferContext) {
+    context.drawImage(iconImage, drawX, drawY, drawWidth, drawHeight);
+    return;
+  }
+
+  bufferContext.imageSmoothingEnabled = true;
+  bufferContext.imageSmoothingQuality = 'high';
+  bufferContext.drawImage(
+    iconImage,
+    bounds.sx,
+    bounds.sy,
+    bounds.sw,
+    bounds.sh,
+    0,
+    0,
+    buffer.width,
+    buffer.height,
+  );
+  bufferContext.globalCompositeOperation = 'source-in';
+  bufferContext.fillStyle = DESCRIPTION_ICON_STYLES[iconId]?.stroke || '#c46f1f';
+  bufferContext.fillRect(0, 0, buffer.width, buffer.height);
+
+  context.drawImage(buffer, drawX, drawY, drawWidth, drawHeight);
+};
+
+const measureTextWithIcons = (context, text, ignoreIcons = false) => {
+  if (!text) return 0;
+  if (ignoreIcons) return context.measureText(text).width;
+
+  const { iconSize, iconPadding } = getInlineIconMetrics(context);
+  const iconWidth = iconSize + iconPadding * 2;
+  return parseLineSegments(text).reduce((width, segment) => {
+    if (segment.isKeyword) return width + iconWidth;
+    return width + context.measureText(segment.text).width;
+  }, 0);
 };
 
 const DESCRIPTION_SEPARATOR_REGEX = /^\s*-{3,}\s*$/;
@@ -1174,9 +1540,9 @@ const measureStyledText = (context, text, layoutFontInfo = {}, ignoreIcons = fal
   return totalWidth;
 };
 
-const measureTextWidth = (context, text) => {
+const measureTextWidth = (context, text, ignoreIcons = false) => {
   const fontInfo = getFontInfoFromContext(context);
-  return measureStyledText(context, text, fontInfo);
+  return measureStyledText(context, text, fontInfo, ignoreIcons);
 };
 
 const getStyledWordsOfLine = (line) => {
@@ -1216,9 +1582,7 @@ const drawSingleStyledWord = (context, word, x, y, resourceImages = {}, ignoreIc
   context.save();
   applySegmentStyle(context, word, fontInfo);
   
-  const fontSize = getActiveFontSize(context);
-  const iconSize = fontSize * 0.9;
-  const iconPadding = fontSize * 0.15;
+  const { fontSize, iconSize, iconPadding } = getInlineIconMetrics(context);
   
   if (ignoreIcons) {
     context.fillText(word.text, x, y);
@@ -1227,17 +1591,17 @@ const drawSingleStyledWord = (context, word, x, y, resourceImages = {}, ignoreIc
     let cursorX = x;
     
     kwSegments.forEach((seg) => {
-      context.fillText(seg.text, cursorX, y);
-      const textWidth = context.measureText(seg.text).width;
-      cursorX += textWidth;
+      if (!seg.isKeyword) {
+        context.fillText(seg.text, cursorX, y);
+        cursorX += context.measureText(seg.text).width;
+      }
       
       if (seg.isKeyword) {
-        const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
-        const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
+        const iconImg = resourceImages[`keyword:${seg.iconId}`] || null;
         
         if (iconImg) {
           const iconY = y + (fontSize - iconSize) / 2;
-          context.drawImage(iconImg, cursorX + iconPadding, iconY, iconSize, iconSize);
+          drawInlineDescriptionIcon(context, iconImg, seg.iconId, cursorX + iconPadding, iconY, iconSize);
         }
         cursorX += iconSize + iconPadding * 2;
       }
@@ -1261,17 +1625,33 @@ const measureStyledWordWidth = (context, word, ignoreIcons = false) => {
 
 const parseLineSegments = (line) => {
   if (!line) return [];
-  KEYWORD_REGEX.lastIndex = 0;
-  const parts = line.split(KEYWORD_REGEX);
-  return parts.map((part) => {
-    const isKeyword = Object.keys(KEYWORD_ICONS).some(
-      (kw) => kw.toLowerCase() === part.toLowerCase() || (part.toLowerCase() === 'dado' && kw === 'Dado')
-    );
-    return {
-      text: part,
-      isKeyword,
-    };
-  }).filter((segment) => segment.text !== '');
+
+  const segments = [];
+  let cursor = 0;
+  DESCRIPTION_ICON_TOKEN_REGEX.lastIndex = 0;
+  let match = DESCRIPTION_ICON_TOKEN_REGEX.exec(line);
+
+  while (match) {
+    if (match.index > cursor) {
+      segments.push({ text: line.slice(cursor, match.index), isKeyword: false });
+    }
+
+    const iconId = normalizeDescriptionIconId(match[1]);
+    if (iconId) {
+      segments.push({ text: match[0], iconId, isKeyword: true });
+    } else {
+      segments.push({ text: match[0], isKeyword: false });
+    }
+
+    cursor = DESCRIPTION_ICON_TOKEN_REGEX.lastIndex;
+    match = DESCRIPTION_ICON_TOKEN_REGEX.exec(line);
+  }
+
+  if (cursor < line.length) {
+    segments.push({ text: line.slice(cursor), isKeyword: false });
+  }
+
+  return segments.filter((segment) => segment.text !== '');
 };
 
 const tokenizeParagraph = (paragraph) => {
@@ -1293,9 +1673,7 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
     styleSegments.forEach((styleSeg) => {
       applySegmentStyle(context, styleSeg, fontInfo);
       
-      const fontSize = getActiveFontSize(context);
-      const iconSize = fontSize * 0.9;
-      const iconPadding = fontSize * 0.15;
+      const { fontSize, iconSize, iconPadding } = getInlineIconMetrics(context);
       
       if (ignoreIcons) {
         context.fillText(styleSeg.text, cursorX, y);
@@ -1303,17 +1681,17 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
       } else {
         const kwSegments = parseLineSegments(styleSeg.text);
         kwSegments.forEach((seg) => {
-          context.fillText(seg.text, cursorX, y);
-          const textWidth = context.measureText(seg.text).width;
-          cursorX += textWidth;
+          if (!seg.isKeyword) {
+            context.fillText(seg.text, cursorX, y);
+            cursorX += context.measureText(seg.text).width;
+          }
           
           if (seg.isKeyword) {
-            const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
-            const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
+            const iconImg = resourceImages[`keyword:${seg.iconId}`] || null;
             
             if (iconImg) {
               const iconY = y + (fontSize - iconSize) / 2;
-              context.drawImage(iconImg, cursorX + iconPadding, iconY, iconSize, iconSize);
+              drawInlineDescriptionIcon(context, iconImg, seg.iconId, cursorX + iconPadding, iconY, iconSize);
             }
             cursorX += iconSize + iconPadding * 2;
           }
@@ -1336,9 +1714,7 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
     styleSegments.forEach((styleSeg) => {
       applySegmentStyle(context, styleSeg, fontInfo);
       
-      const fontSize = getActiveFontSize(context);
-      const iconSize = fontSize * 0.9;
-      const iconPadding = fontSize * 0.15;
+      const { fontSize, iconSize, iconPadding } = getInlineIconMetrics(context);
       
       if (ignoreIcons) {
         context.fillText(styleSeg.text, cursorX, y);
@@ -1346,17 +1722,17 @@ const drawTextLineWithIcons = (context, line, x, y, maxWidth, justify = false, r
       } else {
         const kwSegments = parseLineSegments(styleSeg.text);
         kwSegments.forEach((seg) => {
-          context.fillText(seg.text, cursorX, y);
-          const textWidth = context.measureText(seg.text).width;
-          cursorX += textWidth;
+          if (!seg.isKeyword) {
+            context.fillText(seg.text, cursorX, y);
+            cursorX += context.measureText(seg.text).width;
+          }
           
           if (seg.isKeyword) {
-            const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === seg.text.toLowerCase());
-            const iconImg = matchedKw ? resourceImages[`keyword:${matchedKw}`] : null;
+            const iconImg = resourceImages[`keyword:${seg.iconId}`] || null;
             
             if (iconImg) {
               const iconY = y + (fontSize - iconSize) / 2;
-              context.drawImage(iconImg, cursorX + iconPadding, iconY, iconSize, iconSize);
+              drawInlineDescriptionIcon(context, iconImg, seg.iconId, cursorX + iconPadding, iconY, iconSize);
             }
             cursorX += iconSize + iconPadding * 2;
           }
@@ -1448,7 +1824,7 @@ const serializeTokens = (tokens) => {
   return result;
 };
 
-const wrapDescriptionText = (context, text, maxWidth, hyphenate = false, isLore = false) => {
+const wrapDescriptionText = (context, text, maxWidth, hyphenate = false, isLore = false, ignoreIcons = false) => {
   const paragraphs = text
     .trim()
     .split(/\n+/)
@@ -1481,7 +1857,7 @@ const wrapDescriptionText = (context, text, maxWidth, hyphenate = false, isLore 
             bold: seg.bold,
             italic: seg.italic,
             color: seg.color,
-          }, isLore);
+          }, isLore || ignoreIcons);
 
           if (wordWidth <= maxWidth) {
             tokens.push({
@@ -1500,7 +1876,7 @@ const wrapDescriptionText = (context, text, maxWidth, hyphenate = false, isLore 
                 bold: seg.bold,
                 italic: seg.italic,
                 color: seg.color,
-              }, isLore);
+              }, isLore || ignoreIcons);
               if (nextWidth <= maxWidth || !chunk) {
                 chunk = nextChunk;
               } else {
@@ -1542,7 +1918,7 @@ const wrapDescriptionText = (context, text, maxWidth, hyphenate = false, isLore 
       const testTokens = [...currentLineTokens, token];
       const testString = serializeTokens(testTokens);
 
-      if (measureTextWidth(context, testString) <= maxWidth || currentLineTokens.length === 0) {
+      if (measureTextWidth(context, testString, ignoreIcons) <= maxWidth || currentLineTokens.length === 0) {
         currentLineTokens.push(token);
         continue;
       }
@@ -1572,7 +1948,7 @@ const wrapDescriptionText = (context, text, maxWidth, hyphenate = false, isLore 
                 const testTokensWithHyphen = [...currentLineTokens, prefixToken];
                 const testStringWithHyphen = serializeTokens(testTokensWithHyphen);
 
-                if (measureTextWidth(context, testStringWithHyphen) <= maxWidth) {
+                if (measureTextWidth(context, testStringWithHyphen, ignoreIcons) <= maxWidth) {
                   currentLineTokens.push(prefixToken);
                   while (currentLineTokens.length > 0 && currentLineTokens[currentLineTokens.length - 1].isSpace) {
                     currentLineTokens.pop();
@@ -1614,7 +1990,11 @@ const wrapDescriptionText = (context, text, maxWidth, hyphenate = false, isLore 
   return lines;
 };
 
-const getDescriptionFlowItems = (context, text, maxWidth, lineHeight, hyphenate = false) => {
+const getDescriptionFlowItems = (context, text, maxWidth, lineHeight, hyphenate = false, options = {}) => {
+  const {
+    ignoreIcons = false,
+    paragraphGapScale = 0.55,
+  } = options;
   const lines = text.trim().split(/\n/);
   const items = [];
   let paragraph = '';
@@ -1628,7 +2008,7 @@ const getDescriptionFlowItems = (context, text, maxWidth, lineHeight, hyphenate 
       return;
     }
 
-    const wrappedLines = wrapDescriptionText(context, cleanParagraph, maxWidth, hyphenate, paragraphIsLore);
+    const wrappedLines = wrapDescriptionText(context, cleanParagraph, maxWidth, hyphenate, paragraphIsLore, ignoreIcons);
     wrappedLines.forEach((line, lineIdx) => {
       items.push({
         type: 'text',
@@ -1653,7 +2033,7 @@ const getDescriptionFlowItems = (context, text, maxWidth, lineHeight, hyphenate 
     const { segments } = loreResult;
     if (segments.length === 0) {
       flushParagraph();
-      items.push({ type: 'gap', height: Math.round(lineHeight * 0.55) });
+      items.push({ type: 'gap', height: Math.round(lineHeight * paragraphGapScale) });
       return;
     }
 
@@ -1832,87 +2212,6 @@ const drawDescriptionSeparator = (context, layout, y, lineHeight) => {
   context.restore();
 };
 
-const drawMinionAttributes = (context, attributes, resourceImages = {}) => {
-  const slots = [
-    { x: 225, y: 807, width: 430, height: 175 },
-    { x: 729, y: 807, width: 430, height: 175 },
-    { x: 1233, y: 807, width: 430, height: 175 },
-  ];
-
-  MINION_ATTRIBUTE_TYPES.forEach((attribute, index) => {
-    const slot = slots[index];
-    const { x, y, width, height } = slot;
-    const bevel = 58;
-    const icon = resourceImages[`attribute:${attribute}`] || resourceImages[`keyword:${attribute}`];
-    const iconSize = 70;
-    const value = Number.isFinite(Number(attributes?.[attribute])) ? Number(attributes[attribute]) : 0;
-
-    context.save();
-    const traceAttributePath = (grow = 0) => {
-      const gx = x - grow;
-      const gy = y - grow * 0.65;
-      const gw = width + grow * 2;
-      const gh = height + grow * 1.3;
-      const gb = bevel + grow * 0.4;
-      context.beginPath();
-      context.moveTo(gx + gb, gy);
-      context.lineTo(gx + gw - gb, gy);
-      context.lineTo(gx + gw, gy + gh / 2);
-      context.lineTo(gx + gw - gb, gy + gh);
-      context.lineTo(gx + gb, gy + gh);
-      context.lineTo(gx, gy + gh / 2);
-      context.closePath();
-    };
-
-    traceAttributePath();
-    const fill = context.createLinearGradient(x, y, x, y + height);
-    fill.addColorStop(0, 'rgba(0,0,0,0.88)');
-    fill.addColorStop(0.52, 'rgba(0,0,0,0.98)');
-    fill.addColorStop(1, 'rgba(0,0,0,0.84)');
-    context.fillStyle = fill;
-    context.shadowColor = 'rgba(0,0,0,0.85)';
-    context.shadowBlur = 16;
-    context.fill();
-
-    traceAttributePath(2);
-    context.shadowColor = 'rgba(255,255,255,0.46)';
-    context.shadowBlur = 24;
-    context.lineWidth = 4;
-    context.strokeStyle = 'rgba(255,255,255,0.28)';
-    context.stroke();
-
-    traceAttributePath();
-    context.shadowBlur = 0;
-    context.lineWidth = 2.5;
-    context.strokeStyle = 'rgba(255,255,255,0.58)';
-    context.stroke();
-
-    if (icon) {
-      context.save();
-      context.shadowColor = 'rgba(255,255,255,0.24)';
-      context.shadowBlur = 10;
-      context.drawImage(icon, x + 82, y + height / 2 - iconSize / 2, iconSize, iconSize);
-      context.restore();
-    }
-
-    context.fillStyle = 'rgba(255,255,255,0.96)';
-    context.shadowColor = 'rgba(0,0,0,0.88)';
-    context.shadowBlur = 8;
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    if ('letterSpacing' in context) context.letterSpacing = '0px';
-    context.font = '900 76px Cinzel, Georgia, serif';
-    context.fillText(String(value), x + width / 2 + 15, y + height / 2 - 10);
-
-    context.fillStyle = 'rgba(200,170,110,0.92)';
-    context.font = '900 24px Lato, Arial, sans-serif';
-    if ('letterSpacing' in context) context.letterSpacing = '2px';
-    context.fillText(attribute.toUpperCase(), x + width / 2 + 16, y + height / 2 + 48);
-
-    context.restore();
-  });
-};
-
 const drawTextBlock = (context, textValue, layout, previewText = '', hyphenate = false, resourceImages = {}) => {
   const hasUserText = textValue.trim().length > 0;
   const text = hasUserText ? textValue.trim() : previewText;
@@ -1993,6 +2292,2154 @@ const drawDescription = (context, description, flavorText, typeConfig, showTrait
   drawTextBlock(context, description, layouts.flavor, DESCRIPTION_PREVIEW_TEXT, hyphenate, resourceImages);
 };
 
+const drawRoundRectPath = (context, x, y, width, height, radius) => {
+  const safeRadius = Math.min(radius, width / 2, height / 2);
+  context.beginPath();
+  if (context.roundRect) {
+    context.roundRect(x, y, width, height, safeRadius);
+    return;
+  }
+  context.moveTo(x + safeRadius, y);
+  context.lineTo(x + width - safeRadius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+  context.lineTo(x + width, y + height - safeRadius);
+  context.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+  context.lineTo(x + safeRadius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+  context.lineTo(x, y + safeRadius);
+  context.quadraticCurveTo(x, y, x + safeRadius, y);
+};
+
+const drawCoverImage = (context, image, x, y, width, height, transform = DEFAULT_HEADER_IMAGE_TRANSFORM) => {
+  if (!image) return;
+  const imageRatio = image.width / image.height;
+  const frameRatio = width / height;
+  let sourceWidth = image.width;
+  let sourceHeight = image.height;
+  let sourceX = 0;
+  let sourceY = 0;
+
+  if (imageRatio > frameRatio) {
+    sourceWidth = image.height * frameRatio;
+    sourceX = (image.width - sourceWidth) / 2;
+  } else {
+    sourceHeight = image.width / frameRatio;
+    sourceY = (image.height - sourceHeight) / 2;
+  }
+
+  const zoom = clampNumber(Number(transform.zoom) || 1, 1, 2.5);
+  const panX = clampNumber(Number(transform.x) || 0, -100, 100);
+  const panY = clampNumber(Number(transform.y) || 0, -100, 100);
+  const zoomedSourceWidth = sourceWidth / zoom;
+  const zoomedSourceHeight = sourceHeight / zoom;
+  const centerX = image.width / 2;
+  const centerY = image.height / 2;
+  const maxCenterOffsetX = Math.max(0, (image.width - zoomedSourceWidth) / 2);
+  const maxCenterOffsetY = Math.max(0, (image.height - zoomedSourceHeight) / 2);
+  sourceX = clampNumber(
+    centerX + maxCenterOffsetX * (panX / 100) - zoomedSourceWidth / 2,
+    0,
+    image.width - zoomedSourceWidth,
+  );
+  sourceY = clampNumber(
+    centerY + maxCenterOffsetY * (panY / 100) - zoomedSourceHeight / 2,
+    0,
+    image.height - zoomedSourceHeight,
+  );
+  sourceWidth = zoomedSourceWidth;
+  sourceHeight = zoomedSourceHeight;
+
+  context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
+};
+
+const hexToRgb = (hex) => {
+  const normalized = typeof hex === 'string' ? hex.replace('#', '').trim() : '';
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return null;
+  return {
+    r: parseInt(normalized.slice(0, 2), 16),
+    g: parseInt(normalized.slice(2, 4), 16),
+    b: parseInt(normalized.slice(4, 6), 16),
+  };
+};
+
+const rgbaFromHex = (hex, alpha) => {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return `rgba(42,37,30,${alpha})`;
+  return `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`;
+};
+
+const applyHeaderColorFilter = (context, x, y, width, height, color) => {
+  if (!color || color === DEFAULT_HEADER_BACKDROP_COLOR) return;
+
+  context.save();
+  // 1. Color blend mode (tints the hue/sat while keeping light/dark detail)
+  context.globalCompositeOperation = 'color';
+  context.fillStyle = color;
+  context.globalAlpha = 0.55;
+  context.fillRect(x, y, width, height);
+  context.restore();
+
+  context.save();
+  // 2. Multiply blend mode (adds richer shade depth)
+  context.globalCompositeOperation = 'multiply';
+  context.fillStyle = color;
+  context.globalAlpha = 0.18;
+  context.fillRect(x, y, width, height);
+  context.restore();
+};
+
+const applyBodyColorFilter = (context, x, y, width, height, color) => {
+  if (!color || color === DEFAULT_BODY_BACKDROP_COLOR) return;
+
+  context.save();
+  context.beginPath();
+  // Clip to the concave corner notched parchment path
+  const R = width > 1560 ? 52 : 44;
+  context.moveTo(x, y);
+  context.lineTo(x + width, y);
+  context.lineTo(x + width, y + height - R);
+  context.arc(x + width, y + height, R, 1.5 * Math.PI, Math.PI, true);
+  context.lineTo(x + R, y + height);
+  context.arc(x, y + height, R, 0, 1.5 * Math.PI, true);
+  context.closePath();
+  context.clip();
+
+  // 1. Color blend mode (tints the hue/sat while keeping light/dark detail)
+  context.save();
+  context.globalCompositeOperation = 'color';
+  context.fillStyle = color;
+  context.globalAlpha = 0.55;
+  context.fillRect(x, y, width, height);
+  context.restore();
+
+  // 2. Multiply blend mode (adds richer shade depth for dark colors/shadows)
+  context.save();
+  context.globalCompositeOperation = 'multiply';
+  context.fillStyle = color;
+  context.globalAlpha = 0.20;
+  context.fillRect(x, y, width, height);
+  context.restore();
+
+  // 3. Normal (source-over) blend mode overlay (lays down direct pigment pigment for neutral/black/grey/saturated tones)
+  context.save();
+  context.globalCompositeOperation = 'source-over';
+  context.fillStyle = color;
+  context.globalAlpha = 0.10;
+  context.fillRect(x, y, width, height);
+  context.restore();
+
+  context.restore();
+};
+
+const drawGeneratedHeaderBackdrop = (context, x, y, width, height, headerBackdropColor = DEFAULT_HEADER_BACKDROP_COLOR, stardustImg = null) => {
+  context.save();
+  // 1. Draw base paper color
+  context.fillStyle = '#f3e6cf';
+  context.fillRect(x, y, width, height);
+
+  // 2. Draw paper texture (noise, vignettes)
+  drawPaperTexture(context, x, y, width, height, headerBackdropColor, stardustImg, true);
+
+  // 3. Apply color filter if active
+  if (headerBackdropColor && headerBackdropColor !== DEFAULT_HEADER_BACKDROP_COLOR) {
+    applyHeaderColorFilter(context, x, y, width, height, headerBackdropColor);
+  } else {
+    // If base default, draw a dark wash to enhance title readability
+    context.fillStyle = 'rgba(0,0,0,0.38)';
+    context.fillRect(x, y, width, height);
+  }
+  context.restore();
+};
+
+const fitModularTitleFont = (context, title, hasHeaderIcon = false) => {
+  let size = 176;
+  context.save();
+  while (size > 58) {
+    context.font = `900 ${size}px Lato, Arial, sans-serif`;
+    const titleWidth = context.measureText(title).width;
+    const neededSpace = titleWidth + (hasHeaderIcon ? size * 0.98 + 34 : 0);
+    if (neededSpace <= 1340) break;
+    size -= 4;
+  }
+  context.restore();
+  return size;
+};
+
+const MODULAR_CARD_OUTER_BOUNDS = {
+  x: 62,
+  y: 54,
+  width: 1764,
+  height: 2516,
+};
+const GENERAL_BASE_SOURCE_CROP = { left: 14, top: 18, right: 18, bottom: 14 };
+const GENERAL_HEADER_BOUNDS = {
+  x: 152.46,
+  y: 147.2,
+  width: 1579.73,
+  height: 593.2,
+};
+
+const applyReferenceCardLayoutScale = (context) => {
+  const scale = CANVAS_WIDTH / MODULAR_CARD_OUTER_BOUNDS.width;
+  context.translate(-MODULAR_CARD_OUTER_BOUNDS.x * scale, -MODULAR_CARD_OUTER_BOUNDS.y * scale);
+  context.scale(scale, scale);
+};
+
+const drawPaperTexture = (context, x, y, width, height, accent = '#c46f1f', stardustImg = null, isHeader = false) => {
+  context.save();
+  context.beginPath();
+  context.rect(x, y, width, height);
+  context.clip();
+
+  // Deterministic pseudo-random number generator to keep the stardust layout identical between renders
+  const pseudoRandom = (s) => {
+    const mask = 0xffffffff;
+    let w = (123456789 + s) & mask;
+    let z = (987654321 - s) & mask;
+    return () => {
+      z = (36969 * (z & 65535) + (z >> 16)) & mask;
+      w = (18000 * (w & 65535) + (w >> 16)) & mask;
+      return (((z << 16) + w) >>> 0) / 4294967296;
+    };
+  };
+
+  const random = pseudoRandom(2026); // Fixed seed for stardust layout
+
+  // 1. Soft radial washes to give an organic aged depth/mottling to the background
+  for (let i = 0; i < 5; i++) {
+    const cx = x + random() * width;
+    const cy = y + random() * height;
+    const radius = 300 + random() * 400;
+    const gradient = context.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    gradient.addColorStop(0, 'rgba(139, 94, 26, 0.05)');
+    gradient.addColorStop(0.6, 'rgba(215, 172, 115, 0.02)');
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    context.fillStyle = gradient;
+    context.beginPath();
+    context.arc(cx, cy, radius, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  // 2. Draw stardust image pattern if loaded
+  if (stardustImg) {
+    context.save();
+    const pattern = context.createPattern(stardustImg, 'repeat');
+    if (pattern) {
+      context.fillStyle = pattern;
+      context.globalAlpha = 0.45; // Subtle but noticeable shimmery specs
+      context.fillRect(x, y, width, height);
+    }
+    context.restore();
+  }
+
+  // 3. Fine organic noise particles (procedural dark/light dust specs)
+  // We draw 600 micro-particles
+  for (let i = 0; i < 600; i++) {
+    const px = x + random() * width;
+    const py = y + random() * height;
+    const alpha = 0.02 + random() * 0.04;
+    if (random() > 0.4) {
+      // Dark organic paper dust specs (noticeable but very subtle)
+      context.fillStyle = `rgba(70, 55, 40, ${alpha * 1.5})`;
+      context.fillRect(px, py, 1.2, 1.2);
+    } else {
+      // Light particles
+      context.fillStyle = `rgba(255, 255, 240, ${alpha})`;
+      context.fillRect(px, py, 1.2, 1.2);
+    }
+  }
+
+  // 4. Medium-sized stardust particles (dust specs)
+  // We draw 150 medium particles (1.0px to 3.0px) for depth
+  for (let i = 0; i < 150; i++) {
+    const px = x + random() * width;
+    const py = y + random() * height;
+    const size = 1.0 + random() * 2.0;
+    const alpha = 0.02 + random() * 0.04;
+
+    if (random() > 0.4) {
+      // Dark particles
+      context.fillStyle = `rgba(80, 65, 50, ${alpha * 1.5})`;
+    } else {
+      // Light particles
+      context.fillStyle = `rgba(255, 253, 240, ${alpha})`;
+    }
+
+    context.beginPath();
+    context.arc(px, py, size / 2, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  // 5. Soft hazy/blurry stardust clouds
+  // We draw 18 larger blurry glow particles for depth
+  for (let i = 0; i < 18; i++) {
+    const px = x + random() * width;
+    const py = y + random() * height;
+    const radius = 3 + random() * 6;
+    const alpha = 0.01 + random() * 0.02;
+
+    const g = context.createRadialGradient(px, py, 0, px, py, radius);
+    if (random() > 0.5) {
+      g.addColorStop(0, `rgba(255, 253, 230, ${alpha * 1.5})`);
+      g.addColorStop(1, 'rgba(255, 253, 230, 0)');
+    } else {
+      g.addColorStop(0, `rgba(130, 95, 65, ${alpha})`);
+      g.addColorStop(1, 'rgba(130, 95, 65, 0)');
+    }
+
+    context.fillStyle = g;
+    context.beginPath();
+    context.arc(px, py, radius, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  // 6. Aged vignette border overlay
+  const vignette = 80;
+  
+  // Left Edge
+  const lGrad = context.createLinearGradient(x, y, x + vignette, y);
+  lGrad.addColorStop(0, 'rgba(130, 95, 60, 0.04)');
+  lGrad.addColorStop(1, 'rgba(0,0,0,0)');
+  context.fillStyle = lGrad;
+  context.fillRect(x, y, vignette, height);
+
+  // Right Edge
+  const rGrad = context.createLinearGradient(x + width - vignette, y, x + width, y);
+  rGrad.addColorStop(0, 'rgba(0,0,0,0)');
+  rGrad.addColorStop(1, 'rgba(130, 95, 60, 0.04)');
+  context.fillStyle = rGrad;
+  context.fillRect(x + width - vignette, y, vignette, height);
+
+  // Top Edge
+  const tGrad = context.createLinearGradient(x, y, x, y + vignette);
+  tGrad.addColorStop(0, 'rgba(130, 95, 60, 0.04)');
+  tGrad.addColorStop(1, 'rgba(0,0,0,0)');
+  context.fillStyle = tGrad;
+  context.fillRect(x, y, width, vignette);
+
+  // Bottom Edge
+  const bGrad = context.createLinearGradient(x, y + height - vignette, x, y + height);
+  bGrad.addColorStop(0, 'rgba(0,0,0,0)');
+  bGrad.addColorStop(1, 'rgba(130, 95, 60, 0.04)');
+  context.fillStyle = bGrad;
+  context.fillRect(x, y + height - vignette, width, vignette);
+
+  // 7. Accent color soft overlay wash
+  if (!isHeader && accent && accent.toLowerCase() !== '#c46f1f') {
+    applyBodyColorFilter(context, x, y, width, height, accent);
+  } else {
+    context.globalAlpha = 0.03;
+    context.fillStyle = accent;
+    context.fillRect(x, y, width, height);
+  }
+
+  context.restore();
+};
+
+const drawGeneralBaseImage = (context, generalBaseImg) => {
+  const sourceCrop = GENERAL_BASE_SOURCE_CROP;
+  const scale = CANVAS_WIDTH / MODULAR_CARD_OUTER_BOUNDS.width;
+  const visibleCardHeight = CANVAS_HEIGHT / scale;
+  const imageWidth = generalBaseImg.naturalWidth || generalBaseImg.width || MODULAR_CARD_OUTER_BOUNDS.width;
+  const imageHeight = generalBaseImg.naturalHeight || generalBaseImg.height || visibleCardHeight;
+  const sourceX = Math.min(sourceCrop.left, imageWidth - 1);
+  const sourceY = Math.min(sourceCrop.top, imageHeight - 1);
+  const sourceWidth = Math.max(1, imageWidth - sourceCrop.left - sourceCrop.right);
+  const sourceHeight = Math.max(1, imageHeight - sourceCrop.top - sourceCrop.bottom);
+  context.save();
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(
+    generalBaseImg,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    MODULAR_CARD_OUTER_BOUNDS.x,
+    MODULAR_CARD_OUTER_BOUNDS.y,
+    MODULAR_CARD_OUTER_BOUNDS.width,
+    visibleCardHeight,
+  );
+  context.restore();
+};
+
+const drawModularFrame = (context, accent = '#c46f1f', stardustImg = null, generalBaseImg = null, bodyColor = '#c46f1f') => {
+  context.save();
+  if (generalBaseImg) {
+    drawGeneralBaseImage(context, generalBaseImg);
+    if (bodyColor && bodyColor.toLowerCase() !== '#c46f1f') {
+      applyBodyColorFilter(context, 152, 752, 1584, 1668, bodyColor);
+    }
+    context.restore();
+    return;
+  }
+
+  const cardEdgeGradient = context.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  cardEdgeGradient.addColorStop(0, '#202223');
+  cardEdgeGradient.addColorStop(0.52, '#17191a');
+  cardEdgeGradient.addColorStop(1, '#0d0f10');
+  context.fillStyle = cardEdgeGradient;
+  context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  context.lineWidth = 7;
+  context.strokeStyle = '#030303';
+  context.strokeRect(5, 5, CANVAS_WIDTH - 10, CANVAS_HEIGHT - 10);
+
+  const outerGradient = context.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  outerGradient.addColorStop(0, '#2b2d2e');
+  outerGradient.addColorStop(0.52, '#202223');
+  outerGradient.addColorStop(1, '#121415');
+  context.fillStyle = outerGradient;
+  drawRoundRectPath(context, 62, 54, 1764, 2516, 6);
+  context.fill();
+  context.lineWidth = 6;
+  context.strokeStyle = '#030303';
+  context.stroke();
+
+  context.fillStyle = '#f3e6cf';
+  drawRoundRectPath(context, 160, 126, 1568, 2310, 4);
+  context.fill();
+  context.lineWidth = 12;
+  context.strokeStyle = '#000000';
+  context.stroke();
+
+  context.save();
+  context.beginPath();
+  // Clip to the concave corner notched parchment path
+  const R = 52;
+  context.moveTo(152, 752);
+  context.lineTo(152 + 1584, 752);
+  context.lineTo(152 + 1584, 752 + 1668 - R);
+  context.arc(152 + 1584, 752 + 1668, R, 1.5 * Math.PI, Math.PI, true);
+  context.lineTo(152 + R, 752 + 1668);
+  context.arc(152, 752 + 1668, R, 0, 1.5 * Math.PI, true);
+  context.closePath();
+  context.clip();
+
+  const paperGradient = context.createRadialGradient(944, 1440, 150, 944, 1440, 1200);
+  paperGradient.addColorStop(0, 'rgba(255,248,230,0.65)');
+  paperGradient.addColorStop(0.62, 'rgba(244,222,188,0.18)');
+  paperGradient.addColorStop(1, 'rgba(197,126,48,0.12)');
+  context.fillStyle = paperGradient;
+  context.fillRect(152, 752, 1584, 1668);
+  drawPaperTexture(context, 152, 752, 1584, 1668, bodyColor, stardustImg);
+  context.restore();
+
+  context.globalAlpha = 0.04;
+  context.fillStyle = accent;
+  for (let i = 0; i < 120; i++) {
+    const px = 180 + ((i * 157) % 1500);
+    const py = 790 + ((i * 283) % 1600);
+    context.fillRect(px, py, 1.2, 1.2);
+  }
+  context.restore();
+};
+
+const drawHeaderImageContainer = (
+  context,
+  headerImage,
+  cardName,
+  accent,
+  weaponIconImg = null,
+  elementIconImg = null,
+  skipGeneratedBackdrop = false,
+  headerImageTransform = DEFAULT_HEADER_IMAGE_TRANSFORM,
+  headerBackdropColor = DEFAULT_HEADER_BACKDROP_COLOR,
+  stardustImg = null,
+) => {
+  const headerBounds = skipGeneratedBackdrop
+    ? GENERAL_HEADER_BOUNDS
+    : { x: 170, y: 136, width: 1548, height: 638 };
+  const { x, y, width, height } = headerBounds;
+  context.save();
+  if (skipGeneratedBackdrop) {
+    context.beginPath();
+    context.rect(x, y, width, height);
+  } else {
+    drawRoundRectPath(context, x, y, width, height, 2);
+  }
+  context.clip();
+  if (headerImage) {
+    if (headerBackdropColor && headerBackdropColor !== DEFAULT_HEADER_BACKDROP_COLOR) {
+      // 1. Create a temporary offscreen canvas for the cover image
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = width;
+      tempCanvas.height = height;
+      const tctx = tempCanvas.getContext('2d');
+
+      // 2. Draw the cover image onto the offscreen canvas
+      drawCoverImage(tctx, headerImage, 0, 0, width, height, headerImageTransform);
+
+      // 3. Create a second offscreen canvas for the color mask
+      const maskCanvas = document.createElement('canvas');
+      maskCanvas.width = width;
+      maskCanvas.height = height;
+      const mctx = maskCanvas.getContext('2d');
+      mctx.fillStyle = headerBackdropColor;
+      mctx.fillRect(0, 0, width, height);
+
+      // 4. Clip the color mask to the non-transparent pixels of the image
+      mctx.globalCompositeOperation = 'destination-in';
+      mctx.drawImage(tempCanvas, 0, 0);
+
+      // 5. Apply the color filter overlay using 'color' blend mode on the image pixels
+      tctx.save();
+      tctx.globalCompositeOperation = 'color';
+      tctx.globalAlpha = 1.0;
+      tctx.drawImage(maskCanvas, 0, 0);
+      tctx.restore();
+
+      // 6. Draw the colorized cover image on the main canvas (keeps transparency intact)
+      context.drawImage(tempCanvas, x, y);
+    } else {
+      // No filter active (Base): draw the cover image completely unfiltered
+      drawCoverImage(context, headerImage, x, y, width, height, headerImageTransform);
+    }
+  } else {
+    // If no custom image is uploaded:
+    // If a color filter is active, apply it directly on the card template's built-in header artwork
+    if (headerBackdropColor && headerBackdropColor !== DEFAULT_HEADER_BACKDROP_COLOR) {
+      context.save();
+      context.globalCompositeOperation = 'color';
+      context.fillStyle = headerBackdropColor;
+      context.globalAlpha = 0.85;
+      context.fillRect(x, y, width, height);
+      context.restore();
+
+      context.save();
+      context.globalCompositeOperation = 'multiply';
+      context.fillStyle = headerBackdropColor;
+      context.globalAlpha = 0.15;
+      context.fillRect(x, y, width, height);
+      context.restore();
+    }
+    // If Base color, we draw nothing on top (showing the card base template's original built-in header backdrop)
+  }
+
+  if (headerImage && skipGeneratedBackdrop) {
+    const edgeFade = Math.max(70, Math.round(width * 0.075));
+    const topFade = Math.max(56, Math.round(height * 0.16));
+    const bottomFade = Math.max(150, Math.round(height * 0.34));
+    const leftFade = context.createLinearGradient(x, y, x + edgeFade, y);
+    leftFade.addColorStop(0, 'rgba(0,0,0,0.48)');
+    leftFade.addColorStop(1, 'rgba(0,0,0,0)');
+    context.fillStyle = leftFade;
+    context.fillRect(x, y, edgeFade, height);
+
+    const rightFade = context.createLinearGradient(x + width, y, x + width - edgeFade, y);
+    rightFade.addColorStop(0, 'rgba(0,0,0,0.48)');
+    rightFade.addColorStop(1, 'rgba(0,0,0,0)');
+    context.fillStyle = rightFade;
+    context.fillRect(x + width - edgeFade, y, edgeFade, height);
+
+    const topFadeGradient = context.createLinearGradient(x, y, x, y + topFade);
+    topFadeGradient.addColorStop(0, 'rgba(0,0,0,0.28)');
+    topFadeGradient.addColorStop(1, 'rgba(0,0,0,0)');
+    context.fillStyle = topFadeGradient;
+    context.fillRect(x, y, width, topFade);
+
+    const bottomFadeGradient = context.createLinearGradient(x, y + height, x, y + height - bottomFade);
+    bottomFadeGradient.addColorStop(0, 'rgba(0,0,0,0.72)');
+    bottomFadeGradient.addColorStop(0.58, 'rgba(0,0,0,0.34)');
+    bottomFadeGradient.addColorStop(1, 'rgba(0,0,0,0)');
+    context.fillStyle = bottomFadeGradient;
+    context.fillRect(x, y + height - bottomFade, width, bottomFade);
+  }
+
+  if (headerImage || !skipGeneratedBackdrop) {
+    const bottomShade = context.createLinearGradient(x, y + height * 0.34, x, y + height);
+    bottomShade.addColorStop(0, 'rgba(0,0,0,0.08)');
+    bottomShade.addColorStop(0.7, 'rgba(0,0,0,0.62)');
+    bottomShade.addColorStop(1, 'rgba(0,0,0,0.78)');
+    context.fillStyle = bottomShade;
+    context.fillRect(x, y, width, height);
+  }
+  context.restore();
+
+  context.save();
+  if (!skipGeneratedBackdrop) {
+    context.lineWidth = 12;
+    context.strokeStyle = '#000000';
+    context.strokeRect(x, y, width, height);
+  }
+  context.fillStyle = accent;
+  context.fillRect(x, y + height - 8, width, 8);
+
+  const headerIconImg = elementIconImg;
+  const title = normalizeCardName(cardName).toUpperCase();
+  const titleSize = fitModularTitleFont(context, title, Boolean(headerIconImg));
+  context.font = `900 ${titleSize}px Lato, Arial, sans-serif`;
+  context.textAlign = 'left';
+  context.textBaseline = 'alphabetic';
+  context.shadowColor = 'rgba(0,0,0,0.78)';
+  context.shadowBlur = 16;
+  context.shadowOffsetX = 5;
+  context.shadowOffsetY = 6;
+  context.lineWidth = Math.max(6, Math.round(titleSize * 0.045));
+  context.strokeStyle = 'rgba(42,28,16,0.55)';
+  context.fillStyle = '#f4ead9';
+  const titleX = x + 82;
+  const titleY = y + height - 96;
+  context.strokeText(title, titleX, titleY);
+  context.fillText(title, titleX, titleY);
+
+  if (headerIconImg) {
+    const titleMetrics = context.measureText(title);
+    const iconBounds = getVisibleImageBounds(headerIconImg);
+    const iconVisibleHeight = titleSize * 1.12;
+    const iconVisibleWidth = iconVisibleHeight * ((iconBounds?.sw || 1) / (iconBounds?.sh || 1));
+    const iconGap = titleSize * 0.14;
+    const iconX = Math.min(titleX + titleMetrics.width + iconGap, x + width - 82 - iconVisibleWidth);
+    const titleBottom = titleY + Math.max(0, titleMetrics.actualBoundingBoxDescent || titleSize * 0.04);
+    const iconY = titleBottom - iconVisibleHeight + titleSize * 0.11;
+    context.globalAlpha = 0.94;
+    if (iconBounds) {
+      context.drawImage(
+        headerIconImg,
+        iconBounds.sx,
+        iconBounds.sy,
+        iconBounds.sw,
+        iconBounds.sh,
+        iconX,
+        iconY,
+        iconVisibleWidth,
+        iconVisibleHeight,
+      );
+    } else {
+      context.drawImage(headerIconImg, iconX, iconY, iconVisibleWidth, iconVisibleHeight);
+    }
+  }
+  context.restore();
+};
+
+const drawSectionDiamond = (context, x, y, size, accent) => {
+  context.save();
+  context.translate(x, y);
+  context.rotate(Math.PI / 4);
+  context.fillStyle = accent;
+  context.fillRect(-size / 2, -size / 2, size, size);
+  context.restore();
+};
+
+const MODULAR_CONTENT_TOP = 805;
+const MODULAR_DIVIDER_BOTTOM_INSET = 14;
+
+const getModularBlockCenterY = (y, height, isFirst = false) => (
+  y + height / 2 - (isFirst ? 34 : MODULAR_DIVIDER_BOTTOM_INSET)
+);
+
+const drawContainerDivider = (context, y, accent) => {
+  context.save();
+  context.strokeStyle = 'rgba(181,92,18,0.58)';
+  context.lineWidth = 3;
+  context.beginPath();
+  context.moveTo(314, y);
+  context.lineTo(902, y);
+  context.moveTo(986, y);
+  context.lineTo(1574, y);
+  context.stroke();
+  drawSectionDiamond(context, 944, y, 31, accent);
+  context.restore();
+};
+
+const traceDiamondPath = (context, x, y, size) => {
+  context.beginPath();
+  context.moveTo(x, y - size / 2);
+  context.lineTo(x + size / 2, y);
+  context.lineTo(x, y + size / 2);
+  context.lineTo(x - size / 2, y);
+  context.closePath();
+};
+
+const CHARGE_FOOTER_LINE_Y = 2328;
+const CHARGE_FOOTER_RESERVED_HEIGHT = 110;
+const CHARGE_STYLES = {
+  Hambre: { stroke: '#3d7d45', fill: 'rgba(61,125,69,0.88)' },
+  Cuerpo: { stroke: '#a93832', fill: 'rgba(169,56,50,0.88)' },
+  Mente: { stroke: '#2f6fb3', fill: 'rgba(47,111,179,0.88)' },
+};
+
+const drawModularChargeFooter = (context, chargeSlots, resourceImages = {}, accent = '#c46f1f') => {
+  const slots = Array.from({ length: CHARGE_SLOT_COUNT }, (_, index) => chargeSlots[index] || EMPTY_SLOT);
+  const y = CHARGE_FOOTER_LINE_Y;
+  const centers = [764, 854, 944, 1034, 1124];
+  const sizes = [45, 45, 45, 45, 45];
+
+  context.save();
+  context.strokeStyle = 'rgba(181,92,18,0.58)';
+  context.lineWidth = 3;
+  context.beginPath();
+  context.moveTo(314, y);
+  context.lineTo(715, y);
+  context.moveTo(1173, y);
+  context.lineTo(1574, y);
+  context.stroke();
+
+  slots.forEach((slot, index) => {
+    const x = centers[index];
+    const size = sizes[index];
+    
+    // Determine the color corresponding to each charge
+    const slotColor = slot === 'Hambre' ? '#3d7d45'
+                    : slot === 'Cuerpo' ? '#a93832'
+                    : slot === 'Mente' ? '#2f6fb3'
+                    : accent;
+                    
+    // Draw the diamond shape matching the style of the body diamonds but colored
+    drawSectionDiamond(context, x, y, size, slotColor);
+  });
+  context.restore();
+};
+
+const drawContainerLabel = (context, label, centerY, accent) => {
+  context.save();
+  drawSectionDiamond(context, 262, centerY, 34, accent);
+  context.font = '900 62px Lato, Arial, sans-serif';
+  context.textAlign = 'left';
+  context.textBaseline = 'middle';
+  context.fillStyle = '#1d2120';
+  context.fillText(label.toUpperCase(), 314, centerY);
+  context.restore();
+};
+
+const drawEmptyContainersMessage = (context) => {
+  context.save();
+  const bodyCenterY = MODULAR_CONTENT_TOP + (2386 - MODULAR_CONTENT_TOP) / 2;
+  context.font = '900 46px Lato, Arial, sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillStyle = 'rgba(29,33,32,0.42)';
+  context.fillText('SIN CONTENEDORES HABILITADOS', 944, bodyCenterY);
+  context.font = 'italic 34px Lato, Arial, sans-serif';
+  context.fillStyle = 'rgba(29,33,32,0.32)';
+  context.fillText('Añade contenedores desde el panel lateral', 944, bodyCenterY + 62);
+  context.restore();
+};
+
+const drawModularRange = (context, y, height, selectedIndex, accent, isFirst = false) => {
+  const labels = ['TOQUE', 'CERCANO', 'INTERMEDIO', 'LEJANO', 'EXTREMO'];
+  const centerX = 944;
+  const width = 1148;
+  const startX = centerX - width / 2;
+  const endX = centerX + width / 2;
+  const trackY = getModularBlockCenterY(y, height, isFirst) + 12;
+  const step = (endX - startX) / 4;
+  context.save();
+  context.strokeStyle = '#252523';
+  context.lineWidth = 9;
+  context.lineCap = 'round';
+  context.beginPath();
+  context.moveTo(startX, trackY);
+  context.lineTo(endX, trackY);
+  context.stroke();
+
+  labels.forEach((label, index) => {
+    const cx = startX + step * index;
+    context.font = '900 36px Lato, Arial, sans-serif';
+    context.fillStyle = '#202321';
+    context.textAlign = 'center';
+    context.textBaseline = 'bottom';
+    context.fillText(label, cx, trackY - 58);
+
+    context.beginPath();
+    context.arc(cx, trackY, 41, 0, Math.PI * 2);
+    context.fillStyle = index === selectedIndex ? accent : '#f3e6cf';
+    context.fill();
+    context.lineWidth = 8;
+    context.strokeStyle = '#202321';
+    context.stroke();
+  });
+  context.restore();
+};
+
+const drawModularConsumption = (context, centerY, slots, resourceImages = {}, accent) => {
+  const visibleSlots = Array.from({ length: 4 }, (_, index) => slots[index] || EMPTY_SLOT);
+  const size = 136;
+  const gap = 58;
+  const totalWidth = visibleSlots.length * size + Math.max(0, visibleSlots.length - 1) * gap;
+  const startX = 944 - totalWidth / 2 + size / 2;
+  const cy = centerY;
+
+  const iconStroke = 'rgba(32,35,33,0.78)';
+  const iconFill = 'rgba(32,35,33,0.1)';
+  const slotStyles = {
+    Tiempo: { stroke: accent, fill: 'rgba(196,111,31,0.14)' },
+    Mente: { stroke: '#2f6fb3', fill: 'rgba(47,111,179,0.14)' },
+    Cuerpo: { stroke: '#a93832', fill: 'rgba(169,56,50,0.14)' },
+    Hambre: { stroke: '#3d7d45', fill: 'rgba(61,125,69,0.14)' },
+    Recurso: { stroke: '#6f716c', fill: 'rgba(111,113,108,0.14)' },
+    Armadura_1: { stroke: '#60798f', fill: 'rgba(96,121,143,0.15)' },
+    ...ELEMENT_CONSUMPTION_STYLES,
+  };
+  const getSlotStyle = (slot) => slotStyles[slot] || {
+    stroke: 'rgba(32,35,33,0.56)',
+    fill: 'rgba(244,230,207,0.78)',
+  };
+
+  const createIconCanvas = (width, height) => {
+    const canvasWidth = Math.max(1, Math.ceil(width));
+    const canvasHeight = Math.max(1, Math.ceil(height));
+    const canvas = typeof window !== 'undefined' && typeof window.OffscreenCanvas !== 'undefined'
+      ? new window.OffscreenCanvas(canvasWidth, canvasHeight)
+      : document.createElement('canvas');
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    return canvas;
+  };
+
+  const getVisibleImageBounds = (image, imageWidth, imageHeight) => {
+    const sourceCanvas = createIconCanvas(imageWidth, imageHeight);
+    const sourceContext = sourceCanvas.getContext('2d', { willReadFrequently: true });
+    if (!sourceContext) {
+      return { x: 0, y: 0, width: imageWidth, height: imageHeight };
+    }
+    sourceContext.drawImage(image, 0, 0, imageWidth, imageHeight);
+    const data = sourceContext.getImageData(0, 0, imageWidth, imageHeight).data;
+    let minX = imageWidth;
+    let minY = imageHeight;
+    let maxX = -1;
+    let maxY = -1;
+    for (let yPos = 0; yPos < imageHeight; yPos += 1) {
+      for (let xPos = 0; xPos < imageWidth; xPos += 1) {
+        const alpha = data[((yPos * imageWidth + xPos) * 4) + 3];
+        if (alpha > 20) {
+          minX = Math.min(minX, xPos);
+          minY = Math.min(minY, yPos);
+          maxX = Math.max(maxX, xPos);
+          maxY = Math.max(maxY, yPos);
+        }
+      }
+    }
+    if (maxX < minX || maxY < minY) {
+      return { x: 0, y: 0, width: imageWidth, height: imageHeight };
+    }
+    return {
+      x: minX,
+      y: minY,
+      width: maxX - minX + 1,
+      height: maxY - minY + 1,
+    };
+  };
+
+  const drawTintedImageIcon = (image, cx, targetWidth = 54, targetHeight = 72, tint = iconStroke) => {
+    if (!image) return false;
+    const imageWidth = image.naturalWidth || image.width;
+    const imageHeight = image.naturalHeight || image.height;
+    if (!imageWidth || !imageHeight) return false;
+
+    const bounds = getVisibleImageBounds(image, imageWidth, imageHeight);
+    const scale = Math.min(targetWidth / bounds.width, targetHeight / bounds.height);
+    const width = bounds.width * scale;
+    const height = bounds.height * scale;
+    const x = cx - width / 2;
+    const imageY = cy - height / 2;
+    const buffer = createIconCanvas(width, height);
+    const bufferContext = buffer.getContext('2d');
+    if (!bufferContext) return false;
+    bufferContext.imageSmoothingEnabled = true;
+    bufferContext.imageSmoothingQuality = 'high';
+    bufferContext.drawImage(
+      image,
+      bounds.x,
+      bounds.y,
+      bounds.width,
+      bounds.height,
+      0,
+      0,
+      buffer.width,
+      buffer.height,
+    );
+    bufferContext.globalCompositeOperation = 'source-in';
+    bufferContext.fillStyle = tint;
+    bufferContext.fillRect(0, 0, buffer.width, buffer.height);
+
+    context.save();
+    context.globalAlpha = 0.9;
+    context.drawImage(buffer, x, imageY, width, height);
+    context.restore();
+    return true;
+  };
+
+  const drawHourglassIcon = (cx, tint = iconStroke, alpha = 1) => {
+    context.save();
+    context.globalAlpha = alpha;
+    context.strokeStyle = tint;
+    context.fillStyle = iconFill;
+    context.lineWidth = 6;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+
+    // Draw top and bottom caps
+    context.beginPath();
+    context.moveTo(cx - 24, cy - 32);
+    context.lineTo(cx + 24, cy - 32);
+    context.stroke();
+
+    context.beginPath();
+    context.moveTo(cx - 24, cy + 32);
+    context.lineTo(cx + 24, cy + 32);
+    context.stroke();
+
+    // Draw the glass body
+    context.beginPath();
+    context.moveTo(cx - 18, cy - 28);
+    context.bezierCurveTo(cx - 18, cy - 10, cx - 6, cy - 4, cx - 6, cy); // Upper left to center
+    context.bezierCurveTo(cx - 6, cy + 4, cx - 18, cy + 10, cx - 18, cy + 28); // Center to lower left
+    context.lineTo(cx + 18, cy + 28); // Lower horizontal
+    context.bezierCurveTo(cx + 18, cy + 10, cx + 6, cy + 4, cx + 6, cy); // Lower right to center
+    context.bezierCurveTo(cx + 6, cy - 4, cx + 18, cy - 10, cx + 18, cy - 28); // Center to upper right
+    context.closePath();
+    context.fill();
+    context.stroke();
+
+    // Draw sand in the bottom bulb
+    context.beginPath();
+    context.moveTo(cx - 12, cy + 16);
+    context.bezierCurveTo(cx - 8, cy + 26, cx + 8, cy + 26, cx + 12, cy + 16);
+    context.lineTo(cx + 14, cy + 26);
+    context.lineTo(cx - 14, cy + 26);
+    context.closePath();
+    context.fillStyle = tint;
+    context.fill();
+
+    // Draw sand in the top bulb (falling)
+    context.beginPath();
+    context.moveTo(cx - 10, cy - 20);
+    context.lineTo(cx + 10, cy - 20);
+    context.bezierCurveTo(cx + 8, cy - 14, cx - 8, cy - 14, cx - 10, cy - 20);
+    context.fillStyle = tint;
+    context.fill();
+
+    // Sand stream passing through center
+    context.beginPath();
+    context.moveTo(cx - 2, cy - 8);
+    context.lineTo(cx + 2, cy - 8);
+    context.lineTo(cx + 1, cy + 16);
+    context.lineTo(cx - 1, cy + 16);
+    context.closePath();
+    context.fill();
+
+    context.restore();
+  };
+
+  const drawMindIcon = (cx, tint = iconStroke, alpha = 1) => {
+    context.save();
+    context.globalAlpha = alpha;
+
+    // SVG viewBox: 0 0 1202 1280. Scale to fit within ~68px height (68/1280 = 0.053125)
+    const scaleFactor = 68 / 1280;
+    const widthScaled = 1202 * scaleFactor; // 63.85px
+    
+    // Position at cx, cy
+    context.translate(cx - widthScaled / 2, cy - 34);
+    context.scale(scaleFactor, scaleFactor);
+    context.translate(0, 1280);
+    context.scale(0.1, -0.1);
+
+    const paths = [
+  "M4862 12790 c-180 -14 -246 -36 -357 -120 -35 -26 -59 -33 -160 -49 -136 -21 -239 -53 -371 -116 -73 -34 -110 -60 -184 -129 -128 -120 -148 -121 -310 -26 -152 90 -299 130 -478 130 -243 0 -445 -85 -619 -262 -147 -148 -233 -294 -274 -463 -26 -108 -24 -200 6 -314 53 -203 28 -243 -165 -256 -58 -4 -133 -16 -167 -26 -123 -38 -217 -145 -266 -301 -34 -107 -43 -166 -62 -373 -34 -376 -59 -431 -289 -624 -221 -185 -297 -277 -382 -455 -89 -188 -120 -375 -111 -669 6 -195 12 -234 71 -491 17 -75 22 -114 16 -126 -5 -10 -32 -34 -59 -55 -109 -79 -185 -194 -248 -372 -27 -76 -28 -84 -28 -291 l0 -212 -32 -20 c-40 -24 -149 -161 -202 -255 -45 -78 -111 -246 -144 -364 -16 -59 -21 -106 -21 -211 -1 -129 0 -138 27 -193 35 -70 105 -142 187 -193 33 -20 60 -41 60 -46 0 -5 -18 -32 -41 -60 -95 -120 -186 -302 -230 -458 -33 -118 -33 -316 -1 -439 27 -101 77 -209 132 -282 54 -72 202 -222 305 -310 46 -40 96 -89 111 -110 29 -43 30 -80 3 -226 -13 -71 -12 -73 19 -165 38 -110 39 -135 11 -214 -11 -32 -34 -129 -52 -214 -27 -135 -31 -174 -31 -305 1 -133 4 -160 28 -239 37 -124 95 -235 243 -463 220 -340 348 -441 665 -528 95 -26 122 -76 153 -285 19 -132 15 -117 93 -295 124 -283 165 -327 409 -446 89 -43 200 -90 246 -103 198 -58 402 -58 640 0 78 19 170 37 203 41 114 11 122 7 281 -150 79 -78 166 -172 194 -210 88 -117 145 -159 354 -263 302 -149 414 -178 695 -179 267 0 360 26 471 136 l71 69 49 -6 c43 -6 57 -2 132 35 221 111 331 250 373 469 18 95 18 204 -1 317 -8 50 -15 106 -15 126 0 26 -8 43 -30 64 -27 26 -30 35 -30 89 0 75 57 357 110 545 60 212 73 302 67 456 -3 74 -12 152 -21 181 -9 28 -47 99 -86 158 -105 164 -106 201 -7 400 67 134 89 210 102 346 8 89 -12 525 -30 635 -21 133 -79 360 -136 533 -32 99 -48 161 -43 175 3 12 21 43 40 69 18 26 46 71 61 100 26 50 28 60 27 178 0 109 -4 136 -28 210 -45 135 -107 245 -197 351 l-31 37 64 78 c74 92 111 153 141 232 21 55 22 71 22 432 1 206 -3 483 -7 615 -6 220 -10 250 -37 358 -33 130 -162 459 -245 626 -75 149 -74 143 -21 165 129 53 271 309 304 550 14 97 14 519 1 646 -6 52 -21 133 -34 180 -25 86 -76 304 -76 323 0 6 27 36 60 68 59 56 60 59 60 111 0 118 -46 216 -136 296 l-56 49 35 22 c82 50 224 238 252 334 30 102 14 240 -41 350 -24 46 -111 193 -201 339 -43 68 -43 108 1 203 60 129 71 189 70 385 0 260 -34 371 -149 486 -50 51 -83 72 -190 124 -72 34 -159 80 -194 103 -59 38 -68 41 -145 43 -44 1 -132 -2 -194 -6z m253 -140 c237 -83 352 -164 414 -293 91 -191 100 -468 20 -669 -11 -29 -22 -55 -24 -57 -2 -2 -37 23 -77 56 -40 33 -109 86 -153 118 -44 32 -108 82 -142 111 -83 71 -115 87 -147 74 -32 -12 -34 -45 -6 -99 26 -51 82 -98 182 -152 169 -91 269 -187 400 -384 99 -150 165 -283 179 -359 20 -111 -18 -226 -123 -368 -88 -120 -153 -138 -285 -80 -40 18 -103 45 -140 61 -38 16 -108 42 -158 57 -81 25 -105 28 -235 28 -156 0 -270 -18 -446 -70 -49 -15 -138 -39 -197 -55 -59 -16 -118 -34 -130 -40 -36 -19 -67 -51 -67 -71 0 -15 8 -18 55 -18 82 0 182 23 345 81 173 60 262 79 380 79 116 0 233 -21 379 -69 217 -72 388 -167 445 -249 41 -60 42 -101 7 -216 -49 -158 -41 -258 39 -496 57 -167 70 -269 70 -530 0 -249 -38 -433 -115 -560 -35 -57 -131 -156 -174 -179 -22 -12 -26 -10 -67 37 -42 48 -112 92 -147 92 -44 0 -2 -105 113 -280 100 -151 155 -264 258 -520 115 -289 131 -382 139 -775 6 -367 -7 -645 -37 -740 -98 -310 -320 -498 -822 -694 -210 -83 -314 -178 -221 -204 27 -8 41 -4 97 27 36 20 127 57 203 81 95 31 197 75 329 141 155 79 196 96 218 90 43 -11 114 -90 151 -169 75 -158 83 -265 31 -422 l-32 -100 -30 44 c-57 87 -105 128 -156 136 -53 8 -113 -8 -122 -31 -4 -11 29 -52 102 -127 105 -110 108 -115 170 -251 144 -318 208 -572 219 -866 12 -310 -26 -491 -188 -906 -116 -296 -148 -402 -131 -439 7 -14 20 -25 31 -25 53 0 92 42 126 135 10 28 21 54 25 58 10 11 85 -76 110 -128 43 -88 44 -214 2 -307 -43 -96 -133 -178 -267 -243 -135 -65 -212 -79 -414 -72 -194 6 -293 27 -416 87 -100 49 -170 110 -233 205 -58 86 -78 140 -91 253 -6 45 -15 91 -21 102 -21 39 -68 53 -215 61 -77 5 -155 13 -174 18 -135 41 -198 171 -188 391 6 136 29 217 81 288 68 93 85 154 50 183 -25 21 -58 0 -182 -116 -135 -126 -215 -187 -307 -233 -264 -131 -574 -161 -925 -88 -272 57 -452 137 -565 251 -154 155 -323 513 -386 817 -29 144 -23 274 20 384 17 44 31 89 31 101 0 33 -41 58 -132 83 -287 76 -453 213 -523 429 -25 76 -16 125 38 212 64 106 88 202 67 277 -14 55 -31 67 -73 53 -42 -14 -75 -49 -117 -126 -57 -103 -107 -145 -175 -145 -20 0 -79 18 -131 41 -53 22 -105 39 -117 37 -53 -7 -75 -129 -34 -189 36 -55 81 -70 231 -79 73 -4 142 -13 154 -19 22 -12 34 -43 52 -136 35 -179 241 -383 458 -452 40 -13 88 -23 106 -23 18 0 35 -2 38 -5 3 -3 -3 -34 -14 -68 -71 -230 -1 -524 241 -1005 95 -189 226 -345 355 -421 117 -69 339 -129 571 -151 177 -18 465 -16 569 4 147 28 311 98 443 187 23 16 44 29 47 29 3 0 6 -62 6 -137 0 -168 16 -251 69 -358 48 -97 106 -159 179 -193 50 -23 62 -24 166 -19 61 3 120 7 131 9 16 3 20 -5 27 -48 20 -136 89 -264 203 -379 183 -185 375 -245 740 -232 177 6 283 25 460 81 60 19 111 33 114 31 9 -10 -31 -142 -53 -175 -27 -41 -148 -151 -216 -197 -25 -17 -88 -54 -140 -83 -138 -76 -193 -115 -213 -150 -35 -59 13 -76 114 -41 81 28 140 60 284 155 l130 86 3 -33 c2 -17 19 -113 38 -212 81 -414 28 -582 -251 -798 l-90 -69 -6 71 c-7 68 -33 134 -54 134 -5 0 -30 -41 -55 -91 -55 -111 -103 -162 -195 -207 -101 -50 -173 -66 -315 -72 -148 -6 -261 14 -457 79 -204 67 -280 118 -527 352 -120 113 -243 217 -300 251 -14 8 0 19 71 59 49 27 131 79 183 116 52 37 133 90 180 118 47 28 105 66 129 84 l43 33 86 -85 c132 -130 282 -200 427 -200 37 0 69 6 81 14 37 28 -7 63 -189 154 -141 69 -178 93 -237 149 -103 96 -142 181 -173 375 -19 113 -31 157 -51 193 -15 25 -33 45 -39 42 -7 -2 -20 -19 -30 -38 -26 -49 -18 -175 18 -298 23 -80 26 -99 16 -131 -12 -41 -118 -150 -146 -150 -26 0 -107 45 -190 107 -129 95 -185 200 -185 342 0 106 28 187 116 341 80 139 87 160 57 192 -36 40 -96 14 -200 -84 -61 -57 -146 -99 -255 -127 -99 -25 -154 -28 -251 -11 -84 15 -100 10 -90 -31 10 -35 83 -108 121 -120 33 -9 194 -8 286 3 26 3 31 -1 37 -27 4 -16 14 -47 23 -68 9 -21 30 -97 46 -169 17 -72 41 -151 55 -177 66 -121 186 -228 281 -252 24 -6 44 -14 44 -18 0 -14 -160 -124 -241 -166 -328 -170 -768 -203 -1128 -85 -234 76 -367 192 -477 416 -45 92 -64 147 -108 321 l-52 210 140 6 c127 5 286 26 330 43 13 5 16 -1 16 -37 0 -140 51 -275 129 -349 103 -97 245 -135 481 -128 104 3 142 7 167 21 61 33 67 84 13 112 -21 11 -63 15 -157 15 -225 0 -324 29 -412 119 -66 67 -101 140 -101 208 0 47 4 57 38 94 20 23 82 76 137 117 184 139 267 224 285 292 13 47 5 70 -25 70 -30 0 -79 -37 -209 -159 -258 -240 -448 -312 -793 -298 -295 11 -533 117 -705 313 -118 134 -275 420 -322 586 -59 206 -48 450 28 633 l14 33 65 -23 c138 -50 368 -83 462 -66 90 17 137 75 75 92 -14 4 -63 8 -110 8 -246 4 -374 71 -457 239 -46 92 -54 176 -30 310 38 207 41 201 -120 279 -92 44 -145 77 -191 118 -247 224 -350 561 -268 875 15 58 40 134 55 170 25 61 141 245 165 263 22 16 118 -4 219 -44 91 -37 114 -42 213 -48 l112 -7 54 -42 c64 -49 145 -144 289 -337 188 -253 310 -359 472 -411 139 -44 377 -44 377 1 0 20 -56 60 -118 84 -29 12 -114 37 -188 56 -241 62 -314 116 -480 358 -127 186 -149 229 -158 307 -6 50 -13 68 -36 91 -34 35 -76 37 -212 12 -85 -15 -95 -15 -162 1 -82 19 -268 106 -365 170 -92 62 -185 161 -221 238 -26 55 -30 74 -30 149 0 112 32 228 102 369 43 85 67 120 129 183 100 101 110 101 183 5 74 -98 122 -142 179 -163 26 -10 52 -25 57 -34 5 -9 18 -68 30 -131 12 -63 26 -123 32 -135 21 -40 172 -261 210 -307 49 -59 125 -98 190 -98 41 0 50 3 59 24 20 43 -14 91 -126 176 -143 108 -213 219 -250 395 -31 150 -14 303 56 480 56 146 102 217 212 332 107 112 116 136 58 141 -59 6 -97 -7 -146 -50 -119 -105 -229 -308 -291 -537 -15 -53 -28 -99 -31 -104 -8 -13 -63 26 -107 74 -162 180 -195 505 -76 755 33 69 129 179 186 214 42 27 52 22 118 -61 61 -76 132 -118 174 -103 48 17 39 45 -35 120 -79 80 -129 169 -191 340 -57 156 -82 281 -89 459 -10 255 23 438 112 620 61 124 120 199 294 367 207 201 250 219 379 154 96 -48 137 -60 161 -47 34 19 35 47 0 135 -39 101 -43 106 -93 132 -79 40 -78 38 -67 314 10 267 22 330 82 436 39 68 127 150 195 180 95 42 296 81 324 64 13 -8 10 -24 -19 -106 -24 -70 -36 -126 -42 -198 -13 -160 -11 -238 7 -264 17 -24 56 -29 73 -9 6 7 17 75 26 150 8 75 19 156 25 181 9 43 39 138 45 144 2 2 16 -3 32 -11 16 -9 45 -18 66 -22 57 -11 86 25 121 150 15 55 34 110 41 121 21 34 200 120 275 134 121 22 169 63 119 103 -19 15 -33 18 -72 13 -79 -11 -212 -62 -397 -154 -96 -48 -178 -88 -182 -90 -9 -4 -62 164 -78 246 -19 92 -8 223 23 299 56 137 204 345 306 432 130 109 248 151 423 151 169 0 375 -64 534 -166 34 -21 69 -43 78 -49 15 -9 12 -18 -20 -87 -46 -95 -61 -104 -194 -100 -81 2 -100 -1 -128 -18 -41 -25 -38 -39 14 -65 32 -16 59 -20 154 -20 l115 0 14 -40 c9 -27 15 -119 20 -293 6 -236 7 -255 25 -268 40 -29 83 -9 115 53 17 34 13 133 -14 318 -29 196 -31 287 -10 370 41 158 175 305 364 399 89 45 243 99 319 111 l43 7 -39 -79 c-49 -96 -77 -187 -86 -275 -9 -78 -27 -106 -85 -133 -33 -14 -47 -29 -68 -74 -24 -47 -27 -67 -26 -141 2 -210 105 -314 308 -314 86 0 309 30 338 45 21 12 22 42 2 59 -12 10 -34 11 -88 5 -144 -17 -197 -13 -257 21 -78 44 -120 102 -120 165 0 45 4 54 39 88 41 40 54 80 67 201 20 199 133 425 261 522 91 69 156 89 273 84 68 -3 109 -13 205 -46z",
+  "M3547 11085 c-83 -31 -185 -124 -257 -236 -57 -88 -73 -172 -69 -358 l4 -148 -40 4 c-119 12 -205 27 -259 44 -68 21 -102 24 -111 9 -12 -19 24 -115 52 -142 55 -52 159 -73 280 -57 101 15 120 8 198 -67 94 -92 196 -131 363 -141 56 -3 104 -9 107 -12 2 -4 -8 -49 -21 -101 -29 -112 -30 -213 -2 -218 9 -2 34 14 56 36 30 30 45 58 67 128 35 112 42 125 105 204 96 120 125 210 67 210 -27 0 -50 -15 -139 -91 -36 -31 -76 -60 -87 -64 -50 -16 -266 71 -374 151 -124 91 -159 262 -94 466 26 83 61 139 141 225 74 81 127 153 120 164 -8 13 -63 10 -107 -6z",
+  "M4867 10239 c-66 -44 -131 -119 -172 -201 -42 -84 -44 -110 -10 -136 l25 -20 -78 -7 c-114 -11 -216 -39 -317 -89 -189 -94 -287 -209 -474 -556 -133 -246 -212 -350 -339 -452 -179 -142 -343 -174 -552 -109 -91 29 -151 67 -254 160 -50 45 -95 81 -102 81 -20 0 -64 -100 -64 -145 0 -142 224 -233 654 -266 l154 -12 -20 -38 c-28 -55 -34 -141 -14 -219 23 -91 83 -213 145 -293 l53 -68 -47 -50 c-209 -223 -121 -585 177 -727 125 -60 200 -76 359 -76 l135 -1 12 -150 c6 -82 13 -158 14 -168 2 -15 -11 -23 -72 -41 -304 -90 -552 -380 -577 -673 -7 -73 -3 -72 -113 -42 -208 56 -372 27 -752 -135 l-36 -16 -22 64 c-27 81 -102 189 -166 239 -112 87 -252 131 -419 132 -92 0 -116 -3 -140 -19 l-28 -19 25 -13 c14 -7 86 -24 162 -38 155 -28 225 -56 290 -116 62 -57 100 -120 146 -242 67 -175 112 -188 255 -73 84 68 253 135 394 156 138 20 365 -13 399 -58 7 -11 12 -50 12 -106 0 -88 33 -266 67 -365 25 -70 127 -122 183 -92 31 17 22 51 -42 162 -69 121 -98 225 -105 390 -7 146 4 217 49 325 94 227 275 397 480 449 158 41 271 -19 408 -216 96 -137 121 -142 264 -46 117 79 147 89 239 84 94 -4 145 -34 234 -136 87 -99 143 -144 185 -146 l33 -1 -1 65 c-1 82 -36 162 -96 222 -121 122 -321 138 -618 49 -36 -10 -73 -22 -82 -26 -13 -5 -23 6 -47 52 -74 145 -194 223 -348 223 l-51 0 -7 117 c-14 216 17 295 173 450 108 107 120 131 78 158 -22 14 -28 14 -79 -5 -96 -36 -160 -94 -232 -212 -16 -26 -40 -53 -54 -60 -49 -26 -240 -4 -362 41 -139 52 -220 131 -260 250 -30 88 -22 128 52 268 74 142 74 150 -7 270 -104 155 -132 256 -114 411 20 169 44 211 213 391 126 133 170 197 272 400 254 503 457 632 974 618 102 -3 195 -1 208 4 30 11 29 40 -3 70 -24 23 -32 24 -160 24 -83 0 -134 4 -134 10 1 41 45 168 78 224 48 80 59 116 42 136 -17 20 -20 20 -73 -16z",
+  "M2509 10147 c-52 -113 -72 -229 -73 -432 -1 -124 3 -199 13 -242 25 -106 -9 -171 -198 -380 l-110 -122 -56 98 c-105 185 -143 340 -125 499 20 178 64 284 151 368 69 65 89 92 89 117 0 16 -5 18 -32 12 -65 -14 -148 -68 -216 -140 -103 -108 -115 -140 -122 -317 -3 -80 -7 -148 -10 -150 -3 -3 -61 -10 -130 -16 -69 -6 -172 -23 -230 -37 -198 -48 -257 -85 -246 -153 12 -79 57 -82 176 -12 120 71 168 83 307 78 79 -3 117 -8 123 -17 4 -7 10 -34 14 -60 7 -55 118 -254 178 -319 41 -45 42 -49 13 -117 -7 -16 -47 -70 -89 -118 -88 -102 -140 -199 -195 -361 l-37 -112 -90 85 c-101 97 -178 143 -280 167 -109 26 -304 6 -304 -30 0 -34 78 -66 160 -66 56 0 151 -24 205 -51 22 -11 63 -42 90 -68 28 -26 74 -67 104 -90 91 -70 88 -55 61 -261 -19 -150 1 -390 47 -550 20 -72 77 -195 108 -236 14 -18 25 -35 25 -38 0 -2 -15 -7 -32 -11 -61 -12 -192 -83 -260 -139 -56 -47 -74 -69 -110 -142 -36 -74 -43 -97 -43 -148 0 -60 1 -61 29 -64 39 -5 79 36 177 179 82 121 104 141 217 198 101 51 110 47 199 -72 71 -95 201 -212 306 -275 79 -48 204 -100 270 -113 48 -10 60 -9 82 5 58 38 25 73 -139 150 -379 178 -634 472 -735 848 -97 358 12 833 282 1233 37 55 112 141 192 221 121 121 138 134 242 187 66 34 122 70 138 89 24 28 27 38 21 81 -3 30 -28 98 -63 171 -58 121 -58 121 -58 216 0 78 7 122 39 246 42 163 43 200 5 248 -31 40 -47 32 -80 -37z",
+  "M4815 9198 c-38 -14 -107 -60 -214 -142 -171 -132 -247 -157 -391 -131 -50 10 -94 15 -96 12 -3 -3 -7 -28 -7 -56 -2 -61 21 -97 83 -128 36 -19 61 -23 133 -23 105 0 144 -15 181 -68 55 -81 102 -230 112 -361 6 -84 -5 -158 -52 -338 -27 -106 -31 -113 -64 -131 -19 -11 -57 -23 -84 -27 -47 -6 -96 -40 -96 -65 0 -15 118 -13 321 7 166 15 179 15 230 -1 78 -25 174 -85 259 -161 92 -83 130 -103 168 -89 60 22 13 103 -126 215 -129 104 -233 139 -419 139 -57 0 -103 2 -103 4 0 3 9 20 20 39 47 80 90 251 90 360 0 157 -39 286 -125 410 -86 128 -86 126 -7 210 32 34 79 88 106 119 28 34 73 73 109 94 71 41 107 72 107 90 0 31 -75 43 -135 22z",
+  "M4164 5192 c-85 -47 -109 -86 -125 -199 -22 -155 4 -309 66 -393 32 -44 23 -50 -83 -50 -145 0 -394 63 -524 132 -37 20 -91 64 -142 116 -125 129 -166 142 -166 53 0 -95 31 -137 174 -234 210 -141 359 -178 741 -181 l190 -1 80 39 c117 58 146 56 315 -21 163 -73 257 -103 330 -106 61 -1 120 18 120 39 0 28 -59 53 -263 109 -46 13 -72 29 -128 80 -96 88 -144 103 -284 86 -156 -18 -163 -17 -205 27 -43 46 -73 132 -73 212 0 34 12 93 32 157 18 56 31 113 29 125 -4 29 -42 34 -84 10z",
+  "M2445 4983 c-68 -72 -90 -135 -149 -417 -53 -255 -61 -323 -47 -401 23 -125 100 -220 225 -279 105 -50 163 -61 321 -61 l140 0 78 37 c42 20 77 42 77 48 0 21 32 9 82 -31 106 -83 297 -162 498 -205 206 -44 526 -44 735 2 39 8 82 17 97 21 l27 5 -6 -129 c-5 -115 -3 -138 15 -200 42 -138 144 -205 313 -207 72 -1 90 2 108 18 45 40 17 75 -124 156 -124 71 -154 96 -176 144 -22 48 -26 180 -8 251 11 42 15 46 121 107 139 80 270 178 298 223 28 45 21 78 -19 95 -39 16 -56 6 -156 -89 -129 -123 -229 -182 -416 -244 -197 -66 -404 -83 -614 -52 -271 41 -461 123 -611 266 -76 72 -102 80 -152 46 -103 -71 -220 -101 -374 -95 -93 3 -111 7 -171 36 -80 40 -138 102 -168 181 -18 48 -20 71 -16 156 4 89 11 120 65 282 68 203 86 297 65 337 -17 33 -26 33 -58 -1z",
+  "M6888 12790 c-14 -4 -46 -21 -70 -38 -25 -17 -107 -61 -183 -97 -117 -57 -148 -76 -200 -128 -115 -118 -149 -228 -150 -487 0 -196 11 -255 71 -385 44 -95 44 -135 1 -206 -19 -30 -64 -102 -100 -160 -127 -205 -157 -287 -157 -419 0 -55 7 -90 23 -130 43 -104 169 -265 244 -311 l35 -22 -56 -49 c-89 -78 -136 -178 -136 -290 0 -59 13 -88 52 -113 17 -11 40 -32 51 -46 19 -26 19 -27 -3 -125 -12 -55 -35 -146 -51 -204 -16 -58 -33 -148 -39 -200 -13 -127 -13 -549 1 -646 34 -243 174 -497 304 -550 53 -22 54 -16 -21 -165 -74 -148 -208 -485 -239 -599 -14 -52 -30 -135 -35 -183 -15 -131 -23 -1107 -9 -1182 15 -86 67 -187 148 -288 39 -48 71 -90 71 -93 0 -3 -14 -19 -31 -37 -76 -80 -149 -210 -195 -347 -24 -74 -28 -101 -28 -210 -1 -118 1 -128 27 -179 16 -29 41 -70 56 -92 58 -79 58 -80 2 -250 -128 -392 -161 -595 -163 -1012 -2 -273 6 -317 99 -503 99 -199 98 -237 -7 -400 -88 -135 -101 -175 -107 -339 -6 -154 7 -245 67 -456 53 -188 110 -470 110 -545 0 -54 -3 -63 -30 -89 -22 -21 -30 -38 -30 -64 0 -20 -7 -76 -15 -126 -19 -113 -19 -222 -1 -317 42 -219 152 -358 373 -469 75 -37 89 -41 132 -35 l49 6 71 -69 c111 -110 204 -136 471 -136 281 1 393 30 695 179 209 104 266 146 354 263 28 38 115 132 194 210 159 157 167 161 281 150 33 -4 125 -22 203 -41 238 -58 442 -58 640 0 46 13 157 60 246 103 244 119 285 163 409 446 78 178 74 163 93 295 31 209 58 259 153 285 316 86 445 188 663 525 138 212 206 338 237 441 32 102 46 221 39 328 -7 108 -56 367 -87 455 -27 79 -25 104 12 214 31 92 32 94 19 165 -27 146 -26 183 3 226 15 22 62 68 104 104 99 84 260 247 312 317 90 120 145 277 157 447 15 226 -79 496 -252 724 -25 33 -45 63 -45 68 0 4 27 25 60 45 82 51 152 123 187 193 27 55 28 64 27 193 0 105 -5 152 -21 211 -33 118 -99 286 -144 364 -53 94 -162 231 -202 255 l-32 20 0 212 c0 207 -1 215 -28 291 -63 178 -139 293 -248 372 -27 21 -54 45 -59 55 -6 12 -1 51 16 126 59 257 65 296 71 491 9 294 -22 481 -111 669 -85 178 -161 270 -382 455 -231 194 -255 246 -289 624 -19 207 -28 266 -62 373 -49 156 -143 263 -266 301 -34 10 -109 22 -167 26 -193 13 -218 53 -165 256 30 115 32 206 5 316 -37 157 -124 305 -259 446 -183 191 -382 277 -633 277 -179 0 -326 -40 -478 -130 -162 -95 -182 -94 -310 26 -74 69 -111 95 -184 129 -132 63 -235 95 -371 116 -101 16 -125 23 -160 49 -115 87 -173 105 -380 120 -161 11 -210 11 -247 0z m402 -122 c175 -79 312 -296 349 -553 24 -166 30 -185 73 -227 39 -38 40 -41 36 -94 -6 -67 -40 -114 -118 -158 -60 -34 -113 -38 -257 -21 -54 6 -76 5 -88 -5 -20 -17 -19 -47 3 -59 28 -15 251 -45 337 -45 203 0 306 105 308 314 1 74 -2 94 -26 141 -21 45 -35 60 -68 74 -58 27 -76 55 -84 133 -8 81 -43 188 -91 284 l-36 71 39 -7 c21 -4 83 -21 138 -37 294 -91 496 -266 551 -480 20 -77 15 -206 -16 -403 -22 -144 -26 -246 -9 -279 32 -62 75 -82 115 -53 18 13 19 32 25 268 5 173 11 266 20 293 l14 40 115 0 c94 0 122 4 154 20 52 26 55 40 14 65 -28 17 -47 20 -128 18 -133 -4 -148 5 -194 100 -32 69 -35 78 -20 87 9 6 44 28 78 49 286 183 634 218 856 86 151 -89 353 -344 415 -525 23 -66 31 -200 15 -278 -16 -81 -69 -249 -78 -245 -4 2 -86 42 -182 90 -185 92 -318 143 -397 154 -39 5 -53 2 -72 -13 -50 -40 -2 -81 119 -103 75 -14 254 -100 275 -134 7 -11 26 -66 41 -121 29 -104 63 -155 101 -155 16 1 58 14 103 34 12 5 19 -3 27 -26 27 -75 44 -166 58 -294 8 -75 19 -142 26 -150 17 -21 56 -17 73 8 18 26 20 104 7 264 -6 72 -18 128 -42 198 -29 82 -32 98 -19 106 17 11 75 4 188 -21 203 -46 319 -149 379 -337 23 -69 26 -102 34 -322 11 -278 11 -276 -70 -315 -43 -21 -67 -59 -107 -171 -17 -50 -17 -53 0 -79 23 -34 48 -30 164 25 153 73 182 61 422 -179 193 -194 245 -267 306 -429 57 -154 69 -232 68 -462 0 -237 -16 -334 -86 -524 -62 -171 -112 -260 -191 -340 -75 -76 -83 -103 -33 -121 41 -14 108 26 172 105 28 34 58 67 68 72 23 13 71 -19 143 -95 108 -116 163 -270 163 -457 0 -177 -49 -322 -146 -429 -44 -49 -99 -87 -107 -74 -3 5 -13 37 -22 73 -61 237 -176 456 -295 563 -53 48 -90 61 -151 55 -58 -5 -49 -29 58 -141 110 -115 156 -186 212 -332 94 -239 94 -447 2 -640 -55 -115 -88 -154 -198 -237 -110 -82 -144 -131 -124 -174 9 -21 18 -24 59 -24 65 0 141 39 190 98 38 46 189 267 210 307 6 12 20 72 32 135 12 63 25 122 30 131 5 9 31 24 57 34 57 21 105 65 179 163 68 89 81 91 159 20 144 -131 255 -383 255 -577 0 -75 -4 -94 -30 -149 -36 -77 -129 -176 -221 -238 -97 -64 -283 -151 -365 -170 -67 -16 -77 -16 -162 -1 -136 25 -178 23 -212 -12 -23 -23 -30 -41 -36 -91 -9 -78 -31 -121 -158 -307 -166 -242 -239 -296 -480 -358 -74 -19 -159 -44 -188 -56 -62 -24 -118 -64 -118 -84 0 -45 238 -45 376 -1 161 52 273 147 457 391 166 220 241 308 305 357 l54 42 112 7 c99 6 122 11 213 47 116 47 194 62 219 41 30 -25 138 -193 165 -259 138 -329 100 -662 -107 -931 -80 -104 -158 -165 -297 -232 -161 -78 -158 -72 -120 -279 22 -126 15 -217 -24 -300 -81 -172 -219 -247 -454 -248 -138 0 -173 -18 -129 -65 35 -37 114 -50 233 -36 128 14 234 37 314 66 l65 23 14 -33 c75 -181 87 -429 29 -631 -33 -114 -134 -320 -223 -454 -196 -294 -446 -433 -805 -447 -340 -14 -547 63 -787 292 -155 149 -227 193 -244 149 -10 -26 12 -88 47 -132 41 -53 116 -119 242 -214 55 -41 117 -94 138 -117 33 -37 37 -47 37 -94 0 -67 -35 -140 -99 -206 -90 -92 -185 -121 -404 -121 -102 0 -145 -4 -167 -15 -54 -28 -48 -79 13 -112 25 -14 63 -18 167 -21 236 -7 378 31 481 128 78 74 129 209 129 349 0 36 3 42 16 37 44 -17 203 -38 329 -43 l140 -6 -51 -207 c-115 -462 -271 -650 -627 -754 -156 -45 -282 -59 -472 -53 -242 8 -419 52 -615 153 -80 41 -240 151 -240 165 0 4 20 12 44 18 95 24 215 131 281 252 14 26 38 105 55 177 16 72 37 148 46 169 9 21 19 52 23 68 6 26 11 30 37 27 92 -11 253 -12 286 -3 38 12 111 85 121 120 10 41 -6 46 -90 31 -96 -17 -150 -15 -250 11 -110 28 -195 70 -256 127 -103 97 -159 121 -199 85 -33 -29 -23 -58 75 -229 119 -206 129 -386 29 -533 -53 -78 -252 -221 -307 -221 -28 0 -134 109 -146 150 -10 32 -7 51 16 131 36 123 44 249 18 298 -10 19 -23 36 -30 38 -6 3 -24 -17 -39 -42 -20 -36 -32 -80 -51 -193 -29 -180 -70 -276 -155 -359 -73 -72 -80 -77 -262 -168 -175 -88 -219 -124 -182 -151 12 -8 44 -14 81 -14 145 0 295 70 427 200 l86 85 43 -33 c24 -18 88 -60 142 -93 54 -32 138 -87 186 -122 49 -34 125 -82 170 -107 l81 -46 -64 -43 c-35 -23 -146 -119 -247 -212 -266 -249 -324 -288 -534 -358 -194 -64 -307 -84 -455 -78 -142 6 -214 22 -315 72 -92 45 -140 96 -195 207 -25 50 -49 92 -55 91 -21 0 -47 -66 -54 -134 l-6 -71 -90 69 c-279 216 -332 383 -251 798 19 99 36 195 38 213 l3 32 120 -81 c221 -148 377 -210 415 -164 9 11 8 20 -7 45 -20 35 -75 74 -213 150 -52 29 -115 66 -140 83 -68 46 -189 156 -216 197 -22 33 -62 165 -53 175 3 2 54 -12 114 -31 180 -57 283 -75 467 -81 362 -12 551 47 733 232 114 115 183 243 203 379 7 43 11 51 27 48 11 -2 70 -6 131 -9 104 -5 116 -4 166 19 69 32 127 92 172 177 57 110 68 159 73 343 3 93 7 168 9 168 2 0 34 -20 71 -44 223 -143 393 -190 689 -188 386 1 696 59 870 163 184 109 321 312 502 744 120 284 149 503 93 684 -10 33 -16 63 -13 66 3 3 20 5 38 5 17 0 63 9 100 21 218 67 429 272 463 451 18 94 29 122 53 137 13 8 72 16 154 21 151 9 194 24 232 80 20 29 23 43 19 88 -7 62 -29 102 -58 102 -11 0 -62 -18 -114 -40 -52 -22 -110 -40 -130 -40 -70 0 -118 42 -180 153 -57 103 -131 150 -170 107 -16 -17 -19 -36 -19 -93 1 -89 14 -129 76 -237 55 -96 59 -125 27 -218 -68 -203 -238 -338 -519 -413 -60 -16 -93 -31 -113 -50 l-27 -28 21 -53 c45 -111 50 -136 56 -233 4 -79 1 -121 -16 -203 -63 -304 -232 -662 -386 -817 -113 -114 -293 -194 -565 -251 -351 -73 -661 -43 -925 88 -92 46 -172 107 -307 233 -128 120 -159 139 -185 112 -29 -29 -18 -76 41 -161 68 -101 86 -161 93 -306 10 -220 -52 -350 -188 -391 -19 -5 -97 -13 -174 -18 -147 -8 -194 -22 -215 -61 -6 -11 -15 -57 -21 -102 -13 -113 -33 -167 -91 -253 -63 -95 -133 -156 -233 -205 -138 -68 -229 -84 -455 -85 -178 0 -201 2 -265 23 -182 61 -323 169 -377 290 -42 93 -41 219 2 307 26 53 100 139 110 128 4 -4 13 -26 20 -48 36 -118 131 -188 162 -120 17 37 -15 143 -126 425 -99 250 -144 393 -173 550 -25 133 -24 476 1 610 42 227 97 403 198 626 62 136 65 141 170 251 73 75 106 116 102 127 -9 23 -69 39 -122 31 -51 -8 -99 -49 -156 -136 l-30 -44 -32 100 c-25 74 -33 118 -34 171 0 125 64 288 145 369 71 71 72 71 289 -39 132 -66 234 -110 329 -141 76 -24 167 -61 203 -81 56 -31 70 -35 97 -27 97 27 -9 120 -246 213 -480 189 -700 378 -797 685 -30 96 -44 376 -36 750 7 390 23 474 138 765 103 257 158 369 259 522 81 124 129 221 129 263 0 41 -103 -8 -164 -77 l-44 -51 -34 21 c-47 29 -139 127 -171 182 -70 121 -107 311 -107 550 0 261 13 363 70 530 80 237 88 338 40 495 -36 116 -37 135 -9 193 43 88 219 193 457 271 148 49 265 71 382 71 118 0 207 -19 380 -79 163 -58 263 -81 345 -81 47 0 55 3 55 19 0 30 -56 69 -128 90 -37 10 -123 35 -192 54 -180 52 -232 64 -351 81 -237 35 -376 11 -644 -112 -192 -87 -246 -77 -349 64 -102 140 -137 248 -117 360 14 76 80 209 179 359 131 197 231 293 400 384 136 73 208 152 200 219 -3 23 -8 27 -39 30 -31 3 -46 -5 -100 -48 -35 -28 -107 -83 -159 -122 -52 -40 -128 -98 -168 -131 -40 -33 -75 -58 -77 -56 -8 9 -46 114 -56 157 -59 259 -2 549 135 685 77 77 238 155 441 213 75 21 206 13 275 -18z",
+  "M8366 11092 c-7 -12 44 -81 120 -165 80 -86 115 -142 141 -225 65 -204 30 -375 -94 -466 -108 -80 -324 -167 -374 -151 -11 4 -51 33 -87 64 -89 76 -112 91 -139 91 -34 0 -39 -39 -12 -91 12 -24 50 -80 84 -126 53 -68 69 -99 96 -184 26 -83 40 -110 71 -141 22 -22 47 -38 56 -36 28 5 27 106 -2 218 -13 52 -23 97 -21 101 3 3 51 9 107 12 167 10 268 49 365 142 79 75 96 80 196 66 121 -16 225 5 280 57 28 27 64 123 52 142 -9 15 -43 12 -112 -10 -34 -10 -102 -24 -150 -30 -48 -6 -102 -12 -118 -14 l-30 -4 4 149 c4 197 -11 271 -80 374 -57 84 -151 175 -216 206 -51 25 -127 36 -137 21z",
+  "M7080 10255 c-17 -20 -6 -56 41 -136 32 -54 79 -189 79 -228 0 -3 -60 -6 -134 -6 -128 0 -136 -1 -160 -24 -32 -30 -33 -59 -3 -70 13 -5 106 -7 208 -4 347 10 538 -47 699 -207 97 -96 176 -216 280 -421 100 -198 141 -257 278 -402 159 -168 183 -215 202 -392 17 -146 -12 -245 -113 -396 -82 -121 -82 -130 -8 -271 33 -64 63 -134 67 -156 9 -57 -26 -164 -74 -227 -79 -104 -269 -181 -466 -187 -88 -4 -112 7 -151 70 -72 118 -136 176 -232 212 -51 19 -57 19 -79 5 -42 -27 -30 -51 79 -158 155 -155 186 -234 172 -450 l-7 -117 -51 0 c-154 0 -275 -78 -347 -221 -25 -48 -35 -59 -48 -54 -85 35 -258 73 -365 81 -245 18 -416 -109 -434 -322 -6 -69 1 -79 50 -69 23 5 63 39 147 125 137 140 171 160 272 160 86 0 118 -13 236 -93 129 -88 162 -81 251 53 60 89 136 167 196 198 42 22 63 26 130 26 209 -1 426 -168 546 -420 59 -124 72 -194 66 -354 -7 -173 -34 -274 -105 -398 -64 -111 -73 -145 -42 -162 56 -30 158 22 183 92 33 95 67 283 66 371 0 52 4 94 11 102 35 43 268 75 401 56 152 -23 302 -85 416 -172 127 -97 172 -80 233 90 37 104 70 161 128 223 66 71 142 104 306 134 77 14 150 31 164 38 l25 13 -28 19 c-24 16 -48 19 -140 19 -292 -1 -512 -144 -590 -382 l-16 -53 -37 16 c-380 162 -544 191 -752 135 -109 -30 -106 -31 -113 42 -28 297 -273 583 -577 673 -61 18 -74 26 -72 41 1 10 8 86 14 168 l11 150 136 1 c159 0 234 16 359 76 298 142 386 504 177 727 l-47 50 49 63 c55 72 112 178 139 258 27 81 25 203 -3 256 l-22 41 155 12 c430 33 654 124 654 268 0 43 -45 143 -64 143 -6 0 -52 -36 -101 -81 -105 -93 -165 -131 -255 -160 -209 -65 -373 -33 -552 109 -130 104 -202 201 -353 477 -102 187 -155 271 -215 340 -138 161 -335 259 -562 280 l-78 7 25 20 c34 26 32 52 -10 136 -41 82 -106 157 -172 201 -53 36 -56 36 -73 16z",
+  "M9431 10184 c-37 -47 -37 -86 3 -243 42 -171 53 -267 36 -331 -6 -25 -34 -94 -62 -154 -30 -64 -53 -128 -56 -155 -6 -67 24 -98 161 -168 104 -53 121 -66 243 -187 148 -148 239 -276 330 -461 296 -609 219 -1174 -215 -1588 -111 -105 -223 -181 -377 -253 -164 -77 -197 -112 -139 -150 22 -14 34 -15 82 -5 191 38 441 207 576 388 89 119 98 123 199 72 113 -57 135 -77 217 -198 98 -143 138 -184 177 -179 28 3 29 4 29 64 0 87 -63 214 -138 278 -73 62 -157 111 -236 137 -36 12 -67 23 -69 24 -2 2 11 23 28 48 81 121 133 297 151 517 11 128 7 227 -17 382 -10 60 2 82 68 133 35 27 89 73 120 102 78 73 180 113 291 113 79 0 157 33 157 66 0 36 -195 56 -304 30 -102 -24 -179 -70 -280 -167 l-90 -85 -37 112 c-54 162 -107 259 -195 361 -79 91 -97 119 -108 166 -5 22 0 34 32 70 60 65 171 263 178 318 10 76 7 74 161 74 129 0 142 -2 195 -27 32 -15 78 -41 104 -58 51 -36 115 -50 139 -30 23 19 30 76 11 104 -36 55 -249 119 -466 138 -69 6 -127 13 -130 16 -3 2 -7 70 -10 150 -7 177 -19 209 -122 317 -68 72 -151 126 -215 140 -30 6 -33 5 -33 -18 0 -18 21 -46 74 -97 86 -83 125 -157 151 -285 44 -211 11 -384 -116 -607 l-50 -87 -106 117 c-131 146 -189 225 -204 284 -11 39 -10 58 6 126 15 67 17 106 12 244 -7 184 -29 304 -76 405 -33 69 -49 77 -80 37z",
+  "M7084 9196 c-27 -21 -12 -42 66 -91 67 -42 104 -76 210 -195 82 -92 100 -119 92 -139 -3 -9 -34 -58 -68 -109 -85 -124 -124 -253 -124 -409 0 -109 43 -280 90 -360 11 -19 20 -36 20 -39 0 -2 -46 -4 -102 -4 -187 0 -291 -35 -420 -139 -139 -112 -186 -193 -126 -215 38 -14 76 6 168 89 85 76 181 136 259 161 51 16 64 16 230 1 200 -19 307 -22 316 -7 12 20 -41 58 -91 65 -27 4 -65 16 -84 27 -33 18 -37 25 -64 131 -47 180 -58 254 -52 338 10 131 57 280 112 361 37 53 76 68 181 68 72 0 97 4 133 23 62 31 85 67 83 128 0 28 -4 53 -7 56 -2 3 -46 -2 -96 -12 -144 -26 -220 -1 -391 131 -158 122 -217 154 -284 154 -17 0 -40 -6 -51 -14z",
+  "M7777 5203 c-13 -12 -7 -50 24 -144 51 -157 37 -289 -41 -371 -42 -44 -49 -45 -205 -27 -140 17 -188 2 -284 -86 -56 -51 -82 -67 -128 -80 -204 -56 -263 -81 -263 -109 0 -21 59 -40 120 -39 73 3 167 33 330 106 169 77 198 79 315 21 l80 -39 190 1 c382 3 531 40 741 181 143 97 174 139 174 234 0 89 -41 76 -166 -53 -51 -52 -105 -96 -142 -116 -130 -69 -379 -132 -524 -132 -106 0 -115 6 -83 50 54 74 69 133 69 280 0 154 -11 205 -56 256 -47 53 -129 90 -151 67z",
+  "M9517 4984 c-21 -40 -3 -134 65 -337 54 -162 61 -193 65 -282 4 -85 2 -108 -16 -156 -30 -79 -88 -141 -168 -181 -60 -29 -78 -33 -171 -36 -154 -6 -271 24 -374 95 -50 34 -76 26 -152 -46 -150 -143 -340 -225 -611 -266 -210 -31 -417 -14 -614 52 -187 62 -287 121 -416 244 -100 95 -117 105 -156 89 -40 -17 -47 -50 -19 -95 28 -45 159 -143 298 -223 106 -61 110 -65 121 -107 18 -71 14 -203 -8 -251 -22 -48 -52 -73 -176 -144 -141 -81 -169 -116 -124 -156 18 -16 36 -19 108 -18 169 2 271 69 313 207 18 62 20 85 15 200 l-6 129 27 -5 c15 -4 59 -13 97 -21 209 -46 529 -46 735 -2 201 43 392 122 498 205 50 40 82 52 82 31 0 -6 35 -28 78 -48 l77 -37 140 0 c158 0 216 11 321 61 125 59 202 154 225 279 14 78 6 146 -47 401 -59 280 -82 345 -148 417 -31 34 -42 34 -59 1z"
+];
+
+    const pathObjects = paths.map(p => new Path2D(p));
+
+    // Fill all paths with solid white to make the brain lobes white
+    context.fillStyle = '#ffffff';
+    pathObjects.forEach(path => {
+      context.fill(path);
+    });
+
+    // Stroke all paths with a thin stroke of tint for inner wrinkles
+    context.strokeStyle = tint;
+    context.lineWidth = 150; // Approx 0.8px on screen (150 * 0.053125 * 0.1)
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    pathObjects.forEach(path => {
+      context.stroke(path);
+    });
+
+    // Stroke ONLY the outer boundaries (hemispheres) with thick tint (6px)
+    // We split by 'z' to extract only the outer boundary sub-path (without the wrinkle holes)
+    const outerPathLeft = new Path2D(paths[0].split('z')[0] + 'z');
+    const outerPathRight = new Path2D(paths[7].split('z')[0] + 'z');
+    
+    context.lineWidth = 1130; // Approx 6px on screen (6 * 12800 / 68)
+    context.stroke(outerPathLeft);
+    context.stroke(outerPathRight);
+
+    context.restore();
+  };
+
+  const drawBodyIcon = (cx) => {
+    context.save();
+    context.strokeStyle = iconStroke;
+    context.fillStyle = iconFill;
+    context.lineWidth = 6;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    
+    // Heart shape centered at (cx, cy)
+    context.beginPath();
+    context.moveTo(cx, cy - 15);
+    // Left lobe
+    context.bezierCurveTo(cx - 20, cy - 35, cx - 35, cy - 12, cx - 35, cy + 5);
+    // Left lower half
+    context.bezierCurveTo(cx - 35, cy + 20, cx - 15, cy + 30, cx, cy + 38);
+    // Right lower half
+    context.bezierCurveTo(cx + 15, cy + 30, cx + 35, cy + 20, cx + 35, cy + 5);
+    // Right lobe
+    context.bezierCurveTo(cx + 35, cy - 12, cx + 20, cy - 35, cx, cy - 15);
+    context.closePath();
+    context.fill();
+    context.stroke();
+
+    // A subtle decorative shine reflection on the upper left lobe
+    context.beginPath();
+    context.arc(cx - 12, cy - 10, 4, 0, Math.PI * 2);
+    context.fillStyle = iconStroke;
+    context.fill();
+    
+    context.restore();
+  };
+
+  const drawHungerIcon = (cx) => {
+    context.save();
+    context.strokeStyle = iconStroke;
+    context.fillStyle = iconFill;
+    context.lineWidth = 6;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+
+    context.beginPath();
+    // Start at top of meat connection to bone
+    context.moveTo(cx + 6, cy - 8);
+    // Bone top edge
+    context.lineTo(cx + 22, cy - 8);
+    // Top bone bulb
+    context.bezierCurveTo(cx + 26, cy - 15, cx + 36, cy - 11, cx + 34, cy - 2);
+    // Bottom bone bulb
+    context.bezierCurveTo(cx + 36, cy + 7, cx + 26, cy + 11, cx + 22, cy + 8);
+    // Bone bottom edge
+    context.lineTo(cx + 6, cy + 8);
+    // Meat lower bulge
+    context.bezierCurveTo(cx + 6, cy + 30, cx - 32, cy + 28, cx - 32, cy);
+    // Meat upper bulge
+    context.bezierCurveTo(cx - 32, cy - 28, cx + 6, cy - 30, cx + 6, cy - 8);
+    context.closePath();
+    context.fill();
+    context.stroke();
+
+    // Decorative "cut" in the meat (like a bone detail or a grill mark)
+    context.beginPath();
+    context.moveTo(cx - 16, cy - 12);
+    context.lineTo(cx - 8, cy + 12);
+    context.moveTo(cx - 8, cy - 12);
+    context.lineTo(cx, cy + 12);
+    context.strokeStyle = 'rgba(32,35,33,0.3)';
+    context.lineWidth = 4;
+    context.stroke();
+
+    context.restore();
+  };
+
+  const drawArmorIcon = (cx) => {
+    context.save();
+    context.strokeStyle = iconStroke;
+    context.fillStyle = iconFill;
+    context.lineWidth = 6;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    
+    // Scaled down shield path: height from cy - 32 to cy + 32, width from cx - 28 to cx + 28
+    context.beginPath();
+    context.moveTo(cx, cy - 32);
+    context.lineTo(cx + 26, cy - 20);
+    context.lineTo(cx + 22, cy + 10);
+    context.bezierCurveTo(cx + 14, cy + 24, cx + 3, cy + 32, cx, cy + 34);
+    context.bezierCurveTo(cx - 3, cy + 32, cx - 14, cy + 24, cx - 22, cy + 10);
+    context.lineTo(cx - 26, cy - 20);
+    context.closePath();
+    context.fill();
+    context.stroke();
+
+    // Internal detail: vertical line and horizontal line
+    context.beginPath();
+    context.moveTo(cx, cy - 22);
+    context.lineTo(cx, cy + 24);
+    context.moveTo(cx - 16, cy - 5);
+    context.lineTo(cx + 16, cy - 5);
+    context.stroke();
+    
+    context.restore();
+  };
+
+  const drawResourceIcon = (cx) => {
+    context.save();
+    context.strokeStyle = iconStroke;
+    context.fillStyle = iconFill;
+    context.lineWidth = 6;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+
+    // Bag main body path
+    context.beginPath();
+    // Top ruffle (left to right)
+    context.moveTo(cx - 16, cy - 30);
+    context.bezierCurveTo(cx - 8, cy - 25, cx + 8, cy - 25, cx + 16, cy - 30);
+    // Right side of neck & body
+    context.lineTo(cx + 8, cy - 18);
+    context.bezierCurveTo(cx + 28, cy - 8, cx + 28, cy + 26, cx, cy + 30);
+    // Left side of neck & body
+    context.bezierCurveTo(cx - 28, cy + 26, cx - 28, cy - 8, cx - 8, cy - 18);
+    context.closePath();
+    context.fill();
+    context.stroke();
+
+    // Pouch ribbon tie (horizontal line across the neck)
+    context.beginPath();
+    context.moveTo(cx - 10, cy - 18);
+    context.lineTo(cx + 10, cy - 18);
+    context.stroke();
+
+    // Small bow loop details
+    context.beginPath();
+    context.arc(cx - 5, cy - 18, 4, 0, Math.PI * 2);
+    context.stroke();
+    context.beginPath();
+    context.arc(cx + 5, cy - 18, 4, 0, Math.PI * 2);
+    context.stroke();
+
+    // Coin emblem on the pouch center
+    context.beginPath();
+    context.arc(cx, cy + 8, 8, 0, Math.PI * 2);
+    context.fillStyle = iconStroke;
+    context.fill();
+
+    // Coin inner details
+    context.beginPath();
+    context.moveTo(cx, cy + 4);
+    context.lineTo(cx, cy + 12);
+    context.moveTo(cx - 4, cy + 8);
+    context.lineTo(cx + 4, cy + 8);
+    context.strokeStyle = '#f3e6cf';
+    context.lineWidth = 2.5;
+    context.stroke();
+
+    context.restore();
+  };
+
+  const drawVariableIcon = (cx) => {
+    context.save();
+    context.fillStyle = iconStroke;
+    context.font = '900 64px Lato, Arial, sans-serif';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText('?', cx, cy - 2);
+    context.restore();
+  };
+
+  const drawElementIcon = (slot, cx) => {
+    const shape = {
+      Agua: 'drop',
+      Fuego: 'flame',
+      Hielo: 'snow',
+      Luz: 'sun',
+      Oscuridad: 'moon',
+      Rayo: 'bolt',
+      Tierra: 'mountain',
+      Veneno: 'venom',
+      Viento: 'wind',
+    }[slot];
+    context.save();
+    context.strokeStyle = iconStroke;
+    context.fillStyle = iconFill;
+    context.lineWidth = 6;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    if (shape === 'drop') {
+      context.beginPath();
+      context.moveTo(cx, cy - 48);
+      context.bezierCurveTo(cx + 36, cy - 5, cx + 38, cy + 38, cx, cy + 43);
+      context.bezierCurveTo(cx - 38, cy + 38, cx - 36, cy - 5, cx, cy - 48);
+      context.fill();
+      context.stroke();
+    } else if (shape === 'flame') {
+      context.beginPath();
+      context.moveTo(cx, cy - 52);
+      context.bezierCurveTo(cx + 38, cy - 12, cx + 33, cy + 35, cx, cy + 45);
+      context.bezierCurveTo(cx - 32, cy + 27, cx - 31, cy - 2, cx - 6, cy - 22);
+      context.bezierCurveTo(cx - 5, cy - 7, cx + 8, cy + 2, cx + 1, cy + 18);
+      context.bezierCurveTo(cx + 20, cy + 2, cx + 15, cy - 26, cx, cy - 52);
+      context.fill();
+      context.stroke();
+    } else if (shape === 'snow') {
+      [-Math.PI / 2, -Math.PI / 6, Math.PI / 6].forEach((angle) => {
+        context.beginPath();
+        context.moveTo(cx + Math.cos(angle) * 46, cy + Math.sin(angle) * 46);
+        context.lineTo(cx - Math.cos(angle) * 46, cy - Math.sin(angle) * 46);
+        context.stroke();
+      });
+      context.beginPath();
+      context.arc(cx, cy, 10, 0, Math.PI * 2);
+      context.fill();
+    } else if (shape === 'sun') {
+      context.beginPath();
+      context.arc(cx, cy, 25, 0, Math.PI * 2);
+      context.fill();
+      context.stroke();
+      for (let i = 0; i < 8; i += 1) {
+        const angle = (Math.PI * 2 * i) / 8;
+        context.beginPath();
+        context.moveTo(cx + Math.cos(angle) * 38, cy + Math.sin(angle) * 38);
+        context.lineTo(cx + Math.cos(angle) * 51, cy + Math.sin(angle) * 51);
+        context.stroke();
+      }
+    } else if (shape === 'moon') {
+      context.beginPath();
+      context.arc(cx - 6, cy, 38, Math.PI * 0.35, Math.PI * 1.65);
+      context.bezierCurveTo(cx + 17, cy + 22, cx + 17, cy - 22, cx - 6, cy - 38);
+      context.fill();
+      context.stroke();
+    } else if (shape === 'bolt') {
+      context.beginPath();
+      context.moveTo(cx + 9, cy - 50);
+      context.lineTo(cx - 26, cy + 4);
+      context.lineTo(cx + 1, cy + 4);
+      context.lineTo(cx - 9, cy + 50);
+      context.lineTo(cx + 31, cy - 8);
+      context.lineTo(cx + 4, cy - 8);
+      context.closePath();
+      context.fill();
+      context.stroke();
+    } else if (shape === 'mountain') {
+      context.beginPath();
+      context.moveTo(cx - 46, cy + 40);
+      context.lineTo(cx - 9, cy - 42);
+      context.lineTo(cx + 11, cy - 5);
+      context.lineTo(cx + 28, cy - 29);
+      context.lineTo(cx + 50, cy + 40);
+      context.closePath();
+      context.fill();
+      context.stroke();
+    } else if (shape === 'venom') {
+      context.beginPath();
+      context.arc(cx, cy - 8, 34, 0, Math.PI * 2);
+      context.fill();
+      context.stroke();
+      context.beginPath();
+      context.moveTo(cx - 14, cy + 25);
+      context.lineTo(cx - 22, cy + 49);
+      context.moveTo(cx + 14, cy + 25);
+      context.lineTo(cx + 22, cy + 49);
+      context.moveTo(cx - 14, cy - 7);
+      context.lineTo(cx - 4, cy - 7);
+      context.moveTo(cx + 4, cy - 7);
+      context.lineTo(cx + 14, cy - 7);
+      context.stroke();
+    } else if (shape === 'wind') {
+      context.beginPath();
+      context.moveTo(cx - 46, cy - 18);
+      context.bezierCurveTo(cx - 12, cy - 42, cx + 32, cy - 30, cx + 28, cy - 4);
+      context.moveTo(cx - 48, cy + 8);
+      context.lineTo(cx + 45, cy + 8);
+      context.moveTo(cx - 26, cy + 33);
+      context.bezierCurveTo(cx + 0, cy + 48, cx + 34, cy + 40, cx + 29, cy + 20);
+      context.stroke();
+    } else {
+      context.font = '900 38px Lato, Arial, sans-serif';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillStyle = '#202321';
+      context.fillText(slot.slice(0, 2).toUpperCase(), cx, cy + 2);
+    }
+    context.restore();
+  };
+
+  const drawFilledIcon = (slot, cx) => {
+    if (slot === 'Variable') {
+      drawVariableIcon(cx);
+      return;
+    }
+
+    const image = resourceImages[`consumption:${slot}`];
+    const slotStyle = getSlotStyle(slot);
+    if (drawTintedImageIcon(
+      image,
+      cx,
+      slot === 'Mente' ? 62 : 54,
+      slot === 'Mente' ? 82 : 72,
+      slotStyle.stroke,
+    )) {
+      return;
+    }
+
+    if (slot === 'Tiempo') {
+      drawHourglassIcon(cx, slotStyle.stroke, 1);
+    } else if (slot === 'Mente') {
+      drawMindIcon(cx);
+    } else if (slot === 'Cuerpo') {
+      drawBodyIcon(cx);
+    } else if (slot === 'Hambre') {
+      drawHungerIcon(cx);
+    } else if (slot === 'Armadura_1') {
+      drawArmorIcon(cx);
+    } else if (slot === 'Recurso') {
+      drawResourceIcon(cx);
+    } else {
+      drawElementIcon(slot, cx);
+    }
+  };
+
+  context.save();
+  visibleSlots.forEach((slot, index) => {
+    const isFilled = Boolean(slot && slot !== EMPTY_SLOT);
+    const slotStyle = isFilled ? getSlotStyle(slot) : null;
+    const cx = startX + index * (size + gap);
+    context.beginPath();
+    context.arc(cx, cy, size / 2, 0, Math.PI * 2);
+    context.fillStyle = isFilled ? slotStyle.fill : 'rgba(32,35,33,0.08)';
+    context.fill();
+    context.lineWidth = isFilled ? 6 : 5;
+    context.strokeStyle = isFilled ? slotStyle.stroke : 'rgba(32,35,33,0.45)';
+    context.stroke();
+
+    if (isFilled) {
+      drawFilledIcon(slot, cx);
+    } else {
+      const timeIcon = resourceImages['consumption:Tiempo'];
+      if (!drawTintedImageIcon(timeIcon, cx, 54, 72, 'rgba(32,35,33,0.48)')) {
+        drawHourglassIcon(cx, 'rgba(32,35,33,0.48)', 1);
+      }
+    }
+  });
+  context.restore();
+};
+
+const drawModularDamage = (context, centerY, diceIconImg, diceQty, diceType, accent = '#c46f1f') => {
+  context.save();
+  const count = diceType === 'DX' ? 1 : Math.max(1, Math.min(MAX_DAMAGE_DICE_QTY, diceQty));
+  const size = 96;
+  const gap = 24;
+  const totalWidth = count * size + (count - 1) * gap;
+  let x = 944 - totalWidth / 2;
+  const y = centerY - size / 2;
+
+  let tintedDiceCanvas = null;
+  if (diceIconImg && accent) {
+    try {
+      const canvas = typeof window !== 'undefined' && typeof window.OffscreenCanvas !== 'undefined'
+        ? new window.OffscreenCanvas(size, size)
+        : document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(diceIconImg, 0, 0, size, size);
+        ctx.globalCompositeOperation = 'source-in';
+        ctx.fillStyle = accent;
+        ctx.fillRect(0, 0, size, size);
+        tintedDiceCanvas = canvas;
+      }
+    } catch (e) {
+      console.error("Error tinting dice image:", e);
+    }
+  }
+
+  for (let i = 0; i < count; i++) {
+    if (tintedDiceCanvas) {
+      context.drawImage(tintedDiceCanvas, x, y, size, size);
+    } else if (diceIconImg) {
+      context.drawImage(diceIconImg, x, y, size, size);
+    } else {
+      context.font = '900 58px Lato, Arial, sans-serif';
+      context.fillStyle = '#202321';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText(diceType, x + size / 2, centerY + 2);
+    }
+    x += size + gap;
+  }
+  context.restore();
+};
+
+const drawModularTraits = (context, centerY, traits, visibleTraitRows, accent) => {
+  const labels = traits
+    .slice(0, MAX_TRAITS_PER_CONTAINER)
+    .map((trait) => (trait || '').trim())
+    .filter((trait) => trait && trait !== '-')
+    .slice(0, MAX_TRAITS_PER_CONTAINER);
+  context.save();
+  if (labels.length === 0) {
+    context.font = 'italic 44px Lato, Arial, sans-serif';
+    context.fillStyle = 'rgba(29,33,32,0.52)';
+    context.textAlign = 'left';
+    context.textBaseline = 'middle';
+    context.fillText('Sin rasgos definidos', 610, centerY);
+    context.restore();
+    return;
+  }
+
+  const badgeHeight = 78;
+  const badgeGap = labels.length === 1 ? 0 : 34;
+  const badgeWidth = labels.length === 1 ? 310 : 292;
+  const totalWidth = labels.length * badgeWidth + (labels.length - 1) * badgeGap;
+  const startX = labels.length === 3
+    ? 944 - (2 * badgeWidth + badgeGap) / 2
+    : 944 - totalWidth / 2;
+  const y = centerY - badgeHeight / 2;
+  labels.forEach((label, index) => {
+    const x = startX + index * (badgeWidth + badgeGap);
+    const bevel = 50;
+    context.beginPath();
+    context.moveTo(x, y);
+    context.lineTo(x + badgeWidth - bevel, y);
+    context.lineTo(x + badgeWidth, y + badgeHeight / 2);
+    context.lineTo(x + badgeWidth - bevel, y + badgeHeight);
+    context.lineTo(x, y + badgeHeight);
+    context.closePath();
+    context.fillStyle = 'rgba(244,230,207,0.18)';
+    context.fill();
+    context.lineWidth = 4;
+    context.strokeStyle = 'rgba(181,92,18,0.74)';
+    context.stroke();
+
+    let fontSize = 34;
+    context.font = `900 ${fontSize}px Lato, Arial, sans-serif`;
+    const maxTextWidth = badgeWidth - 72;
+    const upperLabel = label.toUpperCase();
+    while (fontSize > 24 && context.measureText(upperLabel).width > maxTextWidth) {
+      fontSize -= 1;
+      context.font = `900 ${fontSize}px Lato, Arial, sans-serif`;
+    }
+
+    context.fillStyle = '#202321';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(upperLabel, x + badgeWidth / 2 - 8, centerY + 1);
+  });
+  context.restore();
+};
+
+const drawModularMinion = (context, centerY, minionAttributes, accent = '#c46f1f', resourceImages = {}) => {
+  context.save();
+  
+  // 1. Draw outer double-border panel
+  const panelWidth = 1148;
+  const panelHeight = 142;
+  const startX = 944 - panelWidth / 2;
+  const panelCenterY = centerY - 15;
+  const y = panelCenterY - panelHeight / 2;
+  const bevel = 18;
+  
+  // Outer notch path
+  context.beginPath();
+  context.moveTo(startX + bevel, y);
+  context.lineTo(startX + panelWidth - bevel, y);
+  context.lineTo(startX + panelWidth, y + bevel);
+  context.lineTo(startX + panelWidth, y + panelHeight - bevel);
+  context.lineTo(startX + panelWidth - bevel, y + panelHeight);
+  context.lineTo(startX + bevel, y + panelHeight);
+  context.lineTo(startX, y + panelHeight - bevel);
+  context.lineTo(startX, y + bevel);
+  context.closePath();
+  
+  context.fillStyle = 'rgba(32, 35, 33, 0.08)';
+  context.fill();
+  
+  context.strokeStyle = 'rgba(32, 35, 33, 0.45)';
+  context.lineWidth = 3.5;
+  context.stroke();
+
+  // Inner notch path (inset by 6px)
+  const inset = 6;
+  const innerBevel = Math.max(2, bevel - inset);
+  const ix = startX + inset;
+  const iy = y + inset;
+  const iw = panelWidth - 2 * inset;
+  const ih = panelHeight - 2 * inset;
+
+  context.beginPath();
+  context.moveTo(ix + innerBevel, iy);
+  context.lineTo(ix + iw - innerBevel, iy);
+  context.lineTo(ix + iw, iy + innerBevel);
+  context.lineTo(ix + iw, iy + ih - innerBevel);
+  context.lineTo(ix + iw - innerBevel, iy + ih);
+  context.lineTo(ix + innerBevel, iy + ih);
+  context.lineTo(ix, iy + ih - innerBevel);
+  context.lineTo(ix, iy + innerBevel);
+  context.closePath();
+
+  context.strokeStyle = 'rgba(32, 35, 33, 0.20)';
+  context.lineWidth = 1.5;
+  context.stroke();
+
+  // 2. Attributes configurations
+  const attributes = [
+    { name: 'Hambre', fill: '#739b5b', border: '#28421d' },
+    { name: 'Cuerpo', fill: '#c85a4b', border: '#631f16' },
+    { name: 'Mente', fill: '#6a8ea8', border: '#2a3d4d' }
+  ];
+
+  const colWidth = panelWidth / 3;
+  
+  attributes.forEach((attr, index) => {
+    const colCenterX = startX + colWidth * index + colWidth / 2;
+    const diamondX = colCenterX - 95;
+    const textX = colCenterX + 75;
+
+    // Draw Icon (no rotation, no background container, size matches the removed container)
+    const iconKey = `minion:${attr.name}`;
+    const iconImg = resourceImages[iconKey];
+    const iconSize = 120;
+    const tintColor = DESCRIPTION_ICON_STYLES[attr.name]?.stroke || '#c46f1f';
+    
+    if (iconImg) {
+      const buffer = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+      const bufferContext = buffer?.getContext('2d');
+      if (buffer && bufferContext) {
+        buffer.width = iconSize;
+        buffer.height = iconSize;
+        bufferContext.drawImage(iconImg, 0, 0, iconSize, iconSize);
+        bufferContext.globalCompositeOperation = 'source-in';
+        bufferContext.fillStyle = tintColor;
+        bufferContext.fillRect(0, 0, iconSize, iconSize);
+        context.drawImage(buffer, diamondX - iconSize / 2, panelCenterY - iconSize / 2);
+      } else {
+        context.drawImage(iconImg, diamondX - iconSize / 2, panelCenterY - iconSize / 2, iconSize, iconSize);
+      }
+    } else {
+      context.fillStyle = tintColor;
+      context.beginPath();
+      context.arc(diamondX, panelCenterY, iconSize / 3, 0, Math.PI * 2);
+      context.fill();
+    }
+
+    // Draw Text Label (above centerY)
+    context.font = "900 28px Lato, Arial, sans-serif";
+    context.fillStyle = '#171a19';
+    context.textAlign = 'center';
+    context.textBaseline = 'bottom';
+    context.fillText(attr.name.toUpperCase(), textX, panelCenterY - 2);
+
+    // Draw Value (below centerY)
+    const val = minionAttributes[attr.name] ?? 0;
+    context.font = "900 52px 'Oswald', 'Bebas Neue', 'Arial Black', sans-serif";
+    context.textBaseline = 'top';
+    context.fillText(String(val), textX, panelCenterY + 2);
+
+    // Draw separators between columns
+    if (index < 2) {
+      const sepX = startX + colWidth * (index + 1);
+      
+      // Vertical line
+      context.strokeStyle = 'rgba(200, 170, 110, 0.45)';
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(sepX, panelCenterY - 35);
+      context.lineTo(sepX, panelCenterY + 35);
+      context.stroke();
+
+      // Middle small diamond ornament
+      drawSectionDiamond(context, sepX, panelCenterY, 18, accent);
+    }
+  });
+
+  context.restore();
+};
+
+const drawModularCombat = (context, centerY, weaponType, weaponIconImg) => {
+  context.save();
+  const iconSize = 96;
+  const centerX = 944;
+  const label = (weaponType || 'Cuerpo a cuerpo').toUpperCase();
+  let fontSize = 56;
+  context.font = `900 ${fontSize}px Lato, Arial, sans-serif`;
+  while (fontSize > 42 && context.measureText(label).width > 540) {
+    fontSize -= 2;
+    context.font = `900 ${fontSize}px Lato, Arial, sans-serif`;
+  }
+  const textWidth = context.measureText(label).width;
+  const gap = 34;
+
+  let textX = 0;
+  if (label === 'CUERPO A CUERPO') {
+    const part1 = context.measureText('CUERPO ').width;
+    const part2 = context.measureText('A').width;
+    const offset = part1 + part2 / 2;
+    textX = centerX - offset;
+  } else if (label === 'DISTANCIA') {
+    const part1 = context.measureText('DIST').width;
+    const part2 = context.measureText('A').width;
+    const offset = part1 + part2 / 2;
+    textX = centerX - offset;
+  } else if (label === 'MAGIA') {
+    const offset = context.measureText('MA').width;
+    textX = centerX - offset;
+  } else {
+    const totalWidth = textWidth + gap + iconSize;
+    textX = centerX - totalWidth / 2;
+  }
+
+  const iconX = textX + textWidth + gap;
+  const iconY = centerY - iconSize / 2;
+
+  context.fillStyle = '#202321';
+  context.textAlign = 'left';
+  context.textBaseline = 'middle';
+  context.fillText(label, textX, centerY);
+  if (weaponIconImg) {
+    context.drawImage(weaponIconImg, iconX, iconY, iconSize, iconSize);
+  }
+  context.restore();
+};
+
+const drawModularDescription = (
+  context,
+  y,
+  height,
+  description,
+  hyphenate,
+  singleTextStyle,
+  resourceImages,
+  accent = '#c46f1f',
+  isLast = false,
+  hasChargeFooter = false,
+  centerNarrativeText = DEFAULT_NARRATIVE_CENTERING,
+) => {
+  const x = 314;
+  const maxWidth = 1260;
+  const text = description.trim() || DESCRIPTION_PREVIEW_TEXT;
+  const isPreview = !description.trim();
+  const isNarrativeStyle = singleTextStyle === 'narrative';
+  const fontSize = isNarrativeStyle ? 50 : 45;
+  const lineHeight = isNarrativeStyle ? 66 : 61;
+  const top = isNarrativeStyle ? y + 36 : y + 96;
+  
+  let bottom;
+  if (isLast) {
+    bottom = hasChargeFooter ? 2328 - 20 : 2386 - 55;
+  } else {
+    bottom = isNarrativeStyle ? y + height - 58 : y + height - 30;
+  }
+
+  context.save();
+  const textWeight = isNarrativeStyle ? '700' : '400';
+  context.font = `italic ${textWeight} ${fontSize}px Lato, Arial, sans-serif`;
+  context.textAlign = 'left';
+  context.textBaseline = 'top';
+  context.fillStyle = isPreview ? 'rgba(29,33,32,0.42)' : '#171a19';
+  const items = getDescriptionFlowItems(context, text, maxWidth, lineHeight, hyphenate, {
+    ignoreIcons: isNarrativeStyle,
+    paragraphGapScale: 0.12,
+  });
+  const totalTextHeight = items.reduce((total, item) => total + item.height, 0);
+  let cursorY = isNarrativeStyle && centerNarrativeText
+    ? top + Math.max(0, (bottom - top - totalTextHeight) / 2)
+    : top;
+
+  items.forEach((item) => {
+    if (cursorY + item.height > bottom) return;
+    if (item.type === 'separator') {
+      context.strokeStyle = 'rgba(181,92,18,0.45)';
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(x + 70, cursorY + lineHeight / 2);
+      context.lineTo(x + maxWidth - 70, cursorY + lineHeight / 2);
+      context.stroke();
+    } else if (item.line) {
+      if (item.isLore) {
+        context.font = `italic 700 ${Math.max(38, fontSize - 5)}px Lato, Arial, sans-serif`;
+        context.fillStyle = accent;
+        drawTextLineWithIcons(context, item.line, x, cursorY, maxWidth, 'center', resourceImages, true);
+      } else {
+        context.font = `${isNarrativeStyle ? 'italic ' : 'italic '}${isNarrativeStyle ? '700' : '400'} ${fontSize}px Lato, Arial, sans-serif`;
+        context.fillStyle = isPreview ? 'rgba(29,33,32,0.42)' : (isNarrativeStyle ? accent : '#171a19');
+        const shouldJustify = isNarrativeStyle
+          ? 'center'
+          : Boolean(!item.isLastLineOfParagraph && item.line.includes(' '));
+        drawTextLineWithIcons(
+          context,
+          item.line,
+          x,
+          cursorY,
+          maxWidth,
+          shouldJustify,
+          resourceImages,
+          isNarrativeStyle || item.isLore,
+        );
+      }
+    }
+    cursorY += item.height;
+  });
+  context.restore();
+};
+
+const getModularDescriptionAutoHeight = (
+  context,
+  description,
+  hyphenate,
+  singleTextStyle,
+  maxHeight,
+) => {
+  const maxWidth = 1260;
+  const text = description.trim() || DESCRIPTION_PREVIEW_TEXT;
+  const isNarrativeStyle = singleTextStyle === 'narrative';
+  const fontSize = isNarrativeStyle ? 50 : 45;
+  const lineHeight = isNarrativeStyle ? 66 : 61;
+  const textWeight = isNarrativeStyle ? '700' : '400';
+  const topInset = isNarrativeStyle ? 36 : 96;
+  const bottomInset = isNarrativeStyle ? 58 : 30;
+
+  context.save();
+  context.font = `italic ${textWeight} ${fontSize}px Lato, Arial, sans-serif`;
+  const items = getDescriptionFlowItems(context, text, maxWidth, lineHeight, hyphenate, {
+    ignoreIcons: isNarrativeStyle,
+    paragraphGapScale: 0.12,
+  });
+  context.restore();
+
+  const totalTextHeight = items.reduce((total, item) => total + item.height, 0);
+  const desiredHeight = topInset + totalTextHeight + bottomInset + 18;
+  return Math.max(
+    MODULAR_DESCRIPTION_UNIT_HEIGHT,
+    Math.min(maxHeight, Math.ceil(desiredHeight)),
+  );
+};
+
+const getModularDescriptionDesiredHeight = (
+  context,
+  description,
+  hyphenate,
+  singleTextStyle,
+) => (
+  getModularDescriptionAutoHeight(
+    context,
+    description,
+    hyphenate,
+    singleTextStyle,
+    Number.MAX_SAFE_INTEGER,
+  )
+);
+
+const fitActionTitleFont = (context, title) => {
+  let size = 200;
+  context.save();
+  while (size > 84) {
+    context.font = `400 ${size}px "Bebas Neue", "Arial Narrow", Impact, Lato, Arial, sans-serif`;
+    if (context.measureText(title).width <= 1200) break;
+    size -= 4;
+  }
+  context.restore();
+  return size;
+};
+
+const drawActionOrnamentLine = (context, centerX, y, width, accent, diamondSize = 34) => {
+  const gap = 90;
+  context.save();
+  context.strokeStyle = 'rgba(181,92,18,0.58)';
+  context.lineWidth = 3;
+  context.beginPath();
+  context.moveTo(centerX - width / 2, y);
+  context.lineTo(centerX - gap / 2, y);
+  context.moveTo(centerX + gap / 2, y);
+  context.lineTo(centerX + width / 2, y);
+  context.stroke();
+  drawSectionDiamond(context, centerX, y, diamondSize, accent);
+  context.restore();
+};
+
+const drawAttributeOrnamentLine = (context, centerX, y, width, accent, diamondSize = 34) => {
+  const gap = 90;
+  context.save();
+  context.lineCap = 'round';
+  context.strokeStyle = 'rgba(255,224,166,0.18)';
+  context.lineWidth = 8;
+  context.beginPath();
+  context.moveTo(centerX - width / 2, y);
+  context.lineTo(centerX - gap / 2, y);
+  context.moveTo(centerX + gap / 2, y);
+  context.lineTo(centerX + width / 2, y);
+  context.stroke();
+
+  context.strokeStyle = 'rgba(96,43,12,0.72)';
+  context.lineWidth = 4;
+  context.beginPath();
+  context.moveTo(centerX - width / 2, y);
+  context.lineTo(centerX - gap / 2, y);
+  context.moveTo(centerX + gap / 2, y);
+  context.lineTo(centerX + width / 2, y);
+  context.stroke();
+  drawSectionDiamond(context, centerX, y, diamondSize, accent);
+  context.restore();
+};
+
+const drawActionBaseImage = (context, actionBaseImg) => {
+  const sourceCrop = { left: 14, top: 22, right: 16, bottom: 13 };
+  const scale = CANVAS_WIDTH / MODULAR_CARD_OUTER_BOUNDS.width;
+  const visibleCardHeight = CANVAS_HEIGHT / scale;
+  const imageWidth = actionBaseImg.naturalWidth || actionBaseImg.width || MODULAR_CARD_OUTER_BOUNDS.width;
+  const imageHeight = actionBaseImg.naturalHeight || actionBaseImg.height || visibleCardHeight;
+  const sourceX = Math.min(sourceCrop.left, imageWidth - 1);
+  const sourceY = Math.min(sourceCrop.top, imageHeight - 1);
+  const sourceWidth = Math.max(1, imageWidth - sourceCrop.left - sourceCrop.right);
+  const sourceHeight = Math.max(1, imageHeight - sourceCrop.top - sourceCrop.bottom);
+  context.drawImage(
+    actionBaseImg,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    MODULAR_CARD_OUTER_BOUNDS.x,
+    MODULAR_CARD_OUTER_BOUNDS.y,
+    MODULAR_CARD_OUTER_BOUNDS.width,
+    visibleCardHeight,
+  );
+};
+
+const drawAttributeBaseImage = (context, attributeBaseImg) => {
+  if (!attributeBaseImg) return;
+  const sourceCrop = { left: 0, top: 0, right: 0, bottom: 0 };
+  const scale = CANVAS_WIDTH / MODULAR_CARD_OUTER_BOUNDS.width;
+  const visibleCardHeight = CANVAS_HEIGHT / scale;
+  const imageWidth = attributeBaseImg.naturalWidth || attributeBaseImg.width || MODULAR_CARD_OUTER_BOUNDS.width;
+  const imageHeight = attributeBaseImg.naturalHeight || attributeBaseImg.height || visibleCardHeight;
+  const sourceX = Math.min(sourceCrop.left, imageWidth - 1);
+  const sourceY = Math.min(sourceCrop.top, imageHeight - 1);
+  const sourceWidth = Math.max(1, imageWidth - sourceCrop.left - sourceCrop.right);
+  const sourceHeight = Math.max(1, imageHeight - sourceCrop.top - sourceCrop.bottom);
+  context.drawImage(
+    attributeBaseImg,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    MODULAR_CARD_OUTER_BOUNDS.x,
+    MODULAR_CARD_OUTER_BOUNDS.y,
+    MODULAR_CARD_OUTER_BOUNDS.width,
+    visibleCardHeight,
+  );
+};
+
+const drawAttributeCard = (context, cardName, attributeBaseImg = null, accent = '#c46f1f') => {
+  context.save();
+  drawAttributeBaseImage(context, attributeBaseImg);
+
+  const titleLineTopY = 315;
+  const titleLineBottomY = 615;
+  const titleCenterY = (titleLineTopY + titleLineBottomY) / 2;
+
+  drawAttributeOrnamentLine(context, 944, titleLineTopY, 1280, accent, 30);
+
+  const title = normalizeCardName(cardName || 'CUERPO').toUpperCase();
+  const titleSize = fitActionTitleFont(context, title);
+  if ('letterSpacing' in context) context.letterSpacing = '0px';
+  context.font = `400 ${titleSize}px "Bebas Neue", "Arial Narrow", Impact, Lato, Arial, sans-serif`;
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillStyle = '#202321';
+  context.shadowColor = 'rgba(32,35,33,0.16)';
+  context.shadowBlur = 3;
+  const titleMetrics = context.measureText(title);
+  const titleAscent = titleMetrics.actualBoundingBoxAscent || titleSize * 0.72;
+  const titleDescent = titleMetrics.actualBoundingBoxDescent || titleSize * 0.18;
+  const visualTitleY = titleCenterY + (titleAscent - titleDescent) / 2;
+  context.fillText(title, 944, visualTitleY);
+  context.restore();
+
+  drawAttributeOrnamentLine(context, 944, titleLineBottomY, 1015, accent, 30);
+};
+
+const drawActionCostAssets = (context, cost, numberImg, hourglassImg) => {
+  if (!numberImg || !hourglassImg) return;
+
+  const centerY = 1240;
+  const numberHeight = 874;
+  const numberWidth = numberHeight * ((numberImg.naturalWidth || numberImg.width) / (numberImg.naturalHeight || numberImg.height));
+  const hourglassHeight = (cost === 1 || cost === 2) ? 702 : cost === 3 ? 520 : 420;
+  const hourglassWidth = hourglassHeight * ((hourglassImg.naturalWidth || hourglassImg.width) / (hourglassImg.naturalHeight || hourglassImg.height));
+  const hourglassGap = cost === 1 ? 0 : -100;
+  const numberHourglassGap = cost === 4 ? -90 : -120;
+
+  const startX = 400;
+  const hourglassStartX = startX + numberWidth + numberHourglassGap;
+
+  context.save();
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(numberImg, startX, centerY - numberHeight / 2, numberWidth, numberHeight);
+  for (let index = 0; index < cost; index += 1) {
+    const x = hourglassStartX + index * (hourglassWidth + hourglassGap);
+    const yOffset = (cost === 3 || cost === 4) ? 20 : 46;
+    context.drawImage(hourglassImg, x, centerY - hourglassHeight / 2 + yOffset, hourglassWidth, hourglassHeight);
+  }
+  context.restore();
+};
+
+const drawActionTimeChevrons = (context, centerX, centerY, accent, textWidth = 500) => {
+  context.save();
+  context.fillStyle = accent;
+  const drawChevron = (x, direction = 1) => {
+    context.beginPath();
+    context.moveTo(x, centerY);
+    context.lineTo(x + direction * 34, centerY - 34);
+    context.lineTo(x + direction * 20, centerY);
+    context.lineTo(x + direction * 34, centerY + 34);
+    context.closePath();
+    context.fill();
+  };
+  const halfWidth = textWidth / 2;
+  const padding = 50;
+  drawChevron(centerX - halfWidth - padding, -1);
+  drawChevron(centerX + halfWidth + padding, 1);
+  context.restore();
+};
+
+const drawActionTimingCard = (
+  context,
+  actionSpeedId,
+  description,
+  customColorActive,
+  customColor,
+  actionBaseImg = null,
+  actionNumberImg = null,
+  actionHourglassImg = null,
+) => {
+  const speed = ACTION_SPEED_OPTIONS.find((option) => option.id === actionSpeedId) || ACTION_SPEED_OPTIONS[0];
+  const accent = customColorActive && customColor ? customColor : '#c46f1f';
+
+  context.save();
+  if (actionBaseImg) {
+    drawActionBaseImage(context, actionBaseImg);
+  } else {
+    const cardEdgeGradient = context.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    cardEdgeGradient.addColorStop(0, '#202223');
+    cardEdgeGradient.addColorStop(0.52, '#17191a');
+    cardEdgeGradient.addColorStop(1, '#0d0f10');
+    context.fillStyle = cardEdgeGradient;
+    context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    context.lineWidth = 7;
+    context.strokeStyle = '#030303';
+    context.strokeRect(5, 5, CANVAS_WIDTH - 10, CANVAS_HEIGHT - 10);
+
+    const outerGradient = context.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    outerGradient.addColorStop(0, '#2b2d2e');
+    outerGradient.addColorStop(0.52, '#202223');
+    outerGradient.addColorStop(1, '#121415');
+    context.fillStyle = outerGradient;
+    drawRoundRectPath(context, 62, 54, 1764, 2516, 72);
+    context.fill();
+    context.lineWidth = 6;
+    context.strokeStyle = '#030303';
+    context.stroke();
+    context.fillStyle = '#f3e6cf';
+    drawRoundRectPath(context, 160, 126, 1568, 2310, 4);
+    context.fill();
+  }
+
+  drawActionOrnamentLine(context, 944, 330, 1280, accent, 30);
+
+  const titleSize = fitActionTitleFont(context, speed.title);
+  context.save();
+  if ('letterSpacing' in context) context.letterSpacing = '0px';
+  context.font = `400 ${titleSize}px "Bebas Neue", "Arial Narrow", Impact, Lato, Arial, sans-serif`;
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillStyle = '#202321';
+  context.shadowColor = 'rgba(32,35,33,0.16)';
+  context.shadowBlur = 3;
+  context.fillText(speed.title, 944, 540);
+  context.restore();
+
+  drawActionOrnamentLine(context, 944, 690, 1015, accent, 30);
+
+  drawActionCostAssets(context, speed.cost, actionNumberImg, actionHourglassImg);
+
+  drawActionOrnamentLine(context, 944, 1760, 1015, accent, 30);
+  drawActionOrnamentLine(context, 944, 1990, 1140, accent, 30);
+
+  context.save();
+  context.font = '700 72px "Oswald", Lato, Arial, sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillStyle = '#202321';
+  const timeText = `${speed.cost} ${speed.cost === 1 ? 'TIEMPO' : 'TIEMPOS'}`;
+  context.fillText(timeText, 944, 1880);
+  context.restore();
+
+  context.save();
+  context.font = '700 72px "Oswald", Lato, Arial, sans-serif';
+  const timeTextWidth = context.measureText(timeText).width;
+  context.restore();
+
+  drawActionTimeChevrons(context, 944, 1875, accent, timeTextWidth);
+
+  context.save();
+  context.font = '400 64px "Roboto Condensed", Lato, Arial, sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillStyle = '#202321';
+  const bodyText = description.trim() || speed.description;
+  context.fillText(bodyText, 944, 2152, 1240);
+  context.restore();
+
+  context.restore();
+};
+
+const getModularContainerHeight = (blockId, remainingHeight, isLast, descriptionUnits = 1) => {
+  if (blockId === 'range') return 285;
+  if (blockId === 'consumption') return 190;
+  if (blockId === 'damage') return 180;
+  if (blockId === 'traits') return 190;
+  if (blockId === 'minion') return 240;
+  if (blockId === 'charge') return 0;
+  if (blockId === 'description') {
+    const baseHeight = Math.max(MODULAR_DESCRIPTION_UNIT_HEIGHT, MODULAR_DESCRIPTION_UNIT_HEIGHT * descriptionUnits);
+    if (isLast) {
+      return Math.max(baseHeight, remainingHeight);
+    }
+    return baseHeight;
+  }
+  return 180;
+};
+
+const getRenderableCardContainers = (containers) => (
+  containers
+    .map((container, index) => normalizeCardContainer(container, index))
+    .filter((block) => block.id !== 'charge')
+);
+
+const getContainersTotalHeight = (containers, containerDescriptionSizes = {}) => {
+  const blocks = getRenderableCardContainers(containers);
+  const fixedHeight = blocks.reduce((total, block) => {
+    if (block.id === 'description') {
+      const units = getDescriptionBudgetUnits(containerDescriptionSizes[block.key] || DESCRIPTION_SPACE_AUTO);
+      return total + Math.max(MODULAR_DESCRIPTION_UNIT_HEIGHT, MODULAR_DESCRIPTION_UNIT_HEIGHT * units);
+    }
+    return total + getModularContainerHeight(block.id, 0, false);
+  }, 0);
+  const hasChargeFooter = containers.some((container, index) => getContainerId(container, index) === 'charge');
+  const footerHeight = hasChargeFooter ? CHARGE_FOOTER_RESERVED_HEIGHT : 0;
+  return fixedHeight + footerHeight;
+};
+
+const getDescriptionUnitBudget = (containers, cardType = 'weapon') => {
+  const blocks = getRenderableCardContainers(containers, cardType);
+  const descriptionCount = blocks.filter((block) => block.id === 'description').length;
+  if (descriptionCount === 0) return 0;
+
+  const fixedHeight = blocks.reduce((total, block) => {
+    if (block.id === 'description') return total;
+    return total + getModularContainerHeight(block.id, 0, false);
+  }, 0);
+  const hasChargeFooter = containers.some((container, index) => getContainerId(container, index) === 'charge');
+  const footerHeight = hasChargeFooter ? CHARGE_FOOTER_RESERVED_HEIGHT : 0;
+  const availableHeight = Math.max(0, 2386 - MODULAR_CONTENT_TOP - fixedHeight - footerHeight);
+  return Math.max(descriptionCount, Math.min(descriptionCount * 6, Math.floor(availableHeight / MODULAR_DESCRIPTION_UNIT_HEIGHT)));
+};
+
+const clampDescriptionUnits = (requestedUnits, usedUnits, remainingDescriptions, totalBudget) => {
+  if (isAutoDescriptionUnits(requestedUnits)) return DESCRIPTION_SPACE_AUTO;
+  const desiredUnits = normalizeDescriptionUnits(requestedUnits);
+  const maxUnits = Math.max(1, totalBudget - usedUnits - remainingDescriptions);
+  return clampDescriptionUnitOption(desiredUnits, maxUnits);
+};
+
+const getResolvedModularBlockHeights = ({
+  context,
+  blocks,
+  contentHeight,
+  containerDescriptionSizes,
+  containerDescriptionStyles,
+  containerDescriptions,
+  description,
+  hyphenate,
+  singleTextStyle,
+}) => {
+  const heights = new Array(blocks.length).fill(0);
+  const growableDescriptions = [];
+
+  blocks.forEach((block, index) => {
+    const blockId = block.id;
+    if (blockId !== 'description') {
+      heights[index] = getModularContainerHeight(blockId, 0, false);
+      return;
+    }
+
+    const blockKey = block.key;
+    const requestedUnits = containerDescriptionSizes[blockKey] || DESCRIPTION_SPACE_AUTO;
+    const reservedHeight = isAutoDescriptionUnits(requestedUnits)
+      ? MODULAR_DESCRIPTION_UNIT_HEIGHT
+      : Math.max(
+        MODULAR_DESCRIPTION_UNIT_HEIGHT,
+        MODULAR_DESCRIPTION_UNIT_HEIGHT * normalizeDescriptionUnits(requestedUnits),
+      );
+    const selectedDescriptionStyle = containerDescriptionStyles[blockKey] || singleTextStyle || 'principal';
+    const desiredHeight = getModularDescriptionDesiredHeight(
+      context,
+      containerDescriptions[blockKey] ?? description,
+      hyphenate,
+      selectedDescriptionStyle,
+    );
+
+    heights[index] = reservedHeight;
+    growableDescriptions.push({
+      index,
+      desiredHeight: Math.max(reservedHeight, desiredHeight),
+    });
+  });
+
+  const minTotalHeight = heights.reduce((total, height) => total + height, 0);
+  let extraHeight = Math.max(0, contentHeight - minTotalHeight);
+
+  if (growableDescriptions.length > 0 && extraHeight > 0) {
+    const totalNeedFromReserved = growableDescriptions.reduce(
+      (total, entry) => total + Math.max(0, entry.desiredHeight - heights[entry.index]),
+      0,
+    );
+
+    if (totalNeedFromReserved > 0) {
+      if (extraHeight >= totalNeedFromReserved) {
+        growableDescriptions.forEach((entry) => {
+          heights[entry.index] = entry.desiredHeight;
+        });
+        extraHeight -= totalNeedFromReserved;
+      } else {
+        let assigned = 0;
+        growableDescriptions.forEach((entry, growIndex) => {
+          const need = Math.max(0, entry.desiredHeight - heights[entry.index]);
+          const share = growIndex === growableDescriptions.length - 1
+            ? extraHeight - assigned
+            : Math.floor((extraHeight * need) / totalNeedFromReserved);
+          assigned += share;
+          heights[entry.index] += share;
+        });
+        extraHeight = 0;
+      }
+    }
+
+    if (extraHeight > 0) {
+      const lastGrowableDescription = growableDescriptions[growableDescriptions.length - 1];
+      heights[lastGrowableDescription.index] += extraHeight;
+      extraHeight = 0;
+    }
+  }
+
+  return heights;
+};
+
 const drawCardCanvas = (
   canvas,
   image,
@@ -2022,6 +4469,27 @@ const drawCardCanvas = (
   renderScale = 1,
   actionCenterMode = 'dado',
   actionAttributeImg = null,
+  headerImageImg = null,
+  cardContainers = getDefaultCardContainers(cardType),
+  containerTraits = {},
+  containerDescriptions = {},
+  containerDescriptionSizes = {},
+  containerDamage = {},
+  containerConsumptions = {},
+  containerDescriptionStyles = {},
+  containerDescriptionCentered = {},
+  stardustImg = null,
+  diceIconImages = {},
+  actionSpeedId = 'rapida',
+  actionBaseImg = null,
+  actionNumberImg = null,
+  actionHourglassImg = null,
+  generalBaseImg = null,
+  attributeBaseImg = null,
+  headerImageTransform = DEFAULT_HEADER_IMAGE_TRANSFORM,
+  headerBackdropColor = DEFAULT_HEADER_BACKDROP_COLOR,
+  bodyColorActive = false,
+  bodyColor = DEFAULT_BODY_BACKDROP_COLOR,
 ) => {
   const targetWidth = Math.max(1, Math.round(CANVAS_WIDTH * renderScale));
   const targetHeight = Math.max(1, Math.round(CANVAS_HEIGHT * renderScale));
@@ -2034,215 +4502,166 @@ const drawCardCanvas = (
   context.imageSmoothingQuality = renderScale < 1 ? 'medium' : 'high';
 
   context.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  context.drawImage(image, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-  if (customColorActive && customColor) {
-    context.save();
-    context.beginPath();
-    const rx = 125;
-    const ry = 410;
-    const rw = 1630;
-    const rh = 2100;
-    const radius = 50; // Beautifully rounded corners to match the frame
-
-    if (context.roundRect) {
-      context.roundRect(rx, ry, rw, rh, radius);
-    } else {
-      // Fallback path drawing rounded rect for backward compatibility
-      context.moveTo(rx + radius, ry);
-      context.lineTo(rx + rw - radius, ry);
-      context.quadraticCurveTo(rx + rw, ry, rx + rw, ry + radius);
-      context.lineTo(rx + rw, ry + rh - radius);
-      context.quadraticCurveTo(rx + rw, ry + rh, rx + rw - radius, ry + rh);
-      context.lineTo(rx + radius, ry + rh);
-      context.quadraticCurveTo(rx, ry + rh, rx, ry + rh - radius);
-      context.lineTo(rx, ry + radius);
-      context.quadraticCurveTo(rx, ry, rx + radius, ry);
-    }
-    context.closePath();
-
-    context.globalCompositeOperation = 'color';
-    context.fillStyle = customColor;
-    context.fill();
-    context.restore();
-  }
-
-
-  const title = normalizeCardName(cardName).toUpperCase();
-  const titleFont = fitTitleFont(context, title);
+  const accent = customColorActive && customColor ? customColor : '#c46f1f';
+  const edgeGradient = context.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  edgeGradient.addColorStop(0, '#202223');
+  edgeGradient.addColorStop(0.52, '#17191a');
+  edgeGradient.addColorStop(1, '#0d0f10');
+  context.fillStyle = edgeGradient;
+  context.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
   context.save();
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.shadowColor = 'rgba(255,255,255,0.38)';
-  context.shadowBlur = 10;
-  context.fillStyle = 'rgba(245,245,245,0.95)';
-  context.font = `900 ${titleFont.size}px Cinzel, Georgia, serif`;
-  if ('fontKerning' in context) {
-    context.fontKerning = 'normal';
+  applyReferenceCardLayoutScale(context);
+  if (cardType === 'actions') {
+    drawActionTimingCard(
+      context,
+      actionSpeedId,
+      description,
+      customColorActive,
+      customColor,
+      actionBaseImg,
+      actionNumberImg,
+      actionHourglassImg,
+    );
+    context.restore();
+    return;
   }
-  if ('letterSpacing' in context) {
-    context.letterSpacing = '0px';
+  if (cardType === 'attribute') {
+    drawAttributeCard(context, cardName, attributeBaseImg, accent);
+    context.restore();
+    return;
   }
-  drawCenteredSpacedText(
+
+  const usesGeneralBase = cardType === 'general' && Boolean(generalBaseImg);
+  const currentBodyColor = bodyColorActive && bodyColor ? bodyColor : '#c46f1f';
+  drawModularFrame(context, accent, stardustImg, usesGeneralBase ? generalBaseImg : null, currentBodyColor);
+  drawHeaderImageContainer(
     context,
-    title,
-    TITLE_HEADER_CENTER_X,
-    TITLE_HEADER_CENTER_Y,
-    titleFont.letterSpacing,
+    headerImageImg,
+    cardName,
+    accent,
+    weaponIconImg,
+    elementIconImg,
+    usesGeneralBase,
+    headerImageTransform,
+    headerBackdropColor,
+    stardustImg,
   );
+
+  const blockLabels = CARD_CONTAINER_TYPES.reduce((labels, block) => ({
+    ...labels,
+    [block.id]: block.label,
+  }), {});
+  const normalizedBlocks = cardContainers.map((container, index) => normalizeCardContainer(container, index));
+  const hasChargeFooter = normalizedBlocks.some((block) => block.id === 'charge');
+  const blocks = getRenderableCardContainers(cardContainers, cardType);
+  if (blocks.length === 0 && !hasChargeFooter) {
+    drawEmptyContainersMessage(context);
+    context.restore();
+    return;
+  }
+
+  const contentBottom = hasChargeFooter ? 2386 - CHARGE_FOOTER_RESERVED_HEIGHT : 2386;
+  const resolvedBlockHeights = getResolvedModularBlockHeights({
+    context,
+    blocks,
+    contentHeight: contentBottom - MODULAR_CONTENT_TOP,
+    containerDescriptionSizes,
+    containerDescriptionStyles,
+    containerDescriptions,
+    description,
+    hyphenate,
+    singleTextStyle,
+  });
+  let y = MODULAR_CONTENT_TOP;
+
+  blocks.forEach((block, index) => {
+    const blockId = block.id;
+    const blockKey = block.key;
+    const selectedDescriptionStyle = blockId === 'description'
+      ? containerDescriptionStyles[blockKey] || singleTextStyle || 'principal'
+      : 'principal';
+    const selectedDescriptionCentered = blockId === 'description'
+      ? containerDescriptionCentered[blockKey] ?? DEFAULT_NARRATIVE_CENTERING
+      : DEFAULT_NARRATIVE_CENTERING;
+    const descriptionUnits = blockId === 'description'
+      ? containerDescriptionSizes[blockKey] || DESCRIPTION_SPACE_AUTO
+      : 1;
+
+    if (y >= contentBottom - 120) return;
+    const remainingHeight = contentBottom - y;
+    const blockHeight = Math.min(
+      remainingHeight,
+      resolvedBlockHeights[index] || getModularContainerHeight(blockId, remainingHeight, index === blocks.length - 1, descriptionUnits),
+    );
+    const label = blockLabels[blockId] || blockId;
+    const blockCenterY = getModularBlockCenterY(y, blockHeight, index === 0);
+
+    if (blockId !== 'consumption' && blockId !== 'range' && blockId !== 'description' && blockId !== 'minion') {
+      drawContainerLabel(context, label, blockCenterY, accent);
+    } else if (blockId === 'description' && selectedDescriptionStyle !== 'narrative') {
+      drawContainerLabel(context, label, y + 50, accent);
+    }
+
+    if (blockId === 'range') {
+      drawModularRange(context, y, blockHeight, alcance, accent, index === 0);
+    } else if (blockId === 'consumption') {
+      drawModularConsumption(
+        context,
+        blockCenterY,
+        containerConsumptions[blockKey]?.slots || DEFAULT_CONSUMPTION_SLOTS,
+        resourceImages,
+        accent,
+      );
+    } else if (blockId === 'damage') {
+      const damageConfig = containerDamage[blockKey] || DEFAULT_CONTAINER_DAMAGE;
+      const damageDiceType = damageConfig.diceType || DEFAULT_CONTAINER_DAMAGE.diceType;
+      drawModularDamage(
+        context,
+        blockCenterY,
+        diceIconImages[damageDiceType] || diceIconImg,
+        damageConfig.diceQty || DEFAULT_CONTAINER_DAMAGE.diceQty,
+        damageDiceType,
+        accent,
+      );
+    } else if (blockId === 'traits') {
+      drawModularTraits(
+        context,
+        blockCenterY,
+        showTraits ? (containerTraits[blockKey] || traits).slice(0, MAX_TRAITS_PER_CONTAINER) : [],
+        1,
+        accent,
+      );
+    } else if (blockId === 'minion') {
+      drawModularMinion(context, blockCenterY, minionAttributes, accent, resourceImages);
+    } else if (blockId === 'description') {
+      drawModularDescription(
+        context,
+        y,
+        blockHeight,
+        containerDescriptions[blockKey] ?? description,
+        hyphenate,
+        selectedDescriptionStyle,
+        resourceImages,
+        accent,
+        index === blocks.length - 1,
+        hasChargeFooter,
+        selectedDescriptionCentered,
+      );
+    }
+
+    const dividerY = y + blockHeight - 14;
+    const isLastBlock = index === blocks.length - 1;
+    if (!isLastBlock && dividerY < contentBottom - 18) {
+      drawContainerDivider(context, dividerY, accent);
+    }
+    y += blockHeight;
+  });
+  if (hasChargeFooter) {
+    drawModularChargeFooter(context, chargeSlots, resourceImages, accent);
+  }
   context.restore();
-
-  const drawChargeResources = () => {
-    if (resourceMode === RESOURCE_MODE_NONE) {
-      return;
-    }
-    if (resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY) {
-      drawActionConsumptionRail(context, consumptionSlots, resourceImages);
-      return;
-    }
-    if (resourceMode === RESOURCE_MODE_CHARGE_ONLY) {
-      drawCenteredChargeRail(context, chargeSlots, resourceImages);
-      return;
-    }
-
-    drawWeaponResourceRails(context, chargeSlots, consumptionSlots, resourceImages);
-  };
-
-  // Draw weapon interface if cardType is weapon or armor or action!
-  if (cardType === 'weapon' || cardType === 'skill') {
-    // 1. Draw Dice or Element Icon
-    if (cardType === 'weapon' && elementIconImg) {
-      context.save();
-      context.drawImage(elementIconImg, 290 - 200/2, 615 - 200/2, 200, 200);
-      context.restore();
-    } else if (diceIconImg) {
-      drawDiceIcon(context, 290, 615, 200, diceIconImg, diceQty, diceType !== 'DX');
-    }
-
-    // 2. Draw Ruler (width increased to 720, label lowered to 635)
-    drawRuler(context, CANVAS_WIDTH / 2, 512, 720, alcance, 635);
-
-    // 3. Draw Weapon Type Icon
-    if (weaponIconImg) {
-      drawWeaponTypeIcon(context, 1598, 615, 200, weaponIconImg);
-    }
-
-    drawChargeResources();
-    if (cardType === 'skill') {
-      drawMinionAttributes(context, minionAttributes, resourceImages);
-    }
-  } else if (cardType === 'armor' || cardType === 'trap') {
-    drawChargeResources();
-  } else if (cardType === 'action') {
-    if (actionCenterMode !== 'dado' && actionAttributeImg) {
-      context.save();
-      // Trazar máscara con bordes redondeados para la ventana de ilustración
-      context.beginPath();
-      const rx = 125;
-      const ry = 410;
-      const rw = 1630;
-      const rh = 2100;
-      const radius = 50;
-      if (context.roundRect) {
-        context.roundRect(rx, ry, rw, rh, radius);
-      } else {
-        context.moveTo(rx + radius, ry);
-        context.lineTo(rx + rw - radius, ry);
-        context.quadraticCurveTo(rx + rw, ry, rx + rw, ry + radius);
-        context.lineTo(rx + rw, ry + rh - radius);
-        context.quadraticCurveTo(rx + rw, ry + rh, rx + rw - radius, ry + rh);
-        context.lineTo(rx + radius, ry + rh);
-        context.quadraticCurveTo(rx, ry + rh, rx, ry + rh - radius);
-        context.lineTo(rx, ry + radius);
-        context.quadraticCurveTo(rx, ry, rx + radius, ry);
-      }
-      context.closePath();
-      context.clip();
-
-      // Definir la caja de origen (usando la imagen completa con sus márgenes naturales)
-      const sx = 0;
-      const sy = 0;
-      const sw = actionAttributeImg.width;
-      const sh = actionAttributeImg.height;
-
-      // Escalado proporcional para ajustar (fit/contain) dentro de la ventana de ilustración
-      const scale = Math.min(rw / sw, rh / sh);
-      const dw = sw * scale;
-      const dh = sh * scale;
-      const dx = rx + (rw - dw) / 2;
-      const dy = ry + (rh - dh) / 2;
-
-      context.drawImage(actionAttributeImg, sx, sy, sw, sh, dx, dy, dw, dh);
-      context.restore();
-    } else {
-      if (diceIconImg) {
-        const positions = getActionDicePositions(diceQty);
-        positions.forEach((pos) => {
-          context.save();
-          context.drawImage(diceIconImg, pos.x - pos.size / 2, pos.y - pos.size / 2, pos.size, pos.size);
-          context.restore();
-        });
-      }
-      drawActionConsumptionRail(context, consumptionSlots, resourceImages);
-    }
-  } else if (cardType === 'status') {
-    if (elementIconImg) {
-      context.save();
-      const cx = CANVAS_WIDTH / 2;
-      const cy = 1120;
-      const size = 600;
-      context.drawImage(elementIconImg, cx - size / 2, cy - size / 2, size, size);
-      context.restore();
-    }
-  }
-
-  const typeConfig = CARD_TYPES.find((type) => type.id === cardType) || CARD_TYPES[0];
-  if (showTraits && typeConfig.maxTraits > 0) {
-    const activeRows = typeConfig.maxTraits > 2 ? Math.min(visibleTraitRows, typeConfig.maxTraits / 2) : 1;
-    const activeTraitsCount = typeConfig.maxTraits > 2 ? activeRows * 2 : typeConfig.maxTraits;
-    const slotLabels = traits.slice(0, activeTraitsCount);
-    const traitSlots = cardType === 'skill'
-      ? getTraitSlots(typeConfig.layout).slice(2, 2 + activeTraitsCount)
-      : getTraitSlots(typeConfig.layout).slice(0, activeTraitsCount);
-
-    if (typeConfig.maxTraits > 2) {
-      for (let r = 0; r < activeRows; r++) {
-        const leftIndex = r * 2;
-        const rightIndex = r * 2 + 1;
-        const leftVal = (slotLabels[leftIndex] || '').trim();
-        const rightVal = (slotLabels[rightIndex] || '').trim();
-        const leftSlot = traitSlots[leftIndex];
-        const rightSlot = traitSlots[rightIndex];
-
-        const leftHasContent = leftVal && leftVal !== '-';
-        const rightHasContent = rightVal && rightVal !== '-';
-
-        if (leftHasContent && !rightHasContent) {
-          // Draw left trait centered in the card
-          const centeredSlot = { x: 574, y: leftSlot.y, width: 740, height: leftSlot.height };
-          drawTraitBadge(context, centeredSlot, leftVal);
-        } else if (!leftHasContent && rightHasContent) {
-          // Draw right trait centered in the card
-          const centeredSlot = { x: 574, y: rightSlot.y, width: 740, height: rightSlot.height };
-          drawTraitBadge(context, centeredSlot, rightVal);
-        } else {
-          // Draw both normally (even if empty or "-")
-          if (leftSlot) drawTraitBadge(context, leftSlot, leftVal);
-          if (rightSlot) drawTraitBadge(context, rightSlot, rightVal);
-        }
-      }
-    } else {
-      // For cards with 1 max trait (trap/status)
-      traitSlots.forEach((slot, index) => {
-        drawTraitBadge(context, slot, slotLabels[index] || '');
-      });
-    }
-  }
-
-  if (cardType !== 'action') {
-    drawDescription(context, description, flavorText, typeConfig, showTraits, hyphenate, singleTextStyle, resourceImages, visibleTraitRows);
-  }
 };
 
 const getDeckAccessForViewer = (deck, viewerId) => {
@@ -2251,12 +4670,15 @@ const getDeckAccessForViewer = (deck, viewerId) => {
 };
 
 const getLibraryCardType = (builderCardType) => {
+  if (builderCardType === 'general') return 'general';
   if (builderCardType === 'skill') return 'minion';
+  if (builderCardType === 'actions') return 'action';
   if (['weapon', 'armor', 'trap', 'action', 'status'].includes(builderCardType)) return builderCardType;
-  return 'action';
+  return 'general';
 };
 
 const MASTER_LIBRARY_TYPE_TARGETS = {
+  general: { name: 'General', aliases: ['general', 'cartas generales'] },
   action: { name: 'Acciones', aliases: ['accion', 'acciones', 'accion rapida', 'acciones universales'] },
   weapon: { name: 'Armas', aliases: ['arma', 'armas'] },
   armor: { name: 'Armaduras', aliases: ['armadura', 'armaduras'] },
@@ -2285,13 +4707,56 @@ const getSafeFileSlug = (value) => (
     .replace(/(^-|-$)/g, '') || 'carta'
 );
 
+const dataUrlToBytes = async (dataUrl) => {
+  const response = await fetch(dataUrl);
+  if (!response.ok) throw new Error('PNG_EXPORT_READ_FAILED');
+  return new Uint8Array(await response.arrayBuffer());
+};
+
+const bytesToDataUrl = (bytes, mimeType = 'image/png') => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = () => reject(reader.error || new Error('FILE_READ_FAILED'));
+  reader.readAsDataURL(new Blob([bytes], { type: mimeType }));
+});
+
+const downloadBlob = (blob, fileName) => {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.download = fileName;
+  link.href = url;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+};
+
+const fitsTraitWidth = (text) => {
+  if (!text) return true;
+  try {
+    const canvas = typeof window !== 'undefined' && typeof window.OffscreenCanvas !== 'undefined'
+      ? new window.OffscreenCanvas(1, 1)
+      : (typeof document !== 'undefined' ? document.createElement('canvas') : null);
+    if (!canvas) return true;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return true;
+    ctx.font = '900 24px Lato, Arial, sans-serif';
+    const width = ctx.measureText(text.toUpperCase()).width;
+    return width <= 220;
+  } catch (e) {
+    return true;
+  }
+};
+
 const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserId = '' }) => {
   const canvasRef = useRef(null);
   const descriptionRef = useRef(null);
   const flavorTextRef = useRef(null);
+  const containerDescriptionRefs = useRef({});
   const imageCacheRef = useRef(new Map());
   const imageLoadCacheRef = useRef(new Map());
   const activeImageRef = useRef(null);
+  const headerImageInputRef = useRef(null);
+  const projectImportInputRef = useRef(null);
+  const headerImagePreviewCanvasRef = useRef(null);
   const fontLoadPromiseRef = useRef(null);
   const drawSequenceRef = useRef(0);
   const drawTimerRef = useRef(null);
@@ -2300,19 +4765,37 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const [description, setDescription] = useState(DEFAULT_DESCRIPTION);
   const [flavorText, setFlavorText] = useState(DEFAULT_FLAVOR_TEXT);
   const [focusedField, setFocusedField] = useState(null);
+  const [activeDescriptionKey, setActiveDescriptionKey] = useState(null);
+  const [focusedDescriptionKey, setFocusedDescriptionKey] = useState(null);
   const [hyphenate, setHyphenate] = useState(true);
-  const [singleTextStyle, setSingleTextStyle] = useState('narrative'); // 'narrative' or 'principal'
-  const [cardType, setCardType] = useState('weapon');
+  const [singleTextStyle, setSingleTextStyle] = useState('principal'); // 'narrative' or 'principal'
+  const [cardType, setCardType] = useState('general');
   const [showTraits, setShowTraits] = useState(true);
   const [visibleTraitRows, setVisibleTraitRows] = useState(3);
   const [traits, setTraits] = useState(DEFAULT_TRAITS);
+  const [containerTraits, setContainerTraits] = useState({});
+  const [containerDescriptions, setContainerDescriptions] = useState({});
+  const [containerDescriptionSizes, setContainerDescriptionSizes] = useState({});
+  const [containerDescriptionStyles, setContainerDescriptionStyles] = useState({});
+  const [containerDescriptionCentered, setContainerDescriptionCentered] = useState({});
+  const [containerDamage, setContainerDamage] = useState({});
+  const [containerConsumptions, setContainerConsumptions] = useState({});
   const [selectedBackground, setSelectedBackground] = useState('Gris.webp');
+  const [headerImageSrc, setHeaderImageSrc] = useState('');
+  const [headerImageTransform, setHeaderImageTransform] = useState(DEFAULT_HEADER_IMAGE_TRANSFORM);
+  const [cardContainers, setCardContainers] = useState(getDefaultCardContainers('general'));
   const [imageStatus, setImageStatus] = useState('loading');
   const [selectedElement, setSelectedElement] = useState('Ninguno');
   const [customColorActive, setCustomColorActive] = useState(false);
   const [customColor, setCustomColor] = useState('#c8aa6e');
+  const [headerColorActive, setHeaderColorActive] = useState(false);
+  const [headerColor, setHeaderColor] = useState(DEFAULT_HEADER_BACKDROP_COLOR);
+  const [bodyColorActive, setBodyColorActive] = useState(false);
+  const [bodyColor, setBodyColor] = useState(DEFAULT_BODY_BACKDROP_COLOR);
+  const [descriptionFormatColor, setDescriptionFormatColor] = useState('#ffffff');
   const [isUploadingCharacterCard, setIsUploadingCharacterCard] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
+  const [projectStatus, setProjectStatus] = useState('');
 
   // New states for Weapon properties
   const [weaponType, setWeaponType] = useState('Cuerpo a cuerpo');
@@ -2322,13 +4805,18 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const [chargeSlots, setChargeSlots] = useState(DEFAULT_CHARGE_SLOTS);
   const [consumptionSlots, setConsumptionSlots] = useState(DEFAULT_CONSUMPTION_SLOTS);
   const [resourceMode, setResourceMode] = useState(RESOURCE_MODE_BOTH);
-  const [consumptionSlotTypes, setConsumptionSlotTypes] = useState(['consumption', 'consumption', 'consumption', 'consumption', 'consumption']);
+  const [consumptionSlotTypes, setConsumptionSlotTypes] = useState(
+    DEFAULT_CONTAINER_CONSUMPTION_TYPES,
+  );
   const [minionAttributes, setMinionAttributes] = useState(DEFAULT_MINION_ATTRIBUTES);
   const [actionCenterMode, setActionCenterMode] = useState('dado'); // 'dado' | 'Mente' | 'Cuerpo' | 'Hambre'
+  const [actionSpeedId, setActionSpeedId] = useState('rapida');
+  const [attributeType, setAttributeType] = useState('Cuerpo');
 
   // History system for undo/redo
   const descriptionHistoryRef = useRef({ past: [], future: [] });
   const flavorTextHistoryRef = useRef({ past: [], future: [] });
+  const containerDescriptionHistoryRef = useRef({});
   const lastHistoryPushRef = useRef(0);
 
   const saveToHistory = (historyRef, currentValue) => {
@@ -2384,12 +4872,52 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     }
   };
 
+  const handleContainerTextareaKeyDown = (event, containerKey) => {
+    const isUndo = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z';
+    const isRedo = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y';
+
+    if (isUndo || isRedo) {
+      if (!containerDescriptionHistoryRef.current[containerKey]) {
+        containerDescriptionHistoryRef.current[containerKey] = { past: [], future: [] };
+      }
+      const histRef = { current: containerDescriptionHistoryRef.current[containerKey] };
+      const currentVal = containerDescriptions[containerKey] ?? '';
+
+      event.preventDefault();
+      if (isUndo) {
+        const hist = histRef.current;
+        if (hist.past.length > 0) {
+          const previousValue = hist.past.pop();
+          hist.future.push(currentVal);
+          setContainerDescriptions((currentDescriptions) => ({
+            ...currentDescriptions,
+            [containerKey]: previousValue,
+          }));
+        }
+      } else if (isRedo) {
+        const hist = histRef.current;
+        if (hist.future.length > 0) {
+          const nextValue = hist.future.pop();
+          hist.past.push(currentVal);
+          setContainerDescriptions((currentDescriptions) => ({
+            ...currentDescriptions,
+            [containerKey]: nextValue,
+          }));
+        }
+      }
+    }
+  };
+
   // Auto-detect if slot contains an element to sync UI dropdown toggle state
   useEffect(() => {
     setConsumptionSlotTypes((prev) => {
-      const next = [...prev];
+      const next = [...prev].slice(0, RESOURCE_SLOT_COUNT);
       let changed = false;
-      consumptionSlots.forEach((slot, index) => {
+      while (next.length < RESOURCE_SLOT_COUNT) {
+        next.push('consumption');
+        changed = true;
+      }
+      consumptionSlots.slice(0, RESOURCE_SLOT_COUNT).forEach((slot, index) => {
         const isElement = ELEMENT_TYPES.some((el) => el.id !== 'Ninguno' && el.id === slot);
         const expectedType = isElement ? 'element' : 'consumption';
         if (next[index] !== expectedType && slot !== '') {
@@ -2424,48 +4952,9 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const hasSplitDescription = usesSplitDescription(activeType, showTraits);
 
   const descriptionMaxLength = useMemo(() => {
-    const hasRails = activeType.id === 'weapon' || activeType.id === 'armor' || activeType.id === 'trap' || activeType.id === 'skill';
-    let baseHeight = hasRails ? 740 : 895;
-
-    let yOffset = 0;
-    if (showTraits) {
-      if (activeType.id === 'weapon') {
-        const activeRows = Math.min(visibleTraitRows, 3);
-        const hiddenRows = 3 - activeRows;
-        yOffset = hiddenRows * 240;
-      } else if (activeType.id === 'skill') {
-        const activeRows = Math.min(visibleTraitRows, 2);
-        const hiddenRows = 2 - activeRows;
-        yOffset = hiddenRows * 240;
-      } else if (activeType.id === 'armor') {
-        const activeRows = Math.min(visibleTraitRows, 4);
-        const hiddenRows = 4 - activeRows;
-        yOffset = hiddenRows * 230;
-      }
-    }
-
-    let finalHeight = baseHeight + yOffset;
-
-    if (!showTraits) {
-      if (activeType.id === 'weapon') {
-        finalHeight = 1465;
-      } else if (activeType.id === 'armor') {
-        finalHeight = 1772;
-      } else if (activeType.id === 'skill') {
-        finalHeight = 1233;
-      }
-    }
-
-    if (activeType.id === 'trap') {
-      if (showTraits) {
-        finalHeight = 1465;
-      } else {
-        finalHeight = 1772;
-      }
-    }
-
-    return Math.round(520 * (finalHeight / 740));
-  }, [activeType, showTraits, visibleTraitRows]);
+    // Generous limit to allow filling the available container space without input blocking
+    return 4000;
+  }, []);
 
   const loadCachedImage = useCallback(async (src) => {
     const cachedImage = imageCacheRef.current.get(src);
@@ -2493,9 +4982,92 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     return loadPromise;
   }, []);
 
+  useEffect(() => {
+    const canvas = headerImagePreviewCanvasRef.current;
+    if (!canvas) return undefined;
+
+    const context = canvas.getContext('2d');
+    if (!context) return undefined;
+
+    let disposed = false;
+    canvas.width = HEADER_IMAGE_PREVIEW_WIDTH;
+    canvas.height = HEADER_IMAGE_PREVIEW_HEIGHT;
+    context.clearRect(0, 0, HEADER_IMAGE_PREVIEW_WIDTH, HEADER_IMAGE_PREVIEW_HEIGHT);
+    context.fillStyle = '#05070d';
+    context.fillRect(0, 0, HEADER_IMAGE_PREVIEW_WIDTH, HEADER_IMAGE_PREVIEW_HEIGHT);
+
+    if (!headerImageSrc) return undefined;
+
+    Promise.resolve(loadCachedImage(headerImageSrc)).then((image) => {
+      if (disposed || !image) return;
+      context.clearRect(0, 0, HEADER_IMAGE_PREVIEW_WIDTH, HEADER_IMAGE_PREVIEW_HEIGHT);
+
+      if (headerColorActive && headerColor && headerColor !== DEFAULT_HEADER_BACKDROP_COLOR) {
+        // 1. Create a temporary offscreen canvas for the cover image
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = HEADER_IMAGE_PREVIEW_WIDTH;
+        tempCanvas.height = HEADER_IMAGE_PREVIEW_HEIGHT;
+        const tctx = tempCanvas.getContext('2d');
+
+        // 2. Draw the cover image onto the offscreen canvas
+        drawCoverImage(
+          tctx,
+          image,
+          0,
+          0,
+          HEADER_IMAGE_PREVIEW_WIDTH,
+          HEADER_IMAGE_PREVIEW_HEIGHT,
+          headerImageTransform,
+        );
+
+        // 3. Create a second offscreen canvas for the color mask
+        const maskCanvas = document.createElement('canvas');
+        maskCanvas.width = HEADER_IMAGE_PREVIEW_WIDTH;
+        maskCanvas.height = HEADER_IMAGE_PREVIEW_HEIGHT;
+        const mctx = maskCanvas.getContext('2d');
+        mctx.fillStyle = headerColor;
+        mctx.fillRect(0, 0, HEADER_IMAGE_PREVIEW_WIDTH, HEADER_IMAGE_PREVIEW_HEIGHT);
+
+        // 4. Clip the color mask to the non-transparent pixels of the image
+        mctx.globalCompositeOperation = 'destination-in';
+        mctx.drawImage(tempCanvas, 0, 0);
+
+        // 5. Apply the color filter overlay using 'color' blend mode on the image pixels
+        tctx.save();
+        tctx.globalCompositeOperation = 'color';
+        tctx.globalAlpha = 1.0;
+        tctx.drawImage(maskCanvas, 0, 0);
+        tctx.restore();
+
+        // 6. Draw the colorized cover image on the preview canvas
+        context.drawImage(tempCanvas, 0, 0);
+      } else {
+        // Base / default: draw cover image unfiltered
+        drawCoverImage(
+          context,
+          image,
+          0,
+          0,
+          HEADER_IMAGE_PREVIEW_WIDTH,
+          HEADER_IMAGE_PREVIEW_HEIGHT,
+          headerImageTransform,
+        );
+      }
+    }).catch(() => {
+      if (disposed) return;
+      context.clearRect(0, 0, HEADER_IMAGE_PREVIEW_WIDTH, HEADER_IMAGE_PREVIEW_HEIGHT);
+      context.fillStyle = '#05070d';
+      context.fillRect(0, 0, HEADER_IMAGE_PREVIEW_WIDTH, HEADER_IMAGE_PREVIEW_HEIGHT);
+    });
+
+    return () => {
+      disposed = true;
+    };
+  }, [headerImageSrc, headerImageTransform, loadCachedImage, headerColorActive, headerColor]);
+
   const drawCard = useCallback(async (targetCanvas = canvasRef.current, renderScale = getPreviewRenderScale(), updateStatus = true) => {
     const canvas = targetCanvas;
-    if (!canvas || !activeBackground) return undefined;
+    if (!canvas) return undefined;
     const drawId = drawSequenceRef.current + 1;
     if (updateStatus) {
       drawSequenceRef.current = drawId;
@@ -2504,7 +5076,12 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     if (document.fonts?.load) {
       try {
         if (!fontLoadPromiseRef.current) {
-          fontLoadPromiseRef.current = document.fonts.load('700 96px Cinzel');
+          fontLoadPromiseRef.current = Promise.all([
+            document.fonts.load('700 96px Cinzel'),
+            document.fonts.load('400 168px "Bebas Neue"'),
+            document.fonts.load('700 72px Oswald'),
+            document.fonts.load('400 64px "Roboto Condensed"'),
+          ]);
         }
         await fontLoadPromiseRef.current;
       } catch {
@@ -2513,22 +5090,70 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     }
     if (updateStatus && drawId !== drawSequenceRef.current) return undefined;
 
-    // 1. Load Background Image
-    let backgroundImage = null;
-    try {
-      backgroundImage = await loadCachedImage(activeBackground.src);
-    } catch (e) {
-      console.error("Could not load background image:", e);
-        if (updateStatus) setImageStatus('error');
-      return undefined;
+    let headerImageImg = null;
+    if (headerImageSrc) {
+      try {
+        headerImageImg = await loadCachedImage(headerImageSrc);
+      } catch (e) {
+        console.error("Could not load header image:", e);
+      }
     }
 
-    if (updateStatus && drawId !== drawSequenceRef.current) return undefined;
+    let stardustImg = null;
+    try {
+      stardustImg = await loadCachedImage(`${process.env.PUBLIC_URL || ''}/interfaz/stardust.png`);
+    } catch (e) {
+      console.error("Could not load stardust image:", e);
+    }
 
-    // Load Weapon Type Image if cardType is weapon-like
+    let actionBaseImg = null;
+    let actionNumberImg = null;
+    let actionHourglassImg = null;
+    let generalBaseImg = null;
+    let attributeBaseImg = null;
+    if (cardType === 'actions') {
+      try {
+        const speed = ACTION_SPEED_OPTIONS.find((option) => option.id === actionSpeedId) || ACTION_SPEED_OPTIONS[0];
+        let numberImgName = 'numero.webp';
+        if (speed.cost === 2) numberImgName = '2.webp';
+        else if (speed.cost === 3) numberImgName = '3.webp';
+        else if (speed.cost === 4) numberImgName = '4.webp';
+
+        const actionAssetBase = `${process.env.PUBLIC_URL || ''}/interfaz/acciones`;
+        [actionBaseImg, actionNumberImg, actionHourglassImg] = await Promise.all([
+          loadCachedImage(`${process.env.PUBLIC_URL || ''}/interfaz/base.png`),
+          loadCachedImage(`${actionAssetBase}/${numberImgName}`),
+          loadCachedImage(`${actionAssetBase}/reloj.webp`),
+        ]);
+      } catch (e) {
+        console.error("Could not load action card assets:", e);
+      }
+    } else if (cardType === 'general') {
+      try {
+        generalBaseImg = await loadCachedImage(`${process.env.PUBLIC_URL || ''}/interfaz/general.png`);
+      } catch (e) {
+        console.error("Could not load general card base:", e);
+      }
+    } else if (cardType === 'attribute') {
+      try {
+        const attributeOption = ATTRIBUTE_CARD_OPTIONS.find((option) => option.id === attributeType) || ATTRIBUTE_CARD_OPTIONS[0];
+        attributeBaseImg = await loadCachedImage(`${process.env.PUBLIC_URL || ''}/interfaz/atributos/${attributeOption.asset}`);
+      } catch (e) {
+        console.error("Could not load attribute card base:", e);
+      }
+    }
+
     let weaponIconImg = null;
     let diceIconImg = null;
+    const diceIconImages = {};
     const resourceImages = {};
+    const normalizedContainers = cardContainers.map((container, index) => normalizeCardContainer(container, index));
+    const usesDamageContainer = normalizedContainers.some((container) => container.id === 'damage');
+    const usesConsumptionContainer = normalizedContainers.some((container) => container.id === 'consumption');
+    const usesTraitsContainer = normalizedContainers.some((container) => container.id === 'traits');
+    const usesChargeContainer = normalizedContainers.some((container) => container.id === 'charge');
+    const usesMinionContainer = normalizedContainers.some((container) => container.id === 'minion');
+
     if (cardType === 'weapon' || cardType === 'skill') {
       const iconSrc = getWeaponTypeIconSrc(weaponType);
       try {
@@ -2548,23 +5173,30 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       }
     }
 
-    if (cardType === 'weapon' || (cardType === 'action' && actionCenterMode === 'dado') || cardType === 'skill') {
-      // Load Dice Icon Image
-      const diceSrc = `${process.env.PUBLIC_URL || ''}/dados/cartas/${diceType}.webp`;
-      try {
-        diceIconImg = await loadCachedImage(diceSrc);
-      } catch (e) {
-        console.error("Could not load dice icon image:", e);
-      }
+    if (usesDamageContainer) {
+      const damageDiceTypes = Array.from(new Set([
+        diceType,
+        ...normalizedContainers
+          .filter((container) => container.id === 'damage')
+          .map((container) => containerDamage[container.key]?.diceType || DEFAULT_CONTAINER_DAMAGE.diceType),
+      ]));
+      await Promise.all(damageDiceTypes.map(async (type) => {
+        const diceSrc = `${process.env.PUBLIC_URL || ''}/dados/cartas/${type}.webp`;
+        try {
+          const loadedDice = await loadCachedImage(diceSrc);
+          diceIconImages[type] = loadedDice;
+          if (type === diceType) diceIconImg = loadedDice;
+        } catch (e) {
+          console.error("Could not load dice icon image:", e);
+        }
+      }));
     }
 
-    const loadsChargeResources = RESOURCE_CARD_TYPES.has(cardType) && (
-      resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CHARGE_ONLY
-    );
-    const loadsConsumptionResources = (cardType === 'action' && actionCenterMode === 'dado') || (
+    const loadsChargeResources = usesChargeContainer;
+    const loadsConsumptionResources = usesConsumptionContainer && ((cardType === 'action' && actionCenterMode === 'dado') || (
       RESOURCE_CARD_TYPES.has(cardType) && (resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY)
-    );
-    const loadsMinionAttributes = cardType === 'skill';
+    ) || cardType === 'status');
+    const loadsMinionAttributes = usesMinionContainer || (usesTraitsContainer && cardType === 'skill');
 
     if (loadsChargeResources || loadsConsumptionResources || loadsMinionAttributes) {
       const resourceOptions = [
@@ -2574,16 +5206,32 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
         ...ELEMENT_TYPES.filter((option) => option.id !== 'Ninguno').map((option) => ({
           id: option.id,
           label: option.label,
-          src: `/elementos/${option.id}.webp`,
+          src: ELEMENT_CONSUMPTION_ICON_SOURCES[option.id] || `/elementos/${option.id}.webp`,
           cacheKey: `consumption:${option.id}`,
         })),
+        ...MINION_ATTRIBUTE_TYPES.map((attr) => ({
+          id: attr,
+          label: attr,
+          src: `/interfaz/consumo_new/${attr}.webp`,
+          cacheKey: `minion:${attr}`,
+        })),
+      ];
+      const allConsumptionSlots = [
+        ...consumptionSlots,
+        ...normalizedContainers
+          .filter((container) => container.id === 'consumption')
+          .flatMap((container) => containerConsumptions[container.key]?.slots || DEFAULT_CONSUMPTION_SLOTS),
       ];
       const requiredResourceOptions = resourceOptions.filter((option) => (
         loadsChargeResources && chargeSlots.includes(option.id) && option.cacheKey.startsWith('charge:')
       ) || (
-        loadsConsumptionResources && consumptionSlots.includes(option.id) && option.cacheKey.startsWith('consumption:')
+        loadsConsumptionResources && allConsumptionSlots.includes(option.id) && option.cacheKey.startsWith('consumption:')
       ) || (
-        loadsMinionAttributes && MINION_ATTRIBUTE_TYPES.includes(option.id) && option.cacheKey.startsWith('attribute:')
+        loadsConsumptionResources && option.id === 'Tiempo' && option.cacheKey === 'consumption:Tiempo'
+      ) || (
+        loadsMinionAttributes && MINION_ATTRIBUTE_TYPES.includes(option.id) && (
+          option.cacheKey.startsWith('attribute:') || option.cacheKey.startsWith('minion:')
+        )
       ));
 
       await Promise.all(requiredResourceOptions.map(async (option) => {
@@ -2601,9 +5249,8 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     }
 
     let elementIconImg = null;
-    if ((cardType === 'status' || cardType === 'weapon') && selectedElement !== 'Ninguno') {
-      const suffix = cardType === 'weapon' ? '_p' : '';
-      const elementSrc = `${process.env.PUBLIC_URL || ''}/elementos/${selectedElement}${suffix}.webp`;
+    if (selectedElement !== 'Ninguno') {
+      const elementSrc = `${process.env.PUBLIC_URL || ''}${HEADER_ICON_SOURCES[selectedElement] || `/cabecera/${selectedElement.toLowerCase()}.webp`}`;
       try {
         elementIconImg = await loadCachedImage(elementSrc);
       } catch (e) {
@@ -2611,22 +5258,24 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       }
     }
 
-    // 1.5 Load Keyword Icon Images if mentioned in text
-    const textToScan = `${description} ${flavorText}`;
-    const matchedKeywords = Array.from(new Set(textToScan.match(KEYWORD_REGEX) || []));
+    // 1.5 Load explicit description icon tokens inserted from the icon compendium.
+    const textToScan = [
+      description,
+      flavorText,
+      ...Object.values(containerDescriptions),
+    ].join(' ');
+    const matchedKeywords = extractDescriptionIconIds(textToScan);
     if (matchedKeywords.length > 0) {
-      await Promise.all(matchedKeywords.map(async (kwMatch) => {
-        const matchedKw = Object.keys(KEYWORD_ICONS).find(kw => kw.toLowerCase() === kwMatch.toLowerCase());
-        if (!matchedKw) return;
-        const src = `${process.env.PUBLIC_URL || ''}${KEYWORD_ICONS[matchedKw]}`;
+      await Promise.all(matchedKeywords.map(async (iconId) => {
+        const src = `${process.env.PUBLIC_URL || ''}${KEYWORD_ICONS[iconId]}`;
         let icon = null;
         try {
           icon = await loadCachedImage(src);
         } catch (e) {
-          console.error(`Could not load keyword icon: ${matchedKw}`, e);
+          console.error(`Could not load description icon: ${iconId}`, e);
         }
         if (icon) {
-          resourceImages[`keyword:${matchedKw}`] = icon;
+          resourceImages[`keyword:${iconId}`] = icon;
         }
       }));
     }
@@ -2636,7 +5285,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     // 2. Draw the card canvas.
     drawCardCanvas(
       canvas,
-      backgroundImage,
+      null,
       cardName,
       cardType,
       traits,
@@ -2663,11 +5312,32 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       renderScale,
       actionCenterMode,
       actionAttributeImg,
+      headerImageImg,
+      cardContainers,
+      containerTraits,
+      containerDescriptions,
+      containerDescriptionSizes,
+      containerDamage,
+      containerConsumptions,
+      containerDescriptionStyles,
+      containerDescriptionCentered,
+      stardustImg,
+      diceIconImages,
+      actionSpeedId,
+      actionBaseImg,
+      actionNumberImg,
+      actionHourglassImg,
+      generalBaseImg,
+      attributeBaseImg,
+      headerImageTransform,
+      headerColorActive && headerColor ? headerColor : DEFAULT_HEADER_BACKDROP_COLOR,
+      bodyColorActive,
+      bodyColor,
     );
 
     if (updateStatus) setImageStatus('ready');
     return undefined;
-  }, [activeBackground, cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode]);
+  }, [cardName, cardType, traits, showTraits, description, flavorText, weaponType, alcance, diceType, diceQty, chargeSlots, consumptionSlots, resourceMode, hyphenate, selectedElement, customColorActive, customColor, headerColorActive, headerColor, singleTextStyle, visibleTraitRows, minionAttributes, loadCachedImage, actionCenterMode, headerImageSrc, headerImageTransform, cardContainers, containerTraits, containerDescriptions, containerDescriptionSizes, containerDamage, containerConsumptions, containerDescriptionStyles, containerDescriptionCentered, actionSpeedId, attributeType, bodyColorActive, bodyColor]);
 
   useEffect(() => {
     let disposed = false;
@@ -2696,6 +5366,15 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   useEffect(() => {
     const preload = () => {
       const commonSources = [
+        `${process.env.PUBLIC_URL || ''}/interfaz/stardust.png`,
+        `${process.env.PUBLIC_URL || ''}/interfaz/base.png`,
+        `${process.env.PUBLIC_URL || ''}/interfaz/general.png`,
+        `${process.env.PUBLIC_URL || ''}/interfaz/acciones/numero.webp`,
+        `${process.env.PUBLIC_URL || ''}/interfaz/acciones/2.webp`,
+        `${process.env.PUBLIC_URL || ''}/interfaz/acciones/3.webp`,
+        `${process.env.PUBLIC_URL || ''}/interfaz/acciones/4.webp`,
+        `${process.env.PUBLIC_URL || ''}/interfaz/acciones/reloj.webp`,
+        ...ATTRIBUTE_CARD_OPTIONS.map((option) => `${process.env.PUBLIC_URL || ''}/interfaz/atributos/${option.asset}`),
         ...WEAPON_TYPES.map((type) => getWeaponTypeIconSrc(type)),
         ...['D4', 'D6', 'D8', 'D10', 'D12', 'DX'].map((type) => `${process.env.PUBLIC_URL || ''}/dados/cartas/${type}.webp`),
         ...CHARGE_TYPES.map((option) => `${process.env.PUBLIC_URL || ''}${option.src}`),
@@ -2740,16 +5419,111 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     });
   }, [loadCachedImage]);
 
+  useEffect(() => {
+    const normalizedContainers = cardContainers.map((container, index) => normalizeCardContainer(container, index));
+    const traitKeys = new Set(normalizedContainers.filter((container) => container.id === 'traits').map((container) => container.key));
+    const descriptionKeys = new Set(normalizedContainers.filter((container) => container.id === 'description').map((container) => container.key));
+    const damageKeys = new Set(normalizedContainers.filter((container) => container.id === 'damage').map((container) => container.key));
+    const consumptionKeys = new Set(normalizedContainers.filter((container) => container.id === 'consumption').map((container) => container.key));
+
+    setContainerTraits((currentTraits) => {
+      let changed = false;
+      const nextTraits = {};
+      traitKeys.forEach((key) => {
+        nextTraits[key] = currentTraits[key] || Array.from({ length: MAX_TRAITS_PER_CONTAINER }, () => '-');
+        if (!currentTraits[key]) changed = true;
+      });
+      if (Object.keys(currentTraits).some((key) => !traitKeys.has(key))) changed = true;
+      return changed ? nextTraits : currentTraits;
+    });
+
+    setContainerDescriptions((currentDescriptions) => {
+      let changed = false;
+      const nextDescriptions = {};
+      descriptionKeys.forEach((key) => {
+        nextDescriptions[key] = currentDescriptions[key] ?? '';
+        if (!Object.prototype.hasOwnProperty.call(currentDescriptions, key)) changed = true;
+      });
+      if (Object.keys(currentDescriptions).some((key) => !descriptionKeys.has(key))) changed = true;
+      return changed ? nextDescriptions : currentDescriptions;
+    });
+
+    setContainerDescriptionSizes((currentSizes) => {
+      let changed = false;
+      const nextSizes = {};
+      descriptionKeys.forEach((key) => {
+        nextSizes[key] = currentSizes[key] || DESCRIPTION_SPACE_AUTO;
+        if (!currentSizes[key]) changed = true;
+      });
+      if (Object.keys(currentSizes).some((key) => !descriptionKeys.has(key))) changed = true;
+      return changed ? nextSizes : currentSizes;
+    });
+
+    setContainerDescriptionStyles((currentStyles) => {
+      let changed = false;
+      const nextStyles = {};
+      descriptionKeys.forEach((key) => {
+        nextStyles[key] = currentStyles[key] || 'principal';
+        if (!currentStyles[key]) changed = true;
+      });
+      if (Object.keys(currentStyles).some((key) => !descriptionKeys.has(key))) changed = true;
+      return changed ? nextStyles : currentStyles;
+    });
+
+    setContainerDescriptionCentered((currentCentered) => {
+      let changed = false;
+      const nextCentered = {};
+      descriptionKeys.forEach((key) => {
+        nextCentered[key] = currentCentered[key] ?? DEFAULT_NARRATIVE_CENTERING;
+        if (!Object.prototype.hasOwnProperty.call(currentCentered, key)) changed = true;
+      });
+      if (Object.keys(currentCentered).some((key) => !descriptionKeys.has(key))) changed = true;
+      return changed ? nextCentered : currentCentered;
+    });
+
+    setContainerDamage((currentDamage) => {
+      let changed = false;
+      const nextDamage = {};
+      damageKeys.forEach((key) => {
+        nextDamage[key] = currentDamage[key] || { ...DEFAULT_CONTAINER_DAMAGE };
+        if (!currentDamage[key]) changed = true;
+      });
+      if (Object.keys(currentDamage).some((key) => !damageKeys.has(key))) changed = true;
+      return changed ? nextDamage : currentDamage;
+    });
+
+    setContainerConsumptions((currentConsumptions) => {
+      let changed = false;
+      const nextConsumptions = {};
+      consumptionKeys.forEach((key) => {
+        nextConsumptions[key] = currentConsumptions[key] || createDefaultContainerConsumption();
+        if (!currentConsumptions[key]) changed = true;
+      });
+      if (Object.keys(currentConsumptions).some((key) => !consumptionKeys.has(key))) changed = true;
+      return changed ? nextConsumptions : currentConsumptions;
+    });
+  }, [cardContainers]);
+
   const handleReset = () => {
     setCardName('Gris');
     setDescription(DEFAULT_DESCRIPTION);
+    setContainerDescriptions({});
+    setContainerDescriptionSizes({});
+    setContainerDescriptionStyles({});
+    setContainerDescriptionCentered({});
+    setContainerDamage({});
+    setContainerConsumptions({});
     setFlavorText(DEFAULT_FLAVOR_TEXT);
     setHyphenate(true);
-    setCardType('weapon');
+    setCardType('general');
+    setCardContainers(getDefaultCardContainers('general'));
     setShowTraits(true);
     setVisibleTraitRows(3);
     setTraits(DEFAULT_TRAITS);
+    setContainerTraits({});
     setSelectedBackground('Gris.webp');
+    setHeaderImageSrc('');
+    setHeaderImageTransform(DEFAULT_HEADER_IMAGE_TRANSFORM);
     setWeaponType('Cuerpo a cuerpo');
     setAlcance(0);
     setDiceType('D6');
@@ -2757,12 +5531,23 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     setChargeSlots(DEFAULT_CHARGE_SLOTS);
     setConsumptionSlots(DEFAULT_CONSUMPTION_SLOTS);
     setResourceMode(RESOURCE_MODE_BOTH);
-    setConsumptionSlotTypes(['consumption', 'consumption', 'consumption', 'consumption', 'consumption']);
+    setConsumptionSlotTypes(DEFAULT_CONTAINER_CONSUMPTION_TYPES);
     setMinionAttributes(DEFAULT_MINION_ATTRIBUTES);
     setSelectedElement('Ninguno');
     setCustomColorActive(false);
     setCustomColor('#c8aa6e');
+    setHeaderColorActive(false);
+    setHeaderColor(DEFAULT_HEADER_BACKDROP_COLOR);
+    setBodyColorActive(false);
+    setBodyColor(DEFAULT_BODY_BACKDROP_COLOR);
+    setDescriptionFormatColor('#ffffff');
     setActionCenterMode('dado');
+    setActionSpeedId('rapida');
+    setAttributeType('Cuerpo');
+    setSingleTextStyle('principal');
+    setActiveDescriptionKey(null);
+    setFocusedDescriptionKey(null);
+    setProjectStatus('');
   };
 
   const handleTraitChange = (index, value) => {
@@ -2773,9 +5558,60 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     });
   };
 
+  const handleContainerTraitChange = (containerKey, index, value) => {
+    setContainerTraits((currentTraits) => {
+      const nextTraits = [...(currentTraits[containerKey] || Array.from({ length: MAX_TRAITS_PER_CONTAINER }, () => '-'))]
+        .slice(0, MAX_TRAITS_PER_CONTAINER);
+      nextTraits[index] = value;
+      return {
+        ...currentTraits,
+        [containerKey]: nextTraits,
+      };
+    });
+  };
+
+  const handleContainerDescriptionChange = (containerKey, value) => {
+    if (!containerDescriptionHistoryRef.current[containerKey]) {
+      containerDescriptionHistoryRef.current[containerKey] = { past: [], future: [] };
+    }
+    const currentVal = containerDescriptions[containerKey] ?? '';
+    saveToHistory(
+      { current: containerDescriptionHistoryRef.current[containerKey] },
+      currentVal
+    );
+
+    setContainerDescriptions((currentDescriptions) => ({
+      ...currentDescriptions,
+      [containerKey]: value,
+    }));
+  };
+
+  const handleContainerDescriptionSizeChange = (containerKey, value) => {
+    const nextValue = clampDescriptionUnitOption(value);
+    setContainerDescriptionSizes((currentSizes) => ({
+      ...currentSizes,
+      [containerKey]: nextValue,
+    }));
+  };
+
+  const handleContainerDescriptionStyleChange = (containerKey, value) => {
+    setContainerDescriptionStyles((currentStyles) => ({
+      ...currentStyles,
+      [containerKey]: value,
+    }));
+  };
+
+  const handleContainerDescriptionCenteredChange = (containerKey, value) => {
+    setContainerDescriptionCentered((currentCentered) => ({
+      ...currentCentered,
+      [containerKey]: value,
+    }));
+  };
+
   const handleChargeSlotChange = (index, value) => {
     setChargeSlots((currentSlots) => {
-      const nextSlots = [...currentSlots];
+      const nextSlots = [...currentSlots].slice(0, CHARGE_SLOT_COUNT);
+      while (nextSlots.length < CHARGE_SLOT_COUNT) nextSlots.push(EMPTY_SLOT);
       nextSlots[index] = value;
       return nextSlots;
     });
@@ -2783,9 +5619,64 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
 
   const handleConsumptionSlotChange = (index, value) => {
     setConsumptionSlots((currentSlots) => {
-      const nextSlots = [...currentSlots];
+      const nextSlots = [...currentSlots].slice(0, RESOURCE_SLOT_COUNT);
       nextSlots[index] = value;
       return nextSlots;
+    });
+  };
+
+  const handleContainerDamageChange = (containerKey, updates) => {
+    setContainerDamage((currentDamage) => {
+      const currentConfig = currentDamage[containerKey] || { ...DEFAULT_CONTAINER_DAMAGE };
+      const nextConfig = {
+        ...currentConfig,
+        ...updates,
+      };
+      if (updates.diceQty !== undefined) {
+        const parsedQty = parseInt(updates.diceQty, 10);
+        nextConfig.diceQty = Number.isFinite(parsedQty) ? Math.min(MAX_DAMAGE_DICE_QTY, Math.max(1, parsedQty)) : 1;
+      }
+      return {
+        ...currentDamage,
+        [containerKey]: nextConfig,
+      };
+    });
+  };
+
+  const handleContainerConsumptionSlotChange = (containerKey, index, value) => {
+    setContainerConsumptions((currentConsumptions) => {
+      const currentConfig = currentConsumptions[containerKey] || createDefaultContainerConsumption();
+      const nextSlots = [...currentConfig.slots].slice(0, RESOURCE_SLOT_COUNT);
+      while (nextSlots.length < RESOURCE_SLOT_COUNT) nextSlots.push(EMPTY_SLOT);
+      nextSlots[index] = value;
+      return {
+        ...currentConsumptions,
+        [containerKey]: {
+          ...currentConfig,
+          slots: nextSlots,
+        },
+      };
+    });
+  };
+
+  const handleContainerConsumptionSlotTypeToggle = (containerKey, index) => {
+    setContainerConsumptions((currentConsumptions) => {
+      const currentConfig = currentConsumptions[containerKey] || createDefaultContainerConsumption();
+      const nextTypes = [...(currentConfig.slotTypes || DEFAULT_CONTAINER_CONSUMPTION_TYPES)].slice(0, RESOURCE_SLOT_COUNT);
+      while (nextTypes.length < RESOURCE_SLOT_COUNT) nextTypes.push('consumption');
+      const currentType = nextTypes[index] || 'consumption';
+      nextTypes[index] = currentType === 'consumption' ? 'element' : 'consumption';
+      const nextSlots = [...(currentConfig.slots || DEFAULT_CONSUMPTION_SLOTS)].slice(0, RESOURCE_SLOT_COUNT);
+      while (nextSlots.length < RESOURCE_SLOT_COUNT) nextSlots.push(EMPTY_SLOT);
+      nextSlots[index] = EMPTY_SLOT;
+      return {
+        ...currentConsumptions,
+        [containerKey]: {
+          ...currentConfig,
+          slots: nextSlots,
+          slotTypes: nextTypes,
+        },
+      };
     });
   };
 
@@ -2798,90 +5689,156 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     }));
   };
 
+  const handleActionSpeedChange = (speedId) => {
+    const speed = ACTION_SPEED_OPTIONS.find((option) => option.id === speedId) || ACTION_SPEED_OPTIONS[0];
+    setActionSpeedId(speed.id);
+    setCardName(speed.title);
+    setDescription(speed.description);
+  };
+
+  const handleAttributeTypeChange = (typeId) => {
+    const attributeOption = ATTRIBUTE_CARD_OPTIONS.find((option) => option.id === typeId) || ATTRIBUTE_CARD_OPTIONS[0];
+    setAttributeType(attributeOption.id);
+    setCardName(attributeOption.title);
+  };
+
   const handleDiceQtyChange = (value) => {
-    const maxQty = cardType === 'action' ? 6 : 9;
-    setDiceQty(Math.min(maxQty, Math.max(1, value)));
+    setDiceQty(Math.min(MAX_DAMAGE_DICE_QTY, Math.max(1, value)));
+  };
+
+  const handleHeaderImageChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setHeaderImageSrc(typeof reader.result === 'string' ? reader.result : '');
+      setHeaderImageTransform(DEFAULT_HEADER_IMAGE_TRANSFORM);
+      setImageStatus('loading');
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  };
+
+  const updateHeaderImageTransform = (updates) => {
+    setImageStatus('loading');
+    setHeaderImageTransform((currentTransform) => ({
+      zoom: clampNumber(updates.zoom ?? currentTransform.zoom, 1, 2.5),
+      x: clampNumber(updates.x ?? currentTransform.x, -100, 100),
+      y: clampNumber(updates.y ?? currentTransform.y, -100, 100),
+    }));
+  };
+
+  const nudgeHeaderImage = (axis, amount) => {
+    setImageStatus('loading');
+    setHeaderImageTransform((currentTransform) => ({
+      ...currentTransform,
+      [axis]: clampNumber((currentTransform[axis] || 0) + amount, -100, 100),
+    }));
+  };
+
+  const resetHeaderImageTransform = () => {
+    setImageStatus('loading');
+    setHeaderImageTransform(DEFAULT_HEADER_IMAGE_TRANSFORM);
+  };
+
+  const addCardContainer = (containerId) => {
+    setCardContainers((current) => {
+      if (current.length >= MAX_CARD_CONTAINERS) return current;
+      if (
+        SINGLE_INSTANCE_CARD_CONTAINERS.has(containerId)
+        && current.some((container, index) => getContainerId(container, index) === containerId)
+      ) {
+        return current;
+      }
+      const nextContainer = createCardContainer(containerId);
+      let tentative;
+      if (containerId === 'minion') {
+        tentative = [nextContainer, ...current];
+      } else if (containerId === 'charge') {
+        tentative = [...current, nextContainer];
+      } else {
+        const chargeIndex = current.findIndex((container, index) => getContainerId(container, index) === 'charge');
+        if (chargeIndex === -1) {
+          tentative = [...current, nextContainer];
+        } else {
+          tentative = [
+            ...current.slice(0, chargeIndex),
+            nextContainer,
+            ...current.slice(chargeIndex),
+          ];
+        }
+      }
+      if (getContainersTotalHeight(tentative, containerDescriptionSizes) > 1581) {
+        return current;
+      }
+      return tentative;
+    });
+  };
+
+  const removeCardContainer = (containerIndex) => {
+    setCardContainers((current) => current.filter((_, index) => index !== containerIndex));
+  };
+
+  const moveCardContainer = (containerIndex, direction) => {
+    setCardContainers((current) => {
+      const index = containerIndex;
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) return current;
+      if (getContainerId(current[index], index) === 'charge') return current;
+      if (getContainerId(current[nextIndex], nextIndex) === 'charge') return current;
+      const next = [...current];
+      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+      return next;
+    });
   };
 
   const handleTypeChange = (typeId) => {
     setCardType(typeId);
+    setCardContainers(getDefaultCardContainers(typeId));
     
-    if (typeId !== 'trap') {
-      setResourceMode(RESOURCE_MODE_BOTH);
-    }
+    setResourceMode(RESOURCE_MODE_BOTH);
     
-    // Ensure consumption slots are reset to length 5 if switching away from 'action'
-    if (typeId !== 'action') {
-      setActionCenterMode('dado');
-      setConsumptionSlots((currentSlots) => {
-        const nextSlots = [...currentSlots];
-        if (nextSlots.length !== 5) {
-          nextSlots.length = 5;
-          for (let i = 0; i < 5; i++) {
-            if (nextSlots[i] === undefined) {
-              nextSlots[i] = EMPTY_SLOT;
-            }
-          }
-        }
-        return nextSlots;
-      });
-      setConsumptionSlotTypes((prevTypes) => {
-        const nextTypes = [...prevTypes];
-        if (nextTypes.length !== 5) {
-          nextTypes.length = 5;
-          for (let i = 0; i < 5; i++) {
-            if (nextTypes[i] === undefined) {
-              nextTypes[i] = 'consumption';
-            }
-          }
-        }
-        return nextTypes;
-      });
+    // Ensure resource slots stay capped to the card layout count when switching type.
+    setActionCenterMode('dado');
+    setConsumptionSlots((currentSlots) => {
+      const nextSlots = [...currentSlots].slice(0, RESOURCE_SLOT_COUNT);
+      while (nextSlots.length < RESOURCE_SLOT_COUNT) {
+        nextSlots.push(EMPTY_SLOT);
+      }
+      return nextSlots;
+    });
+    setConsumptionSlotTypes((prevTypes) => {
+      const nextTypes = [...prevTypes].slice(0, RESOURCE_SLOT_COUNT);
+      while (nextTypes.length < RESOURCE_SLOT_COUNT) {
+        nextTypes.push('consumption');
+      }
+      return nextTypes;
+    });
+    if (typeId !== 'actions') {
+      setActionSpeedId('rapida');
     }
-    if (typeId === 'trap') {
-      setVisibleTraitRows(1);
-      setShowTraits(true);
-      setTraits((currentTraits) => {
-        const nextTraits = [...currentTraits];
-        nextTraits[0] = nextTraits[0]?.trim() ? nextTraits[0] : 'TRAMPA';
-        return nextTraits;
-      });
-    } else if (typeId === 'status') {
-      setVisibleTraitRows(1);
-      setShowTraits(true);
-      setTraits((currentTraits) => {
-        const nextTraits = [...currentTraits];
-        nextTraits[0] = nextTraits[0]?.trim() ? nextTraits[0] : 'ESTADO';
-        return nextTraits;
-      });
-      setCardName((name) => name === 'Gris' ? 'ARDIENDO' : name);
-      setSelectedElement('Fuego');
-    } else if (typeId === 'armor') {
-      setVisibleTraitRows(4);
-      setConsumptionSlots((currentSlots) => {
-        return currentSlots.map((slot, index) => (
-          index === 0 ? 'Armadura_1' : slot === 'Armadura_1' ? slot : EMPTY_SLOT
-        ));
-      });
-    } else if (typeId === 'action') {
+    if (typeId === 'actions') {
+      const speed = ACTION_SPEED_OPTIONS[0];
       setVisibleTraitRows(0);
-      setDiceQty((qty) => Math.min(6, qty));
-      setConsumptionSlots((currentSlots) => {
-        const nextSlots = [...currentSlots];
-        nextSlots[0] = 'Tiempo';
-        return nextSlots;
-      });
-    } else if (typeId === 'weapon') {
-      setVisibleTraitRows(3);
-      setConsumptionSlots((currentSlots) => {
-        const nextSlots = [...currentSlots];
-        nextSlots[0] = 'Tiempo';
-        return nextSlots;
-      });
-    } else if (typeId === 'skill') {
-      setVisibleTraitRows(2);
+      setShowTraits(false);
+      setActionSpeedId(speed.id);
+      setCardName(speed.title);
+      setDescription(speed.description);
+      setSelectedElement('Ninguno');
+    } else if (typeId === 'attribute') {
+      const attributeOption = ATTRIBUTE_CARD_OPTIONS.find((option) => option.id === attributeType) || ATTRIBUTE_CARD_OPTIONS[0];
+      setVisibleTraitRows(0);
+      setShowTraits(false);
+      setCardName(attributeOption.title);
+      setDescription('');
     } else {
       setVisibleTraitRows(3);
+      setShowTraits(true);
+      setConsumptionSlots((currentSlots) => {
+        const nextSlots = [...currentSlots].slice(0, RESOURCE_SLOT_COUNT);
+        nextSlots[0] = 'Tiempo';
+        return nextSlots;
+      });
     }
   };
 
@@ -3067,15 +6024,164 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     }, 0);
   };
 
+  const applyContainerDescriptionFormat = (containerKey, descriptionIndex, formatType, colorVal = '') => {
+    const textarea = containerDescriptionRefs.current[containerKey];
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    const selectedText = text.substring(start, end);
+
+    let formatted = selectedText;
+    let newStart = start;
+    let newEnd = end;
+    let selectionOffsetStart = 0;
+    let selectionOffsetEnd = 0;
+
+    if (formatType === 'bold') {
+      if (selectedText.startsWith('**') && selectedText.endsWith('**')) {
+        formatted = selectedText.slice(2, -2);
+        selectionOffsetStart = 0;
+        selectionOffsetEnd = formatted.length;
+      } else {
+        const match = selectedText.match(/^(\s*)(.*?)(\s*)$/);
+        const leadingSpace = match ? match[1] : '';
+        const trimmedText = match ? match[2] : selectedText;
+        const trailingSpace = match ? match[3] : '';
+        formatted = `${leadingSpace}**${trimmedText}**${trailingSpace}`;
+        selectionOffsetStart = selectedText.length === 0 ? 2 : leadingSpace.length;
+        selectionOffsetEnd = selectedText.length === 0 ? 2 : leadingSpace.length + trimmedText.length + 4;
+      }
+    } else if (formatType === 'italic') {
+      if (selectedText.startsWith('*') && !selectedText.startsWith('**') && selectedText.endsWith('*') && !selectedText.endsWith('**')) {
+        formatted = selectedText.slice(1, -1);
+        selectionOffsetStart = 0;
+        selectionOffsetEnd = formatted.length;
+      } else {
+        const match = selectedText.match(/^(\s*)(.*?)(\s*)$/);
+        const leadingSpace = match ? match[1] : '';
+        const trimmedText = match ? match[2] : selectedText;
+        const trailingSpace = match ? match[3] : '';
+        formatted = `${leadingSpace}*${trimmedText}*${trailingSpace}`;
+        selectionOffsetStart = selectedText.length === 0 ? 1 : leadingSpace.length;
+        selectionOffsetEnd = selectedText.length === 0 ? 1 : leadingSpace.length + trimmedText.length + 2;
+      }
+    } else if (formatType === 'color') {
+      const anyColorMatch = selectedText.match(/^\[color:(#[0-9a-fA-F]{6})\]\{(.*)\}$/);
+      if (anyColorMatch) {
+        const existingColor = anyColorMatch[1];
+        const innerText = anyColorMatch[2];
+        if (existingColor === colorVal) {
+          formatted = innerText;
+          selectionOffsetStart = 0;
+          selectionOffsetEnd = formatted.length;
+        } else {
+          formatted = `[color:${colorVal}]{${innerText}}`;
+          selectionOffsetStart = 0;
+          selectionOffsetEnd = formatted.length;
+        }
+      } else {
+        const enclosing = findAnyEnclosingColorTag(text, start, end);
+        if (enclosing.found) {
+          if (enclosing.color === colorVal) {
+            formatted = enclosing.innerText;
+            newStart = enclosing.startIdx;
+            newEnd = enclosing.endIdx;
+            selectionOffsetStart = 0;
+            selectionOffsetEnd = formatted.length;
+          } else {
+            formatted = `[color:${colorVal}]{${enclosing.innerText}}`;
+            newStart = enclosing.startIdx;
+            newEnd = enclosing.endIdx;
+            selectionOffsetStart = 0;
+            selectionOffsetEnd = formatted.length;
+          }
+        } else {
+          formatted = `[color:${colorVal}]{${selectedText}}`;
+          selectionOffsetStart = selectedText.length === 0 ? 17 : 0;
+          selectionOffsetEnd = selectedText.length === 0 ? 17 : formatted.length;
+        }
+      }
+    }
+
+    const newText = text.substring(0, newStart) + formatted + text.substring(newEnd);
+    if (descriptionIndex === 0) {
+      handleDescriptionChange(newText);
+    }
+    handleContainerDescriptionChange(containerKey, newText);
+    setActiveDescriptionKey(containerKey);
+
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(newStart + selectionOffsetStart, newStart + selectionOffsetEnd);
+    }, 0);
+  };
+
+  const renderContainerDescriptionToolbar = (containerKey, descriptionIndex) => {
+    const presetColors = DESCRIPTION_FORMAT_PRESET_COLORS;
+    const isFocused = focusedDescriptionKey === containerKey;
+    const borderClass = isFocused
+      ? 'border-[#c8aa6e]/70 shadow-[0_-4px_12px_rgba(200,170,110,0.06),_4px_0_12px_rgba(200,170,110,0.06),_-4px_0_12px_rgba(200,170,110,0.06)]'
+      : 'border-[#c8aa6e]/25';
+
+    return (
+      <div className={`flex flex-wrap items-center justify-between gap-2 rounded-t-md border border-b-0 bg-[#09090b]/90 px-3 py-2 transition-all duration-200 ${borderClass}`}>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => applyContainerDescriptionFormat(containerKey, descriptionIndex, 'bold')}
+            className="flex h-7 w-9 items-center justify-center border border-slate-800 bg-[#09090b]/50 text-[10px] font-black uppercase tracking-wider text-slate-300 transition hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]"
+            title="Negrita"
+            aria-label={`Negrita descripción ${descriptionIndex + 1}`}
+          >
+            B
+          </button>
+          <button
+            type="button"
+            onClick={() => applyContainerDescriptionFormat(containerKey, descriptionIndex, 'italic')}
+            className="flex h-7 w-9 items-center justify-center border border-slate-800 bg-[#09090b]/50 text-[10px] font-black italic uppercase tracking-wider text-slate-300 transition hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]"
+            title="Cursiva"
+            aria-label={`Cursiva descripción ${descriptionIndex + 1}`}
+          >
+            I
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          {presetColors.map((color) => (
+            <button
+              key={`${containerKey}-description-color-${color.value}`}
+              type="button"
+              onClick={() => applyContainerDescriptionFormat(containerKey, descriptionIndex, 'color', color.value)}
+              className="h-5 w-5 rounded-full border border-black/50 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.24)] transition hover:scale-110 hover:border-[#f0e6d2]"
+              style={{ backgroundColor: color.value }}
+              title={color.name}
+              aria-label={`Color ${color.name} descripción ${descriptionIndex + 1}`}
+            />
+          ))}
+          <label
+            className="relative h-5 w-5 cursor-pointer rounded-full border border-black/50 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.24)] transition hover:scale-110 hover:border-[#f0e6d2]"
+            style={{ backgroundColor: descriptionFormatColor }}
+            title="Color personalizado"
+            aria-label={`Color personalizado descripción ${descriptionIndex + 1}`}
+          >
+            <input
+              type="color"
+              value={descriptionFormatColor}
+              onChange={(event) => {
+                setDescriptionFormatColor(event.target.value);
+                applyContainerDescriptionFormat(containerKey, descriptionIndex, 'color', event.target.value);
+              }}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            />
+          </label>
+        </div>
+      </div>
+    );
+  };
+
   const renderToolbar = (ref, fieldId) => {
-    const presetColors = [
-      { name: 'Dorado', value: '#c8aa6e' },
-      { name: 'Rojo', value: '#ff4d4d' },
-      { name: 'Verde', value: '#5cd65c' },
-      { name: 'Azul', value: '#33adff' },
-      { name: 'Morado', value: '#b366ff' },
-      { name: 'Blanco', value: '#ffffff' },
-    ];
+    const presetColors = DESCRIPTION_FORMAT_PRESET_COLORS;
 
     const isFocused = focusedField === fieldId;
     const borderClass = isFocused
@@ -3137,7 +6243,145 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
   const renderExportDataUrl = async () => {
     const exportCanvas = document.createElement('canvas');
     await drawCard(exportCanvas, 1, false);
-    return exportCanvas.toDataURL('image/png');
+    const rawDataUrl = exportCanvas.toDataURL('image/png');
+    const project = createCardBuilderProject(getCardProjectConfig());
+    const pngBytes = await dataUrlToBytes(rawDataUrl);
+    const editablePngBytes = embedCardBuilderProjectInPng(pngBytes, project);
+    return bytesToDataUrl(editablePngBytes);
+  };
+
+  const getCardProjectConfig = () => ({
+    cardName,
+    description,
+    flavorText,
+    hyphenate,
+    singleTextStyle,
+    cardType,
+    showTraits,
+    visibleTraitRows,
+    traits,
+    containerTraits,
+    containerDescriptions,
+    containerDescriptionSizes,
+    containerDescriptionStyles,
+    containerDescriptionCentered,
+    containerDamage,
+    containerConsumptions,
+    selectedBackground,
+    headerImageSrc,
+    headerImageTransform,
+    cardContainers,
+    selectedElement,
+    customColorActive,
+    customColor,
+    headerColorActive,
+    headerColor,
+    bodyColorActive,
+    bodyColor,
+    descriptionFormatColor,
+    weaponType,
+    alcance,
+    diceType,
+    diceQty,
+    chargeSlots,
+    consumptionSlots,
+    resourceMode,
+    consumptionSlotTypes,
+    minionAttributes,
+    actionCenterMode,
+    actionSpeedId,
+    attributeType,
+  });
+
+  const applyCardProjectConfig = (config) => {
+    const asRecord = (value) => (
+      value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+    );
+    const normalizeSlots = (value, fallback, count) => {
+      const next = Array.isArray(value) ? [...value].slice(0, count) : [...fallback];
+      while (next.length < count) next.push(EMPTY_SLOT);
+      return next;
+    };
+    const supportedContainerIds = new Set(CARD_CONTAINER_TYPES.map((container) => container.id));
+    const importedType = CARD_TYPES.some((type) => type.id === config.cardType)
+      ? config.cardType
+      : 'general';
+    const importedContainers = Array.isArray(config.cardContainers)
+      ? config.cardContainers
+        .slice(0, MAX_CARD_CONTAINERS)
+        .map((container, index) => normalizeCardContainer(container, index))
+        .filter((container) => supportedContainerIds.has(container.id))
+      : [];
+    const nextContainers = importedContainers.length > 0
+      ? importedContainers
+      : getDefaultCardContainers(importedType);
+    const backgroundExists = CARD_BACKGROUNDS.some((background) => background.file === config.selectedBackground);
+    const importedHeaderTransform = asRecord(config.headerImageTransform);
+
+    setCardName(typeof config.cardName === 'string' ? config.cardName : DEFAULT_CARD_NAME);
+    setDescription(typeof config.description === 'string' ? config.description : DEFAULT_DESCRIPTION);
+    setFlavorText(typeof config.flavorText === 'string' ? config.flavorText : DEFAULT_FLAVOR_TEXT);
+    setHyphenate(config.hyphenate !== false);
+    setSingleTextStyle(config.singleTextStyle === 'narrative' ? 'narrative' : 'principal');
+    setCardType(importedType);
+    setCardContainers(nextContainers);
+    setShowTraits(config.showTraits !== false);
+    setVisibleTraitRows(clampNumber(Number(config.visibleTraitRows) || 3, 1, 3));
+    setTraits(Array.isArray(config.traits) ? config.traits : DEFAULT_TRAITS);
+    setContainerTraits(asRecord(config.containerTraits));
+    setContainerDescriptions(asRecord(config.containerDescriptions));
+    setContainerDescriptionSizes(asRecord(config.containerDescriptionSizes));
+    setContainerDescriptionStyles(asRecord(config.containerDescriptionStyles));
+    setContainerDescriptionCentered(asRecord(config.containerDescriptionCentered));
+    setContainerDamage(asRecord(config.containerDamage));
+    setContainerConsumptions(asRecord(config.containerConsumptions));
+    setSelectedBackground(backgroundExists ? config.selectedBackground : 'Gris.webp');
+    setHeaderImageSrc(typeof config.headerImageSrc === 'string' ? config.headerImageSrc : '');
+    setHeaderImageTransform({
+      zoom: clampNumber(Number(importedHeaderTransform.zoom) || 1, 1, 2.5),
+      x: clampNumber(Number(importedHeaderTransform.x) || 0, -100, 100),
+      y: clampNumber(Number(importedHeaderTransform.y) || 0, -100, 100),
+    });
+    setSelectedElement(typeof config.selectedElement === 'string' ? config.selectedElement : 'Ninguno');
+    setCustomColorActive(config.customColorActive === true);
+    setCustomColor(typeof config.customColor === 'string' ? config.customColor : '#c8aa6e');
+    setHeaderColorActive(config.headerColorActive === true);
+    setHeaderColor(typeof config.headerColor === 'string' ? config.headerColor : DEFAULT_HEADER_BACKDROP_COLOR);
+    setBodyColorActive(config.bodyColorActive === true);
+    setBodyColor(typeof config.bodyColor === 'string' ? config.bodyColor : DEFAULT_BODY_BACKDROP_COLOR);
+    setDescriptionFormatColor(typeof config.descriptionFormatColor === 'string' ? config.descriptionFormatColor : '#ffffff');
+    setWeaponType(typeof config.weaponType === 'string' ? config.weaponType : 'Cuerpo a cuerpo');
+    setAlcance(clampNumber(Number(config.alcance) || 0, 0, 4));
+    setDiceType(typeof config.diceType === 'string' ? config.diceType : 'D6');
+    setDiceQty(clampNumber(Number(config.diceQty) || 1, 1, 99));
+    setChargeSlots(normalizeSlots(config.chargeSlots, DEFAULT_CHARGE_SLOTS, CHARGE_SLOT_COUNT));
+    setConsumptionSlots(normalizeSlots(config.consumptionSlots, DEFAULT_CONSUMPTION_SLOTS, RESOURCE_SLOT_COUNT));
+    setResourceMode([
+      RESOURCE_MODE_BOTH,
+      RESOURCE_MODE_CHARGE_ONLY,
+      RESOURCE_MODE_CONSUMPTION_ONLY,
+      RESOURCE_MODE_NONE,
+    ].includes(config.resourceMode) ? config.resourceMode : RESOURCE_MODE_BOTH);
+    setConsumptionSlotTypes(normalizeSlots(
+      config.consumptionSlotTypes,
+      DEFAULT_CONTAINER_CONSUMPTION_TYPES,
+      RESOURCE_SLOT_COUNT,
+    ).map((type) => (type === 'element' ? 'element' : 'consumption')));
+    setMinionAttributes({ ...DEFAULT_MINION_ATTRIBUTES, ...asRecord(config.minionAttributes) });
+    setActionCenterMode(['dado', 'Mente', 'Cuerpo', 'Hambre'].includes(config.actionCenterMode)
+      ? config.actionCenterMode
+      : 'dado');
+    setActionSpeedId(typeof config.actionSpeedId === 'string' ? config.actionSpeedId : 'rapida');
+    setAttributeType(['Cuerpo', 'Hambre', 'Mente'].includes(config.attributeType)
+      ? config.attributeType
+      : 'Cuerpo');
+    setActiveDescriptionKey(null);
+    setFocusedDescriptionKey(null);
+    setFocusedField(null);
+    setImageStatus('loading');
+    descriptionHistoryRef.current = { past: [], future: [] };
+    flavorTextHistoryRef.current = { past: [], future: [] };
+    containerDescriptionHistoryRef.current = {};
   };
 
   const handleDownload = async () => {
@@ -3147,6 +6391,45 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     link.download = `${safeName}.png`;
     link.href = dataUrl;
     link.click();
+    setProjectStatus('PNG editable descargado');
+  };
+
+  const handleDownloadProjectJson = () => {
+    const project = createCardBuilderProject(getCardProjectConfig());
+    const safeName = getSafeFileSlug(cardName);
+    downloadBlob(
+      new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' }),
+      `${safeName}.carta.json`,
+    );
+    setProjectStatus('Proyecto JSON descargado');
+  };
+
+  const handleImportProject = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setProjectStatus('Cargando proyecto editable…');
+    try {
+      const isPng = file.type === 'image/png' || file.name.toLowerCase().endsWith('.png');
+      const project = isPng
+        ? extractCardBuilderProjectFromPng(new Uint8Array(await file.arrayBuffer()))
+        : parseCardBuilderProject(await file.text());
+      applyCardProjectConfig(project.card);
+      setProjectStatus(isPng
+        ? 'Carta editable recuperada desde el PNG'
+        : 'Carta editable recuperada desde el JSON');
+    } catch (error) {
+      console.error('Could not import editable card project:', error);
+      setProjectStatus('No se pudo recuperar la carta editable');
+      if (error?.message === 'CARD_PROJECT_NOT_FOUND') {
+        alert('Este PNG no contiene datos editables. Solo pueden recuperarse los PNG exportados con la nueva versión del constructor.');
+      } else if (error?.message === 'CARD_PROJECT_VERSION_TOO_NEW') {
+        alert('La carta fue creada con una versión más nueva del constructor. Actualiza la aplicación para abrirla.');
+      } else {
+        alert('El archivo no contiene un proyecto de carta válido. Usa un PNG editable o un archivo .carta.json.');
+      }
+    } finally {
+      event.target.value = '';
+    }
   };
 
   const findOrCreateCharacterLibrary = async (ownerName) => {
@@ -3245,6 +6528,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     name: normalizeCardName(cardName) || 'Carta sin nombre',
     frontUrl,
     type,
+    ...(cardType === 'attribute' ? { attributeType } : {}),
     visibleToPlayers: true,
     createdAt: Date.now(),
     createdBy: currentUserId || ownerName || mode,
@@ -3274,7 +6558,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
         characterName: ownerName
       };
       await updateDoc(doc(db, 'card_decks', library.id), {
-        cards: [...(library.cards || []), newCard]
+        cards: sanitize([...(library.cards || []), newCard])
       });
       setUploadStatus(`Subida a ${ownerName}`);
     } catch (error) {
@@ -3306,7 +6590,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       );
       const newCard = buildUploadedCardPayload(cardId, frontUrl, libraryType, 'master');
       await updateDoc(doc(db, 'card_decks', library.id), {
-        cards: [...(library.cards || []), newCard]
+        cards: sanitize([...(library.cards || []), newCard])
       });
       setUploadStatus(`Subida a ${library.name || 'colección base'}`);
     } catch (error) {
@@ -3317,16 +6601,99 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
     }
   };
 
-  const usesChargeResources = RESOURCE_CARD_TYPES.has(cardType);
-  const usesConsumptionResources = (cardType === 'action' && actionCenterMode === 'dado') || cardType === 'status' || (
+  const hasContainer = (containerId) => cardContainers.some((container, index) => getContainerId(container, index) === containerId);
+  const usesChargeResources = hasContainer('consumption') && RESOURCE_CARD_TYPES.has(cardType);
+  const usesConsumptionResources = hasContainer('consumption') && ((cardType === 'action' && actionCenterMode === 'dado') || cardType === 'status' || (
     usesChargeResources && (resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY)
+  ));
+  const normalizedCardContainers = useMemo(
+    () => cardContainers.map((containerEntry, index) => normalizeCardContainer(containerEntry, index)),
+    [cardContainers],
   );
+  const descriptionContainers = useMemo(
+    () => normalizedCardContainers.filter((container) => container.id === 'description'),
+    [normalizedCardContainers],
+  );
+  const damageContainers = useMemo(
+    () => normalizedCardContainers.filter((container) => container.id === 'damage'),
+    [normalizedCardContainers],
+  );
+  const consumptionContainers = useMemo(
+    () => normalizedCardContainers.filter((container) => container.id === 'consumption'),
+    [normalizedCardContainers],
+  );
+  const chargeContainers = useMemo(
+    () => normalizedCardContainers.filter((container) => container.id === 'charge'),
+    [normalizedCardContainers],
+  );
+  const traitContainers = useMemo(
+    () => normalizedCardContainers.filter((container) => container.id === 'traits'),
+    [normalizedCardContainers],
+  );
+  const descriptionUnitBudget = useMemo(
+    () => getDescriptionUnitBudget(cardContainers, cardType),
+    [cardContainers, cardType],
+  );
+  const isActionTimingLayout = cardType === 'actions';
+  const isDedicatedBaseLayout = cardType === 'actions' || cardType === 'attribute';
+  const getAvailableDescriptionUnits = (containerKey) => {
+    const otherUsedUnits = descriptionContainers.reduce((total, container) => {
+      if (container.key === containerKey) return total;
+      return total + getDescriptionBudgetUnits(containerDescriptionSizes[container.key]);
+    }, 0);
+    return Math.max(1, Math.min(6, descriptionUnitBudget - otherUsedUnits));
+  };
+  const insertDescriptionIcon = (iconId) => {
+    const targetContainer = (
+      descriptionContainers.find((container) => container.key === activeDescriptionKey)
+      || descriptionContainers[0]
+    );
+    if (!targetContainer) return;
+
+    const targetIndex = descriptionContainers.findIndex((container) => container.key === targetContainer.key);
+    const currentText = containerDescriptions[targetContainer.key] ?? (targetIndex === 0 ? description : '');
+    const token = createDescriptionIconToken(iconId);
+
+    const textarea = containerDescriptionRefs.current[targetContainer.key];
+    let nextText = "";
+    let cursorPosition = 0;
+
+    if (textarea) {
+      const selectionStart = textarea.selectionStart;
+      const selectionEnd = textarea.selectionEnd;
+      const textBefore = currentText.substring(0, selectionStart);
+      const textAfter = currentText.substring(selectionEnd);
+
+      const needsSpaceBefore = textBefore.length > 0 && !textBefore.endsWith(' ');
+      const needsSpaceAfter = textAfter.length > 0 && !textAfter.startsWith(' ');
+
+      const insertedToken = (needsSpaceBefore ? ' ' : '') + token + (needsSpaceAfter ? ' ' : '');
+      nextText = textBefore + insertedToken + textAfter;
+      cursorPosition = selectionStart + insertedToken.length;
+    } else {
+      nextText = currentText.trim().length > 0 ? `${currentText} ${token}` : token;
+    }
+
+    if (targetIndex === 0) {
+      handleDescriptionChange(nextText);
+    }
+    handleContainerDescriptionChange(targetContainer.key, nextText);
+    setActiveDescriptionKey(targetContainer.key);
+
+    if (textarea) {
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(cursorPosition, cursorPosition);
+      }, 0);
+    }
+  };
+  const hasLibraryUpload = mode === 'master' || (mode === 'player' && Boolean(characterName));
 
   return (
     <div className="h-screen max-h-screen overflow-y-auto bg-[#09090b] text-[#e2e8f0] font-['Lato'] selection:bg-[#c8aa6e]/30 selection:text-[#f0e6d2] custom-scrollbar">
       <style>
         {`
-          @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700;1,900&display=swap');
+          @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cinzel:wght@400;600;700;900&family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700;1,900&family=Oswald:wght@700&family=Roboto+Condensed:wght@400&display=swap');
           
           /* Hide browser native up/down number input spinner arrows */
           input[type="number"]::-webkit-outer-spin-button,
@@ -3341,8 +6708,8 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
       </style>
 
       <div className="mx-auto flex min-h-full w-full max-w-[1680px] flex-col gap-5 p-4 pb-24 md:p-8">
-        <div className="flex flex-col gap-4 border-b border-[#c8aa6e]/20 pb-5 md:flex-row md:items-end md:justify-between">
-          <div>
+        <div className="flex flex-col gap-4 border-b border-[#c8aa6e]/20 pb-5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="min-w-0">
             <div className="mb-3 inline-flex items-center gap-3 text-xs font-bold uppercase tracking-[0.25em] text-[#c8aa6e]">
               <span className="opacity-70">ARCANA VAULT</span>
               <span className="h-px w-4 bg-[#c8aa6e]/40" />
@@ -3353,42 +6720,23 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
             </h1>
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center xl:flex-nowrap xl:justify-end">
             {onBack && (
               <button
                 type="button"
                 onClick={onBack}
-                className="group inline-flex items-center justify-center gap-2 border border-[#c8aa6e]/30 bg-[#c8aa6e]/5 px-4 py-2.5 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e] transition-all hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10"
+                className={`group inline-flex h-10 items-center justify-center gap-2 border border-[#c8aa6e]/30 bg-[#c8aa6e]/5 px-4 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e] transition-all hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 ${hasLibraryUpload ? '' : 'col-span-2'} sm:w-auto`}
               >
                 <ChevronLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
                 Volver
               </button>
             )}
-            <button
-              type="button"
-              onClick={handleReset}
-              className="inline-flex h-10 w-10 items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
-              title="Restablecer"
-              aria-label="Restablecer"
-            >
-              <RotateCcw className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={handleDownload}
-              disabled={imageStatus !== 'ready'}
-              className="inline-flex h-10 w-10 items-center justify-center border border-[#c8aa6e]/40 bg-[#c8aa6e]/10 text-[#c8aa6e] transition hover:bg-[#c8aa6e]/20 disabled:cursor-not-allowed disabled:opacity-40"
-              title="Exportar PNG"
-              aria-label="Exportar PNG"
-            >
-              <Download className="h-4 w-4" />
-            </button>
             {mode === 'player' && characterName && (
               <button
                 type="button"
                 onClick={handleUploadToCharacterLibrary}
                 disabled={imageStatus !== 'ready' || isUploadingCharacterCard}
-                className="inline-flex h-10 items-center justify-center gap-2 border border-emerald-400/35 bg-emerald-950/25 px-3 font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200 transition hover:border-emerald-300/70 hover:bg-emerald-900/30 disabled:cursor-wait disabled:opacity-45"
+                className="inline-flex h-10 w-full items-center justify-center gap-2 border border-emerald-400/35 bg-emerald-950/25 px-3 font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200 transition hover:border-emerald-300/70 hover:bg-emerald-900/30 disabled:cursor-wait disabled:opacity-45 sm:w-auto"
                 title={`Subir a la colección ${characterName}`}
               >
                 {isUploadingCharacterCard ? (
@@ -3396,6 +6744,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                 ) : (
                   <UploadCloud className="h-4 w-4" />
                 )}
+                <span className="sm:hidden">Subir</span>
                 <span className="hidden sm:inline">Subir a colección</span>
               </button>
             )}
@@ -3404,7 +6753,7 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                 type="button"
                 onClick={handleUploadToMasterLibrary}
                 disabled={imageStatus !== 'ready' || isUploadingCharacterCard}
-                className="inline-flex h-10 items-center justify-center gap-2 border border-emerald-400/35 bg-emerald-950/25 px-3 font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200 transition hover:border-emerald-300/70 hover:bg-emerald-900/30 disabled:cursor-wait disabled:opacity-45"
+                className="inline-flex h-10 w-full items-center justify-center gap-2 border border-emerald-400/35 bg-emerald-950/25 px-3 font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200 transition hover:border-emerald-300/70 hover:bg-emerald-900/30 disabled:cursor-wait disabled:opacity-45 sm:w-auto"
                 title="Subir a colección base por tipo"
               >
                 {isUploadingCharacterCard ? (
@@ -3412,11 +6761,68 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                 ) : (
                   <UploadCloud className="h-4 w-4" />
                 )}
+                <span className="sm:hidden">Subir</span>
                 <span className="hidden sm:inline">Subir a base</span>
               </button>
             )}
+            <input
+              ref={projectImportInputRef}
+              type="file"
+              accept=".png,.json,.carta.json,image/png,application/json"
+              onChange={handleImportProject}
+              className="hidden"
+            />
+            <div className="col-span-2 grid grid-cols-4 gap-2 sm:flex sm:gap-2">
+              <button
+                type="button"
+                onClick={() => projectImportInputRef.current?.click()}
+                className="inline-flex h-10 w-full items-center justify-center border border-sky-400/35 bg-sky-950/20 text-sky-200 transition hover:border-sky-300/70 hover:bg-sky-900/30 sm:w-10"
+                title="Importar carta editable desde PNG o JSON"
+                aria-label="Importar carta editable"
+              >
+                <FileUp className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleReset}
+                className="inline-flex h-10 w-full items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e] sm:w-10"
+                title="Restablecer"
+                aria-label="Restablecer"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleDownload}
+                disabled={imageStatus !== 'ready'}
+                className="inline-flex h-10 w-full items-center justify-center border border-[#c8aa6e]/40 bg-[#c8aa6e]/10 text-[#c8aa6e] transition hover:bg-[#c8aa6e]/20 disabled:cursor-not-allowed disabled:opacity-40 sm:w-10"
+                title="Exportar PNG editable"
+                aria-label="Exportar PNG editable"
+              >
+                <Download className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadProjectJson}
+                className="inline-flex h-10 w-full items-center justify-center border border-[#c8aa6e]/25 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e] sm:w-10"
+                title="Exportar proyecto JSON"
+                aria-label="Exportar proyecto JSON"
+              >
+                <FileDown className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
+
+        {projectStatus && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="-mt-2 border border-sky-400/15 bg-sky-950/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-sky-100/85"
+          >
+            {projectStatus}
+          </div>
+        )}
 
         {((mode === 'player' && characterName) || mode === 'master') && (
           <div className="flex flex-wrap items-center gap-2 border border-emerald-400/15 bg-emerald-950/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-100/80">
@@ -3433,6 +6839,29 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
 
         <div className="grid flex-1 gap-5 lg:grid-cols-[minmax(280px,380px)_1fr]">
           <aside className="relative z-20 order-2 flex flex-col gap-5 border border-[#c8aa6e]/20 bg-[#0b1120]/75 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.25)] md:p-5 lg:order-1">
+            <div className="space-y-3 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
+              <div className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
+                <Tag className="h-4 w-4" />
+                Tipo de carta
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {CARD_TYPES.map((type) => (
+                  <button
+                    key={type.id}
+                    type="button"
+                    onClick={() => handleTypeChange(type.id)}
+                    className={`border px-2 py-2 text-[10px] font-black uppercase tracking-[0.12em] transition ${
+                      cardType === type.id
+                        ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                        : 'border-slate-800 bg-[#09090b]/60 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                    }`}
+                  >
+                    {type.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="space-y-2">
               <label className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
                 <Type className="h-4 w-4" />
@@ -3447,60 +6876,516 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
               />
             </div>
 
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
-                <Tag className="h-4 w-4" />
-                Tipo
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {CARD_TYPES.map((type) => (
-                  <button
-                    key={type.id}
-                    type="button"
-                    onClick={() => handleTypeChange(type.id)}
-                    className={`border px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] transition ${cardType === type.id
-                      ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
-                      : 'border-slate-700 bg-[#09090b]/60 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
-                      }`}
-                  >
-                    {type.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {(cardType === 'weapon' || cardType === 'armor' || cardType === 'trap' || cardType === 'action' || cardType === 'skill' || cardType === 'status') && (
+            {cardType === 'actions' && (
               <div className="space-y-4 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
                 <div className="font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
-                  {cardType === 'weapon' ? 'Propiedades del Arma' : 
-                   cardType === 'armor' ? 'Propiedades de la Armadura' : 
-                   cardType === 'trap' ? 'Propiedades de la Trampa' :
-                   cardType === 'action' ? 'Propiedades de la Acción' : 
-                   cardType === 'skill' ? 'Propiedades del Minion' :
-                   'Propiedades del Estado'}
+                  Acciones
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {ACTION_SPEED_OPTIONS.map((speed) => (
+                    <button
+                      key={speed.id}
+                      type="button"
+                      onClick={() => handleActionSpeedChange(speed.id)}
+                      className={`border px-2 py-2 text-[10px] font-black uppercase tracking-[0.12em] transition ${
+                        actionSpeedId === speed.id
+                          ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                          : 'border-slate-800 bg-[#09090b]/60 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                      }`}
+                    >
+                      {speed.label}
+                    </button>
+                  ))}
+                </div>
+
+                <textarea
+                  value={description}
+                  onChange={(event) => handleDescriptionChange(event.target.value)}
+                  onKeyDown={(event) => handleTextareaKeyDown(
+                    event,
+                    null,
+                    setDescription,
+                    descriptionHistoryRef,
+                    description
+                  )}
+                  rows={3}
+                  className="w-full resize-y border border-[#c8aa6e]/25 bg-[#09090b]/80 px-3 py-2 text-sm font-semibold leading-relaxed text-[#f0e6d2] outline-none transition placeholder:text-slate-600 focus:border-[#c8aa6e]/70"
+                  placeholder="Texto inferior de la carta"
+                />
+              </div>
+            )}
+
+            {cardType === 'attribute' && (
+              <div className="space-y-4 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
+                <div className="font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
+                  Atributo
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {ATTRIBUTE_CARD_OPTIONS.map((attributeOption) => (
+                    <button
+                      key={attributeOption.id}
+                      type="button"
+                      onClick={() => handleAttributeTypeChange(attributeOption.id)}
+                      className={`border px-2 py-2 text-[10px] font-black uppercase tracking-[0.12em] transition ${
+                        attributeType === attributeOption.id
+                          ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                          : 'border-slate-800 bg-[#09090b]/60 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                      }`}
+                    >
+                      {attributeOption.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!isDedicatedBaseLayout && (
+            <div className="space-y-3 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
+              <div className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
+                <ImageIcon className="h-4 w-4" />
+                Imagen portada
+              </div>
+              <input
+                ref={headerImageInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleHeaderImageChange}
+                className="hidden"
+              />
+              <div 
+                onClick={() => headerImageInputRef.current?.click()}
+                className="relative overflow-hidden border border-[#c8aa6e]/15 bg-black/40 cursor-pointer group transition hover:border-[#c8aa6e]/50" 
+                style={{ aspectRatio: '1548/638' }}
+              >
+                {headerImageSrc ? (
+                  <>
+                    <canvas
+                      ref={headerImagePreviewCanvasRef}
+                      width={HEADER_IMAGE_PREVIEW_WIDTH}
+                      height={HEADER_IMAGE_PREVIEW_HEIGHT}
+                      aria-label="Previsualización de imagen de portada"
+                      className="h-full w-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-[10px] font-bold uppercase tracking-[0.14em] text-[#f0e6d2] pointer-events-none">
+                      Cambiar imagen
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setHeaderImageSrc('');
+                        setHeaderImageTransform(DEFAULT_HEADER_IMAGE_TRANSFORM);
+                      }}
+                      className="absolute top-1.5 right-1.5 z-10 inline-flex h-6 w-6 items-center justify-center border border-slate-800/30 bg-[#09090b]/50 text-slate-500 transition hover:border-red-500/30 hover:bg-[#09090b]/90 hover:text-red-400 shadow-md"
+                      title="Quitar imagen"
+                      aria-label="Quitar imagen"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </>
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center gap-1.5 px-4 text-center text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 group-hover:text-[#c8aa6e] transition">
+                    <UploadCloud className="h-5 w-5 text-slate-500 group-hover:text-[#c8aa6e] transition mb-1" />
+                    <span>Haga clic para subir imagen</span>
+                    <span className="text-[8px] tracking-[0.12em] opacity-60 font-medium text-slate-500 block mt-1 normal-case">
+                      Se generará una cabecera oscura si no subes imagen
+                    </span>
+                  </div>
+                )}
+              </div>
+              {headerImageSrc && (
+                <div className="space-y-3 border-t border-[#c8aa6e]/10 pt-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      Encuadre
+                    </span>
+                    <button
+                      type="button"
+                      onClick={resetHeaderImageTransform}
+                      className="inline-flex items-center gap-1.5 border border-[#c8aa6e]/25 bg-[#c8aa6e]/5 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#c8aa6e] transition hover:border-[#c8aa6e]/60 hover:bg-[#c8aa6e]/10"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      Reajustar
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => nudgeHeaderImage('y', -10)}
+                      className="col-start-2 row-start-1 flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
+                      title="Mover arriba"
+                    >
+                      <ArrowUp className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => nudgeHeaderImage('x', -10)}
+                      className="col-start-1 row-start-2 flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
+                      title="Mover izquierda"
+                    >
+                      <span className="text-base leading-none">←</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetHeaderImageTransform}
+                      className="col-start-2 row-start-2 flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
+                      title="Centrar"
+                    >
+                      0
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => nudgeHeaderImage('x', 10)}
+                      className="col-start-3 row-start-2 flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
+                      title="Mover derecha"
+                    >
+                      <span className="text-base leading-none">→</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => nudgeHeaderImage('y', 10)}
+                      className="col-start-2 row-start-3 flex h-9 items-center justify-center border border-slate-700 bg-slate-900/60 text-slate-300 transition hover:border-[#c8aa6e]/60 hover:text-[#c8aa6e]"
+                      title="Mover abajo"
+                    >
+                      <ArrowDown className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      <span>Zoom</span>
+                      <span className="text-[#c8aa6e]">{headerImageTransform.zoom.toFixed(2)}x</span>
+                    </label>
+                    <input
+                      type="range"
+                      min="1"
+                      max="2.5"
+                      step="0.01"
+                      value={headerImageTransform.zoom}
+                      onInput={(event) => updateHeaderImageTransform({ zoom: Number(event.currentTarget.value) })}
+                      onChange={(event) => updateHeaderImageTransform({ zoom: Number(event.target.value) })}
+                      className="w-full accent-[#c8aa6e]"
+                    />
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        <span>Horizontal</span>
+                        <span className="text-[#c8aa6e]">{headerImageTransform.x}</span>
+                      </label>
+                      <input
+                        type="range"
+                        min="-100"
+                        max="100"
+                        step="1"
+                        value={headerImageTransform.x}
+                        onInput={(event) => updateHeaderImageTransform({ x: Number(event.currentTarget.value) })}
+                        onChange={(event) => updateHeaderImageTransform({ x: Number(event.target.value) })}
+                        className="w-full accent-[#c8aa6e]"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        <span>Vertical</span>
+                        <span className="text-[#c8aa6e]">{headerImageTransform.y}</span>
+                      </label>
+                      <input
+                        type="range"
+                        min="-100"
+                        max="100"
+                        step="1"
+                        value={headerImageTransform.y}
+                        onInput={(event) => updateHeaderImageTransform({ y: Number(event.currentTarget.value) })}
+                        onChange={(event) => updateHeaderImageTransform({ y: Number(event.target.value) })}
+                        className="w-full accent-[#c8aa6e]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div className="space-y-1.5 border-t border-[#c8aa6e]/10 pt-3">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Icono de cabecera
+                </label>
+                <select
+                  value={selectedElement}
+                  onChange={(event) => setSelectedElement(event.target.value)}
+                  className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
+                >
+                  {ELEMENT_TYPES.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2.5 border-t border-[#c8aa6e]/10 pt-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                    Fondo cabecera
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {ACCENT_PRESET_COLORS.map((preset) => {
+                    const isSelected = preset.id === 'default'
+                      ? !headerColorActive
+                      : headerColorActive && headerColor.toLowerCase() === preset.value.toLowerCase();
+                    return (
+                      <button
+                        key={`header-${preset.id}`}
+                        type="button"
+                        onClick={() => {
+                          if (preset.id === 'default') {
+                            setHeaderColorActive(false);
+                            setHeaderColor(DEFAULT_HEADER_BACKDROP_COLOR);
+                          } else {
+                            setHeaderColorActive(true);
+                            setHeaderColor(preset.value);
+                          }
+                          setImageStatus('loading');
+                        }}
+                        className={`flex h-11 items-center justify-center border text-[8px] font-black uppercase tracking-[0.08em] transition ${
+                          isSelected
+                            ? 'border-[#f0e6d2] text-[#f0e6d2]'
+                            : 'border-slate-800 text-slate-500 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                        }`}
+                        style={{
+                          background: `linear-gradient(135deg, ${
+                            preset.id === 'default' ? DEFAULT_HEADER_BACKDROP_COLOR : preset.value
+                          }44, ${
+                            preset.id === 'default' ? DEFAULT_HEADER_BACKDROP_COLOR : preset.value
+                          }12)`
+                        }}
+                        title={preset.label}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                      Personalizado
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHeaderColorActive(true);
+                      }}
+                      className={`border px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition ${
+                        headerColorActive && !ACCENT_PRESET_COLORS.some((preset) => preset.id !== 'default' && preset.value.toLowerCase() === headerColor.toLowerCase())
+                          ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                          : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                      }`}
+                    >
+                      Hex
+                    </button>
+                  </div>
+                  <HexColorInput
+                    value={headerColor}
+                    onChange={(value) => {
+                      setHeaderColor(value);
+                      setHeaderColorActive(true);
+                      setImageStatus('loading');
+                    }}
+                  />
+                  <p className="text-[10px] italic leading-normal text-slate-400">
+                    Aplica un filtro de color a la imagen o al fondo de la cabecera.
+                  </p>
+                </div>
+              </div>
+
+              {/* Fondo cuerpo */}
+              <div className="space-y-2.5 border-t border-[#c8aa6e]/10 pt-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                    Fondo cuerpo
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {ACCENT_PRESET_COLORS.map((preset) => {
+                    const isSelected = preset.id === 'default'
+                      ? !bodyColorActive
+                      : bodyColorActive && bodyColor.toLowerCase() === preset.value.toLowerCase();
+                    return (
+                      <button
+                        key={`body-${preset.id}`}
+                        type="button"
+                        onClick={() => {
+                          if (preset.id === 'default') {
+                            setBodyColorActive(false);
+                            setBodyColor(DEFAULT_BODY_BACKDROP_COLOR);
+                          } else {
+                            setBodyColorActive(true);
+                            setBodyColor(preset.value);
+                          }
+                          setImageStatus('loading');
+                        }}
+                        className={`flex h-11 items-center justify-center border text-[8px] font-black uppercase tracking-[0.08em] transition ${
+                          isSelected
+                            ? 'border-[#f0e6d2] text-[#f0e6d2]'
+                            : 'border-slate-800 text-slate-500 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                        }`}
+                        style={{
+                          background: `linear-gradient(135deg, ${
+                            preset.id === 'default' ? DEFAULT_BODY_BACKDROP_COLOR : preset.value
+                          }44, ${
+                            preset.id === 'default' ? DEFAULT_BODY_BACKDROP_COLOR : preset.value
+                          }12)`
+                        }}
+                        title={preset.label}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                      Personalizado
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBodyColorActive(true);
+                      }}
+                      className={`border px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition ${
+                        bodyColorActive && !ACCENT_PRESET_COLORS.some((preset) => preset.id !== 'default' && preset.value.toLowerCase() === bodyColor.toLowerCase())
+                          ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                          : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                      }`}
+                    >
+                      Hex
+                    </button>
+                  </div>
+                  <HexColorInput
+                    value={bodyColor}
+                    onChange={(value) => {
+                      setBodyColor(value);
+                      setBodyColorActive(true);
+                      setImageStatus('loading');
+                    }}
+                  />
+                  <p className="text-[10px] italic leading-normal text-slate-400">
+                    Aplica un filtro de color a la textura de papel del cuerpo de la carta.
+                  </p>
+                </div>
+              </div>
+            </div>
+            )}
+
+            {!isDedicatedBaseLayout && (
+            <div className="space-y-3 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
+              <div className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
+                <Plus className="h-4 w-4" />
+                Contenedores
+              </div>
+              <div className="space-y-2">
+                {cardContainers.length === 0 ? (
+                  <div className="border border-slate-800 bg-[#09090b]/60 px-3 py-3 text-xs uppercase tracking-[0.16em] text-slate-500">
+                    Solo se mostrará imagen y título.
+                  </div>
+                ) : cardContainers.map((containerEntry, index) => {
+                  const containerId = getContainerId(containerEntry, index);
+                  const containerKey = getContainerKey(containerEntry, index);
+                  const container = CARD_CONTAINER_TYPES.find((item) => item.id === containerId);
+                  const isFixedFooterContainer = containerId === 'charge';
+                  return (
+                    <div
+                      key={containerKey}
+                      className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-1 border border-slate-800 bg-[#0b1120]/70 px-2 py-1.5"
+                    >
+                      <span className="truncate text-[11px] font-black uppercase tracking-[0.14em] text-[#f0e6d2]">
+                        {container?.label || containerId}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => moveCardContainer(index, -1)}
+                        disabled={index === 0 || isFixedFooterContainer}
+                        className="inline-flex h-7 w-7 items-center justify-center border border-slate-800 text-slate-400 transition hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e] disabled:cursor-not-allowed disabled:opacity-30"
+                        title="Subir"
+                        aria-label={`Subir ${container?.label || containerId}`}
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveCardContainer(index, 1)}
+                        disabled={index === cardContainers.length - 1 || isFixedFooterContainer || getContainerId(cardContainers[index + 1], index + 1) === 'charge'}
+                        className="inline-flex h-7 w-7 items-center justify-center border border-slate-800 text-slate-400 transition hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e] disabled:cursor-not-allowed disabled:opacity-30"
+                        title="Bajar"
+                        aria-label={`Bajar ${container?.label || containerId}`}
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeCardContainer(index)}
+                        className="inline-flex h-7 w-7 items-center justify-center border border-slate-800 text-slate-400 transition hover:border-red-400/50 hover:text-red-300"
+                        title="Quitar"
+                        aria-label={`Quitar ${container?.label || containerId}`}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {CARD_CONTAINER_TYPES.map((container) => {
+                  const isFull = cardContainers.length >= MAX_CARD_CONTAINERS;
+                  const isSingletonTaken = SINGLE_INSTANCE_CARD_CONTAINERS.has(container.id) && hasContainer(container.id);
+                  
+                  // Validation of physical height budget (1581px)
+                  const nextContainer = createCardContainer(container.id);
+                  let tentative;
+                  if (container.id === 'minion') {
+                    tentative = [nextContainer, ...cardContainers];
+                  } else if (container.id === 'charge') {
+                    tentative = [...cardContainers, nextContainer];
+                  } else {
+                    const chargeIndex = cardContainers.findIndex((c, idx) => getContainerId(c, idx) === 'charge');
+                    if (chargeIndex === -1) {
+                      tentative = [...cardContainers, nextContainer];
+                    } else {
+                      tentative = [
+                        ...cardContainers.slice(0, chargeIndex),
+                        nextContainer,
+                        ...cardContainers.slice(chargeIndex),
+                      ];
+                    }
+                  }
+                  const wouldOverflow = getContainersTotalHeight(tentative, containerDescriptionSizes) > 1581;
+                  const disabled = isFull || isSingletonTaken || wouldOverflow;
+                  
+                  return (
+                    <button
+                      key={container.id}
+                      type="button"
+                      onClick={() => addCardContainer(container.id)}
+                      disabled={disabled}
+                      className="inline-flex items-center justify-center gap-1 border border-slate-800 bg-[#09090b]/60 px-2 py-2 text-[9px] font-black uppercase tracking-[0.1em] text-slate-400 transition hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e] disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                      <Plus className="h-3 w-3" />
+                      {container.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            )}
+
+            {!isDedicatedBaseLayout && cardType === 'general' && (
+              <div className="space-y-4 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
+                <div className="font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
+                  Datos de contenedores
                 </div>
                 
-                {(cardType === 'weapon' || cardType === 'skill') && (
-                  <>
-                    {/* 1. Tipo de Arma */}
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        Tipo de Arma
-                      </label>
-                      <select
-                        value={weaponType}
-                        onChange={(event) => setWeaponType(event.target.value)}
-                        className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
-                      >
-                        {WEAPON_TYPES.map((type) => (
-                          <option key={type} value={type}>
-                            {type}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* 2. Alcance */}
+                {hasContainer('range') && (
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                         Alcance
@@ -3522,25 +7407,6 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                         ))}
                       </div>
                     </div>
-                    {cardType === 'weapon' && (
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                          Elemento / Estado
-                        </label>
-                        <select
-                          value={selectedElement}
-                          onChange={(event) => setSelectedElement(event.target.value)}
-                          className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
-                        >
-                          {ELEMENT_TYPES.map((type) => (
-                            <option key={type.id} value={type.id}>
-                              {type.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </>
                 )}
 
                 {cardType === 'action' && (
@@ -3563,82 +7429,265 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                   </div>
                 )}
 
-                {(cardType === 'weapon' || (cardType === 'action' && actionCenterMode === 'dado') || cardType === 'skill') && (cardType !== 'weapon' || selectedElement === 'Ninguno') && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        {cardType === 'weapon' ? 'Dado de Daño' : cardType === 'skill' ? 'Dado del Minion' : 'Dado de Acción'}
-                      </label>
-                      <select
-                        value={diceType}
-                        onChange={(event) => setDiceType(event.target.value)}
-                        className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
-                      >
-                        {['D4', 'D6', 'D8', 'D10', 'D12', 'DX'].map((type) => (
-                          <option key={type} value={type}>
-                            {type}
-                          </option>
+                {chargeContainers.map((container) => {
+                  const activeChargeSlots = [...chargeSlots].slice(0, CHARGE_SLOT_COUNT);
+                  while (activeChargeSlots.length < CHARGE_SLOT_COUNT) activeChargeSlots.push(EMPTY_SLOT);
+                  return (
+                    <div key={`charge-editor-${container.key}`} className="space-y-3 rounded border border-[#c8aa6e]/15 bg-[#09090b]/35 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          Carga
+                        </label>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                          5 rombos
+                        </span>
+                      </div>
+                      <div className="flex items-end justify-center gap-3 py-2">
+                        {activeChargeSlots.map((slot, index) => {
+                          const chargeOptions = ['', 'Hambre', 'Cuerpo', 'Mente'];
+                          const currentIdx = chargeOptions.indexOf(slot);
+                          const nextValue = chargeOptions[(currentIdx + 1) % chargeOptions.length];
+                          const colorMap = { Hambre: '#3d7d45', Cuerpo: '#a93832', Mente: '#2f6fb3' };
+                          const slotColor = colorMap[slot] || '#c8aa6e33';
+                          const diamondSize = 38;
+                          const labelMap = { Hambre: 'HAM', Cuerpo: 'CUE', Mente: 'MEN' };
+
+                          return (
+                            <div
+                              key={`${container.key}-charge-slot-${index}`}
+                              className="flex flex-col items-center gap-1 cursor-pointer group"
+                              onClick={() => handleChargeSlotChange(index, nextValue)}
+                              title={`Slot ${index + 1}: ${slot || 'Vacío'} — Click para cambiar`}
+                            >
+                              <svg
+                                width={diamondSize + 6}
+                                height={diamondSize + 6}
+                                viewBox={`0 0 ${diamondSize + 6} ${diamondSize + 6}`}
+                                className="transition-transform duration-150 group-hover:scale-110"
+                              >
+                                <rect
+                                  x={(diamondSize + 6) / 2 - diamondSize / 2 / Math.SQRT2}
+                                  y={(diamondSize + 6) / 2 - diamondSize / 2 / Math.SQRT2}
+                                  width={diamondSize / Math.SQRT2}
+                                  height={diamondSize / Math.SQRT2}
+                                  transform={`rotate(45 ${(diamondSize + 6) / 2} ${(diamondSize + 6) / 2})`}
+                                  fill={slot ? slotColor : 'transparent'}
+                                  stroke={slot ? slotColor : '#c8aa6e44'}
+                                  strokeWidth={slot ? 0 : 1.5}
+                                  rx="2"
+                                />
+                                {slot && (
+                                  <text
+                                    x={(diamondSize + 6) / 2}
+                                    y={(diamondSize + 6) / 2}
+                                    textAnchor="middle"
+                                    dominantBaseline="central"
+                                    fill="#fff"
+                                    fontSize={11}
+                                    fontWeight="900"
+                                    fontFamily="Inter, sans-serif"
+                                  >
+                                    {labelMap[slot] || ''}
+                                  </text>
+                                )}
+                              </svg>
+                              <span className={`text-[8px] font-bold uppercase tracking-wider ${slot ? 'text-slate-300' : 'text-slate-600'}`}>
+                                {slot || '—'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {damageContainers.map((container, damageIndex) => {
+                  const damageConfig = containerDamage[container.key] || DEFAULT_CONTAINER_DAMAGE;
+                  const activeDiceType = damageConfig.diceType || DEFAULT_CONTAINER_DAMAGE.diceType;
+                  const activeDiceQty = damageConfig.diceQty || DEFAULT_CONTAINER_DAMAGE.diceQty;
+                  return (
+                    <div key={`damage-editor-${container.key}`} className="space-y-3 rounded border border-[#c8aa6e]/15 bg-[#09090b]/35 p-3">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        Daño {damageIndex + 1}
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                            Dado
+                          </label>
+                          <select
+                            value={activeDiceType}
+                            onChange={(event) => {
+                              if (damageIndex === 0) setDiceType(event.target.value);
+                              handleContainerDamageChange(container.key, { diceType: event.target.value });
+                            }}
+                            className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
+                          >
+                            {['D4', 'D6', 'D8', 'D10', 'D12', 'DX'].map((type) => (
+                              <option key={type} value={type}>
+                                {type}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                            Cantidad
+                          </label>
+                          {activeDiceType === 'DX' ? (
+                            <div className="flex items-center justify-center h-[38px] border border-slate-800 bg-[#09090b]/60 px-2 text-[10px] uppercase tracking-[0.12em] text-slate-500">
+                              Variable
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-[2.5rem_1fr_2.5rem] h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextQty = activeDiceQty - 1;
+                                  if (damageIndex === 0) handleDiceQtyChange(nextQty);
+                                  handleContainerDamageChange(container.key, { diceQty: nextQty });
+                                }}
+                                className="flex items-center justify-center border-r border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10 h-full cursor-pointer"
+                                aria-label={`Reducir cantidad de dados de daño ${damageIndex + 1}`}
+                              >
+                                -
+                              </button>
+                              <input
+                                type="number"
+                                min={1}
+                                max={MAX_DAMAGE_DICE_QTY}
+                                value={activeDiceQty}
+                                onChange={(event) => {
+                                  const nextQty = parseInt(event.target.value, 10) || 1;
+                                  if (damageIndex === 0) handleDiceQtyChange(nextQty);
+                                  handleContainerDamageChange(container.key, { diceQty: nextQty });
+                                }}
+                                className="w-full h-full bg-transparent px-2 text-center text-sm font-bold text-[#f0e6d2] outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextQty = activeDiceQty + 1;
+                                  if (damageIndex === 0) handleDiceQtyChange(nextQty);
+                                  handleContainerDamageChange(container.key, { diceQty: nextQty });
+                                }}
+                                className="flex items-center justify-center border-l border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10 h-full cursor-pointer"
+                                aria-label={`Aumentar cantidad de dados de daño ${damageIndex + 1}`}
+                              >
+                                +
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {consumptionContainers.map((container, consumptionIndex) => {
+                  const consumptionConfig = containerConsumptions[container.key] || createDefaultContainerConsumption();
+                  const activeSlots = [...(consumptionConfig.slots || DEFAULT_CONSUMPTION_SLOTS)].slice(0, RESOURCE_SLOT_COUNT);
+                  const activeSlotTypes = [...(consumptionConfig.slotTypes || DEFAULT_CONTAINER_CONSUMPTION_TYPES)].slice(0, RESOURCE_SLOT_COUNT);
+                  while (activeSlots.length < RESOURCE_SLOT_COUNT) activeSlots.push(EMPTY_SLOT);
+                  while (activeSlotTypes.length < RESOURCE_SLOT_COUNT) activeSlotTypes.push('consumption');
+                  return (
+                    <div key={`consumption-editor-${container.key}`} className="space-y-3 rounded border border-[#c8aa6e]/15 bg-[#09090b]/35 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          Consumo {consumptionIndex + 1}
+                        </label>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                          4 slots
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {activeSlots.map((slot, index) => (
+                          <div
+                            key={`${container.key}-consumption-slot-${index}`}
+                            className={`grid items-center border border-[#c8aa6e]/20 bg-[#09090b]/80 ${
+                              cardType === 'armor' ? 'grid-cols-[1.75rem_minmax(0,1fr)]' : 'grid-cols-[1.5rem_minmax(0,1fr)_2.25rem]'
+                            }`}
+                          >
+                            <span className="border-r border-[#c8aa6e]/15 py-2 text-center text-[10px] font-black text-[#c8aa6e]">
+                              {index + 1}
+                            </span>
+                            <select
+                              value={slot}
+                              onChange={(event) => {
+                                if (consumptionIndex === 0) handleConsumptionSlotChange(index, event.target.value);
+                                handleContainerConsumptionSlotChange(container.key, index, event.target.value);
+                              }}
+                              className={`min-w-0 bg-transparent py-2 font-bold uppercase text-[#f0e6d2] outline-none cursor-pointer h-full ${
+                                cardType !== 'armor' && slot === 'Armadura_1'
+                                  ? 'px-1 text-[10px] tracking-normal'
+                                  : 'px-2 text-xs'
+                              }`}
+                              aria-label={`Consumo ${consumptionIndex + 1} slot ${index + 1}`}
+                            >
+                              <option value="">Vacío</option>
+                              {cardType === 'armor'
+                                ? CONSUMPTION_TYPES.filter((option) => option.id === 'Armadura_1').map((option) => (
+                                    <option key={option.id} value={option.id}>
+                                      {option.label}
+                                    </option>
+                                  ))
+                                : (activeSlotTypes[index] || 'consumption') === 'consumption'
+                                ? CONSUMPTION_TYPES.map((option) => (
+                                    <option key={option.id} value={option.id}>
+                                      {option.label}
+                                    </option>
+                                  ))
+                                : ELEMENT_TYPES.filter((type) => type.id !== 'Ninguno').map((type) => (
+                                    <option key={type.id} value={type.id}>
+                                      {type.label}
+                                    </option>
+                                  ))}
+                            </select>
+                            {cardType !== 'armor' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (consumptionIndex === 0) {
+                                    const nextTypes = [...consumptionSlotTypes].slice(0, RESOURCE_SLOT_COUNT);
+                                    const currentType = nextTypes[index] || 'consumption';
+                                    nextTypes[index] = currentType === 'consumption' ? 'element' : 'consumption';
+                                    setConsumptionSlotTypes(nextTypes);
+                                    handleConsumptionSlotChange(index, '');
+                                  }
+                                  handleContainerConsumptionSlotTypeToggle(container.key, index);
+                                }}
+                                className={`h-full border-l border-[#c8aa6e]/15 text-[9px] sm:text-[10px] font-bold uppercase transition flex items-center justify-center cursor-pointer select-none ${
+                                  (activeSlotTypes[index] || 'consumption') === 'consumption'
+                                    ? 'text-[#c8aa6e] bg-[#c8aa6e]/5 hover:bg-[#c8aa6e]/15'
+                                    : 'text-teal-400 bg-teal-500/10 hover:bg-teal-500/20'
+                                }`}
+                                title={(activeSlotTypes[index] || 'consumption') === 'consumption' ? "Cambiar a Elemento" : "Cambiar a Consumo"}
+                              >
+                                {(activeSlotTypes[index] || 'consumption') === 'consumption' ? 'CON' : 'ELE'}
+                              </button>
+                            )}
+                          </div>
                         ))}
-                      </select>
+                      </div>
                     </div>
+                  );
+                })}
 
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        Cantidad de Dados
-                      </label>
-                      {diceType === 'DX' ? (
-                        <div className="flex items-center justify-center h-[38px] border border-slate-800 bg-[#09090b]/60 px-2 text-[9px] sm:text-[10px] uppercase tracking-[0.12em] text-slate-500 text-center leading-tight">
-                          Dado variable. Depende de otros factores.
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-[2.5rem_1fr_2.5rem] h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80">
-                          <button
-                            type="button"
-                            onClick={() => handleDiceQtyChange(diceQty - 1)}
-                            className="flex items-center justify-center border-r border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10 h-full cursor-pointer"
-                            aria-label="Reducir cantidad de dados"
-                          >
-                            -
-                          </button>
-                          <input
-                            type="number"
-                            min={1}
-                            max={cardType === 'action' ? 6 : 9}
-                            value={diceQty}
-                            onChange={(event) => handleDiceQtyChange(parseInt(event.target.value, 10) || 1)}
-                            className="w-full h-full bg-transparent px-2 text-center text-sm font-bold text-[#f0e6d2] outline-none"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleDiceQtyChange(diceQty + 1)}
-                            className="flex items-center justify-center border-l border-[#c8aa6e]/15 text-base font-black text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10 h-full cursor-pointer"
-                            aria-label="Aumentar cantidad de dados"
-                          >
-                            +
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {cardType === 'skill' && (
+                {(cardType === 'skill' || hasContainer('minion')) && (
                   <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-3">
                     <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                       Atributos del Minion
                     </label>
                     <div className="grid grid-cols-3 gap-2">
                       {MINION_ATTRIBUTE_TYPES.map((attribute) => {
-                        const iconSrc = `${process.env.PUBLIC_URL || ''}/interfaz/cargas/${attribute}.webp`;
+                        const iconSrc = `${process.env.PUBLIC_URL || ''}/interfaz/consumo_new/${attribute}.webp`;
                         return (
                           <label
                             key={`minion-attribute-${attribute}`}
-                            className="grid grid-cols-[2rem_1fr] items-center border border-[#c8aa6e]/20 bg-[#09090b]/80"
+                            className="grid grid-cols-[1fr_2rem] items-center border border-[#c8aa6e]/20 bg-[#09090b]/80"
                             title={attribute}
                           >
-                            <span className="flex h-full items-center justify-center border-r border-[#c8aa6e]/15">
-                              <img src={iconSrc} alt="" className="h-5 w-5 object-contain" />
-                            </span>
                             <input
                               type="number"
                               min={0}
@@ -3648,309 +7697,188 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                               className="h-[34px] min-w-0 bg-transparent px-1 text-center text-sm font-black text-[#f0e6d2] outline-none"
                               aria-label={`Atributo ${attribute}`}
                             />
+                            <span className="flex h-full items-center justify-center border-l border-[#c8aa6e]/15">
+                              <span
+                                style={{
+                                  display: 'block',
+                                  width: '1.25rem',
+                                  height: '1.25rem',
+                                  backgroundColor: DESCRIPTION_ICON_STYLES[attribute]?.stroke || '#c46f1f',
+                                  WebkitMaskImage: `url("${iconSrc}")`,
+                                  maskImage: `url("${iconSrc}")`,
+                                  WebkitMaskRepeat: 'no-repeat',
+                                  maskRepeat: 'no-repeat',
+                                  WebkitMaskPosition: 'center',
+                                  maskPosition: 'center',
+                                  WebkitMaskSize: 'contain',
+                                  maskSize: 'contain',
+                                }}
+                              />
+                            </span>
                           </label>
                         );
                       })}
                     </div>
                   </div>
                 )}
-
-                {usesChargeResources && (
-                  <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-3">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                      Recursos
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setResourceMode(RESOURCE_MODE_BOTH)}
-                        className={`border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition ${resourceMode === RESOURCE_MODE_BOTH
-                          ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
-                          : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
-                          }`}
-                      >
-                        Carga + consumo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setResourceMode(RESOURCE_MODE_CHARGE_ONLY)}
-                        className={`border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition ${resourceMode === RESOURCE_MODE_CHARGE_ONLY
-                          ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
-                          : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
-                          }`}
-                      >
-                        Solo carga
-                      </button>
-                      {cardType === 'trap' && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => setResourceMode(RESOURCE_MODE_CONSUMPTION_ONLY)}
-                            className={`border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition ${resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY
-                              ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
-                              : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
-                              }`}
-                          >
-                            Solo consumo
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setResourceMode(RESOURCE_MODE_NONE)}
-                            className={`border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.1em] transition ${resourceMode === RESOURCE_MODE_NONE
-                              ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
-                              : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
-                              }`}
-                          >
-                            Sin recursos
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {usesChargeResources && (resourceMode === RESOURCE_MODE_BOTH || resourceMode === RESOURCE_MODE_CHARGE_ONLY) && (
-                  <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-3">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                      Carga
-                    </label>
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      {chargeSlots.map((slot, index) => (
-                        <label
-                          key={`charge-slot-${index}`}
-                          className="grid grid-cols-[1.75rem_1fr] items-center border border-[#c8aa6e]/20 bg-[#09090b]/80"
-                        >
-                          <span className="border-r border-[#c8aa6e]/15 py-2 text-center text-[10px] font-black text-[#c8aa6e]">
-                            {index + 1}
-                          </span>
-                          <select
-                            value={slot}
-                            onChange={(event) => handleChargeSlotChange(index, event.target.value)}
-                            className="min-w-0 bg-transparent px-2 py-2 text-xs font-bold uppercase text-[#f0e6d2] outline-none"
-                            aria-label={`Carga ${index + 1}`}
-                          >
-                            <option value="">Vacío</option>
-                            {CHARGE_TYPES.map((option) => (
-                              <option key={option.id} value={option.id}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {usesConsumptionResources && (
-                  <div className="space-y-3">
-                    <div className={`flex items-center justify-between gap-2 ${(cardType === 'action' || (cardType === 'trap' && resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY)) ? 'border-b border-[#c8aa6e]/10 pb-3' : ''}`}>
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        {cardType === 'weapon' ? 'Consumo' : cardType === 'armor' ? 'Armadura' : 'Consumo'}
-                      </label>
-                      {(cardType === 'action' || (cardType === 'trap' && resourceMode === RESOURCE_MODE_CONSUMPTION_ONLY)) && (
-                        <div className="flex gap-1">
-                          {[5, 6, 7].map((num) => {
-                            const isSelected = consumptionSlots.length === num;
-                            return (
-                              <button
-                                key={`action-slots-count-${num}`}
-                                type="button"
-                                onClick={() => {
-                                  setConsumptionSlots((currentSlots) => {
-                                    const nextSlots = [...currentSlots];
-                                    if (nextSlots.length < num) {
-                                      while (nextSlots.length < num) {
-                                        nextSlots.push(EMPTY_SLOT);
-                                      }
-                                    } else if (nextSlots.length > num) {
-                                      nextSlots.length = num;
-                                    }
-                                    return nextSlots;
-                                  });
-                                  setConsumptionSlotTypes((prevTypes) => {
-                                    const nextTypes = [...prevTypes];
-                                    if (nextTypes.length < num) {
-                                      while (nextTypes.length < num) {
-                                        nextTypes.push('consumption');
-                                      }
-                                    } else if (nextTypes.length > num) {
-                                      nextTypes.length = num;
-                                    }
-                                    return nextTypes;
-                                  });
-                                }}
-                                className={`h-7 w-10 border text-[10px] font-bold transition cursor-pointer flex items-center justify-center ${
-                                  isSelected
-                                    ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
-                                    : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
-                                }`}
-                              >
-                                {num}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {consumptionSlots.map((slot, index) => (
-                      <div
-                        key={`consumption-slot-${index}`}
-                        className={`grid items-center border border-[#c8aa6e]/20 bg-[#09090b]/80 ${
-                          cardType === 'armor' ? 'grid-cols-[1.75rem_minmax(0,1fr)]' : 'grid-cols-[1.5rem_minmax(0,1fr)_2.25rem]'
-                        }`}
-                      >
-                        <span className="border-r border-[#c8aa6e]/15 py-2 text-center text-[10px] font-black text-[#c8aa6e]">
-                          {index + 1}
-                        </span>
-                        <select
-                          value={slot}
-                          onChange={(event) => handleConsumptionSlotChange(index, event.target.value)}
-                          className={`min-w-0 bg-transparent py-2 font-bold uppercase text-[#f0e6d2] outline-none cursor-pointer h-full ${
-                            cardType !== 'armor' && slot === 'Armadura_1'
-                              ? 'px-1 text-[10px] tracking-normal'
-                              : 'px-2 text-xs'
-                          }`}
-                          aria-label={cardType === 'weapon' ? `Consumo ${index + 1}` : cardType === 'armor' ? `Armadura ${index + 1}` : `Consumo ${index + 1}`}
-                        >
-                          <option value="">Vacío</option>
-                          {cardType === 'armor'
-                            ? CONSUMPTION_TYPES.filter((option) => option.id === 'Armadura_1').map((option) => (
-                                <option key={option.id} value={option.id}>
-                                  {option.label}
-                                </option>
-                              ))
-                            : (consumptionSlotTypes[index] || 'consumption') === 'consumption'
-                            ? CONSUMPTION_TYPES.map((option) => (
-                                <option key={option.id} value={option.id}>
-                                  {option.label}
-                                </option>
-                              ))
-                            : ELEMENT_TYPES.filter((type) => type.id !== 'Ninguno').map((type) => (
-                                <option key={type.id} value={type.id}>
-                                  {type.label}
-                                </option>
-                              ))}
-                        </select>
-                        {cardType !== 'armor' && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const nextTypes = [...consumptionSlotTypes];
-                              const currentType = nextTypes[index] || 'consumption';
-                              nextTypes[index] = currentType === 'consumption' ? 'element' : 'consumption';
-                              setConsumptionSlotTypes(nextTypes);
-                              handleConsumptionSlotChange(index, '');
-                            }}
-                            className={`h-full border-l border-[#c8aa6e]/15 text-[9px] sm:text-[10px] font-bold uppercase transition flex items-center justify-center cursor-pointer select-none ${
-                              (consumptionSlotTypes[index] || 'consumption') === 'consumption'
-                                ? 'text-[#c8aa6e] bg-[#c8aa6e]/5 hover:bg-[#c8aa6e]/15'
-                                : 'text-teal-400 bg-teal-500/10 hover:bg-teal-500/20'
-                            }`}
-                            title={(consumptionSlotTypes[index] || 'consumption') === 'consumption' ? "Cambiar a Elemento" : "Cambiar a Consumo"}
-                          >
-                            {(consumptionSlotTypes[index] || 'consumption') === 'consumption' ? 'CON' : 'ELE'}
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                )}
-                {cardType === 'status' && (
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                      Elemento / Estado
-                    </label>
-                    <select
-                      value={selectedElement}
-                      onChange={(event) => setSelectedElement(event.target.value)}
-                      className="w-full h-[38px] border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 text-sm font-semibold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70 cursor-pointer"
-                    >
-                      {ELEMENT_TYPES.map((type) => (
-                        <option key={type.id} value={type.id}>
-                          {type.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
               </div>
             )}
 
-            {activeType.id !== 'action' && (
-              <div className="space-y-2">
+            {!isDedicatedBaseLayout && hasContainer('description') && (
+              <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3 pb-1">
                   <label className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
                     <Type className="h-4 w-4" />
-                    {hasSplitDescription ? 'Texto principal' : 'Descripción'}
+                    Descripciones
                   </label>
-                  <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 cursor-pointer">
+                  <label className="flex cursor-pointer items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
                     <input
                       type="checkbox"
                       checked={hyphenate}
                       onChange={(event) => setHyphenate(event.target.checked)}
-                      className="h-4 w-4 accent-[#c8aa6e] cursor-pointer"
+                      className="h-4 w-4 cursor-pointer accent-[#c8aa6e]"
                     />
                     Guionizar
                   </label>
                 </div>
-                {renderToolbar(descriptionRef, 'description')}
-                <textarea
-                  ref={descriptionRef}
-                  value={description}
-                  onChange={(event) => handleDescriptionChange(event.target.value)}
-                  onKeyDown={(event) => handleTextareaKeyDown(event, descriptionRef, setDescription, descriptionHistoryRef, description)}
-                  onFocus={() => setFocusedField('description')}
-                  onBlur={() => setFocusedField(null)}
-                  rows={hasSplitDescription ? 4 : 5}
-                  maxLength={hasSplitDescription ? 360 : descriptionMaxLength}
-                  className="min-h-[112px] w-full resize-y border border-t-0 border-[#c8aa6e]/25 bg-[#09090b]/80 px-4 py-3 text-base font-semibold leading-relaxed text-[#f0e6d2] outline-none transition placeholder:text-slate-600 focus:border-[#c8aa6e]/70 focus:shadow-[0_4px_12px_rgba(200,170,110,0.06),_4px_0_12px_rgba(200,170,110,0.06),_-4px_0_12px_rgba(200,170,110,0.06)] rounded-b-md"
-                  placeholder={hasSplitDescription ? 'Descripción de la carta' : 'Texto descriptivo de la carta'}
-                />
-                {!hasSplitDescription && (
-                  <div className="flex justify-center gap-1.5 pt-1.5">
-                    {['narrative', 'principal'].map((styleOpt) => (
+
+                <div className="space-y-2 rounded border border-[#c8aa6e]/15 bg-[#09090b]/35 p-3">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                    Compendio visual
+                  </div>
+                  <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-6">
+                    {DESCRIPTION_ICON_LIBRARY.map((icon) => (
                       <button
-                        key={styleOpt}
+                        key={`description-icon-${icon.id}`}
                         type="button"
-                        onClick={() => setSingleTextStyle(styleOpt)}
-                        className={`border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] transition cursor-pointer ${
-                          singleTextStyle === styleOpt
-                            ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
-                            : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
-                        }`}
+                        onClick={() => insertDescriptionIcon(icon.id)}
+                        className="group flex h-16 flex-col items-center justify-center gap-1.5 border border-slate-800 bg-[#09090b]/55 px-1 text-[8px] font-black uppercase tracking-[0.08em] text-slate-500 transition hover:border-[#c8aa6e]/55 hover:bg-[#c8aa6e]/10 hover:text-[#d8c391]"
+                        title={`Insertar ${icon.label}`}
+                        aria-label={`Insertar icono ${icon.label}`}
                       >
-                        {styleOpt === 'narrative' ? 'Narrativo' : 'Principal'}
+                        <span
+                          aria-hidden="true"
+                          className="h-8 w-8 opacity-90 transition group-hover:opacity-100"
+                          style={{
+                            backgroundColor: DESCRIPTION_ICON_STYLES[icon.id]?.stroke || '#c46f1f',
+                            WebkitMaskImage: `url("${process.env.PUBLIC_URL || ''}${icon.src}")`,
+                            maskImage: `url("${process.env.PUBLIC_URL || ''}${icon.src}")`,
+                            WebkitMaskRepeat: 'no-repeat',
+                            maskRepeat: 'no-repeat',
+                            WebkitMaskPosition: 'center',
+                            maskPosition: 'center',
+                            WebkitMaskSize: 'contain',
+                            maskSize: 'contain',
+                          }}
+                        />
+                        <span className="max-w-full truncate">{icon.label}</span>
                       </button>
                     ))}
                   </div>
-                )}
-                {hasSplitDescription && (
-                  <div className="space-y-2 pt-2">
-                    <label className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e] pb-1">
-                      <Type className="h-4 w-4" />
-                      Texto narrativo
-                    </label>
-                    {renderToolbar(flavorTextRef, 'flavorText')}
-                    <textarea
-                      ref={flavorTextRef}
-                      value={flavorText}
-                      onChange={(event) => handleFlavorTextChange(event.target.value)}
-                      onKeyDown={(event) => handleTextareaKeyDown(event, flavorTextRef, setFlavorText, flavorTextHistoryRef, flavorText)}
-                      onFocus={() => setFocusedField('flavorText')}
-                      onBlur={() => setFocusedField(null)}
-                      rows={5}
-                      maxLength={560}
-                      className="min-h-[132px] w-full resize-y border border-t-0 border-[#c8aa6e]/25 bg-[#09090b]/80 px-4 py-3 text-base font-semibold italic leading-relaxed text-[#f0e6d2] outline-none transition placeholder:text-slate-600 focus:border-[#c8aa6e]/70 focus:shadow-[0_4px_12px_rgba(200,170,110,0.06),_4px_0_12px_rgba(200,170,110,0.06),_-4px_0_12px_rgba(200,170,110,0.06)] rounded-b-md"
-                      placeholder="Texto descriptivo de la carta"
-                    />
-                  </div>
-                )}
+                </div>
+
+                {descriptionContainers.map((container, descriptionIndex) => {
+                  const maxUnitsForContainer = getAvailableDescriptionUnits(container.key);
+                  const selectedUnits = clampDescriptionUnitOption(
+                    containerDescriptionSizes[container.key] || DESCRIPTION_SPACE_AUTO,
+                    maxUnitsForContainer,
+                  );
+                  const selectedStyle = containerDescriptionStyles[container.key] || 'principal';
+                  const selectedNarrativeCentered = containerDescriptionCentered[container.key] ?? DEFAULT_NARRATIVE_CENTERING;
+
+                  return (
+                    <div
+                      key={`description-editor-${container.key}`}
+                      className="space-y-2 rounded border border-[#c8aa6e]/15 bg-[#09090b]/35 p-3"
+                    >
+                      <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+                        <label className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-300">
+                          Descripción {descriptionIndex + 1}
+                        </label>
+                        <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                          Espacio
+                          <select
+                            value={selectedUnits}
+                            onChange={(event) => handleContainerDescriptionSizeChange(container.key, event.target.value)}
+                            className="h-8 border border-[#c8aa6e]/20 bg-[#09090b]/90 px-2 text-xs font-bold text-[#f0e6d2] outline-none focus:border-[#c8aa6e]/70"
+                          >
+                            <option value={DESCRIPTION_SPACE_AUTO}>Auto</option>
+                            {DESCRIPTION_SPACE_UNITS.filter((unit) => unit <= maxUnitsForContainer).map((unit) => (
+                              <option key={`${container.key}-description-unit-${unit}`} value={unit}>
+                                {unit}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+
+                      <div className="flex gap-1.5 pb-1">
+                        {['narrative', 'principal'].map((styleOpt) => (
+                          <button
+                            key={`${container.key}-style-${styleOpt}`}
+                            type="button"
+                            onClick={() => handleContainerDescriptionStyleChange(container.key, styleOpt)}
+                            className={`cursor-pointer border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] transition ${
+                              selectedStyle === styleOpt
+                                ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                                : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                            }`}
+                          >
+                            {styleOpt === 'narrative' ? 'Narrativo' : 'Principal'}
+                          </button>
+                        ))}
+                      </div>
+
+                      {selectedStyle === 'narrative' && (
+                        <label className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                          <input
+                            type="checkbox"
+                            checked={selectedNarrativeCentered}
+                            onChange={(event) => handleContainerDescriptionCenteredChange(container.key, event.target.checked)}
+                            className="h-4 w-4 accent-[#c8aa6e]"
+                          />
+                          Centrar bloque
+                        </label>
+                      )}
+
+                      {selectedStyle === 'principal' && renderContainerDescriptionToolbar(container.key, descriptionIndex)}
+                      <textarea
+                        ref={(node) => {
+                          if (node) {
+                            containerDescriptionRefs.current[container.key] = node;
+                          } else {
+                            delete containerDescriptionRefs.current[container.key];
+                          }
+                        }}
+                        value={containerDescriptions[container.key] ?? (descriptionIndex === 0 ? description : '')}
+                        onChange={(event) => {
+                          if (descriptionIndex === 0) {
+                            handleDescriptionChange(event.target.value);
+                          }
+                          handleContainerDescriptionChange(container.key, event.target.value);
+                        }}
+                        onKeyDown={(event) => {
+                          handleContainerTextareaKeyDown(event, container.key);
+                        }}
+                        onFocus={() => {
+                          setActiveDescriptionKey(container.key);
+                          setFocusedDescriptionKey(container.key);
+                        }}
+                        onBlur={() => setFocusedDescriptionKey(null)}
+                        rows={5}
+                        maxLength={descriptionMaxLength}
+                        className={`min-h-[112px] w-full resize-y border border-[#c8aa6e]/25 bg-[#09090b]/80 px-4 py-3 text-base font-semibold leading-relaxed text-[#f0e6d2] outline-none transition placeholder:text-slate-600 focus:border-[#c8aa6e]/70 focus:shadow-[0_4px_12px_rgba(200,170,110,0.06),_4px_0_12px_rgba(200,170,110,0.06),_-4px_0_12px_rgba(200,170,110,0.06)] ${
+                          selectedStyle === 'principal' ? 'rounded-b-md border-t-0' : 'rounded-md'
+                        }`}
+                        placeholder="Texto descriptivo de la carta"
+                      />
+                    </div>
+                  );
+                })}
               </div>
             )}
 
+            {hasContainer('traits') && (
             <div className="space-y-3 border-t border-[#c8aa6e]/10 pt-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
@@ -3970,51 +7898,45 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                 )}
               </div>
 
-              {activeType.maxTraits === 0 ? (
-                <div className="border border-slate-800 bg-[#09090b]/60 px-3 py-3 text-xs uppercase tracking-[0.16em] text-slate-500">
-                  Este tipo no usa rasgos.
-                </div>
-              ) : showTraits ? (
+              {showTraits ? (
                 <div className="space-y-3">
-                  {activeType.maxTraits > 2 && (
-                    <div className="flex items-center justify-between gap-2 border-b border-[#c8aa6e]/10 pb-3">
-                      <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                        Filas / Pares visibles
+                  {traitContainers.map((container, traitsIndex) => {
+                    const traitValues = (containerTraits[container.key] || (traitsIndex === 0 ? traits : DEFAULT_TRAITS)).slice(0, MAX_TRAITS_PER_CONTAINER);
+
+                    return (
+                      <div
+                        key={`traits-editor-${container.key}`}
+                        className="space-y-2 rounded border border-[#c8aa6e]/15 bg-[#09090b]/35 p-3"
+                      >
+                        <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-300">
+                          Rasgos {traitsIndex + 1} · Máximo 3
+                        </div>
+                        <div className="grid grid-cols-1 gap-2">
+                          {Array.from({ length: MAX_TRAITS_PER_CONTAINER }).map((_, index) => {
+                            const currentValue = traitValues[index] || '';
+                            return (
+                              <input
+                                key={`${container.key}-trait-${index}`}
+                                value={currentValue}
+                                onChange={(event) => {
+                                  const val = event.target.value;
+                                  if (val.length < currentValue.length || fitsTraitWidth(val)) {
+                                    if (traitsIndex === 0) {
+                                      handleTraitChange(index, val);
+                                    }
+                                    handleContainerTraitChange(container.key, index, val);
+                                  }
+                                }}
+                                maxLength={22}
+                                className="w-full border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 py-2 text-sm font-bold uppercase tracking-[0.08em] text-[#f0e6d2] outline-none transition placeholder:text-slate-700 focus:border-[#c8aa6e]/70"
+                                placeholder={`Rasgo ${index + 1}`}
+                              />
+                            );
+                          })}
+                        </div>
                       </div>
-                      <div className="flex gap-1">
-                        {Array.from({ length: activeType.maxTraits / 2 }).map((_, i) => {
-                          const rowVal = i + 1;
-                          const isSelected = visibleTraitRows === rowVal;
-                          return (
-                            <button
-                              key={`visible-rows-${rowVal}`}
-                              type="button"
-                              onClick={() => setVisibleTraitRows(rowVal)}
-                              className={`h-7 w-10 border text-[10px] font-bold transition cursor-pointer flex items-center justify-center ${
-                                isSelected
-                                  ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
-                                  : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
-                              }`}
-                            >
-                              {rowVal}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1">
-                    {Array.from({ length: activeType.maxTraits > 2 ? Math.min(visibleTraitRows, activeType.maxTraits / 2) * 2 : activeType.maxTraits }).map((_, index) => (
-                      <input
-                        key={`${cardType}-trait-${index}`}
-                        value={traits[index] || ''}
-                        onChange={(event) => handleTraitChange(index, event.target.value)}
-                        maxLength={22}
-                        className="w-full border border-[#c8aa6e]/20 bg-[#09090b]/80 px-3 py-2 text-sm font-bold uppercase tracking-[0.08em] text-[#f0e6d2] outline-none transition placeholder:text-slate-700 focus:border-[#c8aa6e]/70"
-                        placeholder={cardType === 'trap' ? 'TRAMPA' : `Rasgo ${index + 1}`}
-                      />
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="border border-slate-800 bg-[#09090b]/60 px-3 py-3 text-xs uppercase tracking-[0.16em] text-slate-500">
@@ -4022,70 +7944,75 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
                 </div>
               )}
             </div>
+            )}
 
             <div className="space-y-3">
               <div className="flex items-center gap-2 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
                 <Palette className="h-4 w-4" />
-                Fondo
+                Acento
               </div>
 
-              <div className="grid grid-cols-3 gap-3 pr-1 sm:grid-cols-5 lg:max-h-[56vh] lg:grid-cols-3 lg:overflow-y-auto lg:custom-scrollbar">
-                {CARD_BACKGROUNDS.map((background) => {
-                  const isSelected = background.file === selectedBackground;
-
-                  return (
-                    <button
-                      key={background.file}
-                      type="button"
-                      onClick={() => setSelectedBackground(background.file)}
-                      className={`group relative aspect-[1888/2624] overflow-hidden border bg-[#09090b] transition-all ${isSelected
-                        ? 'border-[#c8aa6e] shadow-[0_0_20px_rgba(200,170,110,0.28)]'
-                        : 'border-slate-700/70 hover:border-[#c8aa6e]/60'
-                        }`}
-                      title={background.name}
-                      aria-label={`Fondo ${background.name}`}
-                      aria-pressed={isSelected}
-                    >
-                      <img
-                        src={background.src}
-                        alt=""
-                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-                        loading="lazy"
-                      />
-                      <span className="absolute inset-x-0 bottom-0 bg-black/70 px-1 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-200">
-                        {background.name}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Custom background color overlay controls */}
               <div className="mt-3 space-y-2.5 rounded border border-[#c8aa6e]/15 bg-[#09090b]/40 p-3 shadow-inner">
-                <div className="flex items-center justify-between gap-3">
-                  <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-300">
-                    <input
-                      type="checkbox"
-                      checked={customColorActive}
-                      onChange={(event) => {
-                        setCustomColorActive(event.target.checked);
-                        if (event.target.checked) {
-                          setSelectedBackground('Gris.webp');
-                        }
-                      }}
-                      className="h-4 w-4 accent-[#c8aa6e]"
-                    />
-                    Personalizar color
-                  </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {ACCENT_PRESET_COLORS.map((preset) => {
+                    const isSelected = preset.id === 'default'
+                      ? !customColorActive
+                      : customColorActive && customColor.toLowerCase() === preset.value.toLowerCase();
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          if (preset.id === 'default') {
+                            setCustomColorActive(false);
+                          } else {
+                            setCustomColorActive(true);
+                            setCustomColor(preset.value);
+                          }
+                        }}
+                        className={`flex h-11 items-center justify-center border text-[8px] font-black uppercase tracking-[0.08em] transition ${
+                          isSelected
+                            ? 'border-[#f0e6d2] text-[#f0e6d2]'
+                            : 'border-slate-800 text-slate-500 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                        }`}
+                        style={{ background: `linear-gradient(135deg, ${preset.value}44, ${preset.value}12)` }}
+                        title={preset.label}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
                 </div>
-                {customColorActive && (
-                  <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-2.5">
-                    <HexColorInput value={customColor} onChange={setCustomColor} />
-                    <p className="text-[10px] italic leading-normal text-slate-400">
-                      * Se recomienda usar el fondo <strong>Gris</strong> como base para obtener colores puros.
-                    </p>
+                <div className="space-y-2 border-t border-[#c8aa6e]/10 pt-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                      Personalizado
+                    </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomColorActive(true);
+                    }}
+                    className={`border px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition ${
+                      customColorActive && !ACCENT_PRESET_COLORS.some((preset) => preset.id !== 'default' && preset.value.toLowerCase() === customColor.toLowerCase())
+                        ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
+                        : 'border-slate-800 bg-[#09090b]/40 text-slate-400 hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]'
+                    }`}
+                  >
+                    Hex
+                  </button>
                   </div>
-                )}
+                    <HexColorInput
+                      value={customColor}
+                      onChange={(value) => {
+                        setCustomColor(value);
+                        setCustomColorActive(true);
+                      }}
+                    />
+                    <p className="text-[10px] italic leading-normal text-slate-400">
+                      Cambia la línea bajo la imagen, los rombos y los indicadores activos.
+                    </p>
+                </div>
               </div>
             </div>
           </aside>
@@ -4102,8 +8029,11 @@ const CardBuilder = ({ onBack, mode = 'player', characterName = '', currentUserI
             <div className="pointer-events-none absolute inset-0 bg-[#05070d]/50" />
             <div className="relative flex h-full w-full max-w-full items-center justify-center lg:sticky lg:top-12 lg:self-start lg:h-fit lg:w-full lg:items-start">
               <div 
-                className="relative w-full max-w-[380px] sm:max-w-[460px] lg:max-w-[520px] lg:max-h-[calc(100vh-220px)] shrink-0 select-none"
-                style={{ aspectRatio: '1888/2624' }}
+                className="relative w-full max-w-[380px] shrink-0 select-none sm:max-w-[460px] lg:max-w-[520px]"
+                style={{
+                  aspectRatio: '1888/2624',
+                  width: 'min(100%, 520px, calc((100vh - 220px) * 1888 / 2624))',
+                }}
               >
                 {/* Luz ambiental suave detrás de la previsualización, sin cortes visibles. */}
                 <div

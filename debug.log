@@ -1,0 +1,4 @@
+[2026-07-25/ 05:37:51.135:INFO:selfupdate_helper_win.cc(214)] Current user isNon-Admin
+[2026-07-25/ 05:37:51.144:INFO:selfupdate_helper_win.cc(365)] Self Update Task Started Event Handle= 0000000000000328
+[2026-07-25/ 05:37:51.145:INFO:selfupdate_helper_win.cc(490)] Triggering Application Event hEventLog = 0000026BD1432830
+[2026-07-25/ 05:37:51.198:INFO:selfupdate_helper_win.cc(511)] RunSelfUpdateTask: foundTask = 1 succeded = 1

@@ -63,6 +63,7 @@ import { CharacterCreatorView } from './components/CharacterCreatorView';
 import { CharacterListView } from './components/CharacterListView';
 import InitiativeTracker from './components/InitiativeTracker';
 import CanvasSection from './components/CanvasSection';
+import BoardSection from './components/BoardSection';
 import CardBuilder from './components/CardBuilder';
 import DeckBuilderView from './components/DeckBuilderView';
 import EnemyViewModal from './components/EnemyViewModal';
@@ -4575,8 +4576,7 @@ function App() {
 
         {showPlayerBoard && (
           <div className="fixed inset-0 z-[100]">
-            <CanvasSection
-              mode="board"
+            <BoardSection
               onBack={() => { setShowPlayerBoard(false); setPlayerCharacterData(null); }}
               playerName={playerName}
               currentUserId={playerName}
@@ -7372,8 +7372,7 @@ function App() {
 
   if (userType === 'master' && authenticated && chosenView === 'board') {
     return (
-      <CanvasSection
-        mode="board"
+      <BoardSection
         onBack={() => setChosenView(null)}
         existingPlayers={existingPlayers}
         armas={armas}
