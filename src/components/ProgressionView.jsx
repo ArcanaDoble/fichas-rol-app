@@ -1,9 +1,23 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { FiCheckCircle, FiLock, FiPlus, FiTrash2, FiEdit2 } from 'react-icons/fi';
+import {
+    FiCheck,
+    FiEdit2,
+    FiLock,
+    FiPlus,
+    FiTrash2,
+} from 'react-icons/fi';
+import { Footprints, Heart, Sparkles } from 'lucide-react';
+import NumberStepper from './NumberStepper';
 
-// Editable Text Component for inline editing
-const EditableText = ({ value, onChange, className = '', multiline = false, placeholder = 'Click para editar', readOnly = false }) => {
+const EditableText = ({
+    value,
+    onChange,
+    className = '',
+    inputClassName = '',
+    multiline = false,
+    placeholder = 'Sin definir',
+}) => {
     const [isEditing, setIsEditing] = useState(false);
     const [tempValue, setTempValue] = useState(value || '');
     const inputRef = useRef(null);
@@ -15,247 +29,416 @@ const EditableText = ({ value, onChange, className = '', multiline = false, plac
     useEffect(() => {
         if (isEditing && inputRef.current) {
             inputRef.current.focus();
-            if (!multiline) {
-                inputRef.current.select();
-            }
+            if (!multiline) inputRef.current.select();
         }
     }, [isEditing, multiline]);
 
-    const handleSave = () => {
+    const save = () => {
         onChange(tempValue);
         setIsEditing(false);
     };
 
-    const handleKeyDown = (e) => {
-        if (e.key === 'Enter' && !multiline) {
-            e.preventDefault();
-            handleSave();
-        }
-        if (e.key === 'Escape') {
+    const handleKeyDown = (event) => {
+        if (event.key === 'Escape') {
             setTempValue(value || '');
             setIsEditing(false);
         }
+        if (event.key === 'Enter' && !multiline) {
+            event.preventDefault();
+            save();
+        }
     };
 
-    if (isEditing && !readOnly) {
-        return multiline ? (
-            <textarea
-                ref={inputRef}
-                value={tempValue}
-                onChange={(e) => setTempValue(e.target.value)}
-                onBlur={handleSave}
-                onKeyDown={handleKeyDown}
-                className={`${className} bg-slate-900/90 border border-[#c8aa6e]/50 rounded px-2 py-1 focus:outline-none focus:border-[#c8aa6e] w-full resize-none`}
-                rows={3}
-            />
-        ) : (
-            <input
-                ref={inputRef}
-                type="text"
-                value={tempValue}
-                onChange={(e) => setTempValue(e.target.value)}
-                onBlur={handleSave}
-                onKeyDown={handleKeyDown}
-                className={`${className} bg-slate-900/90 border border-[#c8aa6e]/50 rounded px-2 py-1 focus:outline-none focus:border-[#c8aa6e] w-full`}
-            />
-        );
+    if (isEditing) {
+        const sharedProps = {
+            ref: inputRef,
+            value: tempValue,
+            onChange: (event) => setTempValue(event.target.value),
+            onBlur: save,
+            onKeyDown: handleKeyDown,
+            className: `${className} ${inputClassName} w-full border border-[#c8aa6e]/35 bg-[#080c17] px-3 py-2 text-[#f0e6d2] outline-none transition focus:border-[#c8aa6e]/70`,
+        };
+
+        return multiline
+            ? <textarea {...sharedProps} rows={4} className={`${sharedProps.className} resize-y`} />
+            : <input {...sharedProps} type="text" />;
     }
 
     return (
-        <div
-            onClick={() => !readOnly && setIsEditing(true)}
-            className={`${className} ${!readOnly ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''} group relative flex items-center gap-2`}
-            title={!readOnly ? "Click para editar" : ""}
+        <button
+            type="button"
+            onClick={() => setIsEditing(true)}
+            className={`${className} group/edit relative block w-full text-left transition hover:text-[#f0e6d2]`}
+            title="Editar"
         >
-            <span className="break-words w-full">{value || placeholder}</span>
-            {!readOnly && (
-                <FiEdit2 className="opacity-0 group-hover:opacity-100 text-[#c8aa6e] w-3 h-3 transition-opacity shrink-0" />
+            <span className={!value ? 'italic text-slate-600' : ''}>{value || placeholder}</span>
+            <FiEdit2 className="ml-2 inline h-3.5 w-3.5 text-[#c8aa6e]/60 opacity-0 transition group-hover/edit:opacity-100" />
+        </button>
+    );
+};
+
+const LEVEL_METRIC_TONES = {
+    life: {
+        surface: 'border-[#b76f72]/20 bg-gradient-to-r from-[#713b43]/[0.14] via-[#713b43]/[0.045] to-transparent',
+        icon: 'text-[#cf8b8d]',
+        label: 'text-[#b88789]',
+    },
+    movement: {
+        surface: 'border-[#6593a1]/20 bg-gradient-to-r from-[#31586a]/[0.14] via-[#31586a]/[0.045] to-transparent',
+        icon: 'text-[#82aeb8]',
+        label: 'text-[#739eaa]',
+    },
+    resource: {
+        surface: 'border-[#8c72a5]/20 bg-gradient-to-r from-[#523d68]/[0.14] via-[#523d68]/[0.045] to-transparent',
+        icon: 'text-[#a88cbe]',
+        label: 'text-[#967cab]',
+    },
+};
+
+const LevelMetric = ({ icon: Icon, label, value, editable, onChange, tone }) => {
+    if (!editable && (value === null || value === undefined)) return null;
+
+    const palette = LEVEL_METRIC_TONES[tone] || LEVEL_METRIC_TONES.resource;
+
+    return (
+        <div
+            data-metric-tone={tone}
+            className={`flex min-h-[82px] min-w-0 flex-col items-stretch justify-between gap-3 overflow-hidden border-b px-3 py-3 last:border-b-0 sm:flex-row sm:items-center sm:px-4 lg:flex-col lg:items-stretch lg:border-b-0 lg:border-l lg:first:border-l-0 ${palette.surface}`}
+        >
+            <div className="flex min-w-0 items-center gap-2">
+                <Icon className={`h-4 w-4 shrink-0 ${palette.icon}`} strokeWidth={1.5} />
+                <div className="min-w-0">
+                    <div className={`break-words text-[9px] font-bold uppercase leading-4 tracking-[0.16em] ${palette.label}`}>{label}</div>
+                    {!editable && (
+                    <div className="mt-0.5 text-sm font-bold text-[#e2d5b5]">{value}</div>
+                    )}
+                </div>
+            </div>
+            {editable && (
+                <NumberStepper
+                    value={value ?? 0}
+                    onChange={onChange}
+                    label={label}
+                    min={0}
+                    max={99}
+                    className="self-start sm:self-auto lg:self-start"
+                />
             )}
         </div>
     );
 };
 
-const ProgressionView = ({ dndClass, onUpdateLevel, onToggleAcquired, onAddFeature, onRemoveFeature, onUpdateFeature }) => {
-    // Usamos classLevels directamente. Si no hay suficientes, mostramos hasta el max configurado o 20 por defecto.
-    const levelsList = dndClass.classLevels || [];
-    const totalLevels = Math.max(20, levelsList.length);
+const ProgressionRail = ({ totalLevels, currentLevel, editorMode }) => {
+    if (totalLevels === 0) return null;
+
+    const progress = totalLevels <= 1
+        ? 0
+        : ((currentLevel - 1) / (totalLevels - 1)) * 100;
 
     return (
-        <div className="w-full h-full min-h-screen overflow-y-auto custom-scrollbar bg-[#09090b] pb-20 md:pb-0">
-            <div className="max-w-5xl mx-auto p-4 pt-12 md:p-8 lg:p-12">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 md:mb-12 border-b border-[#c8aa6e]/20 pb-4 md:pb-6 gap-4">
-                    <div>
-                        <h2 className="text-2xl md:text-4xl font-['Cinzel'] text-[#f0e6d2] mb-1 md:mb-2">CONSTELACIÓN</h2>
-                        <p className="text-slate-400 text-xs md:text-sm uppercase tracking-widest">Progreso de Nivel y Rasgos</p>
-                    </div>
-                    <div className="text-left sm:text-right">
-                        <div className="text-2xl md:text-3xl font-bold text-[#c8aa6e]">{dndClass.level || 0} <span className="text-slate-600 text-lg md:text-xl">/ {totalLevels}</span></div>
-                        <div className="text-[10px] md:text-xs text-slate-500 uppercase font-bold">Nivel Actual</div>
-                    </div>
-                </div>
-
-                <div className="relative space-y-0 pl-1 md:pl-0">
-                    {/* Vertical connecting line - centered on node: pl-1 (4px) + w-12/2 (24px) = 28px for mobile */}
-                    <div className="absolute left-[28px] md:left-[32px] top-8 bottom-8 w-[2px] bg-slate-800 z-0"></div>
+        <div className="overflow-x-auto custom-scrollbar pb-2" data-testid="roguelite-progression-rail">
+            <div
+                className="relative mx-auto flex h-24 items-start justify-between px-6 pt-1"
+                style={{ minWidth: `${Math.max(620, totalLevels * 76)}px` }}
+            >
+                <div className="absolute left-10 right-10 top-[22px] h-px bg-slate-800" />
+                {!editorMode && (
                     <div
-                        className="absolute left-[28px] md:left-[32px] top-8 w-[2px] bg-gradient-to-b from-[#c8aa6e] to-slate-800 z-0 transition-all duration-1000"
-                        style={{ height: `${((dndClass.level || 0) / totalLevels) * 100}%` }}
-                    ></div>
+                        className="absolute left-10 top-[22px] h-px bg-[#c8aa6e] shadow-[0_0_8px_rgba(200,170,110,0.45)] transition-all duration-700"
+                        style={{ width: `calc((100% - 80px) * ${progress / 100})` }}
+                    />
+                )}
 
-                    {Array.from({ length: totalLevels }, (_, i) => i + 1).map((level) => {
-                        const levelIndex = level - 1;
-                        const levelData = levelsList[levelIndex] || { title: `Nivel ${level}`, description: '' };
-                        const isPast = level <= (dndClass.level || 0);
-                        const isCurrent = level === (dndClass.level || 0);
+                {Array.from({ length: totalLevels }, (_, index) => {
+                    const level = index + 1;
+                    const isCurrent = !editorMode && level === currentLevel;
+                    const isUnlocked = editorMode || level <= currentLevel;
 
-                        // Calculate total items (main + extras) to limit to 3
-                        const extraFeatures = levelData.additionalFeatures || [];
-                        const canAddMore = extraFeatures.length < 2; // 1 main + 2 extras = 3 max
-
-                        return (
-                            <div key={level} className="relative z-10 group mb-4 md:mb-6 last:mb-0">
-                                <div className={`
-                                flex items-stretch gap-3 md:gap-6 p-1 rounded-lg transition-all duration-300
-                                ${isCurrent ? 'bg-gradient-to-r from-[#c8aa6e]/10 to-transparent border-l-4 border-[#c8aa6e] pl-1 md:pl-4' : ''}
-                            `}>
-                                    {/* Level Node */}
-                                    <div className="flex flex-col items-center shrink-0 pt-2">
-                                        <div className={`
-                                        w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center text-lg md:text-xl font-bold font-['Cinzel'] border-3 md:border-4 relative bg-[#0b1120] shadow-xl transition-all duration-300
-                                        ${isPast ? 'border-[#c8aa6e] text-[#c8aa6e]' : 'border-slate-700 text-slate-600 grayscale'}
-                                        ${isCurrent ? 'scale-110 shadow-[0_0_20px_rgba(200,170,110,0.4)]' : ''}
-                                     `}>
-                                            {level}
-                                            {isCurrent && <div className="absolute inset-0 rounded-full border-2 border-white/20 animate-ping"></div>}
-                                        </div>
-                                    </div>
-
-                                    {/* Content Box */}
-                                    <div className={`
-                                    flex-1 p-3 md:p-5 rounded border backdrop-blur-sm transition-all duration-300 flex flex-col md:flex-row md:items-start gap-4 md:gap-6
-                                    ${isPast
-                                            ? 'bg-[#161f32]/60 border-[#c8aa6e]/30 hover:bg-[#161f32]/80'
-                                            : 'bg-[#0b1120]/40 border-slate-800 text-slate-500'
-                                        }
-                                `}>
-                                        <div className="flex-1 space-y-6">
-                                            {/* Main Feature (Always present) */}
-                                            <div className="relative group/main">
-                                                <EditableText
-                                                    value={levelData.title}
-                                                    onChange={(val) => onUpdateLevel && onUpdateLevel(levelIndex, 'title', val)}
-                                                    className={`font-bold text-base md:text-lg font-['Cinzel'] mb-1 block ${isPast ? 'text-[#f0e6d2]' : 'text-slate-400'}`}
-                                                />
-                                                <EditableText
-                                                    value={levelData.description}
-                                                    onChange={(val) => onUpdateLevel && onUpdateLevel(levelIndex, 'description', val)}
-                                                    className={`text-sm leading-relaxed block ${isPast ? 'text-slate-300' : 'text-slate-600'}`}
-                                                    multiline={true}
-                                                />
-
-                                                {/* Add Button for first extra if none exist */}
-                                                {canAddMore && extraFeatures.length === 0 && (
-                                                    <div className="mt-2">
-                                                        <button
-                                                            onClick={() => onAddFeature && onAddFeature(levelIndex)}
-                                                            className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:text-[#c8aa6e] transition-colors opacity-0 group-hover/main:opacity-100"
-                                                            title="Añadir rasgo adicional"
-                                                        >
-                                                            <FiPlus className="w-3 h-3" /> Añadir Rasgo
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Additional Features */}
-                                            {extraFeatures.map((extra, idx) => (
-                                                <div key={idx} className="relative pl-4 border-l-2 border-slate-700/30 group/extra">
-                                                    <div className="flex items-start gap-3">
-                                                        <div className="flex-1">
-                                                            <EditableText
-                                                                value={extra.title}
-                                                                onChange={(val) => onUpdateFeature && onUpdateFeature(levelIndex, idx, 'title', val)}
-                                                                className={`font-bold text-sm md:text-base font-['Cinzel'] mb-1 block ${isPast ? 'text-[#e2d5b5]' : 'text-slate-500'}`}
-                                                                placeholder="Nuevo Título"
-                                                            />
-                                                            <EditableText
-                                                                value={extra.description}
-                                                                onChange={(val) => onUpdateFeature && onUpdateFeature(levelIndex, idx, 'description', val)}
-                                                                className={`text-xs md:text-sm leading-relaxed block ${isPast ? 'text-slate-400' : 'text-slate-600'}`}
-                                                                multiline={true}
-                                                                placeholder="Descripción del rasgo adicional..."
-                                                            />
-                                                        </div>
-                                                        <button
-                                                            onClick={() => onRemoveFeature && onRemoveFeature(levelIndex, idx)}
-                                                            className="opacity-0 group-hover/extra:opacity-100 p-1.5 text-slate-600 hover:text-rose-400 transition-opacity"
-                                                            title="Eliminar rasgo"
-                                                        >
-                                                            <FiTrash2 className="w-3.5 h-3.5" />
-                                                        </button>
-                                                    </div>
-
-                                                    {/* Add Button for subsequent extras (if below limit) */}
-                                                    {canAddMore && idx === extraFeatures.length - 1 && (
-                                                        <div className="mt-2">
-                                                            <button
-                                                                onClick={() => onAddFeature && onAddFeature(levelIndex)}
-                                                                className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:text-[#c8aa6e] transition-colors opacity-0 group-hover/extra:opacity-100"
-                                                                title="Añadir otro rasgo"
-                                                            >
-                                                                <FiPlus className="w-3 h-3" /> Añadir Rasgo
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        {/* Status Icon with Toggle */}
-                                        <div className="hidden sm:flex shrink-0 opacity-50 group-hover:opacity-100 transition-opacity self-center">
-                                            <button
-                                                onClick={() => onToggleAcquired && onToggleAcquired(levelIndex)}
-                                                className="flex flex-col items-center gap-1 cursor-pointer hover:scale-110 transition-transform focus:outline-none"
-                                                title={isPast ? "Click para marcar como no adquirido" : "Click para marcar como adquirido"}
-                                            >
-                                                {isPast ? (
-                                                    <>
-                                                        <FiCheckCircle className="w-6 h-6 text-[#c8aa6e]" />
-                                                        <span className="text-[10px] text-[#c8aa6e] font-bold uppercase tracking-wider">Adquirido</span>
-                                                    </>
-                                                ) : (
-                                                    <FiLock className="w-6 h-6 text-slate-700" />
-                                                )}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
+                    return (
+                        <div key={level} className="relative z-10 flex w-12 flex-col items-center">
+                            <div
+                                className={`flex h-11 w-11 items-center justify-center rounded-full border bg-[#0b1120] font-['Cinzel'] text-sm font-bold transition ${isCurrent
+                                    ? 'scale-110 border-[#c8aa6e] text-[#f0e6d2] shadow-[0_0_18px_rgba(200,170,110,0.35)]'
+                                    : isUnlocked
+                                        ? 'border-[#c8aa6e]/60 text-[#c8aa6e]'
+                                        : 'border-slate-800 text-slate-600'
+                                    }`}
+                            >
+                                {level}
                             </div>
-                        );
-                    })}
-                </div>
-
-                {/* End of path decoration */}
-                <div className="text-center py-12">
-                    <div className="inline-block p-4 rounded-full border border-slate-800 bg-[#0b1120] text-slate-600">
-                        <span className="font-['Cinzel'] uppercase tracking-[0.2em] text-xs">Maestría de Clase</span>
-                    </div>
-                </div>
+                            <span className={`mt-3 text-[9px] font-bold uppercase tracking-[0.16em] ${isCurrent ? 'text-[#c8aa6e]' : 'text-slate-700'}`}>
+                                {editorMode ? 'Definido' : isCurrent ? 'Actual' : isUnlocked ? 'Obtenido' : 'Pendiente'}
+                            </span>
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
 };
 
+const LevelStatus = ({ state }) => {
+    if (state === 'current') {
+        return (
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#c8aa6e] shadow-[0_0_8px_#c8aa6e]" />
+                Nivel actual
+            </span>
+        );
+    }
+
+    if (state === 'unlocked') {
+        return (
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8f7b52]">
+                <FiCheck className="h-3.5 w-3.5" />
+                Desbloqueado
+            </span>
+        );
+    }
+
+    return (
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600">
+            <FiLock className="h-3.5 w-3.5" />
+            Por desbloquear
+        </span>
+    );
+};
+
+const ProgressionView = ({
+    dndClass,
+    readOnly = false,
+    onUpdateLevel,
+    onAddLevel,
+    onRemoveLevel,
+}) => {
+    const levels = Array.isArray(dndClass.classLevels) ? dndClass.classLevels : [];
+    const totalLevels = levels.length;
+    const rawCurrentLevel = Math.max(1, Number(dndClass.level) || 1);
+    const currentLevel = totalLevels > 0 ? Math.min(rawCurrentLevel, totalLevels) : 1;
+    const editorMode = !readOnly;
+    const resourceName = dndClass.resource?.name
+        || dndClass.roguelite?.resource?.name
+        || 'Recurso';
+
+    return (
+        <div className="h-full min-h-screen w-full overflow-y-auto bg-[#09090b] pb-24 md:pb-12">
+            <div className="mx-auto max-w-6xl px-4 pb-16 pt-12 md:px-8 lg:px-12">
+                <header className="mb-9 flex flex-col gap-5 border-b border-[#c8aa6e]/20 pb-6 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <div className="mb-3 flex items-center gap-3">
+                            <span className="h-px w-8 bg-[#c8aa6e]" />
+                            <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#c8aa6e]/70">Camino de clase</span>
+                        </div>
+                        <h2 className="font-['Cinzel'] text-3xl text-[#f0e6d2] md:text-4xl">PROGRESIÓN</h2>
+                        <p className="mt-2 text-xs uppercase tracking-[0.2em] text-slate-500">
+                            {editorMode ? 'Define los beneficios de cada nivel' : 'Beneficios obtenidos y próximos desbloqueos'}
+                        </p>
+                    </div>
+
+                    <div className="flex items-end gap-5 sm:text-right">
+                        <div>
+                            <div className="font-['Cinzel'] text-3xl text-[#c8aa6e]">
+                                {editorMode ? totalLevels : currentLevel}
+                                <span className="ml-2 text-lg text-slate-700">/ {totalLevels}</span>
+                            </div>
+                            <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600">
+                                {editorMode ? 'Niveles definidos' : 'Nivel actual'}
+                            </div>
+                        </div>
+                        {editorMode && (
+                            <button
+                                type="button"
+                                onClick={onAddLevel}
+                                className="mb-0.5 inline-flex items-center gap-2 border border-[#c8aa6e]/35 px-4 py-2 font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.18em] text-[#c8aa6e] transition hover:border-[#c8aa6e]/70 hover:bg-[#c8aa6e]/5"
+                            >
+                                <FiPlus className="h-4 w-4" />
+                                Añadir nivel
+                            </button>
+                        )}
+                    </div>
+                </header>
+
+                <ProgressionRail
+                    totalLevels={totalLevels}
+                    currentLevel={currentLevel}
+                    editorMode={editorMode}
+                />
+
+                {levels.length > 0 ? (
+                    <div className="mt-5 border-t border-[#c8aa6e]/15">
+                        {levels.map((level, index) => {
+                            const levelNumber = index + 1;
+                            const state = editorMode
+                                ? 'editor'
+                                : levelNumber === currentLevel
+                                    ? 'current'
+                                    : levelNumber < currentLevel
+                                        ? 'unlocked'
+                                        : 'locked';
+                            const isCurrent = state === 'current';
+                            const isLocked = state === 'locked';
+
+                            return (
+                                <article
+                                    key={`progression-level-${levelNumber}`}
+                                    data-testid={`roguelite-progression-level-${levelNumber}`}
+                                    className={`relative grid grid-cols-[52px_minmax(0,1fr)] gap-4 border-b px-1 py-6 transition md:grid-cols-[72px_minmax(0,1fr)] md:gap-6 md:px-4 ${isCurrent
+                                        ? 'border-[#c8aa6e]/40 bg-[#c8aa6e]/[0.045]'
+                                        : 'border-slate-800/80'
+                                        } ${isLocked ? 'opacity-60' : ''}`}
+                                >
+                                    {isCurrent && <div className="absolute bottom-0 left-0 top-0 w-[2px] bg-[#c8aa6e]" />}
+
+                                    <div className="pt-0.5 text-center">
+                                        <div className={`font-['Cinzel'] text-3xl ${isCurrent ? 'text-[#c8aa6e]' : isLocked ? 'text-slate-700' : 'text-[#8f7b52]'}`}>
+                                            {String(levelNumber).padStart(2, '0')}
+                                        </div>
+                                        <div className="mt-1 text-[8px] font-bold uppercase tracking-[0.22em] text-slate-700">Nivel</div>
+                                    </div>
+
+                                    <div className="min-w-0">
+                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                            <div className={`min-w-0 flex-1 ${editorMode ? 'pr-12' : ''}`}>
+                                                {editorMode ? (
+                                                    <EditableText
+                                                        value={level.title}
+                                                        onChange={(value) => onUpdateLevel(index, 'title', value)}
+                                                        className="font-['Cinzel'] text-lg font-semibold uppercase tracking-[0.08em] text-[#f0e6d2] md:text-xl"
+                                                        placeholder={`Nivel ${levelNumber}`}
+                                                    />
+                                                ) : (
+                                                    <h3 className={`font-['Cinzel'] text-lg font-semibold uppercase tracking-[0.08em] md:text-xl ${isLocked ? 'text-slate-500' : 'text-[#f0e6d2]'}`}>
+                                                        {level.title || `Nivel ${levelNumber}`}
+                                                    </h3>
+                                                )}
+                                            </div>
+
+                                            <div className="flex shrink-0 items-center gap-3">
+                                                {!editorMode && <LevelStatus state={state} />}
+                                            </div>
+                                        </div>
+
+                                        {editorMode && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onRemoveLevel(index)}
+                                                className="absolute right-1 top-5 flex h-10 w-10 touch-manipulation items-center justify-center border border-transparent text-slate-700 transition hover:border-rose-400/30 hover:bg-rose-400/5 hover:text-rose-400 active:bg-rose-400/10 md:right-4"
+                                                aria-label={`Eliminar nivel ${levelNumber}`}
+                                                title="Eliminar nivel"
+                                            >
+                                                <FiTrash2 className="h-4 w-4" />
+                                            </button>
+                                        )}
+
+                                        <div className="mt-3 max-w-4xl">
+                                            {editorMode ? (
+                                                <EditableText
+                                                    value={level.description}
+                                                    onChange={(value) => onUpdateLevel(index, 'description', value)}
+                                                    multiline
+                                                    className="text-sm leading-6 text-slate-400"
+                                                    placeholder="Describe el beneficio que se obtiene al alcanzar este nivel."
+                                                />
+                                            ) : (
+                                                <p className={`text-sm leading-6 ${isLocked ? 'text-slate-600' : 'text-slate-400'}`}>
+                                                    {level.description || 'Beneficio pendiente de definir por el máster.'}
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        <div className="mt-5 grid min-w-0 grid-cols-1 lg:grid-cols-3">
+                                            <LevelMetric
+                                                icon={Heart}
+                                                label="Vida"
+                                                tone="life"
+                                                value={level.maxLife}
+                                                editable={editorMode}
+                                                onChange={(value) => onUpdateLevel(index, 'maxLife', value)}
+                                            />
+                                            <LevelMetric
+                                                icon={Footprints}
+                                                label="Movimiento"
+                                                tone="movement"
+                                                value={level.movement}
+                                                editable={editorMode}
+                                                onChange={(value) => onUpdateLevel(index, 'movement', value)}
+                                            />
+                                            <LevelMetric
+                                                icon={Sparkles}
+                                                label={`${resourceName} máx.`}
+                                                tone="resource"
+                                                value={level.resourceMaximum}
+                                                editable={editorMode}
+                                                onChange={(value) => onUpdateLevel(index, 'resourceMaximum', value)}
+                                            />
+                                        </div>
+                                    </div>
+                                </article>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="mt-10 border-y border-[#c8aa6e]/15 py-14 text-center">
+                        <div className="font-['Cinzel'] text-lg uppercase tracking-[0.16em] text-slate-500">Progresión sin definir</div>
+                        <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-600">
+                            {editorMode
+                                ? 'Añade el primer nivel para comenzar a definir el camino de esta clase.'
+                                : 'El máster todavía no ha definido los niveles de esta clase.'}
+                        </p>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+EditableText.propTypes = {
+    value: PropTypes.string,
+    onChange: PropTypes.func.isRequired,
+    className: PropTypes.string,
+    inputClassName: PropTypes.string,
+    multiline: PropTypes.bool,
+    placeholder: PropTypes.string,
+};
+
+LevelMetric.propTypes = {
+    icon: PropTypes.elementType.isRequired,
+    label: PropTypes.string.isRequired,
+    value: PropTypes.number,
+    editable: PropTypes.bool.isRequired,
+    onChange: PropTypes.func.isRequired,
+    tone: PropTypes.oneOf(['life', 'movement', 'resource']).isRequired,
+};
+
+ProgressionRail.propTypes = {
+    totalLevels: PropTypes.number.isRequired,
+    currentLevel: PropTypes.number.isRequired,
+    editorMode: PropTypes.bool.isRequired,
+};
+
+LevelStatus.propTypes = {
+    state: PropTypes.oneOf(['current', 'unlocked', 'locked']).isRequired,
+};
+
 ProgressionView.propTypes = {
     dndClass: PropTypes.shape({
         level: PropTypes.number,
-        classLevels: PropTypes.array
+        classLevels: PropTypes.array,
+        resource: PropTypes.shape({ name: PropTypes.string }),
+        roguelite: PropTypes.shape({
+            resource: PropTypes.shape({ name: PropTypes.string }),
+        }),
     }).isRequired,
+    readOnly: PropTypes.bool,
     onUpdateLevel: PropTypes.func,
-    onToggleAcquired: PropTypes.func,
-    onAddFeature: PropTypes.func,
-    onRemoveFeature: PropTypes.func,
-    onUpdateFeature: PropTypes.func
+    onAddLevel: PropTypes.func,
+    onRemoveLevel: PropTypes.func,
+};
+
+ProgressionView.defaultProps = {
+    onUpdateLevel: () => {},
+    onAddLevel: () => {},
+    onRemoveLevel: () => {},
 };
 
 export default ProgressionView;

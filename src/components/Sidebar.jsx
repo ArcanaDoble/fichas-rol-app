@@ -13,6 +13,27 @@ const menuItems = [
     { id: 'store', label: 'CARTAS', sub: 'Constructor', icon: <Layers className="w-5 h-5" />, mobileLabel: 'Cartas' },
 ];
 
+const resolveMenuItems = (isPlayerMode, isRogueliteClass) => menuItems.map((item) => {
+    if (item.id !== 'progression') return item;
+    if (isRogueliteClass) {
+        return {
+            ...item,
+            label: 'PROGRESIÓN',
+            sub: 'Nivel',
+            mobileLabel: 'Nivel'
+        };
+    }
+    if (isPlayerMode) {
+        return {
+            ...item,
+            label: 'COLECCIÓN',
+            sub: 'Baraja',
+            mobileLabel: 'Colección'
+        };
+    }
+    return item;
+});
+
 // Componente de navegación móvil (barra inferior)
 export const MobileNav = ({
     activeTab,
@@ -20,19 +41,10 @@ export const MobileNav = ({
     onSave,
     hasUnsavedChanges = false,
     saveButtonState = 'idle',
-    isPlayerMode = false
+    isPlayerMode = false,
+    isRogueliteClass = false
 }) => {
-    const resolvedMenuItems = menuItems.map(item => {
-        if (item.id === 'progression' && isPlayerMode) {
-            return {
-                ...item,
-                label: 'COLECCIÓN',
-                sub: 'Baraja',
-                mobileLabel: 'Colección'
-            };
-        }
-        return item;
-    });
+    const resolvedMenuItems = resolveMenuItems(isPlayerMode, isRogueliteClass);
 
     return (
         <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0b1120]/98 border-t border-[#c8aa6e]/30 backdrop-blur-xl" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
@@ -100,7 +112,8 @@ MobileNav.propTypes = {
     onSave: PropTypes.func,
     hasUnsavedChanges: PropTypes.bool,
     saveButtonState: PropTypes.oneOf(['idle', 'saving', 'success', 'error']),
-    isPlayerMode: PropTypes.bool
+    isPlayerMode: PropTypes.bool,
+    isRogueliteClass: PropTypes.bool
 };
 
 // Sidebar Desktop (oculto en móvil)
@@ -114,19 +127,10 @@ const Sidebar = ({
     onSave,
     hasUnsavedChanges = false,
     saveButtonState = 'idle',
-    isPlayerMode = false
+    isPlayerMode = false,
+    isRogueliteClass = false
 }) => {
-    const resolvedMenuItems = menuItems.map(item => {
-        if (item.id === 'progression' && isPlayerMode) {
-            return {
-                ...item,
-                label: 'COLECCIÓN',
-                sub: 'Baraja',
-                mobileLabel: 'Colección'
-            };
-        }
-        return item;
-    });
+    const resolvedMenuItems = resolveMenuItems(isPlayerMode, isRogueliteClass);
 
     return (
         <div className="hidden md:flex w-20 lg:w-72 xl:w-80 h-full flex-col bg-[#0b1120]/95 border-r border-[#c8aa6e]/20 relative z-30 backdrop-blur-xl shadow-[4px_0_24px_rgba(0,0,0,0.4)] transition-all duration-300">
@@ -277,7 +281,8 @@ Sidebar.propTypes = {
     onSave: PropTypes.func,
     hasUnsavedChanges: PropTypes.bool,
     saveButtonState: PropTypes.oneOf(['idle', 'saving', 'success', 'error']),
-    isPlayerMode: PropTypes.bool
+    isPlayerMode: PropTypes.bool,
+    isRogueliteClass: PropTypes.bool
 };
 
 export default Sidebar;

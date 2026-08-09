@@ -1,6 +1,7 @@
 import React from 'react';
 import ClassList from './ClassList';
 import { CharacterCreatorView } from './CharacterCreatorView';
+import RogueliteClassSection from '../features/roguelite/components/RogueliteClassSection';
 
 export const CharacterListView = ({
     playerName,
@@ -41,6 +42,14 @@ export const CharacterListView = ({
             onLaunchMinimap={onLaunchMinimap}
             onLaunchCanvas={onLaunchCanvas}
             onLaunchBoard={onLaunchBoard}
+            currentUserId={playerName}
+
+            additionalLibrarySection={({ openClassDetails }) => (
+                <RogueliteClassSection
+                    playerName={playerName}
+                    onOpenClass={openClassDetails}
+                />
+            )}
 
             disableSidebar={false}
             backButtonLabel="Cerrar Sesión"

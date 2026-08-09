@@ -1,16 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { motion } from 'framer-motion';
-import { FiSearch, FiUser, FiCalendar, FiActivity, FiPlus, FiKey, FiLock, FiTrash2 } from 'react-icons/fi';
+import { FiSearch, FiUser, FiCalendar, FiPlus, FiKey, FiTrash2, FiCompass, FiCheck } from 'react-icons/fi';
 import Boton from './Boton';
 import Modal from './Modal';
 import { deleteDoc } from 'firebase/firestore';
+import {
+    normalizeRogueliteAccess,
+    setRogueliteEnabled,
+    toggleRogueliteClass,
+    withRogueliteAccess,
+} from '../features/roguelite/access';
+import { mergeRogueliteClassCatalogs } from '../features/roguelite/classDefinition';
 
 const UsersView = ({ onBack }) => {
     const [players, setPlayers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [rogueliteClasses, setRogueliteClasses] = useState([]);
+    const [rogueliteClassesLoading, setRogueliteClassesLoading] = useState(true);
 
     const [isCreating, setIsCreating] = useState(false);
     const [editingPasswordFor, setEditingPasswordFor] = useState(null);
@@ -37,6 +46,41 @@ const UsersView = ({ onBack }) => {
             }
         };
         fetchPlayers();
+
+        const fetchRogueliteClasses = async () => {
+            try {
+                const [legacyResult, rogueliteResult] = await Promise.allSettled([
+                    getDocs(collection(db, 'classes')),
+                    getDocs(collection(db, 'rogueliteClasses')),
+                ]);
+                const mapSnapshot = (snapshot) => snapshot.docs.map((classDoc) => ({
+                    ...classDoc.data(),
+                    id: classDoc.id,
+                }));
+                const legacyClasses = legacyResult.status === 'fulfilled'
+                    ? mapSnapshot(legacyResult.value)
+                    : [];
+                const dedicatedClasses = rogueliteResult.status === 'fulfilled'
+                    ? mapSnapshot(rogueliteResult.value)
+                    : [];
+
+                if (legacyResult.status === 'rejected') {
+                    console.error('Error fetching legacy classes:', legacyResult.reason);
+                }
+                if (rogueliteResult.status === 'rejected') {
+                    console.error('Error fetching dedicated roguelite classes:', rogueliteResult.reason);
+                }
+                setRogueliteClasses(mergeRogueliteClassCatalogs(
+                    legacyClasses,
+                    dedicatedClasses,
+                ));
+            } catch (error) {
+                console.error('Error fetching roguelite classes:', error);
+            } finally {
+                setRogueliteClassesLoading(false);
+            }
+        };
+        fetchRogueliteClasses();
     }, []);
 
     const handleCreateUser = async () => {
@@ -53,6 +97,12 @@ const UsersView = ({ onBack }) => {
                 passcode: formData.passcode.trim(),
                 createdAt: new Date(),
                 permissions: {},
+                gameAccess: {
+                    roguelite: {
+                        enabled: false,
+                        unlockedClassIds: [],
+                    },
+                },
                 // Inicializar datos de juego por defecto para evitar errores
                 atributos: {
                     destreza: 0,
@@ -87,6 +137,12 @@ const UsersView = ({ onBack }) => {
                 name: formData.name.trim(),
                 passcode: formData.passcode.trim(),
                 permissions: {},
+                gameAccess: {
+                    roguelite: {
+                        enabled: false,
+                        unlockedClassIds: [],
+                    },
+                },
                 stats: {}
             };
             setPlayers([...players, newPlayer]);
@@ -171,6 +227,40 @@ const UsersView = ({ onBack }) => {
             console.error("Error updating permissions:", error);
             // Revert changes if needed (not implemented for simplicity, but good practice)
         }
+    };
+
+    const persistRogueliteAccess = async (player, nextAccess) => {
+        if (!player?.id) return;
+        const previousAccess = normalizeRogueliteAccess(player);
+
+        setPlayers((currentPlayers) => currentPlayers.map((currentPlayer) => (
+            currentPlayer.id === player.id
+                ? withRogueliteAccess(currentPlayer, nextAccess)
+                : currentPlayer
+        )));
+
+        try {
+            await updateDoc(doc(db, 'players', player.id), {
+                'gameAccess.roguelite': nextAccess,
+            });
+        } catch (error) {
+            console.error('Error updating roguelite access:', error);
+            setPlayers((currentPlayers) => currentPlayers.map((currentPlayer) => (
+                currentPlayer.id === player.id
+                    ? withRogueliteAccess(currentPlayer, previousAccess)
+                    : currentPlayer
+            )));
+            alert('No se pudo actualizar el acceso al modo Roguelite.');
+        }
+    };
+
+    const handleRogueliteEnabledChange = (player) => {
+        const currentAccess = normalizeRogueliteAccess(player);
+        persistRogueliteAccess(player, setRogueliteEnabled(player, !currentAccess.enabled));
+    };
+
+    const handleRogueliteClassToggle = (player, classId) => {
+        persistRogueliteAccess(player, toggleRogueliteClass(player, classId));
     };
 
     const PLAYER_PERMISSIONS = [
@@ -325,6 +415,79 @@ const UsersView = ({ onBack }) => {
                                                 })}
                                             </div>
                                         </div>
+
+                                        {/* Acceso independiente al modo Roguelite */}
+                                        <div className="rounded-lg border border-[#c8aa6e]/20 bg-[#0b1120]/45 p-3">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div className="flex min-w-0 items-center gap-2">
+                                                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#c8aa6e]/30 bg-[#c8aa6e]/10 text-[#c8aa6e]">
+                                                        <FiCompass />
+                                                    </span>
+                                                    <div className="min-w-0">
+                                                        <p className="truncate font-['Cinzel'] text-xs font-bold uppercase tracking-wider text-[#f0e6d2]">
+                                                            Modo Roguelite
+                                                        </p>
+                                                        <p className="text-[10px] text-slate-500">
+                                                            Clases y aventuras del Canvas
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRogueliteEnabledChange(player)}
+                                                    aria-pressed={normalizeRogueliteAccess(player).enabled}
+                                                    className={`relative h-7 w-12 shrink-0 rounded-full border transition-colors ${normalizeRogueliteAccess(player).enabled
+                                                        ? 'border-emerald-400/50 bg-emerald-500/25'
+                                                        : 'border-slate-600 bg-slate-800'
+                                                        }`}
+                                                    title={`${normalizeRogueliteAccess(player).enabled ? 'Desactivar' : 'Activar'} modo Roguelite`}
+                                                >
+                                                    <span className={`absolute top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full transition-all ${normalizeRogueliteAccess(player).enabled
+                                                        ? 'left-6 bg-emerald-400 text-emerald-950'
+                                                        : 'left-1 bg-slate-500 text-slate-900'
+                                                        }`}>
+                                                        {normalizeRogueliteAccess(player).enabled && <FiCheck className="h-3 w-3" />}
+                                                    </span>
+                                                </button>
+                                            </div>
+
+                                            {normalizeRogueliteAccess(player).enabled && (
+                                                <div className="mt-3 border-t border-[#c8aa6e]/10 pt-3">
+                                                    <p className="mb-2 font-['Cinzel'] text-[9px] font-bold uppercase tracking-widest text-[#c8aa6e]/70">
+                                                        Clases desbloqueadas
+                                                    </p>
+                                                    {rogueliteClassesLoading ? (
+                                                        <p className="text-[10px] text-slate-500">Cargando clases...</p>
+                                                    ) : rogueliteClasses.length === 0 ? (
+                                                        <p className="rounded border border-dashed border-slate-700 px-2 py-2 text-[10px] leading-relaxed text-slate-500">
+                                                            Aún no hay clases creadas en la Lista de Clases.
+                                                        </p>
+                                                    ) : (
+                                                        <div className="flex flex-wrap gap-1.5">
+                                                            {rogueliteClasses.map((classItem) => {
+                                                                const isUnlocked = normalizeRogueliteAccess(player).unlockedClassIds.includes(classItem.id);
+                                                                return (
+                                                                    <button
+                                                                        type="button"
+                                                                        key={classItem.id}
+                                                                        onClick={() => handleRogueliteClassToggle(player, classItem.id)}
+                                                                        aria-pressed={isUnlocked}
+                                                                        className={`rounded border px-2 py-1 font-['Cinzel'] text-[10px] font-bold transition-colors ${isUnlocked
+                                                                            ? 'border-[#c8aa6e]/50 bg-[#c8aa6e]/15 text-[#e7cf9a]'
+                                                                            : 'border-slate-700 bg-slate-900/50 text-slate-500 hover:border-[#c8aa6e]/30 hover:text-slate-300'
+                                                                            }`}
+                                                                    >
+                                                                        {isUnlocked && <FiCheck className="mr-1 inline h-3 w-3" />}
+                                                                        {classItem.name}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+
                                         <div className="pt-2 flex justify-end">
                                             <button
                                                 onClick={() => {

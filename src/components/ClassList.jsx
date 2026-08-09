@@ -36,8 +36,13 @@ import {
   Upload,
   ImageIcon,
   Dices,
+  Footprints,
+  Gauge,
+  Heart,
   Zap,
   Map,
+  Shield,
+  Sparkles,
   Star,
   Lock,
 } from 'lucide-react';
@@ -60,7 +65,10 @@ import CardBuilder from './CardBuilder';
 import HexIcon from './HexIcon';
 import { RelicsView } from './RelicsView';
 import KarmaBar from './KarmaBar';
+import { LibraryCharacterCard } from './LibraryCharacterCard';
 import { isYuuzuName, KARMA_MIN, KARMA_MAX } from '../utils/karma';
+import { normalizeRogueliteProfileLevel } from '../features/roguelite/profileClass';
+import { resolveRogueliteClassLevels } from '../features/roguelite/progression';
 
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -585,25 +593,7 @@ const ensureClassDefaults = (classItem) => {
     ...entry,
   }));
 
-  merged.classLevels = (merged.classLevels || []).map((level, index) => {
-    if (level && typeof level === 'object') {
-      return {
-        title: level.title || `Nivel ${index + 1} — Nuevo avance`,
-        description: level.description || '',
-        completed: Boolean(level.completed),
-        acquired: Boolean(level.acquired),
-        additionalFeatures: level.additionalFeatures || [],
-      };
-    }
-
-    return {
-      title: `Nivel ${index + 1} — Nuevo avance`,
-      description: typeof level === 'string' ? level : '',
-      completed: false,
-      acquired: false,
-      additionalFeatures: [],
-    };
-  });
+  merged.classLevels = resolveRogueliteClassLevels(merged);
   merged.rules = merged.rules || [];
 
   merged.equipment = {
@@ -1498,6 +1488,7 @@ const ClassList = ({
   initialCharacterName = null,
   currentUserId = null,
   knownPlayers = [],
+  additionalLibrarySection = null,
 }) => {
   const [classes, setClasses] = useState([]);
   const [isAutoOpening, setIsAutoOpening] = useState(!!initialCharacterName);
@@ -1506,6 +1497,7 @@ const ClassList = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('alphaAsc');
   const [selectedClass, setSelectedClass] = useState(null);
+  const [detailPersistence, setDetailPersistence] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileActiveView, setMobileActiveView] = useState('list');
   const [activeDetailTab, setActiveDetailTab] = useState('overview');
@@ -1828,8 +1820,9 @@ const ClassList = ({
     }
   }, [selectedClass]);
 
-  const openClassDetails = (classItem) => {
+  const openClassDetails = (classItem, persistence = null) => {
     setSaveStatus(null);
+    setDetailPersistence(persistence);
     const sanitized = ensureClassDefaults(classItem);
     setSelectedClass(sanitized);
     setEditingClass(deepClone(sanitized));
@@ -1844,12 +1837,24 @@ const ClassList = ({
   const closeClassDetails = () => {
     setSaveStatus(null);
     setSelectedClass(null);
+    setDetailPersistence(null);
     setActiveDetailTab('overview');
     setEditingClass(null);
     if (isMobile) {
       setMobileActiveView('list');
     }
   };
+
+  const getDetailDocumentRef = (classId) => {
+    if (Array.isArray(detailPersistence?.collectionPathSegments)) {
+      return doc(db, ...detailPersistence.collectionPathSegments, classId);
+    }
+    return doc(db, collectionPath, classId);
+  };
+
+  const getDetailCollectionLabel = () => (
+    detailPersistence?.collectionLabel || collectionPath
+  );
 
   const updateEditingClass = (mutator) => {
     setEditingClass((prev) => {
@@ -1873,6 +1878,7 @@ const ClassList = ({
       if (!levels[levelIndex]) return;
       levels[levelIndex][field] = value;
       draft.classLevels = levels;
+      draft.rogueliteProgressionConfigured = true;
     });
   };
 
@@ -2254,6 +2260,7 @@ const ClassList = ({
       if (!levels[index]) return;
       levels[index][field] = value;
       draft.classLevels = levels;
+      draft.rogueliteProgressionConfigured = true;
     });
   };
 
@@ -2282,7 +2289,9 @@ const ClassList = ({
 
       // Contar cuántos niveles están marcados como acquired y actualizar el nivel actual
       const acquiredCount = levels.filter(l => l.acquired).length;
-      draft.level = acquiredCount;
+      draft.level = detailPersistence?.mode === 'roguelite'
+        ? normalizeRogueliteProfileLevel(acquiredCount)
+        : acquiredCount;
 
       draft.classLevels = levels;
     });
@@ -2294,16 +2303,25 @@ const ClassList = ({
       const levels = draft.classLevels || [];
       if (target > levels.length) {
         for (let i = levels.length; i < target; i += 1) {
+          const previousLevel = levels[i - 1] || {};
           levels.push({
             title: `Nivel ${i + 1} — Nuevo avance`,
             description: 'Describe el beneficio de este nivel.',
+            maxLife: previousLevel.maxLife ?? draft.maxLife ?? draft.roguelite?.maxLife ?? null,
+            movement: previousLevel.movement ?? draft.movement ?? draft.roguelite?.movement ?? null,
+            resourceMaximum: previousLevel.resourceMaximum
+              ?? draft.resource?.maximum
+              ?? draft.roguelite?.resource?.maximum
+              ?? null,
             completed: false,
+            acquired: false,
           });
         }
       } else if (target < levels.length) {
         levels.length = target;
       }
       draft.classLevels = levels;
+      draft.rogueliteProgressionConfigured = true;
     });
   };
 
@@ -2321,6 +2339,7 @@ const ClassList = ({
       const levels = draft.classLevels || [];
       levels.splice(index, 1);
       draft.classLevels = levels;
+      draft.rogueliteProgressionConfigured = true;
     });
   };
 
@@ -2416,10 +2435,16 @@ const ClassList = ({
 
       // Asegurar que cleanedData tenga el id
       cleanedData.id = classId;
+      if (detailPersistence?.mode === 'roguelite') {
+        cleanedData.templateId = selectedClass?.templateId || classId;
+        cleanedData.owner = currentUserId || cleanedData.owner || '';
+        cleanedData.profileType = 'rogueliteClass';
+        cleanedData.level = normalizeRogueliteProfileLevel(cleanedData.level);
+      }
 
       // Guardar en Firebase con timeout extendido para evitar espera indefinida
       // Si Firebase está saturado (resource-exhausted), esto fallará después de 20s
-      const savePromise = setDoc(doc(db, collectionPath, classId), cleanedData, { merge: true });
+      const savePromise = setDoc(getDetailDocumentRef(classId), cleanedData, { merge: true });
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Firebase está saturado o la conexión es lenta (Timeout 20s)')), 20000)
       );
@@ -2439,13 +2464,15 @@ const ClassList = ({
       const savedData = ensureClassDefaults(cleanedData);
 
       // Actualizar el estado principal de clases
-      setClasses((prevClasses) => {
-        const exists = prevClasses.some((c) => c.id === classId);
-        if (exists) {
-          return prevClasses.map((c) => (c.id === classId ? savedData : c));
-        }
-        return [...prevClasses, savedData];
-      });
+      if (detailPersistence?.updateMainLibrary !== false) {
+        setClasses((prevClasses) => {
+          const exists = prevClasses.some((c) => c.id === classId);
+          if (exists) {
+            return prevClasses.map((c) => (c.id === classId ? savedData : c));
+          }
+          return [...prevClasses, savedData];
+        });
+      }
 
       // Actualizar selectedClass y editingClass con los mismos datos
       // para que hasUnsavedChanges sea false
@@ -2458,7 +2485,7 @@ const ClassList = ({
         detail: {
           name: savedData.name,
           sheet: savedData,
-          collection: collectionPath
+          collection: getDetailCollectionLabel()
         }
       }));
 
@@ -3539,7 +3566,8 @@ const ClassList = ({
     try {
       setSaveStatus(null);
 
-      const storagePrefix = collectionPath === 'classes' ? 'class' : 'character';
+      const storagePrefix = detailPersistence?.storagePrefix
+        || (collectionPath === 'classes' ? 'class' : 'character');
 
       // 0. If it's a new upload, save the RAW source first
       if (cropperState.isNewUpload && cropperState.imageSrc.startsWith('data:')) {
@@ -3568,9 +3596,11 @@ const ClassList = ({
       }
 
       if (hasUpdates) {
-        await setDoc(doc(db, collectionPath, classId), updates, { merge: true });
+        await setDoc(getDetailDocumentRef(classId), updates, { merge: true });
 
-        setClasses((prev) => prev.map((c) => c.id === classId ? { ...c, ...updates } : c));
+        if (detailPersistence?.updateMainLibrary !== false) {
+          setClasses((prev) => prev.map((c) => c.id === classId ? { ...c, ...updates } : c));
+        }
 
         if (selectedClass?.id === classId) {
           setSelectedClass((prev) => ({ ...prev, ...updates }));
@@ -3599,6 +3629,25 @@ const ClassList = ({
     if (!selectedClass || !editingClass) {
       return null;
     }
+
+    const isRoguelitePlayerClass = detailPersistence?.mode === 'roguelite';
+    const isRogueliteClassSummary = isRoguelitePlayerClass || !isPlayerMode;
+
+    const updateMasterRogueliteField = (field, value) => {
+      updateEditingClass((draft) => {
+        draft[field] = value;
+        draft.roguelite = { ...(draft.roguelite || {}), [field]: value };
+      });
+    };
+
+    const updateMasterRogueliteResource = (field, value) => {
+      updateEditingClass((draft) => {
+        const resource = { ...(draft.roguelite?.resource || {}), ...(draft.resource || {}) };
+        resource[field] = value;
+        draft.resource = resource;
+        draft.roguelite = { ...(draft.roguelite || {}), resource: { ...resource } };
+      });
+    };
 
     // Mapping editingClass to the structure expected by the new design
     const dndClass = {
@@ -3659,10 +3708,10 @@ const ClassList = ({
               <div className="relative z-20 flex flex-col lg:flex-row min-h-full items-center justify-start lg:justify-center p-4 pt-16 md:p-8 lg:p-16 gap-6 md:gap-12 lg:gap-24 pb-20 md:pb-8">
                 {/* Left: Character Card Presentation / Portrait Editor */}
                 <div className="relative w-full max-w-[280px] md:max-w-sm lg:max-w-md shrink-0 flex flex-col gap-0">
-                  <div className={`relative group w-full perspective-1000 ${!isCropping ? 'aspect-[2/3]' : ''}`}>
+                  <div className={`relative group w-full perspective-1000 ${!(isCropping && !isRoguelitePlayerClass) ? 'aspect-[2/3]' : ''}`}>
                     <div className="relative w-full h-full transition-transform duration-700">
 
-                      {isCropping ? (
+                      {isCropping && !isRoguelitePlayerClass ? (
                         <div className="space-y-6 h-full flex flex-col">
                           {/* MODE TABS */}
                           <div className="flex gap-2">
@@ -3849,17 +3898,29 @@ const ClassList = ({
                             )}
 
                             <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-[#0b1120] via-[#0b1120]/90 to-transparent p-6 pt-16">
-                              <EditableText
-                                value={dndClass.name}
-                                onChange={(val) => handleUpdateClassField('name', val)}
-                                className="text-3xl font-['Cinzel'] text-center text-[#f0e6d2] drop-shadow-lg mb-1 block"
-                              />
+                              {isRoguelitePlayerClass ? (
+                                <div className="text-3xl font-['Cinzel'] text-center text-[#f0e6d2] drop-shadow-lg mb-1 block">
+                                  {dndClass.name}
+                                </div>
+                              ) : (
+                                <EditableText
+                                  value={dndClass.name}
+                                  onChange={(val) => handleUpdateClassField('name', val)}
+                                  className="text-3xl font-['Cinzel'] text-center text-[#f0e6d2] drop-shadow-lg mb-1 block"
+                                />
+                              )}
                               <div className="h-[1px] w-1/2 mx-auto bg-gradient-to-r from-transparent via-[#c8aa6e] to-transparent mb-3"></div>
-                              <EditableText
-                                value={dndClass.subtitle}
-                                onChange={(val) => handleUpdateClassField('subtitle', val)}
-                                className="text-[#c8aa6e] text-center text-xs font-bold tracking-[0.2em] uppercase block"
-                              />
+                              {isRoguelitePlayerClass ? (
+                                <div className="text-[#c8aa6e] text-center text-xs font-bold tracking-[0.2em] uppercase block">
+                                  {dndClass.subtitle}
+                                </div>
+                              ) : (
+                                <EditableText
+                                  value={dndClass.subtitle}
+                                  onChange={(val) => handleUpdateClassField('subtitle', val)}
+                                  className="text-[#c8aa6e] text-center text-xs font-bold tracking-[0.2em] uppercase block"
+                                />
+                              )}
                             </div>
                           </div>
                         </>
@@ -3867,7 +3928,7 @@ const ClassList = ({
                     </div>
                   </div>
 
-                  {['Yerma', 'Taiga', 'Tundra'].includes(dndClass.name) && !isCropping && (
+                  {!isRoguelitePlayerClass && ['Yerma', 'Taiga', 'Tundra'].includes(dndClass.name) && !isCropping && (
                     <div className="flex justify-center gap-6 mt-4">
                       {[
                         { name: 'Yerma', src: '/yerma/Yerma.webp' },
@@ -4368,16 +4429,20 @@ const ClassList = ({
 
                     <div className="relative pl-6 lg:pl-6 border-l-2 lg:border-l-2 border-[#c8aa6e]/30 mx-auto lg:mx-0 w-full text-left">
                       <div className="text-lg text-slate-300 leading-relaxed font-serif italic">
-                        "<EditableText
-                          value={editingClass.description}
-                          onChange={(val) =>
-                            updateEditingClass((draft) => {
-                              draft.description = val;
-                            })
-                          }
-                          className="inline text-slate-300"
-                          multiline={true}
-                        />"
+                        {isRoguelitePlayerClass ? (
+                          <>"{editingClass.description}"</>
+                        ) : (
+                          <>"<EditableText
+                            value={editingClass.description}
+                            onChange={(val) =>
+                              updateEditingClass((draft) => {
+                                draft.description = val;
+                              })
+                            }
+                            className="inline text-slate-300"
+                            multiline={true}
+                          />"</>
+                        )}
                       </div>
                       <div className="absolute top-0 -left-[5px] w-[8px] h-[8px] bg-[#c8aa6e] rotate-45"></div>
                       <div className="absolute bottom-0 -left-[5px] w-[8px] h-[8px] bg-[#c8aa6e] rotate-45"></div>
@@ -4393,35 +4458,72 @@ const ClassList = ({
                         <div className="mb-6 border-b border-[#c8aa6e]/30 pb-2">
                           <h4 className="text-[#c8aa6e] font-['Cinzel'] text-lg tracking-widest flex items-center gap-2">
                             <span className="w-8 h-[1px] bg-[#c8aa6e]"></span>
-                            {isPlayerMode ? 'ATRIBUTOS' : 'ATRIBUTOS DE CLASE'}
+                            {isRogueliteClassSummary ? 'DADOS DE ACCIÓN' : 'ATRIBUTOS'}
                           </h4>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          {[
-                            { key: 'destreza', label: 'Destreza', icon: '🎯' },
-                            { key: 'vigor', label: 'Vigor', icon: '💪' },
-                            { key: 'intelecto', label: 'Intelecto', icon: '🧠' },
-                            { key: 'voluntad', label: 'Voluntad', icon: '✨' }
-                          ].map((attr) => {
-                            const diceValue = editingClass.attributes?.[attr.key] || 'd4';
-
-                            return (
-                              <div key={attr.key} className="bg-[#161f32]/80 p-4 rounded-xl border border-[#c8aa6e]/20 hover:border-[#c8aa6e]/50 transition-colors group flex flex-col items-center w-full">
-                                <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-3">{attr.label}</div>
-                                <DiceSelector
-                                  value={diceValue}
-                                  onChange={(newValue) => {
-                                    updateEditingClass((draft) => {
-                                      if (!draft.attributes) draft.attributes = {};
-                                      draft.attributes[attr.key] = newValue;
-                                    });
-                                  }}
-                                />
-                                <div className="text-center text-sm text-[#c8aa6e] font-bold mt-3 tracking-widest">{diceValue.toUpperCase()}</div>
+                        {isRogueliteClassSummary ? (
+                          <div className="grid grid-cols-3 gap-4" data-testid="roguelite-action-dice">
+                            {normalizeRogueliteActionDice(
+                              editingClass.actionDice || editingClass.roguelite?.actionDice,
+                            ).map((diceValue, index) => (
+                              <div
+                                key={`${diceValue}-${index}`}
+                                className="bg-[#161f32]/80 p-4 rounded-xl border border-[#c8aa6e]/20 hover:border-[#c8aa6e]/50 transition-colors group flex flex-col items-center w-full"
+                              >
+                                {isRoguelitePlayerClass ? (
+                                  <div className="w-16 h-16 transition-transform group-hover:scale-110">
+                                    <img
+                                      src={`/dados/${diceValue.toUpperCase()}.webp`}
+                                      alt={diceValue.toUpperCase()}
+                                      className="w-full h-full object-contain"
+                                    />
+                                  </div>
+                                ) : (
+                                  <DiceSelector
+                                    value={diceValue}
+                                    onChange={(newValue) => {
+                                      const nextDice = normalizeRogueliteActionDice(
+                                        editingClass.actionDice || editingClass.roguelite?.actionDice,
+                                      );
+                                      nextDice[index] = newValue;
+                                      updateMasterRogueliteField('actionDice', nextDice);
+                                    }}
+                                  />
+                                )}
+                                <div className="text-center text-sm text-[#c8aa6e] font-bold mt-3 tracking-widest">
+                                  {diceValue.toUpperCase()}
+                                </div>
                               </div>
-                            );
-                          })}
-                        </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-4">
+                            {[
+                              { key: 'destreza', label: 'Destreza', icon: '🎯' },
+                              { key: 'vigor', label: 'Vigor', icon: '💪' },
+                              { key: 'intelecto', label: 'Intelecto', icon: '🧠' },
+                              { key: 'voluntad', label: 'Voluntad', icon: '✨' }
+                            ].map((attr) => {
+                              const diceValue = editingClass.attributes?.[attr.key] || 'd4';
+
+                              return (
+                                <div key={attr.key} className="bg-[#161f32]/80 p-4 rounded-xl border border-[#c8aa6e]/20 hover:border-[#c8aa6e]/50 transition-colors group flex flex-col items-center w-full">
+                                  <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-3">{attr.label}</div>
+                                  <DiceSelector
+                                    value={diceValue}
+                                    onChange={(newValue) => {
+                                      updateEditingClass((draft) => {
+                                        if (!draft.attributes) draft.attributes = {};
+                                        draft.attributes[attr.key] = newValue;
+                                      });
+                                    }}
+                                  />
+                                  <div className="text-center text-sm text-[#c8aa6e] font-bold mt-3 tracking-widest">{diceValue.toUpperCase()}</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
 
                       {isYuuzuName(dndClass.name) && (
@@ -4472,7 +4574,7 @@ const ClassList = ({
                       )}
 
                       {/* Actions */}
-                      <div className="mt-auto space-y-4">
+                      <div className={`${isRogueliteClassSummary ? '' : 'mt-auto'} space-y-4`}>
                         <button
                           onClick={() => {
                             if (onLaunchCanvas) {
@@ -4499,20 +4601,30 @@ const ClassList = ({
                           <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500 ease-in-out z-0" />
                         </button>
 
-                        <button
-                          onClick={() => handleStartPortraitEdit(dndClass)}
-                          className={`w-full px-6 py-4 border font-['Cinzel'] font-bold uppercase tracking-widest transition-all ${isCropping ? 'bg-[#c8aa6e] text-[#0b1120] border-[#c8aa6e]' : 'border-[#c8aa6e]/30 text-[#c8aa6e] hover:bg-[#c8aa6e]/10'}`}
-                        >
-                          {isCropping ? 'Editando Retrato...' : 'Editar Retrato'}
-                        </button>
+                        {!isRoguelitePlayerClass && (
+                          <button
+                            onClick={() => handleStartPortraitEdit(dndClass)}
+                            className={`w-full px-6 py-4 border font-['Cinzel'] font-bold uppercase tracking-widest transition-all ${isCropping ? 'bg-[#c8aa6e] text-[#0b1120] border-[#c8aa6e]' : 'border-[#c8aa6e]/30 text-[#c8aa6e] hover:bg-[#c8aa6e]/10'}`}
+                          >
+                            {isCropping ? 'Editando Retrato...' : 'Editar Retrato'}
+                          </button>
+                        )}
                       </div>
                     </div >
 
                     {/* Right Column: Stats */}
                     < div >
 
-                      {/* STATS SECTION */}
-                      < div >
+                      {isRogueliteClassSummary ? (
+                        <RogueliteClassStatsSummary
+                          classData={editingClass}
+                          editable={!isRoguelitePlayerClass}
+                          onFieldChange={updateMasterRogueliteField}
+                          onResourceChange={updateMasterRogueliteResource}
+                        />
+                      ) : (
+                        /* STATS SECTION */
+                        < div >
                         <div className="flex items-center justify-between mb-6 border-b border-[#c8aa6e]/30 pb-2">
                           <h4 className="text-[#c8aa6e] font-['Cinzel'] text-lg tracking-widest flex items-center gap-2">
                             <span className="w-8 h-[1px] bg-[#c8aa6e]"></span>
@@ -4975,7 +5087,8 @@ const ClassList = ({
                             <div className="w-full h-[1px] bg-gradient-to-r from-slate-800 to-transparent mt-3"></div>
                           </div>
                         </div>
-                      </div >
+                        </div >
+                      )}
 
                     </div >
                   </div >
@@ -4985,6 +5098,14 @@ const ClassList = ({
           );
         /* Funciones movidas al scope principal, ver más arriba */
         case 'progression':
+          if (isRoguelitePlayerClass) {
+            return (
+              <ProgressionView
+                dndClass={editingClass}
+                readOnly={true}
+              />
+            );
+          }
           if (isPlayerMode) {
             return (
               <DeckBuilderView
@@ -4999,11 +5120,10 @@ const ClassList = ({
           return (
             <ProgressionView
               dndClass={editingClass}
+              readOnly={false}
               onUpdateLevel={handleUpdateLevel}
-              onToggleAcquired={toggleLevelCompleted}
-              onAddFeature={handleAddLevelFeature}
-              onRemoveFeature={handleRemoveLevelFeature}
-              onUpdateFeature={handleUpdateLevelFeature}
+              onAddLevel={addLevel}
+              onRemoveLevel={removeLevel}
             />
           );
         case 'loadout':
@@ -5056,6 +5176,7 @@ const ClassList = ({
           hasUnsavedChanges={hasUnsavedChanges}
           saveButtonState={saveButtonState}
           isPlayerMode={isPlayerMode}
+          isRogueliteClass={isRoguelitePlayerClass || !isPlayerMode}
         />
         <div className="flex-1 relative overflow-hidden pb-16 md:pb-0">
           {renderActiveView()}
@@ -5079,6 +5200,7 @@ const ClassList = ({
           hasUnsavedChanges={hasUnsavedChanges}
           saveButtonState={saveButtonState}
           isPlayerMode={isPlayerMode}
+          isRogueliteClass={isRoguelitePlayerClass || !isPlayerMode}
         />
       </div>
     );
@@ -5252,131 +5374,20 @@ const ClassList = ({
                     </div>
                   )}
 
-                  {filteredClasses.map((classItem) => {
-                    const isLocked = classItem.status === 'locked';
-
-                    return (
-                      <div
-                        key={classItem.id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => openClassDetails(classItem)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            openClassDetails(classItem);
-                          }
-                        }}
-                        className="group relative aspect-[3/4.5] cursor-pointer rounded-sm transition-all duration-500 ease-out hover:-translate-y-2 hover:shadow-[0_15px_40px_-10px_rgba(200,170,110,0.3)]"
-                      >
-                        {/* Main Frame Content */}
-                        <div className={`absolute inset-0 overflow-hidden bg-[#1a1b26] border-[1px] ${!isLocked ? 'border-[#785a28]' : 'border-slate-700'}`}>
-                          {/* Background Image with Zoom effect */}
-                          <div className="absolute inset-0 overflow-hidden">
-                            {classItem.image ? (
-                              <img
-                                src={classItem.image}
-                                alt={classItem.name}
-                                className={`h-full w-full object-cover transition-transform duration-700 group-hover:scale-110 ${isLocked ? 'grayscale opacity-40' : 'opacity-90'}`}
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center bg-[#1a1b26] text-slate-700">
-                                <FiImage className="h-12 w-12 opacity-20" />
-                              </div>
-                            )}
-                            <div className="absolute inset-0 bg-gradient-to-t from-[#0b1120] via-transparent to-transparent opacity-90" />
-                          </div>
-
-                          {/* Locked Overlay */}
-                          {isLocked && (
-                            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px]">
-                              <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full border-2 border-slate-500 bg-[#0b1120]/80">
-                                <FiLock className="h-8 w-8 text-slate-400" />
-                              </div>
-                              <span className="font-['Cinzel'] text-sm font-bold tracking-[0.2em] text-slate-400 shadow-black drop-shadow-md">BLOQUEADO</span>
-                            </div>
-                          )}
-
-                          {/* Card Content */}
-                          <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center p-5 text-center">
-                            <h3 className={`mb-1 font-['Cinzel'] text-xl font-bold uppercase tracking-wider transition-colors duration-300 drop-shadow-lg ${!isLocked ? 'text-[#f0e6d2] group-hover:text-white' : 'text-slate-500'}`}>
-                              {classItem.name}
-                            </h3>
-
-                            {/* Stars */}
-                            <div className="mb-3 flex items-center justify-center gap-0.5">
-                              {Array.from({ length: 5 }).map((_, i) => (
-                                <svg
-                                  key={i}
-                                  className={`h-3 w-3 drop-shadow-md ${i < (classItem.rating || 0) ? (!isLocked ? 'text-[#c8aa6e] fill-[#c8aa6e]' : 'text-slate-600 fill-slate-600') : 'text-slate-800 fill-slate-800'}`}
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                                </svg>
-                              ))}
-                            </div>
-
-                            {/* Role/Level Badge */}
-                            {!isLocked && (
-                              <div className="flex w-full items-center justify-center gap-3">
-                                <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent to-[#c8aa6e]/50"></div>
-                                <div className="rounded border border-[#c8aa6e]/40 bg-[#1c1917]/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[#c8aa6e]">
-                                  Nvl {classItem.level || 1}
-                                </div>
-                                <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent to-[#c8aa6e]/50"></div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Fancy Border Frame (Over everything) */}
-                        <div className={`pointer-events-none absolute inset-0 z-30 border-2 shadow-[inset_0_0_20px_rgba(200,170,110,0.2)] transition-opacity duration-300 ${!isLocked ? 'border-[#c8aa6e]' : 'border-slate-600'} opacity-0 group-hover:opacity-100`}>
-                          {/* Corner Accents */}
-                          <div className="absolute left-0 top-0 h-2 w-2 border-l-2 border-t-2 border-white"></div>
-                          <div className="absolute right-0 top-0 h-2 w-2 border-r-2 border-t-2 border-white"></div>
-                          <div className="absolute bottom-0 left-0 h-2 w-2 border-b-2 border-l-2 border-white"></div>
-                          <div className="absolute bottom-0 right-0 h-2 w-2 border-b-2 border-r-2 border-white"></div>
-                        </div>
-
-                        {/* Static Border for non-hover */}
-                        <div className={`pointer-events-none absolute inset-0 z-20 border transition-opacity ${!isLocked ? 'border-[#785a28]' : 'border-slate-700'} opacity-100 group-hover:opacity-0`}></div>
-
-
-                        {/* Edit Button (Top Left) */}
-                        {/* Edit Button (Top Left) - Only if not readOnly */}
-                        {!readOnly && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleStartPortraitEdit(classItem);
-                              }}
-                              className="absolute left-3 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-slate-500/30 bg-[#0b1120]/80 text-slate-300 opacity-0 backdrop-blur-md transition-all duration-300 hover:bg-slate-800 hover:text-white group-hover:opacity-100"
-                              title="Cambiar retrato"
-                            >
-                              <FiImage className="h-3.5 w-3.5" />
-                            </button>
-
-                            {!isLocked && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteClass(classItem.id);
-                                }}
-                                className="absolute right-3 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-red-500/30 bg-[#0b1120]/80 text-red-400 opacity-0 backdrop-blur-md transition-all duration-300 hover:bg-red-900/50 hover:text-red-200 group-hover:opacity-100"
-                                title="Eliminar clase"
-                              >
-                                <FiTrash2 className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {filteredClasses.map((classItem) => (
+                    <LibraryCharacterCard
+                      key={classItem.id}
+                      item={classItem}
+                      onOpen={() => openClassDetails(classItem)}
+                      onPortraitEdit={!readOnly ? () => handleStartPortraitEdit(classItem) : undefined}
+                      onDelete={!readOnly ? () => handleDeleteClass(classItem.id) : undefined}
+                      starValue={classItem.rating || 0}
+                    />
+                  ))}
                 </div>
+                {typeof additionalLibrarySection === 'function'
+                  ? additionalLibrarySection({ openClassDetails })
+                  : additionalLibrarySection}
               </div>
             )}
           </motion.div>
@@ -5414,6 +5425,306 @@ ClassList.propTypes = {
   rarityColorMap: PropTypes.objectOf(PropTypes.string),
   currentUserId: PropTypes.string,
   knownPlayers: PropTypes.arrayOf(PropTypes.string),
+  additionalLibrarySection: PropTypes.oneOfType([PropTypes.node, PropTypes.func]),
+};
+
+const normalizeRogueliteActionDice = (value) => {
+  const dice = Array.isArray(value)
+    ? value
+      .map((die) => String(die || '').trim().toLowerCase())
+      .filter((die) => /^d(4|6|8|10|12|20)$/.test(die))
+      .slice(0, 3)
+    : [];
+
+  while (dice.length < 3) dice.push('d4');
+  return dice;
+};
+
+const RogueliteRangeEditor = ({
+  label,
+  value,
+  maximum,
+  onValueChange,
+  onMaximumChange,
+  testId,
+}) => {
+  const safeMaximum = Math.max(0, Math.min(99, Number(maximum) || 0));
+  const safeValue = Math.max(0, Math.min(safeMaximum, Number(value) || 0));
+
+  const setMaximum = (nextValue) => {
+    const resolved = Math.max(0, Math.min(99, nextValue));
+    onMaximumChange(resolved);
+    if (safeValue > resolved) onValueChange(resolved);
+  };
+
+  const controls = [
+    {
+      key: 'initial',
+      caption: 'Inicio',
+      value: safeValue,
+      decrease: () => onValueChange(Math.max(0, safeValue - 1)),
+      increase: () => onValueChange(Math.min(safeMaximum, safeValue + 1)),
+      canDecrease: safeValue > 0,
+      canIncrease: safeValue < safeMaximum,
+    },
+    {
+      key: 'maximum',
+      caption: 'Máx.',
+      value: safeMaximum,
+      decrease: () => setMaximum(safeMaximum - 1),
+      increase: () => setMaximum(safeMaximum + 1),
+      canDecrease: safeMaximum > 0,
+      canIncrease: safeMaximum < 99,
+    },
+  ];
+
+  return (
+    <div
+      data-testid={`roguelite-stat-editor-${testId}`}
+      className="inline-flex shrink-0 items-center border border-[#c8aa6e]/20 bg-[#080c17]/80 px-1.5 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]"
+    >
+      {controls.map((control, index) => (
+        <React.Fragment key={control.key}>
+          {index > 0 && <div className="mx-1.5 h-7 w-px bg-[#c8aa6e]/15" />}
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-[7px] font-bold uppercase tracking-[0.16em] text-slate-600">
+              {control.caption}
+            </span>
+            <div className="flex items-center">
+              <button
+                type="button"
+                onClick={control.decrease}
+                disabled={!control.canDecrease}
+                className="flex h-7 w-7 touch-manipulation items-center justify-center text-slate-600 transition hover:bg-[#c8aa6e]/5 hover:text-[#c8aa6e] active:bg-[#c8aa6e]/10 disabled:cursor-not-allowed disabled:text-slate-800"
+                aria-label={`Reducir ${label} ${control.caption.toLowerCase()}`}
+              >
+                <FiMinus className="h-3 w-3" />
+              </button>
+              <span
+                className={`min-w-6 text-center font-mono text-xs font-bold ${control.key === 'initial' ? 'text-[#e2d5b5]' : 'text-slate-400'}`}
+                aria-label={`${label} ${control.caption.toLowerCase()}: ${control.value}`}
+              >
+                {control.value}
+              </span>
+              <button
+                type="button"
+                onClick={control.increase}
+                disabled={!control.canIncrease}
+                className="flex h-7 w-7 touch-manipulation items-center justify-center text-slate-600 transition hover:bg-[#c8aa6e]/5 hover:text-[#c8aa6e] active:bg-[#c8aa6e]/10 disabled:cursor-not-allowed disabled:text-slate-800"
+                aria-label={`Aumentar ${label} ${control.caption.toLowerCase()}`}
+              >
+                <FiPlus className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+};
+
+RogueliteRangeEditor.propTypes = {
+  label: PropTypes.string.isRequired,
+  value: PropTypes.number.isRequired,
+  maximum: PropTypes.number.isRequired,
+  onValueChange: PropTypes.func.isRequired,
+  onMaximumChange: PropTypes.func.isRequired,
+  testId: PropTypes.string.isRequired,
+};
+
+const RogueliteStatBar = ({
+  icon: Icon,
+  label,
+  value,
+  maximum,
+  color,
+  valueLabel,
+  testId,
+  controls,
+  onLabelChange,
+}) => {
+  const safeValue = Math.max(0, Number(value) || 0);
+  const safeMaximum = Math.max(1, Number(maximum) || safeValue || 1);
+  const segmentCount = Math.min(10, Math.max(1, Math.ceil(safeMaximum)));
+  const filledSegments = Math.min(
+    segmentCount,
+    Math.max(0, Math.round((safeValue / safeMaximum) * segmentCount)),
+  );
+
+  return (
+    <div className="flex flex-col w-full" data-testid={`roguelite-stat-${testId || label.toLowerCase()}`}>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0 text-[#f0e6d2] font-['Cinzel'] font-bold tracking-widest text-sm uppercase flex items-center gap-2">
+          <Icon className="h-4 w-4" style={{ color }} aria-hidden="true" />
+          {onLabelChange ? (
+            <EditableText
+              value={label}
+              onChange={onLabelChange}
+              className="min-w-[90px] text-[#f0e6d2]"
+            />
+          ) : label}
+        </div>
+        {controls || (
+          <span className="text-[#c8aa6e] font-bold font-mono text-sm opacity-80">
+            {valueLabel}
+          </span>
+        )}
+      </div>
+      <div className="flex h-6 w-full max-w-[420px] relative pl-1">
+        {Array.from({ length: segmentCount }).map((_, index) => (
+          <div
+            key={index}
+            className="flex-1 h-full transition-all duration-300 relative min-w-[20px]"
+            style={{
+              backgroundColor: index < filledSegments ? color : `${color}33`,
+              clipPath: index === 0
+                ? 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%)'
+                : 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%, 10px 50%)',
+              marginLeft: index === 0 ? '0' : '-6px',
+              zIndex: segmentCount - index,
+              filter: 'drop-shadow(2px 0 0 rgba(0,9,11,0.8))',
+            }}
+          >
+            <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
+            <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/20" />
+          </div>
+        ))}
+      </div>
+      <div className="w-full h-[1px] bg-gradient-to-r from-slate-800 to-transparent mt-3" />
+    </div>
+  );
+};
+
+RogueliteStatBar.propTypes = {
+  icon: PropTypes.elementType.isRequired,
+  label: PropTypes.string.isRequired,
+  value: PropTypes.number.isRequired,
+  maximum: PropTypes.number.isRequired,
+  color: PropTypes.string.isRequired,
+  valueLabel: PropTypes.string.isRequired,
+  testId: PropTypes.string,
+  controls: PropTypes.node,
+  onLabelChange: PropTypes.func,
+};
+
+const RogueliteClassStatsSummary = ({
+  classData,
+  editable = false,
+  onFieldChange = () => {},
+  onResourceChange = () => {},
+}) => {
+  const rules = classData.roguelite || {};
+  const resource = { ...(rules.resource || {}), ...(classData.resource || {}) };
+  const maxLife = Math.max(0, Number(classData.maxLife ?? rules.maxLife) || 0);
+  const lifeInitial = Math.min(
+    maxLife,
+    Math.max(0, Number(classData.lifeInitial ?? rules.lifeInitial ?? maxLife) || 0),
+  );
+  const defenseClass = Math.max(0, Number(classData.defenseClass ?? rules.defenseClass) || 0);
+  const maxDefenseClass = Math.max(
+    defenseClass,
+    Number(classData.maxDefenseClass ?? rules.maxDefenseClass ?? defenseClass) || 0,
+  );
+  const movement = Math.max(0, Number(classData.movement ?? rules.movement) || 0);
+  const maxMovement = Math.max(
+    movement,
+    Number(classData.maxMovement ?? rules.maxMovement ?? movement) || 0,
+  );
+  const initiative = Math.max(0, Number(classData.initiativeBase ?? rules.initiativeBase) || 0);
+  const maxInitiative = Math.max(
+    initiative,
+    Number(classData.maxInitiative ?? rules.maxInitiative ?? initiative) || 0,
+  );
+  const resourceMaximum = Math.max(0, Number(resource.maximum ?? resource.max) || 0);
+  const resourceInitial = Math.min(
+    resourceMaximum,
+    Math.max(0, Number(resource.initial ?? resource.current) || 0),
+  );
+  const resourceName = resource.name || 'Recurso';
+  const resourceColor = resource.color || '#60a5fa';
+  const rangeControl = (valueField, maximumField, value, maximum, label, testId) => editable ? (
+    <RogueliteRangeEditor
+      value={value}
+      maximum={maximum}
+      onValueChange={(nextValue) => onFieldChange(valueField, nextValue)}
+      onMaximumChange={(nextValue) => onFieldChange(maximumField, nextValue)}
+      label={label}
+      testId={testId}
+    />
+  ) : null;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6 border-b border-[#c8aa6e]/30 pb-2">
+        <h4 className="text-[#c8aa6e] font-['Cinzel'] text-lg tracking-widest flex items-center gap-2">
+          <span className="w-8 h-[1px] bg-[#c8aa6e]" />
+          ESTADÍSTICAS
+        </h4>
+      </div>
+      <div className="flex flex-col gap-5 px-1">
+        <RogueliteStatBar icon={Heart} label="Vida" testId="vida" value={lifeInitial} maximum={Math.max(maxLife, 1)} color="#e6a0a5" valueLabel={`${lifeInitial} / ${maxLife}`} controls={rangeControl('lifeInitial', 'maxLife', lifeInitial, maxLife, 'Vida', 'vida')} />
+        <RogueliteStatBar icon={Shield} label="CD" testId="cd" value={defenseClass} maximum={Math.max(maxDefenseClass, 1)} color="#b9b5ad" valueLabel={`${defenseClass} / ${maxDefenseClass}`} controls={rangeControl('defenseClass', 'maxDefenseClass', defenseClass, maxDefenseClass, 'CD', 'cd')} />
+        <RogueliteStatBar icon={Footprints} label="Movimiento" testId="movimiento" value={movement} maximum={Math.max(maxMovement, 1)} color="#82b8df" valueLabel={`${movement} / ${maxMovement}`} controls={rangeControl('movement', 'maxMovement', movement, maxMovement, 'Movimiento', 'movimiento')} />
+        <RogueliteStatBar icon={Gauge} label="Iniciativa" testId="iniciativa" value={initiative} maximum={Math.max(maxInitiative, 1)} color="#d0ad61" valueLabel={`${initiative} / ${maxInitiative}`} controls={rangeControl('initiativeBase', 'maxInitiative', initiative, maxInitiative, 'Iniciativa', 'iniciativa')} />
+        <div>
+          <RogueliteStatBar
+            icon={Sparkles}
+            label={resourceName}
+            testId={resourceName.toLowerCase()}
+            value={resourceInitial}
+            maximum={Math.max(resourceMaximum, 1)}
+            color={resourceColor}
+            valueLabel={`${resourceInitial} / ${resourceMaximum}`}
+            onLabelChange={editable ? (value) => onResourceChange('name', value) : undefined}
+            controls={editable ? (
+              <RogueliteRangeEditor
+                label={resourceName}
+                value={resourceInitial}
+                maximum={resourceMaximum}
+                onValueChange={(value) => onResourceChange('initial', value)}
+                onMaximumChange={(value) => onResourceChange('maximum', value)}
+                testId="resource"
+              />
+            ) : null}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+RogueliteClassStatsSummary.propTypes = {
+  classData: PropTypes.shape({
+    maxLife: PropTypes.number,
+    lifeInitial: PropTypes.number,
+    defenseClass: PropTypes.number,
+    maxDefenseClass: PropTypes.number,
+    movement: PropTypes.number,
+    maxMovement: PropTypes.number,
+    initiativeBase: PropTypes.number,
+    maxInitiative: PropTypes.number,
+    roguelite: PropTypes.shape({
+      maxLife: PropTypes.number,
+      lifeInitial: PropTypes.number,
+      defenseClass: PropTypes.number,
+      maxDefenseClass: PropTypes.number,
+      movement: PropTypes.number,
+      maxMovement: PropTypes.number,
+      initiativeBase: PropTypes.number,
+      maxInitiative: PropTypes.number,
+      resource: PropTypes.object,
+    }),
+    resource: PropTypes.shape({
+      name: PropTypes.string,
+      color: PropTypes.string,
+      maximum: PropTypes.number,
+      initial: PropTypes.number,
+      current: PropTypes.number,
+    }),
+  }).isRequired,
+  editable: PropTypes.bool,
+  onFieldChange: PropTypes.func,
+  onResourceChange: PropTypes.func,
 };
 
 export default ClassList;

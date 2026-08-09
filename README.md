@@ -1565,6 +1565,60 @@ npm run build      # Genera build de producción
 firebase deploy    # Despliega a Firebase Hosting
 ```
 
+## Acceso inicial al modo Roguelite
+
+- Cada documento de `players` puede declarar `gameAccess.roguelite.enabled` y
+  `gameAccess.roguelite.unlockedClassIds`. Los perfiles antiguos permanecen sin
+  acceso hasta que el máster lo habilite expresamente desde `Usuarios`.
+- El catálogo combina las clases ya existentes de `classes` con las
+  definiciones específicas de `rogueliteClasses`. Si ambas colecciones usan el
+  mismo identificador, la definición roguelite amplía y prevalece sobre la
+  antigua; así se pueden reutilizar las clases actuales y migrarlas poco a
+  poco. Conceder una clase solo guarda su identificador en el perfil.
+- `Mis personajes` conserva intacta la biblioteca tradicional. Cuando el modo
+  está habilitado añade, después de un separador, las clases desbloqueadas y
+  abre la ficha existente en modo `roguelite` de jugador. Se conserva el diseño
+  y el hover del retrato, pero nombre, subtítulo, leyenda, retrato, tres dados de
+  acción y estadísticas base son de solo lectura y proceden de la definición
+  del máster. En este resumen, el botón de aventura continúa inmediatamente
+  después de los dados para no conservar el hueco del antiguo bloque de cuatro
+  atributos. Las demás pestañas mantienen por ahora su comportamiento actual.
+  Las tarjetas comparten marco y animación de hover, no muestran acciones de
+  retrato o eliminación y reflejan el nivel personal mediante diez estrellas.
+- La definición global nunca aporta progreso alcanzado al jugador. Una clase
+  recién desbloqueada comienza limpia y en nivel 1; sus atributos, equipo,
+  Talentos y nivel actual se guardan de forma independiente en
+  `players/{playerId}/rogueliteClasses/{classId}`. Dos perfiles pueden usar la
+  misma clase con niveles y configuraciones completamente distintos. Los datos
+  autorales, el combate base y la tabla de niveles del máster prevalecen sobre
+  cualquier copia antigua guardada en el perfil del jugador.
+- En las fichas de clase Roguelite, `Colección · Baraja` se sustituye por
+  `Progresión · Nivel`. El Bárbaro recibe como base sus diez niveles
+  documentados, con Vida, Movimiento, Furia máxima y beneficio. El máster puede
+  editar, añadir o eliminar niveles desde la misma vista; el catálogo global
+  sincroniza esos cambios con todas las copias desbloqueadas.
+- El `Resumen` de la biblioteca del máster comparte el esquema Roguelite del
+  jugador: tres dados de acción y barras para Vida, CD, Movimiento, Iniciativa
+  y recurso de clase. En esta variante el máster conserva la edición de texto,
+  retrato, dados y estadísticas; el guardado actualiza tanto los campos
+  normalizados como la definición `roguelite` que reciben los perfiles.
+- Cada estadística Roguelite dispone de un valor de inicio y un máximo propios:
+  `lifeInitial/maxLife`, `defenseClass/maxDefenseClass`,
+  `movement/maxMovement`, `initiativeBase/maxInitiative` y
+  `resource.initial/resource.maximum`. El máster los ajusta con un control
+  compacto integrado en la cabecera de cada barra; las definiciones antiguas
+  adoptan su valor existente como máximo para conservar compatibilidad.
+- Los valores numéricos editables usan `NumberStepper`, con objetivos táctiles
+  de 40 px y botones propios de incremento y reducción. La progresión dispone
+  sus métricas en una columna ordenada y solo pasa a tres columnas desde `lg`;
+  incluso entonces, etiqueta y controles se apilan para impedir solapamientos
+  con zoom o escalado de pantalla. Vida, Movimiento y recurso se distinguen
+  mediante acentos degradados discretos en carmesí, azul verdoso y violeta. La
+  acción de eliminar permanece anclada arriba a la derecha y no desplaza el
+  título.
+- Esta primera fase no conecta todavía el botón de aventura con Canvas ni
+  modifica el combate o el BoardSection.
+
 ## 📋 Arquitectura del proyecto
 
 ```
@@ -1595,6 +1649,10 @@ src/
 │       ├── spatial.js          # Coordenadas, snap y colisiones
 │       ├── tokenSheetSync.js   # Sincronización token ↔ ficha
 │       └── useCanvasGridController.js # Estado editable de cuadrícula
+│   ├── roguelite/
+│   │   ├── access.js                    # Permisos y clases desbloqueadas
+│   │   ├── classDefinition.js           # Normalización del catálogo
+│   │   └── components/                  # Galería y ficha de clase propias
 │   └── tactical-shared/
 │       ├── TacticalSectionCore.jsx     # Sesión, cámara y persistencia comunes
 │       ├── createTacticalCombatController.js # Base de combate reutilizable
