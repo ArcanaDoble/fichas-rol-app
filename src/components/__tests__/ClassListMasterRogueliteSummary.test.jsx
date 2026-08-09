@@ -100,9 +100,9 @@ test('uses the editable roguelite summary for the master class sheet', async () 
 
   const lifeEditor = screen.getByTestId('roguelite-stat-editor-vida');
   within(lifeEditor).getAllByRole('button').forEach((button) => {
-    expect(button).toHaveClass('h-7', 'w-7');
+    expect(button).toHaveClass('h-5', 'w-5');
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Aumentar Vida inicio' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Fijar Vida en 7' }));
   fireEvent.click(screen.getByRole('button', { name: 'Aumentar Vida máx.' }));
   fireEvent.click(screen.getByRole('button', { name: 'Aumentar CD máx.' }));
   fireEvent.click(screen.getByRole('button', { name: 'Aumentar Movimiento máx.' }));

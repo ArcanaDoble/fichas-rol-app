@@ -4,6 +4,7 @@ import {
     FiCheck,
     FiEdit2,
     FiLock,
+    FiMinus,
     FiPlus,
     FiTrash2,
 } from 'react-icons/fi';
@@ -79,19 +80,19 @@ const EditableText = ({
 
 const LEVEL_METRIC_TONES = {
     life: {
-        surface: 'border-[#b76f72]/20 bg-gradient-to-r from-[#713b43]/[0.14] via-[#713b43]/[0.045] to-transparent',
-        icon: 'text-[#cf8b8d]',
-        label: 'text-[#b88789]',
+        surface: 'from-[#713b43]/[0.14]',
+        icon: 'text-[#ef4444]',
+        label: 'text-[#e2d5b5]',
     },
     movement: {
-        surface: 'border-[#6593a1]/20 bg-gradient-to-r from-[#31586a]/[0.14] via-[#31586a]/[0.045] to-transparent',
-        icon: 'text-[#82aeb8]',
-        label: 'text-[#739eaa]',
+        surface: 'from-[#31586a]/[0.14]',
+        icon: 'text-[#38bdf8]',
+        label: 'text-[#e2d5b5]',
     },
     resource: {
-        surface: 'border-[#8c72a5]/20 bg-gradient-to-r from-[#523d68]/[0.14] via-[#523d68]/[0.045] to-transparent',
-        icon: 'text-[#a88cbe]',
-        label: 'text-[#967cab]',
+        surface: 'from-[#523d68]/[0.14]',
+        icon: 'text-[#c8aa6e]',
+        label: 'text-[#e2d5b5]',
     },
 };
 
@@ -99,33 +100,54 @@ const LevelMetric = ({ icon: Icon, label, value, editable, onChange, tone }) => 
     if (!editable && (value === null || value === undefined)) return null;
 
     const palette = LEVEL_METRIC_TONES[tone] || LEVEL_METRIC_TONES.resource;
-    const layoutClass = editable
-        ? 'w-full max-w-full flex-col items-stretch justify-between gap-2.5 px-3 py-2.5 sm:w-[176px]'
-        : 'w-full max-w-full items-center gap-2.5 px-3 py-2 sm:w-[152px]';
+    const safeValue = Math.max(0, Math.min(99, Number(value) || 0));
+    const displayValue = safeValue > 0 ? `+${safeValue}` : `${safeValue}`;
 
     return (
         <div
             data-metric-tone={tone}
-            className={`flex min-w-0 overflow-hidden border ${layoutClass} ${palette.surface}`}
+            className={`flex min-w-0 w-full sm:w-auto overflow-hidden items-center justify-between gap-1.5 border-b border-[#c8aa6e]/25 pb-2 px-2 ${
+                editable ? 'sm:w-[176px] py-2.5' : 'sm:w-[152px] py-2'
+            } ${palette.surface}`}
         >
-            <div className="flex min-w-0 items-center gap-2">
-                <Icon className={`h-4 w-4 shrink-0 ${palette.icon}`} strokeWidth={1.5} />
-                <div className="min-w-0">
-                    <div className={`break-words text-[9px] font-bold uppercase leading-4 tracking-[0.16em] ${palette.label}`}>{label}</div>
-                    {!editable && (
-                    <div className="mt-0.5 text-sm font-bold text-[#e2d5b5]">{value}</div>
-                    )}
-                </div>
+            <div className="flex items-center gap-1.5 min-w-0 shrink-0">
+                <Icon className={`h-3.5 w-3.5 shrink-0 ${palette.icon}`} strokeWidth={2} />
+                <span className="truncate text-[10.5px] sm:text-[11px] font-bold font-['Cinzel'] tracking-wide text-[#e2d5b5] uppercase">
+                    {label}
+                </span>
             </div>
-            {editable && (
-                <NumberStepper
-                    value={value ?? 0}
-                    onChange={onChange}
-                    label={label}
-                    min={0}
-                    max={99}
-                    className="self-start"
-                />
+
+            {editable ? (
+                <div className="flex shrink-0 items-center gap-0.5 ml-auto">
+                    <button
+                        type="button"
+                        onClick={() => onChange(Math.max(0, safeValue - 1))}
+                        disabled={safeValue <= 0}
+                        className="text-slate-400 hover:text-[#c8aa6e] transition p-0.5 disabled:opacity-20 touch-manipulation"
+                        aria-label={`Reducir ${label}`}
+                    >
+                        <FiMinus className="h-3 w-3" />
+                    </button>
+                    <span
+                        className="font-mono text-xs font-bold text-[#c8aa6e] min-w-[16px] text-center"
+                        aria-label={`${label}: ${safeValue}`}
+                    >
+                        {displayValue}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => onChange(Math.min(99, safeValue + 1))}
+                        disabled={safeValue >= 99}
+                        className="text-slate-400 hover:text-[#c8aa6e] transition p-0.5 disabled:opacity-20 touch-manipulation"
+                        aria-label={`Aumentar ${label}`}
+                    >
+                        <FiPlus className="h-3 w-3" />
+                    </button>
+                </div>
+            ) : (
+                <span className="font-mono text-xs font-bold text-[#c8aa6e] shrink-0 ml-auto">
+                    {displayValue}
+                </span>
             )}
         </div>
     );
@@ -349,7 +371,7 @@ const ProgressionView = ({
                                             )}
                                         </div>
 
-                                        <div className="mt-4 flex min-w-0 flex-wrap items-start gap-2.5">
+                                        <div className="mt-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 sm:gap-6 md:gap-8">
                                             <LevelMetric
                                                 icon={Heart}
                                                 label="Vida"

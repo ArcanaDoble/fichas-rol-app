@@ -4475,7 +4475,7 @@ const ClassList = ({
                                     <img
                                       src={`/dados/${diceValue.toUpperCase()}.webp`}
                                       alt={diceValue.toUpperCase()}
-                                      className="w-full h-full object-contain"
+                                      className="w-full h-full object-contain opacity-90 drop-shadow-[0_0_4px_rgba(203,213,225,0.3)]"
                                     />
                                   </div>
                                 ) : (
@@ -5454,82 +5454,175 @@ const RogueliteRangeEditor = ({
   const setMaximum = (nextValue) => {
     const resolved = Math.max(0, Math.min(99, nextValue));
     onMaximumChange(resolved);
-    if (safeValue > resolved) onValueChange(resolved);
+    if (safeValue > resolved && onValueChange) onValueChange(resolved);
   };
-
-  const controls = [
-    {
-      key: 'initial',
-      caption: 'Inicio',
-      value: safeValue,
-      decrease: () => onValueChange(Math.max(0, safeValue - 1)),
-      increase: () => onValueChange(Math.min(safeMaximum, safeValue + 1)),
-      canDecrease: safeValue > 0,
-      canIncrease: safeValue < safeMaximum,
-    },
-    {
-      key: 'maximum',
-      caption: 'Máx.',
-      value: safeMaximum,
-      decrease: () => setMaximum(safeMaximum - 1),
-      increase: () => setMaximum(safeMaximum + 1),
-      canDecrease: safeMaximum > 0,
-      canIncrease: safeMaximum < 99,
-    },
-  ];
 
   return (
     <div
       data-testid={`roguelite-stat-editor-${testId}`}
-      className="inline-flex shrink-0 items-center border border-[#c8aa6e]/20 bg-[#080c17]/80 px-1.5 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]"
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[#c8aa6e]/30 bg-[#080c17]/90 px-2 py-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_2px_4px_rgba(0,0,0,0.4)]"
     >
-      {controls.map((control, index) => (
-        <React.Fragment key={control.key}>
-          {index > 0 && <div className="mx-1.5 h-7 w-px bg-[#c8aa6e]/15" />}
-          <div className="flex flex-col items-center gap-0.5">
-            <span className="text-[7px] font-bold uppercase tracking-[0.16em] text-slate-600">
-              {control.caption}
-            </span>
-            <div className="flex items-center">
-              <button
-                type="button"
-                onClick={control.decrease}
-                disabled={!control.canDecrease}
-                className="flex h-7 w-7 touch-manipulation items-center justify-center text-slate-600 transition hover:bg-[#c8aa6e]/5 hover:text-[#c8aa6e] active:bg-[#c8aa6e]/10 disabled:cursor-not-allowed disabled:text-slate-800"
-                aria-label={`Reducir ${label} ${control.caption.toLowerCase()}`}
-              >
-                <FiMinus className="h-3 w-3" />
-              </button>
-              <span
-                className={`min-w-6 text-center font-mono text-xs font-bold ${control.key === 'initial' ? 'text-[#e2d5b5]' : 'text-slate-400'}`}
-                aria-label={`${label} ${control.caption.toLowerCase()}: ${control.value}`}
-              >
-                {control.value}
-              </span>
-              <button
-                type="button"
-                onClick={control.increase}
-                disabled={!control.canIncrease}
-                className="flex h-7 w-7 touch-manipulation items-center justify-center text-slate-600 transition hover:bg-[#c8aa6e]/5 hover:text-[#c8aa6e] active:bg-[#c8aa6e]/10 disabled:cursor-not-allowed disabled:text-slate-800"
-                aria-label={`Aumentar ${label} ${control.caption.toLowerCase()}`}
-              >
-                <FiPlus className="h-3 w-3" />
-              </button>
-            </div>
-          </div>
-        </React.Fragment>
-      ))}
+      <span className="font-['Cinzel'] text-[10px] font-bold tracking-widest text-[#c8aa6e]/80 select-none">
+        MÁX:
+      </span>
+      <button
+        type="button"
+        onClick={() => setMaximum(safeMaximum - 1)}
+        disabled={safeMaximum <= 0}
+        className="flex h-5 w-5 touch-manipulation items-center justify-center rounded text-[#c8aa6e] transition hover:bg-[#c8aa6e]/20 active:scale-90 active:bg-[#c8aa6e]/30 disabled:cursor-not-allowed disabled:opacity-30"
+        aria-label={`Reducir ${label} máx.`}
+      >
+        <FiMinus className="h-3 w-3" />
+      </button>
+      <span
+        className="min-w-4 text-center font-mono text-xs font-bold text-[#f0e6d2]"
+        aria-label={`${label} máx.: ${safeMaximum}`}
+      >
+        {safeMaximum}
+      </span>
+      <button
+        type="button"
+        onClick={() => setMaximum(safeMaximum + 1)}
+        disabled={safeMaximum >= 99}
+        className="flex h-5 w-5 touch-manipulation items-center justify-center rounded text-[#c8aa6e] transition hover:bg-[#c8aa6e]/20 active:scale-90 active:bg-[#c8aa6e]/30 disabled:cursor-not-allowed disabled:opacity-30"
+        aria-label={`Aumentar ${label} máx.`}
+      >
+        <FiPlus className="h-3 w-3" />
+      </button>
     </div>
   );
 };
 
 RogueliteRangeEditor.propTypes = {
   label: PropTypes.string.isRequired,
-  value: PropTypes.number.isRequired,
+  value: PropTypes.number,
   maximum: PropTypes.number.isRequired,
-  onValueChange: PropTypes.func.isRequired,
+  onValueChange: PropTypes.func,
   onMaximumChange: PropTypes.func.isRequired,
   testId: PropTypes.string.isRequired,
+};
+
+const PRESET_RESOURCE_COLORS = [
+  { name: 'Azul', hex: '#60a5fa' },
+  { name: 'Rojo', hex: '#f87171' },
+  { name: 'Esmeralda', hex: '#34d399' },
+  { name: 'Dorado', hex: '#fbbf24' },
+  { name: 'Violeta', hex: '#a78bfa' },
+  { name: 'Cian', hex: '#38bdf8' },
+  { name: 'Naranja', hex: '#fb923c' },
+];
+
+const ResourceColorPicker = ({ color, onChange }) => {
+  const [showCustomPopover, setShowCustomPopover] = useState(false);
+  const [hexInput, setHexInput] = useState(color || '#60a5fa');
+  const popoverRef = useRef(null);
+
+  useEffect(() => {
+    setHexInput(color || '#60a5fa');
+  }, [color]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target)) {
+        setShowCustomPopover(false);
+      }
+    };
+    if (showCustomPopover) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showCustomPopover]);
+
+  const isPreset = PRESET_RESOURCE_COLORS.some(
+    (p) => p.hex.toLowerCase() === (color || '').toLowerCase()
+  );
+
+  const handleHexSubmit = (e) => {
+    e?.preventDefault();
+    let cleaned = hexInput.trim();
+    if (!cleaned.startsWith('#')) cleaned = `#${cleaned}`;
+    if (/^#[0-9A-Fa-f]{6}$/.test(cleaned)) {
+      onChange(cleaned);
+      setShowCustomPopover(false);
+    }
+  };
+
+  return (
+    <div className="relative inline-flex items-center gap-1.5 ml-2.5" data-testid="resource-color-picker">
+      {PRESET_RESOURCE_COLORS.map((preset) => {
+        const isSelected = (color || '').toLowerCase() === preset.hex.toLowerCase();
+        return (
+          <button
+            key={preset.hex}
+            type="button"
+            onClick={() => onChange(preset.hex)}
+            className={`w-3.5 h-3.5 rounded-full transition-all duration-200 touch-manipulation focus:outline-none ${
+              isSelected
+                ? 'scale-125 ring-2 ring-[#c8aa6e] ring-offset-1 ring-offset-[#080c17] shadow-[0_0_8px_rgba(200,170,110,0.6)]'
+                : 'opacity-70 hover:opacity-100 hover:scale-110'
+            }`}
+            style={{ backgroundColor: preset.hex }}
+            title={`Color ${preset.name}`}
+            aria-label={`Seleccionar color ${preset.name}`}
+          />
+        );
+      })}
+
+      <button
+        type="button"
+        onClick={() => setShowCustomPopover(!showCustomPopover)}
+        className={`w-3.5 h-3.5 rounded-full transition-all duration-200 touch-manipulation focus:outline-none bg-[conic-gradient(from_0deg,#ff0000,#ff8000,#ffff00,#00ff00,#00ffff,#0000ff,#8000ff,#ff0000)] ${
+          !isPreset
+            ? 'scale-125 ring-2 ring-[#c8aa6e] ring-offset-1 ring-offset-[#080c17] shadow-[0_0_8px_rgba(200,170,110,0.6)]'
+            : 'opacity-80 hover:opacity-100 hover:scale-110'
+        }`}
+        title="Color personalizado (HEX)"
+        aria-label="Abrir selector de color personalizado"
+      />
+
+      <AnimatePresence>
+        {showCustomPopover && (
+          <motion.div
+            ref={popoverRef}
+            initial={{ opacity: 0, y: -6, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className="absolute left-0 top-full mt-2 z-30 flex items-center gap-2 p-2 rounded-md border border-[#c8aa6e]/40 bg-[#080c17] shadow-[0_4px_16px_rgba(0,0,0,0.8)] text-xs"
+          >
+            <input
+              type="color"
+              value={color || '#60a5fa'}
+              onChange={(e) => {
+                setHexInput(e.target.value);
+                onChange(e.target.value);
+              }}
+              className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent p-0"
+              title="Elegir color nativo"
+              aria-label="Selector de color nativo"
+            />
+            <form onSubmit={handleHexSubmit} className="flex items-center gap-1.5">
+              <input
+                type="text"
+                value={hexInput}
+                onChange={(e) => setHexInput(e.target.value)}
+                placeholder="#60a5fa"
+                maxLength={7}
+                className="w-20 px-1.5 py-0.5 font-mono text-xs text-[#f0e6d2] bg-slate-900 border border-[#c8aa6e]/30 rounded focus:outline-none focus:border-[#c8aa6e]"
+                aria-label="Código HEX de color"
+              />
+              <button
+                type="submit"
+                className="px-2 py-0.5 text-[10px] font-bold uppercase font-['Cinzel'] tracking-wider bg-[#c8aa6e]/20 text-[#c8aa6e] hover:bg-[#c8aa6e]/30 active:scale-95 rounded border border-[#c8aa6e]/40 transition"
+              >
+                OK
+              </button>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 };
 
 const RogueliteStatBar = ({
@@ -5542,6 +5635,8 @@ const RogueliteStatBar = ({
   testId,
   controls,
   onLabelChange,
+  onValueChange,
+  onColorChange,
 }) => {
   const safeValue = Math.max(0, Number(value) || 0);
   const safeMaximum = Math.max(1, Number(maximum) || safeValue || 1);
@@ -5550,6 +5645,16 @@ const RogueliteStatBar = ({
     segmentCount,
     Math.max(0, Math.round((safeValue / safeMaximum) * segmentCount)),
   );
+
+  const handleSegmentClick = (index) => {
+    if (!onValueChange) return;
+    const targetValue = index + 1;
+    if (safeValue === targetValue) {
+      onValueChange(index);
+    } else {
+      onValueChange(targetValue);
+    }
+  };
 
   return (
     <div className="flex flex-col w-full" data-testid={`roguelite-stat-${testId || label.toLowerCase()}`}>
@@ -5560,35 +5665,54 @@ const RogueliteStatBar = ({
             <EditableText
               value={label}
               onChange={onLabelChange}
-              className="min-w-[90px] text-[#f0e6d2]"
+              className="text-[#f0e6d2]"
             />
           ) : label}
+          {onColorChange && (
+            <ResourceColorPicker color={color} onChange={onColorChange} />
+          )}
         </div>
-        {controls || (
-          <span className="text-[#c8aa6e] font-bold font-mono text-sm opacity-80">
+        <div className="flex items-center gap-2.5">
+          <span className="text-[#c8aa6e] font-bold font-mono text-xs opacity-90 tracking-wide" aria-label={`${label} inicio: ${safeValue}`}>
             {valueLabel}
           </span>
-        )}
+          {controls}
+        </div>
       </div>
-      <div className="flex h-6 w-full max-w-[420px] relative pl-1">
-        {Array.from({ length: segmentCount }).map((_, index) => (
-          <div
-            key={index}
-            className="flex-1 h-full transition-all duration-300 relative min-w-[20px]"
-            style={{
-              backgroundColor: index < filledSegments ? color : `${color}33`,
-              clipPath: index === 0
-                ? 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%)'
-                : 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%, 10px 50%)',
-              marginLeft: index === 0 ? '0' : '-6px',
-              zIndex: segmentCount - index,
-              filter: 'drop-shadow(2px 0 0 rgba(0,9,11,0.8))',
-            }}
-          >
-            <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
-            <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/20" />
-          </div>
-        ))}
+      <div className="flex h-7 w-full max-w-[420px] relative pl-1">
+        {Array.from({ length: segmentCount }).map((_, index) => {
+          const isFilled = index < filledSegments;
+          const isInteractive = Boolean(onValueChange);
+          return (
+            <button
+              key={index}
+              type="button"
+              onClick={() => handleSegmentClick(index)}
+              disabled={!isInteractive}
+              aria-label={`Fijar ${label} en ${index + 1}`}
+              className={`flex-1 h-full transition-all duration-200 relative min-w-[20px] touch-manipulation focus:outline-none ${
+                isInteractive
+                  ? 'cursor-pointer hover:brightness-125 hover:scale-y-[1.06] active:scale-95 active:brightness-150'
+                  : 'cursor-default'
+              }`}
+              style={{
+                backgroundColor: isFilled ? color : `${color}33`,
+                clipPath:
+                  index === 0
+                    ? 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%)'
+                    : 'polygon(0% 0%, calc(100% - 10px) 0%, 100% 50%, calc(100% - 10px) 100%, 0% 100%, 10px 50%)',
+                marginLeft: index === 0 ? '0' : '-6px',
+                zIndex: segmentCount - index,
+                filter: isFilled
+                  ? 'drop-shadow(0 0 6px rgba(200, 170, 110, 0.2)) drop-shadow(2px 0 0 rgba(0,9,11,0.8))'
+                  : 'drop-shadow(2px 0 0 rgba(0,9,11,0.8))',
+              }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-b from-white/15 to-transparent pointer-events-none" />
+              <div className="absolute top-0 left-0 right-0 h-[1px] bg-white/30 pointer-events-none" />
+            </button>
+          );
+        })}
       </div>
       <div className="w-full h-[1px] bg-gradient-to-r from-slate-800 to-transparent mt-3" />
     </div>
@@ -5605,6 +5729,8 @@ RogueliteStatBar.propTypes = {
   testId: PropTypes.string,
   controls: PropTypes.node,
   onLabelChange: PropTypes.func,
+  onValueChange: PropTypes.func,
+  onColorChange: PropTypes.func,
 };
 
 const RogueliteClassStatsSummary = ({
@@ -5662,10 +5788,50 @@ const RogueliteClassStatsSummary = ({
         </h4>
       </div>
       <div className="flex flex-col gap-5 px-1">
-        <RogueliteStatBar icon={Heart} label="Vida" testId="vida" value={lifeInitial} maximum={Math.max(maxLife, 1)} color="#e6a0a5" valueLabel={`${lifeInitial} / ${maxLife}`} controls={rangeControl('lifeInitial', 'maxLife', lifeInitial, maxLife, 'Vida', 'vida')} />
-        <RogueliteStatBar icon={Shield} label="CD" testId="cd" value={defenseClass} maximum={Math.max(maxDefenseClass, 1)} color="#b9b5ad" valueLabel={`${defenseClass} / ${maxDefenseClass}`} controls={rangeControl('defenseClass', 'maxDefenseClass', defenseClass, maxDefenseClass, 'CD', 'cd')} />
-        <RogueliteStatBar icon={Footprints} label="Movimiento" testId="movimiento" value={movement} maximum={Math.max(maxMovement, 1)} color="#82b8df" valueLabel={`${movement} / ${maxMovement}`} controls={rangeControl('movement', 'maxMovement', movement, maxMovement, 'Movimiento', 'movimiento')} />
-        <RogueliteStatBar icon={Gauge} label="Iniciativa" testId="iniciativa" value={initiative} maximum={Math.max(maxInitiative, 1)} color="#d0ad61" valueLabel={`${initiative} / ${maxInitiative}`} controls={rangeControl('initiativeBase', 'maxInitiative', initiative, maxInitiative, 'Iniciativa', 'iniciativa')} />
+        <RogueliteStatBar
+          icon={Heart}
+          label="Vida"
+          testId="vida"
+          value={lifeInitial}
+          maximum={Math.max(maxLife, 1)}
+          color="#e6a0a5"
+          valueLabel={`${lifeInitial} / ${maxLife}`}
+          onValueChange={editable ? (nextValue) => onFieldChange('lifeInitial', nextValue) : undefined}
+          controls={rangeControl('lifeInitial', 'maxLife', lifeInitial, maxLife, 'Vida', 'vida')}
+        />
+        <RogueliteStatBar
+          icon={Shield}
+          label="CD"
+          testId="cd"
+          value={defenseClass}
+          maximum={Math.max(maxDefenseClass, 1)}
+          color="#b9b5ad"
+          valueLabel={`${defenseClass} / ${maxDefenseClass}`}
+          onValueChange={editable ? (nextValue) => onFieldChange('defenseClass', nextValue) : undefined}
+          controls={rangeControl('defenseClass', 'maxDefenseClass', defenseClass, maxDefenseClass, 'CD', 'cd')}
+        />
+        <RogueliteStatBar
+          icon={Footprints}
+          label="Movimiento"
+          testId="movimiento"
+          value={movement}
+          maximum={Math.max(maxMovement, 1)}
+          color="#82b8df"
+          valueLabel={`${movement} / ${maxMovement}`}
+          onValueChange={editable ? (nextValue) => onFieldChange('movement', nextValue) : undefined}
+          controls={rangeControl('movement', 'maxMovement', movement, maxMovement, 'Movimiento', 'movimiento')}
+        />
+        <RogueliteStatBar
+          icon={Gauge}
+          label="Iniciativa"
+          testId="iniciativa"
+          value={initiative}
+          maximum={Math.max(maxInitiative, 1)}
+          color="#d0ad61"
+          valueLabel={`${initiative} / ${maxInitiative}`}
+          onValueChange={editable ? (nextValue) => onFieldChange('initiativeBase', nextValue) : undefined}
+          controls={rangeControl('initiativeBase', 'maxInitiative', initiative, maxInitiative, 'Iniciativa', 'iniciativa')}
+        />
         <div>
           <RogueliteStatBar
             icon={Sparkles}
@@ -5676,6 +5842,8 @@ const RogueliteClassStatsSummary = ({
             color={resourceColor}
             valueLabel={`${resourceInitial} / ${resourceMaximum}`}
             onLabelChange={editable ? (value) => onResourceChange('name', value) : undefined}
+            onValueChange={editable ? (value) => onResourceChange('initial', value) : undefined}
+            onColorChange={editable ? (color) => onResourceChange('color', color) : undefined}
             controls={editable ? (
               <RogueliteRangeEditor
                 label={resourceName}
