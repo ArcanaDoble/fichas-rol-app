@@ -1609,13 +1609,12 @@ firebase deploy    # Despliega a Firebase Hosting
   compacto integrado en la cabecera de cada barra; las definiciones antiguas
   adoptan su valor existente como máximo para conservar compatibilidad.
 - Los valores numéricos editables usan `NumberStepper`, con objetivos táctiles
-  de 40 px y botones propios de incremento y reducción. La progresión dispone
-  sus métricas en una columna ordenada y solo pasa a tres columnas desde `lg`;
-  incluso entonces, etiqueta y controles se apilan para impedir solapamientos
-  con zoom o escalado de pantalla. Vida, Movimiento y recurso se distinguen
-  mediante acentos degradados discretos en carmesí, azul verdoso y violeta. La
-  acción de eliminar permanece anclada arriba a la derecha y no desplaza el
-  título.
+  de 40 px y botones propios de incremento y reducción. Vida, Movimiento y
+  recurso se distinguen mediante acentos degradados discretos en carmesí, azul
+  verdoso y violeta, pero sus indicadores no se estiran para rellenar la fila:
+  miden 152 px en la vista del jugador y 176 px en el editor del máster, con
+  altura basada en contenido y envoltura automática. La acción de eliminar
+  permanece anclada arriba a la derecha y no desplaza el título.
 - Esta primera fase no conecta todavía el botón de aventura con Canvas ni
   modifica el combate o el BoardSection.
 

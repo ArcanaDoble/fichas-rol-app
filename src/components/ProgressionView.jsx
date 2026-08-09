@@ -99,11 +99,14 @@ const LevelMetric = ({ icon: Icon, label, value, editable, onChange, tone }) => 
     if (!editable && (value === null || value === undefined)) return null;
 
     const palette = LEVEL_METRIC_TONES[tone] || LEVEL_METRIC_TONES.resource;
+    const layoutClass = editable
+        ? 'w-full max-w-full flex-col items-stretch justify-between gap-2.5 px-3 py-2.5 sm:w-[176px]'
+        : 'w-full max-w-full items-center gap-2.5 px-3 py-2 sm:w-[152px]';
 
     return (
         <div
             data-metric-tone={tone}
-            className={`flex min-h-[82px] min-w-0 flex-col items-stretch justify-between gap-3 overflow-hidden border-b px-3 py-3 last:border-b-0 sm:flex-row sm:items-center sm:px-4 lg:flex-col lg:items-stretch lg:border-b-0 lg:border-l lg:first:border-l-0 ${palette.surface}`}
+            className={`flex min-w-0 overflow-hidden border ${layoutClass} ${palette.surface}`}
         >
             <div className="flex min-w-0 items-center gap-2">
                 <Icon className={`h-4 w-4 shrink-0 ${palette.icon}`} strokeWidth={1.5} />
@@ -121,7 +124,7 @@ const LevelMetric = ({ icon: Icon, label, value, editable, onChange, tone }) => 
                     label={label}
                     min={0}
                     max={99}
-                    className="self-start sm:self-auto lg:self-start"
+                    className="self-start"
                 />
             )}
         </div>
@@ -346,7 +349,7 @@ const ProgressionView = ({
                                             )}
                                         </div>
 
-                                        <div className="mt-5 grid min-w-0 grid-cols-1 lg:grid-cols-3">
+                                        <div className="mt-4 flex min-w-0 flex-wrap items-start gap-2.5">
                                             <LevelMetric
                                                 icon={Heart}
                                                 label="Vida"

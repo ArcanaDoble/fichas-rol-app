@@ -26,6 +26,7 @@ test('shows acquired, current and pending levels without player editing controls
   expect(screen.queryByRole('button', { name: 'Añadir nivel' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /Eliminar nivel/ })).not.toBeInTheDocument();
   expect(screen.queryByTitle('Editar')).not.toBeInTheDocument();
+  expect(screen.getByTestId('roguelite-progression-level-4').querySelector('[data-metric-tone="life"]')).toHaveClass('sm:w-[152px]', 'py-2');
 });
 
 test('lets the master add, remove and edit progression content', () => {
@@ -59,8 +60,8 @@ test('lets the master add, remove and edit progression content', () => {
   expect(lifeMetric).toHaveClass('from-[#713b43]/[0.14]');
   expect(container.querySelector('[data-metric-tone="movement"]')).toHaveClass('from-[#31586a]/[0.14]');
   expect(container.querySelector('[data-metric-tone="resource"]')).toHaveClass('from-[#523d68]/[0.14]');
-  expect(container.querySelector('[data-metric-tone="movement"]')).toHaveClass('lg:flex-col');
+  expect(container.querySelector('[data-metric-tone="movement"]')).toHaveClass('sm:w-[176px]', 'py-2.5');
   expect(container.querySelector('[data-metric-tone="resource"]')).toHaveClass('min-w-0', 'overflow-hidden');
-  expect(lifeMetric.parentElement).toHaveClass('lg:grid-cols-3');
-  expect(lifeMetric.parentElement).not.toHaveClass('sm:grid-cols-3');
+  expect(lifeMetric.parentElement).toHaveClass('flex', 'flex-wrap', 'gap-2.5');
+  expect(lifeMetric.parentElement).not.toHaveClass('grid', 'lg:grid-cols-3');
 });
