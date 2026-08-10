@@ -117,7 +117,7 @@ const LevelMetric = ({ icon: Icon, label, value, editable, onChange, tone, isLoc
     return (
         <div
             data-metric-tone={tone}
-            className={`inline-flex min-w-[132px] items-center gap-2 border-l-2 py-1 pl-2.5 pr-1 ${borderClass}`}
+            className={`inline-flex min-w-[132px] w-[148px] items-center gap-2 border-l-2 py-1 pl-2.5 pr-1.5 ${borderClass}`}
         >
             <div className="flex min-w-0 shrink-0 items-center gap-1.5">
                 <Icon className={`h-3.5 w-3.5 shrink-0 ${iconClass}`} strokeWidth={2} />
@@ -167,7 +167,7 @@ const LevelStatus = ({ state }) => {
         return (
             <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
                 <span className="text-[10px] text-[#c8aa6e]">✦</span>
-                Nivel actual
+                <span className="hidden sm:inline">Nivel actual</span>
             </span>
         );
     }
@@ -176,7 +176,7 @@ const LevelStatus = ({ state }) => {
         return (
             <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8f7b52]">
                 <FiCheck className="h-3.5 w-3.5" />
-                Desbloqueado
+                <span className="hidden sm:inline">Desbloqueado</span>
             </span>
         );
     }
@@ -184,7 +184,7 @@ const LevelStatus = ({ state }) => {
     return (
         <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600">
             <FiLock className="h-3.5 w-3.5" />
-            Por desbloquear
+            <span className="hidden sm:inline">Por desbloquear</span>
         </span>
     );
 };
