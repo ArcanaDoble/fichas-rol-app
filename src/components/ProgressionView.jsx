@@ -102,21 +102,26 @@ const LEVEL_METRIC_TONES = {
     },
 };
 
-const LevelMetric = ({ icon: Icon, label, value, editable, onChange, tone }) => {
+const LevelMetric = ({ icon: Icon, label, value, editable, onChange, tone, isLocked = false }) => {
     if (!editable && (value === null || value === undefined)) return null;
 
     const palette = LEVEL_METRIC_TONES[tone] || LEVEL_METRIC_TONES.resource;
     const safeValue = Math.max(0, Math.min(99, Number(value) || 0));
     const displayValue = `${safeValue}`;
 
+    const borderClass = isLocked ? 'border-l-slate-700/60' : palette.border;
+    const iconClass = isLocked ? 'text-slate-600' : palette.icon;
+    const labelClass = isLocked ? 'text-slate-600' : palette.label;
+    const valueClass = isLocked ? 'text-slate-500' : palette.value;
+
     return (
         <div
             data-metric-tone={tone}
-            className={`inline-flex min-w-[132px] items-center gap-2 border-l-2 py-1 pl-2.5 pr-1 ${palette.border}`}
+            className={`inline-flex min-w-[132px] items-center gap-2 border-l-2 py-1 pl-2.5 pr-1 ${borderClass}`}
         >
             <div className="flex min-w-0 shrink-0 items-center gap-1.5">
-                <Icon className={`h-3.5 w-3.5 shrink-0 ${palette.icon}`} strokeWidth={2} />
-                <span className={`truncate font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.14em] ${palette.label}`}>
+                <Icon className={`h-3.5 w-3.5 shrink-0 ${iconClass}`} strokeWidth={2} />
+                <span className={`truncate font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.14em] ${labelClass}`}>
                     {label}
                 </span>
             </div>
@@ -133,7 +138,7 @@ const LevelMetric = ({ icon: Icon, label, value, editable, onChange, tone }) => 
                         <FiMinus className="h-3 w-3" />
                     </button>
                     <span
-                        className={`min-w-[16px] text-center font-mono text-xs font-bold ${palette.value}`}
+                        className={`min-w-[16px] text-center font-mono text-xs font-bold ${valueClass}`}
                         aria-label={`${label}: ${safeValue}`}
                     >
                         {displayValue}
@@ -149,7 +154,7 @@ const LevelMetric = ({ icon: Icon, label, value, editable, onChange, tone }) => 
                     </button>
                 </div>
             ) : (
-                <span className={`ml-auto shrink-0 font-mono text-xs font-bold ${palette.value}`}>
+                <span className={`ml-auto shrink-0 font-mono text-xs font-bold ${valueClass}`}>
                     {displayValue}
                 </span>
             )}
@@ -372,6 +377,7 @@ const ProgressionView = ({
                                                     tone="life"
                                                     value={level.maxLife}
                                                     editable={editorMode}
+                                                    isLocked={isLocked}
                                                     onChange={(value) => onUpdateLevel(index, 'maxLife', value)}
                                                 />
                                                 <LevelMetric
@@ -380,6 +386,7 @@ const ProgressionView = ({
                                                     tone="movement"
                                                     value={level.movement}
                                                     editable={editorMode}
+                                                    isLocked={isLocked}
                                                     onChange={(value) => onUpdateLevel(index, 'movement', value)}
                                                 />
                                                 <LevelMetric
@@ -388,6 +395,7 @@ const ProgressionView = ({
                                                     tone="resource"
                                                     value={level.resourceMaximum}
                                                     editable={editorMode}
+                                                    isLocked={isLocked}
                                                     onChange={(value) => onUpdateLevel(index, 'resourceMaximum', value)}
                                                 />
                                             </div>
