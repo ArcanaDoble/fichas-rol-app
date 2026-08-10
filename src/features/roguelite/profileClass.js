@@ -1,4 +1,10 @@
 import { applyRogueliteLevelEffects } from './progression';
+import { DEFAULT_STATUS_EFFECTS } from '../../utils/statusEffects';
+import {
+  isNavigationTag,
+  mergeInheritedAndPersonalTags,
+  resolveClassAuthorTags,
+} from '../../utils/tags';
 
 const DEFAULT_ATTRIBUTES = Object.freeze({
   destreza: 'd4',
@@ -42,6 +48,31 @@ const resetProgression = (levels = []) => (
     : []
 );
 
+const resolveInheritedTags = (definition) => (
+  Array.isArray(definition.classTags)
+    ? definition.classTags
+    : resolveClassAuthorTags(definition.tags, DEFAULT_STATUS_EFFECTS)
+);
+
+const resolveStoredPersonalStatuses = (storedConfiguration, inheritedTags) => {
+  if (Array.isArray(storedConfiguration?.personalStatusTags)) {
+    return storedConfiguration.personalStatusTags;
+  }
+
+  const inheritedNames = new Set(
+    inheritedTags.map((tag) => String(tag || '').split('|')[0].trim().toLowerCase()),
+  );
+
+  // Compatibilidad con perfiles anteriores: los estados se guardaban mezclados
+  // en `tags` como claves simples, mientras que las etiquetas nuevas llevan color.
+  return (Array.isArray(storedConfiguration?.tags) ? storedConfiguration.tags : [])
+    .filter((tag) => !String(tag || '').includes('|'))
+    .filter((tag) => {
+      const name = String(tag || '').trim().toLowerCase();
+      return name && !inheritedNames.has(name) && !isNavigationTag(tag);
+    });
+};
+
 export const createRogueliteProfileClass = (
   classDefinition,
   storedConfiguration,
@@ -51,6 +82,8 @@ export const createRogueliteProfileClass = (
   const hasStoredConfiguration = Boolean(
     storedConfiguration && typeof storedConfiguration === 'object',
   );
+  const inheritedTags = resolveInheritedTags(definition);
+  const personalStatusTags = resolveStoredPersonalStatuses(storedConfiguration, inheritedTags);
   const cleanConfiguration = {
     ...definition,
     id: definition.id,
@@ -66,7 +99,8 @@ export const createRogueliteProfileClass = (
     talents: {},
     storeItems: [],
     money: 0,
-    tags: [],
+    tags: clone(inheritedTags),
+    personalStatusTags: [],
     inspiration: (definition.inspiration || []).map((entry) => ({
       ...clone(entry),
       completed: false,
@@ -100,6 +134,9 @@ export const createRogueliteProfileClass = (
     initiativeBase: definition.initiativeBase,
     maxInitiative: progressionStats.maxInitiative,
     resource: clone(progressionStats.resource),
+    classTags: clone(inheritedTags),
+    personalStatusTags: clone(personalStatusTags),
+    tags: mergeInheritedAndPersonalTags(inheritedTags, personalStatusTags),
     classLevels: resetProgression(definition.classLevels),
     rogueliteProgressionConfigured: Boolean(definition.rogueliteProgressionConfigured),
     id: definition.id,

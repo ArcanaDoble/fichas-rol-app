@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { optimizeImageFile } from '../utils/storage';
+import EditableTag from './EditableTag';
+import { parseTag, serializeTag } from '../utils/tags';
 
 // --- HELPER COMPONENTS ---
 
@@ -288,7 +290,6 @@ export const EnemyDetailView = ({ enemy, enemies = [], onClose, onUpdate, onDele
     const [isStatsEditing, setIsStatsEditing] = useState(false);
     const [abilitySearchTerm, setAbilitySearchTerm] = useState('');
     const [isAbilitySearchOpen, setIsAbilitySearchOpen] = useState(false);
-    const [activeEditingTagIndex, setActiveEditingTagIndex] = useState(null);
     const fileInputRef = useRef(null);
     const abilitySearchRef = useRef(null);
 
@@ -450,7 +451,7 @@ export const EnemyDetailView = ({ enemy, enemies = [], onClose, onUpdate, onDele
 
     const handleAddTag = () => {
         setLocalEnemy(prev => {
-            const updated = { ...prev, tags: [...(prev.tags || []), "ETIQUETA"] };
+            const updated = { ...prev, tags: [...(prev.tags || []), serializeTag('ETIQUETA', '#ef4444')] };
             onUpdate(updated);
             return updated;
         });
@@ -462,6 +463,16 @@ export const EnemyDetailView = ({ enemy, enemies = [], onClose, onUpdate, onDele
             newTags[index] = value;
             const updated = { ...prev, tags: newTags };
             // onUpdate(updated); // Removed auto-save on typing
+            return updated;
+        });
+    };
+
+    const handleTagChangeAndCommit = (index, value) => {
+        setLocalEnemy(prev => {
+            const newTags = [...(prev.tags || [])];
+            newTags[index] = value;
+            const updated = { ...prev, tags: newTags };
+            onUpdate(updated);
             return updated;
         });
     };
@@ -733,96 +744,16 @@ export const EnemyDetailView = ({ enemy, enemies = [], onClose, onUpdate, onDele
 
                             {/* Dynamic Tags */}
                             {(localEnemy.tags || []).map((tag, index) => {
-                                const parts = tag.split('|');
-                                const tagName = parts[0];
-                                const tagColor = parts[1] || '#ef4444';
-
-                                const PRESET_COLORS = [
-                                    { hex: '#ef4444', label: 'Carmesí', glow: 'rgba(239,68,68,0.7)' },
-                                    { hex: '#f59e0b', label: 'Ámbar', glow: 'rgba(245,158,11,0.7)' },
-                                    { hex: '#10b981', label: 'Esmeralda', glow: 'rgba(16,185,129,0.7)' },
-                                    { hex: '#3b82f6', label: 'Zafiro', glow: 'rgba(59,130,246,0.7)' },
-                                ];
+                                const { name: tagName, color: tagColor } = parseTag(tag);
 
                                 return (
-                                    <div key={index} className="flex relative group/tag justify-center items-center">
-                                        {/* Color selector bubble */}
-                                        <div 
-                                            className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 flex items-center justify-center gap-1.5 bg-[#050b14]/95 backdrop-blur-md px-2.5 py-1.5 rounded-full border border-slate-800 shadow-[0_4px_12px_rgba(0,0,0,0.6)] z-30 transition-all duration-200 pointer-events-none opacity-0 group-hover/tag:opacity-100 group-hover/tag:pointer-events-auto ${activeEditingTagIndex === index ? 'opacity-100 pointer-events-auto' : ''}`}
-                                        >
-                                            {PRESET_COLORS.map((preset) => (
-                                                <button
-                                                    key={preset.hex}
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleTagChange(index, tagName + '|' + preset.hex);
-                                                        setLocalEnemy(prev => {
-                                                            const newTags = [...(prev.tags || [])];
-                                                            newTags[index] = tagName + '|' + preset.hex;
-                                                            const updated = { ...prev, tags: newTags };
-                                                            onUpdate(updated);
-                                                            return updated;
-                                                        });
-                                                    }}
-                                                    className="w-3.5 h-3.5 rounded-full border border-white/20 hover:scale-110 active:scale-90 transition-all cursor-pointer"
-                                                    style={{
-                                                        backgroundColor: preset.hex,
-                                                        boxShadow: `0 0 6px ${preset.glow}`,
-                                                    }}
-                                                    title={preset.label}
-                                                />
-                                            ))}
-
-                                            {/* Custom color selector sphere */}
-                                            <div
-                                                className="relative w-3.5 h-3.5 rounded-full bg-gradient-to-br from-white via-slate-100 to-slate-300 border border-white/40 hover:scale-110 active:scale-90 transition-all cursor-pointer flex items-center justify-center shadow-[0_0_6px_rgba(255,255,255,0.7)]"
-                                                title="Color personalizado"
-                                            >
-                                                <div className="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-red-500 via-green-500 to-blue-500 pointer-events-none" />
-                                                <input
-                                                    type="color"
-                                                    value={tagColor}
-                                                    onChange={(e) => {
-                                                        const newColor = e.target.value;
-                                                        handleTagChange(index, tagName + '|' + newColor);
-                                                        setLocalEnemy(prev => {
-                                                            const newTags = [...(prev.tags || [])];
-                                                            newTags[index] = tagName + '|' + newColor;
-                                                            const updated = { ...prev, tags: newTags };
-                                                            onUpdate(updated);
-                                                            return updated;
-                                                        });
-                                                    }}
-                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer rounded-full"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <EditableField
-                                            value={tagName}
-                                            onChange={(val) => handleTagChange(index, val + '|' + tagColor)}
+                                    <div key={index} className="flex items-center justify-center">
+                                        <EditableTag
+                                            name={tagName}
+                                            color={tagColor}
+                                            onNameChange={(value) => handleTagChange(index, serializeTag(value, tagColor))}
+                                            onColorChange={(value) => handleTagChangeAndCommit(index, serializeTag(tagName, value))}
                                             onCommit={handleCommit}
-                                            showEditIcon={false}
-                                            onFocus={() => setActiveEditingTagIndex(index)}
-                                            onBlur={() => {
-                                                setTimeout(() => {
-                                                    setActiveEditingTagIndex(null);
-                                                }, 150);
-                                            }}
-                                            style={{
-                                                color: tagColor,
-                                                borderColor: tagColor + '80',
-                                                backgroundColor: tagColor + '1a',
-                                            }}
-                                            inputStyle={{
-                                                color: tagColor,
-                                                borderColor: tagColor + '80',
-                                                backgroundColor: '#000000',
-                                            }}
-                                            textClassName="px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] block min-w-[60px] text-center rounded border transition-all duration-300 font-sans"
-                                            inputClassName="px-2 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-center min-w-[60px] rounded border transition-all duration-300 font-sans"
-                                            placeholder="ETIQUETA"
                                         />
                                     </div>
                                 );

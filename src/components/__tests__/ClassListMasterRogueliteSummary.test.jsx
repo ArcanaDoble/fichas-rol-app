@@ -30,6 +30,7 @@ beforeEach(() => {
         name: 'Bárbaro',
         subtitle: 'Furia desatada',
         description: 'Convierte el riesgo en fuerza.',
+        tags: ['Arcano|#3b82f6'],
         roguelite: {
           actionDice: ['d8', 'd6', 'd4'],
           lifeInitial: 6,
@@ -97,6 +98,22 @@ test('uses the editable roguelite summary for the master class sheet', async () 
   expect(screen.getByLabelText('Movimiento máx.: 3')).toBeInTheDocument();
   expect(screen.getByLabelText('Furia inicio: 1')).toBeInTheDocument();
   expect(screen.getByLabelText('Furia máx.: 3')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Gestionar estados' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Añadir etiqueta' })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Editar etiqueta Arcano' }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Nombre de etiqueta Arcano' }), {
+    target: { value: 'Veterano' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Color Violeta' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Aplicar color de etiqueta' }));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Añadir etiqueta' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Editar etiqueta ETIQUETA' }));
+  const emptyTagInput = screen.getByRole('textbox', { name: 'Nombre de etiqueta ETIQUETA' });
+  fireEvent.change(emptyTagInput, { target: { value: '' } });
+  fireEvent.keyDown(emptyTagInput, { key: 'Enter' });
+  expect(screen.queryByRole('button', { name: 'Editar etiqueta ETIQUETA' })).not.toBeInTheDocument();
 
   const lifeEditor = screen.getByTestId('roguelite-stat-editor-vida');
   within(lifeEditor).getAllByRole('button').forEach((button) => {
@@ -133,6 +150,8 @@ test('uses the editable roguelite summary for the master class sheet', async () 
     maxInitiative: 5,
     resource: { name: 'Furia', maximum: 4, initial: 1 },
     actionDice: ['d12', 'd6', 'd4'],
+    tags: ['Veterano|#a78bfa'],
+    classTags: ['Veterano|#a78bfa'],
     roguelite: {
       lifeInitial: 7,
       maxLife: 9,

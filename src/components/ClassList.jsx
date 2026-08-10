@@ -69,6 +69,13 @@ import { LibraryCharacterCard } from './LibraryCharacterCard';
 import { isYuuzuName, KARMA_MIN, KARMA_MAX } from '../utils/karma';
 import { normalizeRogueliteProfileLevel } from '../features/roguelite/profileClass';
 import { resolveRogueliteClassLevels } from '../features/roguelite/progression';
+import EditableTag from './EditableTag';
+import {
+  parseTag,
+  resolveClassAuthorTags,
+  resolvePersonalStatusTags,
+  serializeTag,
+} from '../utils/tags';
 
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -478,6 +485,10 @@ const EditableField = ({
   textClassName = '',
   type = 'text',
   autoSelect = true,
+  onFocus = null,
+  onBlur = null,
+  style = {},
+  inputStyle = {},
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const inputRef = useRef(null);
@@ -494,24 +505,33 @@ const EditableField = ({
   const handleBlur = () => {
     setIsEditing(false);
     if (onCommit) onCommit();
+    if (onBlur) onBlur();
+  };
+
+  const handleFocus = () => {
+    setIsEditing(true);
+    if (onFocus) onFocus();
   };
 
   const handleKeyDown = (event) => {
     if (event.key === 'Enter' && !multiline) {
       event.preventDefault();
       setIsEditing(false);
+      if (onCommit) onCommit();
+      if (onBlur) onBlur();
     }
     if (event.key === 'Escape') {
       event.preventDefault();
       setIsEditing(false);
+      if (onBlur) onBlur();
     }
   };
 
   const baseInputClasses =
     'w-full bg-black/60 border border-slate-700/50 rounded px-2 py-1 text-sm text-slate-100 focus:outline-none focus:border-[#c8aa6e]/80 transition-all';
 
-  const displayValue = value && value.length > 0 ? value : placeholder;
-  const isPlaceholder = !value || value.length === 0;
+  const displayValue = value && value.toString().length > 0 ? value : placeholder;
+  const isPlaceholder = !value || value.toString().length === 0;
 
   return (
     <div className={`relative ${buttonClassName}`}>
@@ -525,6 +545,7 @@ const EditableField = ({
             onKeyDown={handleKeyDown}
             className={`${baseInputClasses} min-h-[120px] resize-y ${inputClassName}`}
             placeholder={placeholder}
+            style={inputStyle}
           />
         ) : (
           <input
@@ -536,13 +557,15 @@ const EditableField = ({
             onKeyDown={handleKeyDown}
             className={`${baseInputClasses} ${inputClassName}`}
             placeholder={placeholder}
+            style={inputStyle}
           />
         )
       ) : (
         <button
           type="button"
-          onClick={() => setIsEditing(true)}
+          onClick={handleFocus}
           className={`group inline-flex items-center gap-2 text-left transition hover:text-slate-100/90 ${displayClassName || 'w-full'}`}
+          style={style}
         >
           <span
             className={`${textClassName || ''
@@ -2441,6 +2464,15 @@ const ClassList = ({
         cleanedData.owner = currentUserId || cleanedData.owner || '';
         cleanedData.profileType = 'rogueliteClass';
         cleanedData.level = normalizeRogueliteProfileLevel(cleanedData.level);
+        cleanedData.personalStatusTags = resolvePersonalStatusTags(
+          cleanedData.tags,
+          statusEffectsConfig,
+        );
+      } else if (!isPlayerMode) {
+        cleanedData.classTags = resolveClassAuthorTags(
+          cleanedData.tags,
+          statusEffectsConfig,
+        );
       }
 
       // Guardar en Firebase con timeout extendido para evitar espera indefinida
@@ -3966,35 +3998,12 @@ const ClassList = ({
                   {/* Header / Title Section */}
                   <div className="flex flex-col items-center lg:items-start text-center lg:text-left">
                     <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 mb-4">
-                      {/* DIFICULTAD */}
-                      {!isPlayerMode && (
-                        <EditableField
-                          value={`${editingClass.difficulty}`}
-                          onChange={(val) => updateEditingClass(d => { d.difficulty = val })}
-                          showEditIcon={false}
-                          displayClassName="w-auto"
-                          textClassName="px-3 py-1 bg-[#c8aa6e]/10 border border-[#c8aa6e]/50 text-[#c8aa6e] text-[10px] font-bold uppercase tracking-[0.2em] block"
-                          inputClassName="bg-[#0b1120] text-[#c8aa6e] text-[10px] font-bold uppercase border border-[#c8aa6e]/50 px-2 py-0.5 rounded w-24"
-                          placeholder="Dificultad"
-                        />
-                      )}
-
-                      {/* ROL */}
-                      {!isPlayerMode && (
-                        <EditableField
-                          value={editingClass.role || 'N/A'}
-                          onChange={(val) => updateEditingClass(d => { d.role = val })}
-                          showEditIcon={false}
-                          displayClassName="w-auto"
-                          textClassName="px-3 py-1 bg-cyan-900/20 border border-cyan-500/50 text-cyan-400 text-[10px] font-bold uppercase tracking-[0.2em] block"
-                          inputClassName="bg-[#0b1120] text-cyan-400 text-[10px] font-bold uppercase border border-cyan-500/50 px-2 py-0.5 rounded w-24"
-                          placeholder="Rol"
-                        />
-                      )}
-
                       {/* ETIQUETAS DINÁMICAS */}
                       {(editingClass.tags || []).map((tag, index) => {
-                        const isMinigame = tag.toLowerCase().trim() === 'minijuego';
+                        const { name: tagName, color: tagColor } = parseTag(tag);
+                        const tagLower = tagName.toLowerCase().trim();
+
+                        const isMinigame = tagLower === 'minijuego';
 
                         if (isMinigame) {
                           return (
@@ -4010,24 +4019,12 @@ const ClassList = ({
                               >
                                 <FiLock className="w-3 h-3" />
                                 MINIJUEGO
-                                <div
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    updateEditingClass(d => {
-                                      d.tags.splice(index, 1);
-                                    });
-                                  }}
-                                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover/mini:opacity-100 transition-opacity hover:bg-red-600 shadow-lg"
-                                  title="Eliminar Etiqueta"
-                                >
-                                  <FiX />
-                                </div>
                               </button>
                             </div>
                           );
                         }
 
-                        const isCalculator = tag.toLowerCase().trim() === 'calculadora';
+                        const isCalculator = tagLower === 'calculadora';
 
                         if (isCalculator) {
                           return (
@@ -4043,24 +4040,12 @@ const ClassList = ({
                               >
                                 <Dices className="w-3 h-3" />
                                 CALCULADORA
-                                <div
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    updateEditingClass(d => {
-                                      d.tags.splice(index, 1);
-                                    });
-                                  }}
-                                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover/mini:opacity-100 transition-opacity hover:bg-red-600 shadow-lg"
-                                  title="Eliminar Etiqueta"
-                                >
-                                  <FiX />
-                                </div>
                               </button>
                             </div>
                           );
                         }
 
-                        const isSpeedSystem = tag.toLowerCase().trim() === 'velocidad';
+                        const isSpeedSystem = tagLower === 'velocidad';
 
                         if (isSpeedSystem) {
                           return (
@@ -4076,24 +4061,12 @@ const ClassList = ({
                               >
                                 <Zap className="w-3 h-3" />
                                 VELOCIDAD
-                                <div
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    updateEditingClass(d => {
-                                      d.tags.splice(index, 1);
-                                    });
-                                  }}
-                                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover/mini:opacity-100 transition-opacity hover:bg-red-600 shadow-lg"
-                                  title="Eliminar Etiqueta"
-                                >
-                                  <FiX />
-                                </div>
                               </button>
                             </div>
                           );
                         }
 
-                        const isMinimap = tag.toLowerCase().trim() === 'minimapa';
+                        const isMinimap = tagLower === 'minimapa';
 
                         if (isMinimap) {
                           return (
@@ -4109,24 +4082,12 @@ const ClassList = ({
                               >
                                 <Map className="w-3 h-3" />
                                 MINIMAPA
-                                <div
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    updateEditingClass(d => {
-                                      d.tags.splice(index, 1);
-                                    });
-                                  }}
-                                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover/mini:opacity-100 transition-opacity hover:bg-red-600 shadow-lg"
-                                  title="Eliminar Etiqueta"
-                                >
-                                  <FiX />
-                                </div>
                               </button>
                             </div>
                           );
                         }
 
-                        const isCanvas = tag.toLowerCase().trim() === 'canvas';
+                        const isCanvas = tagLower === 'canvas';
 
                         if (isCanvas) {
                           return (
@@ -4142,24 +4103,12 @@ const ClassList = ({
                               >
                                 <FiMap className="w-3 h-3" />
                                 CANVAS
-                                <div
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    updateEditingClass(d => {
-                                      d.tags.splice(index, 1);
-                                    });
-                                  }}
-                                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover/mini:opacity-100 transition-opacity hover:bg-red-600 shadow-lg"
-                                  title="Eliminar Etiqueta"
-                                >
-                                  <FiX />
-                                </div>
                               </button>
                             </div>
                           );
                         }
 
-                        const isBoard = ['tablero', 'board'].includes(tag.toLowerCase().trim());
+                        const isBoard = ['tablero', 'board'].includes(tagLower);
 
                         if (isBoard) {
                           return (
@@ -4175,26 +4124,14 @@ const ClassList = ({
                               >
                                 <LayoutTemplate className="w-3 h-3" />
                                 TABLERO
-                                <div
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    updateEditingClass(d => {
-                                      d.tags.splice(index, 1);
-                                    });
-                                  }}
-                                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover/mini:opacity-100 transition-opacity hover:bg-red-600 shadow-lg"
-                                  title="Eliminar Etiqueta"
-                                >
-                                  <FiX />
-                                </div>
                               </button>
                             </div>
                           );
                         }
 
                         // Check for Status Effects (Robust lookup by ID or Label)
-                        const statusConfig = statusEffectsConfig[tag.toLowerCase()] ||
-                          Object.values(statusEffectsConfig).find(c => c.label.toLowerCase() === tag.toLowerCase());
+                        const statusConfig = statusEffectsConfig[tagLower] ||
+                          Object.values(statusEffectsConfig).find(c => c.label.toLowerCase() === tagLower);
 
                         if (statusConfig) {
                           const StatusIcon = ICON_MAP[statusConfig.iconName] || ICON_MAP.AlertCircle;
@@ -4220,85 +4157,65 @@ const ClassList = ({
                               >
                                 <StatusIcon className="w-3 h-3" />
                                 {statusConfig.label}
-                                <div
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    updateEditingClass(d => {
-                                      d.tags.splice(index, 1);
-                                    });
-                                  }}
-                                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] opacity-0 group-hover/mini:opacity-100 transition-opacity hover:bg-red-600 shadow-lg cursor-pointer"
-                                  title="Eliminar Estado"
-                                >
-                                  <FiX />
-                                </div>
                               </button>
                             </div>
                           );
                         }
 
                         return (
-                          <EditableField
-                            key={index}
-                            value={tag}
-                            onChange={(val) => updateEditingClass(d => { d.tags[index] = val })}
-                            onCommit={() => {
-                              updateEditingClass(d => {
-                                d.tags = (d.tags || []).filter(t => t.trim() !== '');
-                              });
-                            }}
-                            showEditIcon={false}
-                            displayClassName="w-auto"
-                            textClassName="px-3 py-1 bg-slate-800/40 border border-slate-700/50 text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em] block"
-                            inputClassName="bg-[#0b1120] text-slate-400 text-[10px] font-bold uppercase border border-slate-700 px-2 py-0.5 rounded w-28"
-                            placeholder="Etiqueta"
-                          />
+                          <div key={index} className="flex items-center justify-center">
+                            <EditableTag
+                              name={tagName}
+                              color={tagColor}
+                              readOnly={isPlayerMode}
+                              onNameChange={(value) => handleTagChange(index, serializeTag(value, tagColor))}
+                              onColorChange={(value) => handleTagChange(index, serializeTag(tagName, value))}
+                              onCommit={() => {
+                                updateEditingClass((draft) => {
+                                  const cleanTags = (draft.tags || []).filter((t) => {
+                                    const { name } = parseTag(t);
+                                    return name.trim() !== '';
+                                  });
+                                  draft.tags = cleanTags;
+                                });
+                              }}
+                            />
+                          </div>
                         );
                       })}
 
                       {/* BOTÓN AÑADIR ETIQUETA */}
-                      <button
-                        onClick={() => updateEditingClass(d => {
-                          if (!d.tags) d.tags = [];
-                          d.tags.push('ETIQUETA');
-                        })}
-                        className="p-1 text-[#c8aa6e] hover:text-[#f0e6d2] transition-colors"
-                        title="Añadir Etiqueta"
-                      >
-                        <FiPlus className="w-5 h-5" />
-                      </button>
-
-                      {/* UNLOCK/LOCK TOGGLE or STATUS MENU */}
-                      <div className="relative">
+                      {!isPlayerMode && (
                         <button
-                          onClick={() => {
-                            if (isPlayerMode) {
-                              setShowStatusSelector(!showStatusSelector);
-                            } else {
-                              const newStatus = editingClass.status === 'locked' ? 'available' : 'locked';
-                              updateEditingClass((draft) => {
-                                draft.status = newStatus;
-                              });
-                            }
-                          }}
-                          className={`w-10 h-[26px] border rounded flex items-center justify-center transition-all hover:scale-105 active:scale-95 ${isPlayerMode
-                            ? showStatusSelector ? 'bg-[#c8aa6e] border-[#c8aa6e] text-[#0b1120]' : 'bg-[#c8aa6e]/10 border-[#c8aa6e]/30 text-[#c8aa6e] hover:bg-[#c8aa6e]/20 hover:border-[#c8aa6e]'
-                            : editingClass.status !== 'locked'
-                              ? 'bg-green-900/10 border-green-500/30 text-green-500 hover:bg-green-900/30 hover:border-green-500'
-                              : 'bg-red-900/10 border-red-500/30 text-red-500 hover:bg-red-900/30 hover:border-red-500'
-                            }`}
-                          title={isPlayerMode ? "Gestionar Estados" : (editingClass.status !== 'locked' ? "Bloquear Clase" : "Desbloquear Clase")}
+                          onClick={() => updateEditingClass(d => {
+                            if (!d.tags) d.tags = [];
+                            d.tags.push(serializeTag('ETIQUETA', '#ef4444'));
+                          })}
+                          className="flex h-7 w-7 touch-manipulation items-center justify-center text-[#c8aa6e] transition-colors hover:text-[#f0e6d2]"
+                          title="Añadir Etiqueta"
+                          aria-label="Añadir etiqueta"
                         >
-                          {isPlayerMode ? (
-                            <Star className="w-3.5 h-3.5" />
-                          ) : (
-                            editingClass.status !== 'locked' ? <FiUnlock className="w-3.5 h-3.5" /> : <FiLock className="w-3.5 h-3.5" />
-                          )}
+                          <FiPlus className="w-5 h-5" />
+                        </button>
+                      )}
+
+                      {/* STATUS MENU AND MASTER LOCK CONTROL */}
+                      <div className="relative flex items-center gap-2">
+                        <button
+                          onClick={() => setShowStatusSelector(!showStatusSelector)}
+                          className={`flex h-[28px] w-10 touch-manipulation items-center justify-center border transition-all hover:brightness-125 active:scale-95 ${showStatusSelector
+                            ? 'border-[#c8aa6e] bg-[#c8aa6e] text-[#0b1120]'
+                            : 'border-[#c8aa6e]/30 bg-[#c8aa6e]/10 text-[#c8aa6e] hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/20'
+                            }`}
+                          title="Gestionar Estados"
+                          aria-label="Gestionar estados"
+                        >
+                          <Star className="w-3.5 h-3.5" />
                         </button>
 
                         {/* Status Selector Popover */}
                         <AnimatePresence>
-                          {showStatusSelector && isPlayerMode && (
+                          {showStatusSelector && (
                             <>
                               <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden" onClick={() => setShowStatusSelector(false)} />
                               <motion.div
@@ -4320,7 +4237,10 @@ const ClassList = ({
                                 </div>
                                 <div className="grid grid-cols-3 gap-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
                                   {Object.entries(statusEffectsConfig).map(([key, config]) => {
-                                    const isSelected = (editingClass.tags || []).some(t => t.toLowerCase() === key);
+                                    const isSelected = (editingClass.tags || []).some((tag) => {
+                                      const tagName = parseTag(tag).name.toLowerCase().trim();
+                                      return tagName === key || tagName === config.label.toLowerCase();
+                                    });
                                     const StatusIcon = ICON_MAP[config.iconName] || ICON_MAP.AlertCircle;
 
                                     return (
@@ -4330,7 +4250,7 @@ const ClassList = ({
                                           updateEditingClass(draft => {
                                             const tags = draft.tags || [];
                                             const tagIndex = tags.findIndex(t => {
-                                              const tLow = t.toLowerCase();
+                                              const tLow = parseTag(t).name.toLowerCase().trim();
                                               return tLow === key || tLow === config.label.toLowerCase();
                                             });
 
@@ -4365,6 +4285,28 @@ const ClassList = ({
                             </>
                           )}
                         </AnimatePresence>
+
+                        {!isPlayerMode && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newStatus = editingClass.status === 'locked' ? 'available' : 'locked';
+                              updateEditingClass((draft) => {
+                                draft.status = newStatus;
+                              });
+                            }}
+                            className={`flex h-[28px] w-10 touch-manipulation items-center justify-center border transition-all hover:brightness-125 active:scale-95 ${editingClass.status !== 'locked'
+                              ? 'border-green-500/30 bg-green-900/10 text-green-500 hover:border-green-500'
+                              : 'border-red-500/30 bg-red-900/10 text-red-500 hover:border-red-500'
+                              }`}
+                            title={editingClass.status !== 'locked' ? 'Bloquear Clase' : 'Desbloquear Clase'}
+                            aria-label={editingClass.status !== 'locked' ? 'Bloquear clase' : 'Desbloquear clase'}
+                          >
+                            {editingClass.status !== 'locked'
+                              ? <FiUnlock className="w-3.5 h-3.5" />
+                              : <FiLock className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
 
                         {/* Status Effect Info Modal */}
                         <AnimatePresence>

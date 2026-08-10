@@ -1,11 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { motion } from 'framer-motion';
-import { FiSearch, FiUser, FiCalendar, FiPlus, FiMinus, FiKey, FiTrash2, FiCompass, FiCheck } from 'react-icons/fi';
+import {
+    FiSearch,
+    FiUser,
+    FiCalendar,
+    FiPlus,
+    FiMinus,
+    FiKey,
+    FiTrash2,
+    FiCompass,
+    FiCheck,
+} from 'react-icons/fi';
 import Boton from './Boton';
 import Modal from './Modal';
-import { deleteDoc } from 'firebase/firestore';
 import {
     normalizeRogueliteAccess,
     setRogueliteEnabled,
@@ -121,7 +130,6 @@ const UsersView = ({ onBack }) => {
         if (!formData.name.trim()) return alert("El nombre es obligatorio");
         if (!formData.passcode.trim()) return alert("La contraseña es obligatoria");
 
-        // Check if name already exists
         const exists = players.some(p => p.name.toLowerCase() === formData.name.trim().toLowerCase());
         if (exists) return alert("Ya existe un jugador con este nombre");
 
@@ -137,7 +145,6 @@ const UsersView = ({ onBack }) => {
                         unlockedClassIds: [],
                     },
                 },
-                // Inicializar datos de juego por defecto para evitar errores
                 atributos: {
                     destreza: 0,
                     vigor: 0,
@@ -165,7 +172,6 @@ const UsersView = ({ onBack }) => {
                 ]
             });
 
-            // Update local state
             const newPlayer = {
                 id: formData.name.trim(),
                 name: formData.name.trim(),
@@ -226,17 +232,10 @@ const UsersView = ({ onBack }) => {
 
     const togglePermission = async (player, permissionKey) => {
         if (!player || !player.id) return;
-
-        // Determine current state (default to true if undefined)
         const currentVal = player.permissions ? player.permissions[permissionKey] : undefined;
-        // If undefined, it means they have access (backward compatibility), so toggling means setting to false.
-        // If it is explicitly true, toggle to false.
-        // If it is explicitly false, toggle to true.
-        // We can simplify: default is true.
         const effectiveVal = currentVal !== false;
         const newVal = !effectiveVal;
 
-        // Optimistic update
         const updatedPlayers = players.map(p => {
             if (p.id === player.id) {
                 return {
@@ -259,7 +258,6 @@ const UsersView = ({ onBack }) => {
             }, { merge: true });
         } catch (error) {
             console.error("Error updating permissions:", error);
-            // Revert changes if needed (not implemented for simplicity, but good practice)
         }
     };
 
@@ -293,17 +291,25 @@ const UsersView = ({ onBack }) => {
         persistRogueliteAccess(player, setRogueliteEnabled(player, !currentAccess.enabled));
     };
 
-    const requestProfileLevelChange = (player, classItem, direction) => {
+    const requestProfileLevelChange = (player, classItem, targetInput) => {
         const profileKey = getProfileClassKey(player.id, classItem.id);
         const maximumLevel = getClassMaximumLevel(classItem);
         const currentLevel = normalizeRogueliteProfileLevel(
             rogueliteProfileLevels[profileKey] ?? 1,
             maximumLevel,
         );
-        const nextLevel = Math.min(maximumLevel, Math.max(1, currentLevel + direction));
+
+        let nextLevel;
+        if (targetInput === 1 || targetInput === -1) {
+            nextLevel = Math.min(maximumLevel, Math.max(1, currentLevel + targetInput));
+        } else {
+            nextLevel = Math.min(maximumLevel, Math.max(1, Number(targetInput)));
+        }
+
         if (nextLevel === currentLevel) return;
 
-        const changedLevelNumber = direction > 0 ? nextLevel : currentLevel;
+        const direction = nextLevel > currentLevel ? 1 : -1;
+        const changedLevelNumber = nextLevel;
         const changedLevel = classItem.classLevels?.[changedLevelNumber - 1] || {};
         const resourceName = classItem.resource?.name
             || classItem.roguelite?.resource?.name
@@ -376,116 +382,129 @@ const UsersView = ({ onBack }) => {
     ];
 
     return (
-        <div className="min-h-screen bg-[#0b1120] text-gray-100 p-4 md:p-8 font-['Lato']">
-            {/* Background similar to MasterMenu */}
+        <div className="min-h-screen bg-[#070b14] text-slate-200 p-4 sm:p-6 md:p-8 font-['Lato']">
+            {/* Background Texture */}
             <div className="fixed inset-0 pointer-events-none z-0">
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-10"></div>
-                <div className="absolute inset-0 bg-gradient-to-b from-[#0b1120] via-transparent to-[#0b1120]"></div>
+                <div className="absolute inset-0 bg-gradient-to-b from-[#070b14] via-transparent to-[#070b14]"></div>
             </div>
 
-            <div className="relative z-10 max-w-7xl mx-auto space-y-8">
+            <div className="relative z-10 max-w-7xl mx-auto space-y-6 sm:space-y-8">
                 {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[#c8aa6e]/20 pb-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#c8aa6e]/25 pb-5">
                     <div>
-                        <h1 className="font-['Cinzel'] text-3xl md:text-4xl font-bold text-[#f0e6d2]">
+                        <h1 className="font-['Cinzel'] text-2xl sm:text-3xl md:text-4xl font-bold text-[#f0e6d2] tracking-wide">
                             Fichas de Jugadores
                         </h1>
-                        <p className="text-slate-400 mt-2 text-sm uppercase tracking-wide">
+                        <p className="text-slate-400 mt-1 text-xs sm:text-sm uppercase tracking-wider">
                             Gestión de accesos y perfiles de jugadores
                         </p>
                     </div>
-                    <div className="flex gap-4">
-                        <div className="flex gap-4">
-                            <Boton
-                                color="green"
-                                onClick={() => {
-                                    setFormData({ name: '', passcode: '' });
-                                    setIsCreating(true);
-                                }}
-                                className="flex items-center gap-2"
-                            >
-                                <FiPlus /> Crear Jugador
-                            </Boton>
-                            <Boton color="gray" onClick={onBack}>
-                                ← Volver al Menú
-                            </Boton>
-                        </div>
+                    <div className="flex flex-wrap gap-3 w-full sm:w-auto">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setFormData({ name: '', passcode: '' });
+                                setIsCreating(true);
+                            }}
+                            className="flex h-10 items-center justify-center gap-2 border border-[#c8aa6e]/60 bg-[#c8aa6e]/15 px-4 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.1em] text-[#f0e6d2] transition hover:bg-[#c8aa6e]/30 hover:border-[#c8aa6e] active:bg-[#c8aa6e]/40"
+                        >
+                            <FiPlus className="h-4 w-4 text-[#c8aa6e]" /> Crear Jugador
+                        </button>
+                        <button
+                            type="button"
+                            onClick={onBack}
+                            className="flex h-10 items-center justify-center gap-2 border border-slate-700/80 bg-[#121927] px-4 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.1em] text-slate-300 transition hover:border-slate-500 hover:text-white active:bg-slate-800"
+                        >
+                            ← Volver al Menú
+                        </button>
                     </div>
                 </div>
 
-                {/* Search */}
+                {/* Search Bar */}
                 <div className="relative max-w-md">
-                    <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
                     <input
                         type="text"
-                        placeholder="Buscar por nombre..."
-                        className="w-full bg-[#161f32] border border-gray-700/50 rounded-lg py-2 pl-10 pr-4 text-gray-200 focus:border-[#c8aa6e]/50 focus:outline-none transition-colors"
+                        placeholder="Buscar jugador por nombre..."
+                        className="w-full bg-[#121927] border border-slate-700/60 rounded-none py-2.5 pl-10 pr-4 text-xs sm:text-sm text-slate-200 font-['Cinzel'] placeholder:font-['Lato'] placeholder:text-slate-500 focus:border-[#c8aa6e]/70 focus:outline-none transition-colors"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
 
-                {/* Grid */}
+                {/* Player Cards Grid */}
                 {loading ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
                         {[1, 2, 3].map(i => (
-                            <div key={i} className="bg-[#1a1b26] h-64 rounded-lg border border-gray-800"></div>
+                            <div key={i} className="bg-[#121927] h-64 border border-slate-800"></div>
                         ))}
                     </div>
                 ) : filteredPlayers.length === 0 ? (
-                    <div className="text-center py-20 text-gray-500 bg-[#161f32]/50 rounded-lg border border-gray-800 border-dashed">
-                        <FiUser className="mx-auto text-4xl mb-4 opacity-50" />
-                        No se encontraron jugadores.
+                    <div className="text-center py-16 text-slate-500 bg-[#121927]/60 border border-dashed border-slate-800">
+                        <FiUser className="mx-auto text-4xl mb-3 opacity-40" />
+                        <p className="font-['Cinzel'] text-sm uppercase tracking-wider text-slate-400">No se encontraron jugadores</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredPlayers.map((player, index) => (
-                            <motion.div
-                                key={player.id}
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: index * 0.05 }}
-                                className="bg-[#1a1b26] border border-gray-800 hover:border-[#c8aa6e]/30 p-6 rounded-lg transition-all group relative overflow-hidden hover:shadow-lg hover:shadow-[#c8aa6e]/5"
-                            >
-                                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
-                                    <FiUser size={120} />
-                                </div>
+                        {filteredPlayers.map((player, index) => {
+                            const rogueliteAccess = normalizeRogueliteAccess(player);
+                            const unlockedCount = rogueliteAccess.unlockedClassIds.length;
 
-                                <div className="relative z-10">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <h2 className="text-xl font-bold text-[#f0e6d2] font-['Cinzel'] truncate pr-2">
-                                            {player.name}
-                                        </h2>
-                                        {player.nivel && (
-                                            <span className="text-xs bg-[#c8aa6e]/10 text-[#c8aa6e] px-2 py-1 rounded font-bold uppercase tracking-wider">
-                                                Nvl {player.nivel}
-                                            </span>
-                                        )}
-                                    </div>
+                            return (
+                                <motion.div
+                                    key={player.id}
+                                    initial={{ opacity: 0, y: 15 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: index * 0.04 }}
+                                    className="bg-[#121927] border border-slate-800 hover:border-[#c8aa6e]/40 p-5 sm:p-6 transition-all group relative overflow-hidden flex flex-col justify-between shadow-lg"
+                                >
+                                    <div className="space-y-5">
+                                        {/* Card Header: Player Name + Quick Controls */}
+                                        <div className="flex justify-between items-start gap-3 border-b border-slate-800/80 pb-4">
+                                            <div className="min-w-0 flex-1">
+                                                <h2 className="text-xl font-bold text-[#f0e6d2] font-['Cinzel'] truncate tracking-wide">
+                                                    {player.name}
+                                                </h2>
+                                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                                    <span className="flex items-center gap-1" title="Última actualización">
+                                                        <FiCalendar className="text-slate-600 h-3 w-3" />
+                                                        {player.updatedAt?.seconds
+                                                            ? new Date(player.updatedAt.seconds * 1000).toLocaleDateString()
+                                                            : 'Sin actividad'}
+                                                    </span>
+                                                </div>
+                                            </div>
 
-                                    <p className="text-xs text-slate-500 font-mono mb-6 uppercase tracking-wider flex items-center gap-2">
-                                        <span className={`w-2 h-2 rounded-full ${player.hp > 0 ? 'bg-emerald-500' : 'bg-gray-600'}`}></span>
-                                        {player.clase?.name || 'Clase no definida'}
-                                    </p>
-
-                                    {/* Stats (Compact) */}
-                                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs mb-6 opacity-80">
-                                        <div className="flex justify-between">
-                                            <span className="text-slate-500">Vida</span>
-                                            <span className="text-emerald-400 font-mono">{player.stats?.vida?.actual ?? 0}/{player.stats?.vida?.total ?? 0}</span>
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setFormData({ name: player.name, passcode: player.passcode || '' });
+                                                        setEditingPasswordFor(player);
+                                                    }}
+                                                    className="flex h-8 items-center gap-1 border border-slate-700/60 bg-[#080c17] px-2 text-[10px] font-mono text-slate-400 transition hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]"
+                                                    title="Cambiar contraseña de acceso"
+                                                >
+                                                    <FiKey className="h-3 w-3 text-[#c8aa6e]/70" />
+                                                    <span>{player.passcode ? '••••' : 'Sin clave'}</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDeleteUser(player.id)}
+                                                    className="flex h-8 w-8 items-center justify-center text-slate-600 transition hover:text-rose-400 active:text-rose-500"
+                                                    title="Eliminar usuario"
+                                                >
+                                                    <FiTrash2 className="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-slate-500">Cordura</span>
-                                            <span className="text-purple-400 font-mono">{player.stats?.cordura?.actual ?? 0}/{player.stats?.cordura?.total ?? 0}</span>
-                                        </div>
-                                    </div>
 
-                                    {/* Permissions Toggles */}
-                                    <div className="border-t border-gray-800/50 pt-4 space-y-4">
-
-                                        {/* Herramientas de Jugador */}
+                                        {/* Player Basic Tools Toggles */}
                                         <div>
-                                            <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-2">Herramientas Básicas</p>
+                                            <p className="text-[10px] font-['Cinzel'] font-bold uppercase tracking-[0.18em] text-slate-400 mb-2">
+                                                Herramientas de Jugador
+                                            </p>
                                             <div className="grid grid-cols-2 gap-2">
                                                 {PLAYER_PERMISSIONS.map(perm => {
                                                     let hasAccess;
@@ -498,74 +517,118 @@ const UsersView = ({ onBack }) => {
                                                     return (
                                                         <button
                                                             key={perm.key}
+                                                            type="button"
                                                             onClick={() => togglePermission(player, perm.key)}
                                                             className={`
-                                                                flex items-center gap-2 px-2 py-1.5 rounded text-xs font-medium transition-all border
+                                                                flex items-center gap-2 px-2.5 py-1.5 text-xs font-medium transition-all border
                                                                 ${hasAccess
-                                                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
-                                                                    : 'bg-red-500/5 border-red-500/20 text-red-500/50 hover:bg-red-500/10 hover:text-red-400'
+                                                                    ? 'bg-emerald-500/10 border-emerald-500/35 text-emerald-400 hover:bg-emerald-500/20'
+                                                                    : 'bg-slate-900/60 border-slate-800 text-slate-600 hover:border-slate-700 hover:text-slate-400'
                                                                 }
                                                             `}
                                                             title={`Click para ${hasAccess ? 'revocar' : 'conceder'} acceso`}
                                                         >
-                                                            <span className="text-base">{perm.icon}</span>
-                                                            <span className="truncate">{perm.label}</span>
+                                                            <span className="text-sm">{perm.icon}</span>
+                                                            <span className="truncate text-[11px]">{perm.label}</span>
                                                         </button>
                                                     );
                                                 })}
                                             </div>
                                         </div>
 
-                                        {/* Acceso independiente al modo Roguelite */}
-                                        <div className="rounded-lg border border-[#c8aa6e]/20 bg-[#0b1120]/45 p-3">
+                                        {/* Master Privileged Access Toggles */}
+                                        <div>
+                                            <p className="text-[10px] font-['Cinzel'] font-bold uppercase tracking-[0.18em] text-amber-500/80 mb-2">
+                                                Accesos de Máster
+                                            </p>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {MASTER_PERMISSIONS.map(perm => {
+                                                    let hasAccess;
+                                                    if (player.permissions && player.permissions[perm.key] !== undefined) {
+                                                        hasAccess = player.permissions[perm.key];
+                                                    } else {
+                                                        hasAccess = perm.default !== false;
+                                                    }
+
+                                                    return (
+                                                        <button
+                                                            key={perm.key}
+                                                            type="button"
+                                                            onClick={() => togglePermission(player, perm.key)}
+                                                            className={`
+                                                                flex items-center gap-2 px-2.5 py-1.5 text-xs font-medium transition-all border
+                                                                ${hasAccess
+                                                                    ? 'bg-amber-500/10 border-amber-500/35 text-amber-400 hover:bg-amber-500/20'
+                                                                    : 'bg-slate-900/60 border-slate-800 text-slate-600 hover:border-slate-700 hover:text-slate-400'
+                                                                }
+                                                            `}
+                                                            title={`Click para ${hasAccess ? 'revocar' : 'conceder'} acceso de máster`}
+                                                        >
+                                                            <span className="text-sm">{perm.icon}</span>
+                                                            <span className="truncate text-[11px]">{perm.label}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        {/* Modo Roguelite Section */}
+                                        <div className="border border-[#c8aa6e]/25 bg-[#090e1a] p-3.5 space-y-3">
                                             <div className="flex items-center justify-between gap-3">
-                                                <div className="flex min-w-0 items-center gap-2">
-                                                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#c8aa6e]/30 bg-[#c8aa6e]/10 text-[#c8aa6e]">
-                                                        <FiCompass />
+                                                <div className="flex min-w-0 items-center gap-2.5">
+                                                    <span className="flex h-8 w-8 shrink-0 items-center justify-center border border-[#c8aa6e]/40 bg-[#c8aa6e]/10 text-[#c8aa6e]">
+                                                        <FiCompass className="h-4 w-4" />
                                                     </span>
                                                     <div className="min-w-0">
                                                         <p className="truncate font-['Cinzel'] text-xs font-bold uppercase tracking-wider text-[#f0e6d2]">
                                                             Modo Roguelite
                                                         </p>
                                                         <p className="text-[10px] text-slate-500">
-                                                            Clases y aventuras del Canvas
+                                                            {rogueliteAccess.enabled ? `${unlockedCount} clases activas` : 'Desactivado'}
                                                         </p>
                                                     </div>
                                                 </div>
                                                 <button
                                                     type="button"
                                                     onClick={() => handleRogueliteEnabledChange(player)}
-                                                    aria-pressed={normalizeRogueliteAccess(player).enabled}
-                                                    className={`relative h-7 w-12 shrink-0 rounded-full border transition-colors ${normalizeRogueliteAccess(player).enabled
-                                                        ? 'border-emerald-400/50 bg-emerald-500/25'
-                                                        : 'border-slate-600 bg-slate-800'
+                                                    aria-pressed={rogueliteAccess.enabled}
+                                                    className={`relative h-7 w-12 shrink-0 border transition-colors ${rogueliteAccess.enabled
+                                                        ? 'border-emerald-400/60 bg-emerald-500/25'
+                                                        : 'border-slate-700 bg-slate-850'
                                                         }`}
-                                                    title={`${normalizeRogueliteAccess(player).enabled ? 'Desactivar' : 'Activar'} modo Roguelite`}
+                                                    title={`${rogueliteAccess.enabled ? 'Desactivar' : 'Activar'} modo Roguelite`}
                                                 >
-                                                    <span className={`absolute top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full transition-all ${normalizeRogueliteAccess(player).enabled
+                                                    <span className={`absolute top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center transition-all ${rogueliteAccess.enabled
                                                         ? 'left-6 bg-emerald-400 text-emerald-950'
-                                                        : 'left-1 bg-slate-500 text-slate-900'
+                                                        : 'left-1 bg-slate-600 text-slate-900'
                                                         }`}>
-                                                        {normalizeRogueliteAccess(player).enabled && <FiCheck className="h-3 w-3" />}
+                                                        {rogueliteAccess.enabled && <FiCheck className="h-3 w-3" />}
                                                     </span>
                                                 </button>
                                             </div>
 
-                                            {normalizeRogueliteAccess(player).enabled && (
-                                                <div className="mt-3 border-t border-[#c8aa6e]/10 pt-3">
-                                                    <p className="mb-2 font-['Cinzel'] text-[9px] font-bold uppercase tracking-widest text-[#c8aa6e]/70">
-                                                        Clases desbloqueadas
-                                                    </p>
+                                            {/* Roguelite Class Management Matrix */}
+                                            {rogueliteAccess.enabled && (
+                                                <div className="border-t border-[#c8aa6e]/15 pt-3 space-y-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <p className="font-['Cinzel'] text-[9px] font-bold uppercase tracking-widest text-[#c8aa6e]">
+                                                            Gestión de Clases
+                                                        </p>
+                                                        <span className="text-[9px] font-mono text-slate-500">
+                                                            {unlockedCount} / {rogueliteClasses.length}
+                                                        </span>
+                                                    </div>
+
                                                     {rogueliteClassesLoading ? (
-                                                        <p className="text-[10px] text-slate-500">Cargando clases...</p>
+                                                        <p className="text-[10px] text-slate-500 italic">Cargando catálogo de clases...</p>
                                                     ) : rogueliteClasses.length === 0 ? (
-                                                        <p className="rounded border border-dashed border-slate-700 px-2 py-2 text-[10px] leading-relaxed text-slate-500">
-                                                            Aún no hay clases creadas en la Lista de Clases.
+                                                        <p className="border border-dashed border-slate-800 p-2 text-[10px] text-slate-500 text-center">
+                                                            Aún no existen clases en la Lista de Clases.
                                                         </p>
                                                     ) : (
-                                                        <div className="divide-y divide-slate-800/80 border-y border-slate-800/80">
+                                                        <div className="space-y-2 max-h-80 overflow-y-auto pr-1 custom-scrollbar">
                                                             {rogueliteClasses.map((classItem) => {
-                                                                const isUnlocked = normalizeRogueliteAccess(player).unlockedClassIds.includes(classItem.id);
+                                                                const isUnlocked = rogueliteAccess.unlockedClassIds.includes(classItem.id);
                                                                 const profileKey = getProfileClassKey(player.id, classItem.id);
                                                                 const maximumLevel = getClassMaximumLevel(classItem);
                                                                 const currentLevel = normalizeRogueliteProfileLevel(
@@ -575,83 +638,113 @@ const UsersView = ({ onBack }) => {
                                                                 const nextLevel = classItem.classLevels?.[currentLevel];
                                                                 const isSaving = savingProfileLevel === profileKey;
                                                                 const isConfirming = pendingLevelChange?.profileKey === profileKey;
+
                                                                 return (
-                                                                    <div key={classItem.id} className="py-2" data-player-class={profileKey}>
+                                                                    <div
+                                                                        key={classItem.id}
+                                                                        className={`border transition-all p-2.5 ${isUnlocked
+                                                                            ? 'border-[#c8aa6e]/30 bg-[#0d1525] border-l-2 border-l-[#c8aa6e]'
+                                                                            : 'border-slate-800/80 bg-[#070c16]/80 border-l-2 border-l-slate-700/40 opacity-70 hover:opacity-90'
+                                                                            }`}
+                                                                        data-player-class={profileKey}
+                                                                    >
                                                                         <div className="flex flex-wrap items-center justify-between gap-2">
+                                                                            {/* Class Unlock Toggle */}
                                                                             <button
                                                                                 type="button"
                                                                                 onClick={() => handleRogueliteClassToggle(player, classItem.id)}
                                                                                 aria-pressed={isUnlocked}
-                                                                                className={`flex min-h-9 min-w-0 items-center gap-2 border-l-2 px-2 text-left font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.1em] transition-colors ${isUnlocked
-                                                                                    ? 'border-l-[#c8aa6e] text-[#e7cf9a]'
-                                                                                    : 'border-l-slate-700 text-slate-500 hover:border-l-[#c8aa6e]/50 hover:text-slate-300'
-                                                                                    }`}
+                                                                                className="flex min-w-0 items-center gap-2 text-left transition-colors group/btn"
                                                                             >
-                                                                                <span className={`flex h-4 w-4 shrink-0 items-center justify-center border ${isUnlocked ? 'border-[#c8aa6e]/60 text-[#c8aa6e]' : 'border-slate-700 text-transparent'}`}>
+                                                                                <span className={`flex h-4 w-4 shrink-0 items-center justify-center border ${isUnlocked ? 'border-[#c8aa6e] bg-[#c8aa6e]/20 text-[#c8aa6e]' : 'border-slate-700 text-transparent group-hover/btn:border-slate-500'}`}>
                                                                                     <FiCheck className="h-3 w-3" />
                                                                                 </span>
-                                                                                <span className="truncate">{classItem.name}</span>
+                                                                                <span className={`font-['Cinzel'] text-[11px] font-bold uppercase tracking-wider truncate ${isUnlocked ? 'text-[#f0e6d2]' : 'text-slate-500'}`}>
+                                                                                    {classItem.name}
+                                                                                </span>
                                                                             </button>
 
+                                                                            {/* Direct Multi-Level Selector + Steppers */}
                                                                             {isUnlocked && (
-                                                                                <div
-                                                                                    className="flex h-10 shrink-0 items-stretch border border-[#c8aa6e]/20 bg-[#080c17]"
-                                                                                    aria-label={`Nivel de ${classItem.name} para ${player.name || player.id}`}
-                                                                                >
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={() => requestProfileLevelChange(player, classItem, -1)}
-                                                                                        disabled={currentLevel <= 1 || isSaving}
-                                                                                        className="flex w-10 touch-manipulation items-center justify-center border-r border-[#c8aa6e]/15 text-slate-500 transition hover:text-[#c8aa6e] disabled:cursor-not-allowed disabled:opacity-20"
-                                                                                        aria-label={`Bajar ${classItem.name} de ${player.name || player.id} al nivel ${Math.max(1, currentLevel - 1)}`}
-                                                                                    >
-                                                                                        <FiMinus className="h-3.5 w-3.5" />
-                                                                                    </button>
-                                                                                    <div className="flex min-w-[76px] flex-col items-center justify-center px-2 leading-none">
-                                                                                        <span className="font-['Cinzel'] text-[8px] font-bold uppercase tracking-[0.16em] text-slate-600">Nivel</span>
-                                                                                        <span className="mt-1 font-mono text-xs font-bold text-[#e2d5b5]">{currentLevel} / {maximumLevel}</span>
+                                                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                                                    {/* Level Display & Direct Selector */}
+                                                                                    <div className="flex h-8 items-center border border-[#c8aa6e]/30 bg-[#080c17] px-2">
+                                                                                        <span className="font-mono text-xs font-bold text-[#e2d5b5]">
+                                                                                            {currentLevel} / {maximumLevel}
+                                                                                        </span>
+                                                                                        <select
+                                                                                            value={currentLevel}
+                                                                                            onChange={(e) => requestProfileLevelChange(player, classItem, Number(e.target.value))}
+                                                                                            disabled={isSaving}
+                                                                                            className="ml-1 bg-transparent text-[11px] font-['Cinzel'] text-[#c8aa6e] outline-none cursor-pointer hover:text-[#f0e6d2]"
+                                                                                            aria-label={`Seleccionar nivel de ${classItem.name} para ${player.name || player.id}`}
+                                                                                        >
+                                                                                            {Array.from({ length: maximumLevel }, (_, i) => i + 1).map((lvl) => (
+                                                                                                <option key={lvl} value={lvl} className="bg-[#0e1626] text-[#e2d5b5]">
+                                                                                                    Ir a Nvl {lvl}
+                                                                                                </option>
+                                                                                            ))}
+                                                                                        </select>
                                                                                     </div>
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={() => requestProfileLevelChange(player, classItem, 1)}
-                                                                                        disabled={currentLevel >= maximumLevel || isSaving}
-                                                                                        className="flex w-10 touch-manipulation items-center justify-center border-l border-[#c8aa6e]/15 text-[#9b8556] transition hover:bg-[#c8aa6e]/5 hover:text-[#e2d5b5] disabled:cursor-not-allowed disabled:opacity-20"
-                                                                                        aria-label={`Subir ${classItem.name} de ${player.name || player.id} al nivel ${Math.min(maximumLevel, currentLevel + 1)}`}
+
+                                                                                    {/* Stepper Buttons for Step Increases */}
+                                                                                    <div
+                                                                                        className="flex h-8 shrink-0 items-stretch border border-[#c8aa6e]/30 bg-[#080c17]"
+                                                                                        aria-label={`Nivel de ${classItem.name} para ${player.name || player.id}`}
                                                                                     >
-                                                                                        <FiPlus className="h-3.5 w-3.5" />
-                                                                                    </button>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => requestProfileLevelChange(player, classItem, -1)}
+                                                                                            disabled={currentLevel <= 1 || isSaving}
+                                                                                            className="flex w-8 touch-manipulation items-center justify-center border-r border-[#c8aa6e]/20 text-slate-500 transition hover:text-[#c8aa6e] active:bg-white/5 disabled:cursor-not-allowed disabled:opacity-20"
+                                                                                            aria-label={`Bajar ${classItem.name} de ${player.name || player.id} al nivel ${Math.max(1, currentLevel - 1)}`}
+                                                                                        >
+                                                                                            <FiMinus className="h-3 w-3" />
+                                                                                        </button>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => requestProfileLevelChange(player, classItem, 1)}
+                                                                                            disabled={currentLevel >= maximumLevel || isSaving}
+                                                                                            className="flex w-8 touch-manipulation items-center justify-center text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10 hover:text-[#f0e6d2] active:bg-white/5 disabled:cursor-not-allowed disabled:opacity-20"
+                                                                                            aria-label={`Subir ${classItem.name} de ${player.name || player.id} al nivel ${Math.min(maximumLevel, currentLevel + 1)}`}
+                                                                                        >
+                                                                                            <FiPlus className="h-3 w-3" />
+                                                                                        </button>
+                                                                                    </div>
                                                                                 </div>
                                                                             )}
                                                                         </div>
 
+                                                                        {/* Next Level Teaser */}
                                                                         {isUnlocked && nextLevel && !isConfirming && (
-                                                                            <p className="mt-1 pl-8 text-[10px] leading-relaxed text-slate-600">
-                                                                                Próximo: <span className="text-slate-400">{nextLevel.title || `Nivel ${currentLevel + 1}`}</span>
+                                                                            <p className="mt-1.5 pl-6 text-[10px] leading-relaxed text-slate-500">
+                                                                                Próximo perk: <span className="text-slate-300 font-['Cinzel']">{nextLevel.title || `Nivel ${currentLevel + 1}`}</span>
                                                                             </p>
                                                                         )}
 
+                                                                        {/* Level Confirmation Banner */}
                                                                         {isUnlocked && isConfirming && (
-                                                                            <div className="mt-2 border-l-2 border-[#c8aa6e]/55 bg-[#0d1422] px-3 py-2.5" data-level-confirmation={profileKey}>
-                                                                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                                                            <div className="mt-2 border-l-2 border-[#c8aa6e] bg-[#090f1c] p-2.5" data-level-confirmation={profileKey}>
+                                                                                <div className="flex flex-wrap items-start justify-between gap-2">
                                                                                     <div className="min-w-0 flex-1">
-                                                                                        <p className="font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.12em] text-[#e2d5b5]">
+                                                                                        <p className="font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.1em] text-[#e2d5b5]">
                                                                                             {pendingLevelChange.direction > 0 ? 'Subir de nivel' : 'Bajar de nivel'} · {pendingLevelChange.currentLevel} → {pendingLevelChange.nextLevel}
                                                                                         </p>
-                                                                                        <p className="mt-1 text-[10px] text-slate-500">{pendingLevelChange.changedLevelTitle}</p>
+                                                                                        <p className="mt-0.5 text-[10px] text-slate-400">{pendingLevelChange.changedLevelTitle}</p>
                                                                                         {pendingLevelChange.effectDescriptions.length > 0 && (
-                                                                                            <ul className="mt-1.5 space-y-0.5 text-[10px] text-[#c8aa6e]/75">
+                                                                                            <ul className="mt-1 space-y-0.5 text-[10px] text-[#c8aa6e]/85 font-mono">
                                                                                                 {pendingLevelChange.effectDescriptions.map((description) => (
                                                                                                     <li key={description}>{pendingLevelChange.direction > 0 ? '+' : '−'} {description}</li>
                                                                                                 ))}
                                                                                             </ul>
                                                                                         )}
                                                                                     </div>
-                                                                                    <div className="flex shrink-0 gap-2">
+                                                                                    <div className="flex shrink-0 gap-1.5">
                                                                                         <button
                                                                                             type="button"
                                                                                             onClick={() => setPendingLevelChange(null)}
                                                                                             disabled={isSaving}
-                                                                                            className="h-9 border border-slate-700 px-3 font-['Cinzel'] text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500 transition hover:text-slate-300 disabled:opacity-40"
+                                                                                            className="h-8 border border-slate-700 px-2.5 font-['Cinzel'] text-[9px] font-bold uppercase tracking-[0.1em] text-slate-400 transition hover:text-slate-200 disabled:opacity-40"
                                                                                         >
                                                                                             Cancelar
                                                                                         </button>
@@ -659,7 +752,7 @@ const UsersView = ({ onBack }) => {
                                                                                             type="button"
                                                                                             onClick={confirmProfileLevelChange}
                                                                                             disabled={isSaving}
-                                                                                            className="h-9 border border-[#c8aa6e]/45 px-3 font-['Cinzel'] text-[9px] font-bold uppercase tracking-[0.12em] text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10 hover:text-[#f0e6d2] disabled:opacity-40"
+                                                                                            className="h-8 border border-[#c8aa6e]/60 bg-[#c8aa6e]/15 px-2.5 font-['Cinzel'] text-[9px] font-bold uppercase tracking-[0.1em] text-[#f0e6d2] transition hover:bg-[#c8aa6e]/30 disabled:opacity-40"
                                                                                         >
                                                                                             {isSaving ? 'Guardando…' : 'Confirmar'}
                                                                                         </button>
@@ -675,69 +768,14 @@ const UsersView = ({ onBack }) => {
                                                 </div>
                                             )}
                                         </div>
-
-                                        <div className="pt-2 flex justify-end">
-                                            <button
-                                                onClick={() => {
-                                                    setFormData({ name: player.name, passcode: player.passcode || '' });
-                                                    setEditingPasswordFor(player);
-                                                }}
-                                                className="text-xs text-slate-500 hover:text-[#c8aa6e] flex items-center gap-1 transition-colors px-2 py-1 rounded hover:bg-[#c8aa6e]/10"
-                                                title="Cambiar contraseña"
-                                            >
-                                                <FiKey /> {player.passcode ? '******' : 'Sin contraseña'}
-                                            </button>
-                                        </div>
-
-                                        {/* Herramientas de Master (Privilegiadas) */}
-                                        <div>
-                                            <p className="text-[10px] text-amber-500/70 uppercase tracking-widest font-bold mb-2">Accesos de Master</p>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                {MASTER_PERMISSIONS.map(perm => {
-                                                    let hasAccess;
-                                                    if (player.permissions && player.permissions[perm.key] !== undefined) {
-                                                        hasAccess = player.permissions[perm.key];
-                                                    } else {
-                                                        hasAccess = perm.default !== false;
-                                                    }
-
-                                                    return (
-                                                        <button
-                                                            key={perm.key}
-                                                            onClick={() => togglePermission(player, perm.key)}
-                                                            className={`
-                                                                flex items-center gap-2 px-2 py-1.5 rounded text-xs font-medium transition-all border
-                                                                ${hasAccess
-                                                                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
-                                                                    : 'bg-red-500/5 border-red-500/20 text-red-500/50 hover:bg-red-500/10 hover:text-red-400'
-                                                                }
-                                                            `}
-                                                            title={`Click para ${hasAccess ? 'revocar' : 'conceder'} acceso de Master`}
-                                                        >
-                                                            <span className="text-base">{perm.icon}</span>
-                                                            <span className="truncate">{perm.label}</span>
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-
                                     </div>
-
-                                    <div className="pt-4 mt-4 border-t border-gray-800/50 flex justify-between items-center text-xs text-slate-500">
-                                        <span className="flex items-center gap-1.5" title="Última actualización">
-                                            <FiCalendar className="text-slate-600" />
-                                            {player.updatedAt?.seconds
-                                                ? new Date(player.updatedAt.seconds * 1000).toLocaleDateString()
-                                                : 'Sin actividad'}
-                                        </span>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        ))}
+                                </motion.div>
+                            );
+                        })}
                     </div>
                 )}
             </div>
+
             {/* Modal Crear Usuario */}
             <Modal
                 isOpen={isCreating}
@@ -752,25 +790,25 @@ const UsersView = ({ onBack }) => {
             >
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-1">Nombre del Personaje</label>
+                        <label className="block text-xs font-['Cinzel'] font-bold uppercase tracking-wider text-slate-400 mb-1">Nombre del Personaje</label>
                         <input
                             type="text"
-                            className="w-full bg-[#0b1120] border border-gray-700 rounded p-2 text-white focus:border-[#c8aa6e] focus:outline-none"
+                            className="w-full bg-[#070c16] border border-slate-700 p-2.5 text-xs text-slate-200 focus:border-[#c8aa6e] focus:outline-none"
                             placeholder="Ej. Arthas"
                             value={formData.name}
                             onChange={e => setFormData({ ...formData, name: e.target.value })}
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-1">Contraseña de Acceso</label>
+                        <label className="block text-xs font-['Cinzel'] font-bold uppercase tracking-wider text-slate-400 mb-1">Contraseña de Acceso</label>
                         <input
                             type="text"
-                            className="w-full bg-[#0b1120] border border-gray-700 rounded p-2 text-white focus:border-[#c8aa6e] focus:outline-none"
+                            className="w-full bg-[#070c16] border border-slate-700 p-2.5 text-xs text-slate-200 focus:border-[#c8aa6e] focus:outline-none"
                             placeholder="Contraseña"
                             value={formData.passcode}
                             onChange={e => setFormData({ ...formData, passcode: e.target.value })}
                         />
-                        <p className="text-xs text-slate-500 mt-1">Esta será la contraseña que usará el jugador para entrar.</p>
+                        <p className="text-[11px] text-slate-500 mt-1">Esta será la contraseña que usará el jugador para entrar.</p>
                     </div>
                 </div>
             </Modal>
@@ -785,11 +823,12 @@ const UsersView = ({ onBack }) => {
                         <Boton color="gray" onClick={() => setEditingPasswordFor(null)}>Cancelar</Boton>
                         <div className="flex gap-2">
                             <button
+                                type="button"
                                 onClick={() => {
                                     handleDeleteUser(editingPasswordFor.id);
                                     setEditingPasswordFor(null);
                                 }}
-                                className="px-4 py-2 bg-red-900/30 text-red-500 rounded hover:bg-red-900/50 flex items-center gap-2 border border-red-900/50"
+                                className="px-3 py-2 bg-rose-950/40 text-rose-400 text-xs font-['Cinzel'] uppercase font-bold hover:bg-rose-900/50 flex items-center gap-1.5 border border-rose-800/60"
                             >
                                 <FiTrash2 /> Eliminar Usuario
                             </button>
@@ -800,10 +839,10 @@ const UsersView = ({ onBack }) => {
             >
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-1">Nueva Contraseña</label>
+                        <label className="block text-xs font-['Cinzel'] font-bold uppercase tracking-wider text-slate-400 mb-1">Nueva Contraseña</label>
                         <input
                             type="text"
-                            className="w-full bg-[#0b1120] border border-gray-700 rounded p-2 text-white focus:border-[#c8aa6e] focus:outline-none"
+                            className="w-full bg-[#070c16] border border-slate-700 p-2.5 text-xs text-slate-200 focus:border-[#c8aa6e] focus:outline-none"
                             placeholder="Nueva contraseña"
                             value={formData.passcode}
                             onChange={e => setFormData({ ...formData, passcode: e.target.value })}

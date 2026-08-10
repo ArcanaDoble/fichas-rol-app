@@ -61,6 +61,7 @@ beforeEach(() => {
             image: '',
             subtitle: 'Furia desatada',
             description: 'Furia de prueba',
+            tags: ['Vanguardia|#f59e0b'],
             roguelite: {
               actionDice: ['d8', 'd6', 'd4'],
               maxLife: 8,
@@ -113,6 +114,22 @@ test('mounts the roguelite card and opens it in the shared character sheet', asy
   expect(screen.getByTestId('roguelite-stat-movimiento')).toHaveTextContent('2 / 2');
   expect(screen.getByTestId('roguelite-stat-iniciativa')).toHaveTextContent('2 / 2');
   expect(screen.getByTestId('roguelite-stat-furia')).toHaveTextContent('0 / 3');
+  expect(screen.getByRole('button', { name: 'Gestionar estados' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Añadir etiqueta' })).not.toBeInTheDocument();
+  expect(screen.getByText('Vanguardia')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Editar etiqueta Vanguardia' })).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Gestionar estados' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Sangrado' }));
+  fireEvent.click(screen.getByRole('button', { name: /Guardar Cambios/i }));
+
+  await waitFor(() => {
+    const savedProfile = require('firebase/firestore').setDoc.mock.calls.at(-1)[1];
+    expect(savedProfile).toMatchObject({
+      tags: ['Vanguardia|#f59e0b', 'sangrado'],
+      personalStatusTags: ['sangrado'],
+    });
+  });
 
   const progressionNavigation = screen.getByText('PROGRESIÓN');
   expect(screen.queryByText('COLECCIÓN')).not.toBeInTheDocument();

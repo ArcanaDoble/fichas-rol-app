@@ -108,6 +108,45 @@ describe('personal roguelite class configuration', () => {
     });
   });
 
+  test('inherits current master tags while keeping player status effects personal', () => {
+    const firstDefinition = {
+      ...definition,
+      tags: ['Furia innata|#ef4444', 'Vanguardia|#f59e0b'],
+    };
+    const storedProfile = {
+      tags: ['Etiqueta antigua|#3b82f6', 'sangrado'],
+      personalStatusTags: ['sangrado'],
+    };
+
+    const firstProfile = createRogueliteProfileClass(firstDefinition, storedProfile, 'Ada');
+    expect(firstProfile.tags).toEqual([
+      'Furia innata|#ef4444',
+      'Vanguardia|#f59e0b',
+      'sangrado',
+    ]);
+
+    const updatedProfile = createRogueliteProfileClass({
+      ...firstDefinition,
+      tags: ['Ímpetu|#a78bfa'],
+    }, storedProfile, 'Ada');
+
+    expect(updatedProfile.tags).toEqual(['Ímpetu|#a78bfa', 'sangrado']);
+    expect(updatedProfile.personalStatusTags).toEqual(['sangrado']);
+    expect(updatedProfile.tags).not.toContain('Etiqueta antigua|#3b82f6');
+  });
+
+  test('migrates plain personal states from profiles saved before the separation', () => {
+    const profileClass = createRogueliteProfileClass(
+      { ...definition, tags: ['Vanguardia'] },
+      { tags: ['Vanguardia', 'aturdido'] },
+      'Ada',
+    );
+
+    expect(profileClass.classTags).toEqual(['Vanguardia']);
+    expect(profileClass.personalStatusTags).toEqual(['aturdido']);
+    expect(profileClass.tags).toEqual(['Vanguardia', 'aturdido']);
+  });
+
   test('keeps personal levels inside the ten-level range', () => {
     expect(normalizeRogueliteProfileLevel(0)).toBe(1);
     expect(normalizeRogueliteProfileLevel(7.9)).toBe(7);

@@ -99,7 +99,8 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Rendimiento del constructor de cartas**: el canvas agrupa redibujos rápidos, reutiliza cargas de imágenes en curso, precarga recursos comunes en segundo plano y usa una previsualización interna más ligera en móvil sin perder resolución al exportar.
 - **Edición directa de todos los campos**: haz clic en título, subtítulo, descripción, etiquetas, reglas o listas para actualizar la clase y guarda los cambios con un solo botón.
 - **Hitos con seguimiento**: marca la inspiración completada mediante checks persistentes y resaltados que mantienen el estilo luminiscente del panel.
-- **Rediseño Responsivo de Progresión por Nivel**: Optimización completa del editor de mejoramiento de nivel para másters y jugadores. Alineación milimétrica al píxel en PC para que el borde del campo de mejora personalizada iguale a los botones de steppers de las filas superiores, y maquetación adaptativa fluida sin desbordamientos ni deformaciones en teléfonos móviles.
+- **Rediseño Estético de Fichas de Clases & Selección Multinivel Roguelite**: Nueva interfaz temática RPG de mesa en tono cristal oscuro con acentos dorados Cinzel. Eliminación de campos obsoletos (`Vida`, `Cordura`, `Clase no definida`). Incorporación de matriz visual de desbloqueo de clases por jugador, selector de color HEX personalizado para recursos y gestor de etiquetas de clases idéntico al del bestiario (4 presets: Carmesí, Ámbar, Esmeralda, Zafiro + esfera personalizada nativa). Eliminación de la "X", borrado por texto vacío y eliminación de etiquetas predeterminadas forzadas en la plantilla de clase.
+- **Rediseño Responsivo de Progresión por Nivel**: Optimización completa del editor de mejoramiento de nivel para másters y jugadores. Alineación milimétrica al píxel en PC para que el borde del campo de mejora personalizada iguale a los botones de steppers de las filas superiores, maquetación adaptativa fluida sin desbordamientos en móviles, y despliegue superior flotante (`bottom-full`) del selector de color HEX de mejoras para evitar cualquier solapamiento o recorte por los bordes de la tarjeta.
 - **Ficha de configuración responsiva** que aprovecha todo el ancho disponible, evita recortes en pantallas ultrapanorámicas, ajusta el retrato a un ancho máximo seguro y mantiene contenedores desplazables dentro de cada bloque para conservar el layout compacto.
 - **Seguimiento de niveles completados** mediante casillas activables por nivel con resaltado esmeralda que conservan el progreso dentro de la ficha.
 - **Vista previa de equipación refinada** con iconos automáticos para consumos y cargas, categorías saneadas y paneles de rareza que conservan el efecto hover incluso en armas especiales.
@@ -1633,6 +1634,19 @@ firebase deploy    # Despliega a Firebase Hosting
 - Esta primera fase no conecta todavía el botón de aventura con Canvas ni
   modifica el combate o el BoardSection.
 
+### Etiquetas y estados de fichas
+
+- Bestiario, fichas de personaje y fichas de clase comparten el mismo editor
+  compacto de etiquetas. Al editar, la paleta permanece abierta hasta
+  confirmar o pulsar fuera, por lo que cambiar texto o color no desmonta los
+  controles durante la interacción.
+- La paleta ofrece colores predefinidos, un selector multicolor y entrada HEX
+  validada. El valor se conserva en el formato compatible `nombre|#rrggbb`.
+- En las fichas abiertas como jugador las etiquetas autorales son de solo
+  lectura y no aparece la acción de añadir. El gestor de estados permanece
+  disponible porque modifica el estado personal; el máster dispone del mismo
+  gestor además de su control independiente para bloquear la clase.
+
 ## 📋 Arquitectura del proyecto
 
 ```
@@ -2839,5 +2853,12 @@ Guía rápida: ver `docs/Minimapa.md`.
 - **Gestos de Cámara Fluidos y Sin Parpadeos**: Se restauró la prevención de gestos nativos del navegador en el viewport del mapa y se implementó un flujo alternativo usando `onTouchEnd` en los botones táctiles. Esto previene que el navegador confunda los deslizamientos de cámara con interacciones del botón, eliminando cualquier tipo de parpadeo, desconfiguración del SVG o desaparición de interfaces al hacer zoom/deslizar en móviles.
 - **Prevención de Click Fantasma (Tap-through)**: Para evitar movimientos accidentales inmediatamente después de seleccionar una ficha, el sistema bloquea y descarta cualquier click sobre las opciones de movimiento recibidos en menos de 350ms desde el cambio de selección.
 - **Optimización del Rendimiento SVG (Resolución de Parpadeo en Zoom)**: Se eliminó la clase `transition-all` de los componentes SVG de la rejilla de fondo y de la niebla/iluminación. Esto detiene el recálculo e interpolación de vectores en cada frame de paneo o zoom (manteniendo los límites de zoom originales de 10% a 500%), eliminando de raíz las desapariciones de componentes e interfaces en dispositivos móviles.
+
+## Novedades: Etiquetas heredadas y estados personales Roguelite
+
+- Las etiquetas descriptivas guardadas por el máster se consideran parte de la definición de clase y se reconstruyen desde esa fuente cada vez que un jugador abre su ficha.
+- Los efectos de estado se guardan aparte en `personalStatusTags`, por lo que cada perfil conserva sus propios estados sin copiar ni bloquear futuras modificaciones de las etiquetas globales.
+- Los perfiles anteriores se migran al leerlos: se mantienen sus estados simples, se descartan copias antiguas de etiquetas autorales y no se mezclan los accesos especiales de Canvas o Tablero.
+- Una etiqueta vacía se elimina al confirmar con `Enter` o al clicar fuera del editor, tanto en clases como en Bestiario, sin añadir controles de borrado visuales.
 
 

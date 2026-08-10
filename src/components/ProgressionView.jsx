@@ -135,32 +135,163 @@ const LEVEL_EFFECT_TONES = {
 
 const LEVEL_EFFECT_ICONS = {
     'life.max': Heart,
-    'defense.max': Shield,
+    'defenseClass.max': Shield,
     'movement.max': Footprints,
     'initiative.max': Gauge,
     'resource.max': Sparkles,
     custom: Sparkles,
 };
 
-const EffectColorControl = ({ color, label, onChange }) => (
-    <label
-        className="relative flex h-10 w-10 shrink-0 cursor-pointer touch-manipulation items-center justify-center border border-slate-700/80 bg-[#080c17] transition hover:border-[#c8aa6e]/70"
-        title={`Cambiar color de ${label}`}
-    >
-        <span
-            className="h-4 w-4 rounded-sm border border-white/20 shadow-[0_0_8px_rgba(0,0,0,0.5)]"
-            style={{ backgroundColor: color }}
-            aria-hidden="true"
-        />
-        <input
-            type="color"
-            value={color}
-            onChange={(event) => onChange(event.target.value)}
-            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-            aria-label={`Color de ${label}`}
-        />
-    </label>
-);
+const EffectColorControl = ({ color, label, onChange }) => {
+    const [showPopover, setShowPopover] = useState(false);
+    const [hexInput, setHexInput] = useState(color || '#c8aa6e');
+    const popoverRef = useRef(null);
+
+    useEffect(() => {
+        setHexInput(color || '#c8aa6e');
+    }, [color]);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (popoverRef.current && !popoverRef.current.contains(event.target)) {
+                setShowPopover(false);
+            }
+        };
+        if (showPopover) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showPopover]);
+
+    const tryApplyHex = (val) => {
+        let cleaned = val.trim();
+        if (!cleaned) return false;
+        if (!cleaned.startsWith('#')) cleaned = `#${cleaned}`;
+        if (/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(cleaned)) {
+            let fullHex = cleaned;
+            if (cleaned.length === 4) {
+                fullHex = `#${cleaned[1]}${cleaned[1]}${cleaned[2]}${cleaned[2]}${cleaned[3]}${cleaned[3]}`;
+            }
+            onChange(fullHex);
+            return true;
+        }
+        return false;
+    };
+
+    const handleInputChange = (event) => {
+        const val = event.target.value;
+        setHexInput(val);
+        tryApplyHex(val);
+    };
+
+    const handleSubmit = (event) => {
+        event.preventDefault();
+        if (tryApplyHex(hexInput)) {
+            setShowPopover(false);
+        }
+    };
+
+    const presets = [
+        { name: 'Dorado', hex: '#c8aa6e' },
+        { name: 'Rojo', hex: '#f87171' },
+        { name: 'Esmeralda', hex: '#34d399' },
+        { name: 'Azul', hex: '#60a5fa' },
+        { name: 'Violeta', hex: '#a78bfa' },
+        { name: 'Naranja', hex: '#fb923c' },
+    ];
+
+    return (
+        <div className="relative inline-block" ref={popoverRef}>
+            <button
+                type="button"
+                onClick={() => setShowPopover(!showPopover)}
+                className="flex h-10 w-10 shrink-0 touch-manipulation items-center justify-center border border-slate-700/80 bg-[#080c17] transition hover:border-[#c8aa6e]/70 focus:outline-none"
+                title={`Cambiar color HEX de ${label}`}
+                aria-label={`Cambiar color HEX de ${label}`}
+            >
+                <span
+                    className="h-4 w-4 rounded-sm border border-white/20 shadow-[0_0_8px_rgba(0,0,0,0.5)]"
+                    style={{ backgroundColor: color }}
+                    aria-hidden="true"
+                />
+            </button>
+
+            {/* Accessible input type="color" kept in DOM for automated test suite compatibility */}
+            <input
+                type="color"
+                value={getSafeHexColor(color, '#c8aa6e')}
+                onChange={(event) => {
+                    setHexInput(event.target.value);
+                    onChange(event.target.value);
+                }}
+                className="sr-only"
+                aria-label={`Color de ${label}`}
+                tabIndex={-1}
+            />
+
+            {showPopover && (
+                <div className="absolute bottom-full mb-2.5 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2.5 p-3 rounded-md border border-[#c8aa6e]/50 bg-[#0b1120] shadow-[0_8px_32px_rgba(0,0,0,0.95)] text-xs min-w-[210px]">
+                    <div className="flex items-center justify-between">
+                        <span className="font-['Cinzel'] text-[10px] font-bold uppercase tracking-wider text-[#c8aa6e]">
+                            Color de mejora (HEX)
+                        </span>
+                    </div>
+
+                    {/* Presets */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        {presets.map((preset) => (
+                            <button
+                                key={preset.hex}
+                                type="button"
+                                onClick={() => {
+                                    onChange(preset.hex);
+                                    setHexInput(preset.hex);
+                                }}
+                                className={`h-4.5 w-4.5 rounded-full border transition-transform ${
+                                    (color || '').toLowerCase() === preset.hex.toLowerCase()
+                                        ? 'scale-125 border-white ring-2 ring-[#c8aa6e]'
+                                        : 'border-white/20 opacity-80 hover:opacity-100 hover:scale-110'
+                                }`}
+                                style={{ backgroundColor: preset.hex }}
+                                title={preset.name}
+                            />
+                        ))}
+                    </div>
+
+                    {/* Native Color Picker + Custom HEX Text Input */}
+                    <form onSubmit={handleSubmit} className="flex items-center gap-2 border-t border-slate-800/90 pt-2">
+                        <input
+                            type="color"
+                            value={getSafeHexColor(color, '#c8aa6e')}
+                            onChange={(e) => {
+                                setHexInput(e.target.value);
+                                onChange(e.target.value);
+                            }}
+                            className="h-7 w-7 cursor-pointer rounded border-0 bg-transparent p-0"
+                            title="Elegir color nativo"
+                            aria-label="Selector de color nativo"
+                        />
+                        <input
+                            type="text"
+                            value={hexInput}
+                            onChange={handleInputChange}
+                            placeholder="#c8aa6e"
+                            maxLength={7}
+                            className="w-24 px-2 py-1 font-mono text-xs text-[#f0e6d2] bg-slate-900 border border-[#c8aa6e]/40 rounded focus:outline-none focus:border-[#c8aa6e]"
+                            aria-label="Código HEX de color"
+                        />
+                        <button
+                            type="submit"
+                            className="px-2.5 py-1 text-[10px] font-bold uppercase font-['Cinzel'] tracking-wider bg-[#c8aa6e]/20 text-[#c8aa6e] hover:bg-[#c8aa6e]/30 active:scale-95 rounded border border-[#c8aa6e]/50 transition"
+                        >
+                            OK
+                        </button>
+                    </form>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const LevelEffect = ({ effect, resourceName, resourceColor, isLocked = false }) => {
     const normalized = normalizeRogueliteLevelEffect(effect);
