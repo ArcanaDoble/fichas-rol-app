@@ -160,8 +160,8 @@ const LevelMetric = ({ icon: Icon, label, value, editable, onChange, tone }) => 
 const LevelStatus = ({ state }) => {
     if (state === 'current') {
         return (
-            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#c8aa6e] shadow-[0_0_8px_#c8aa6e]" />
+            <span className="inline-flex items-center gap-1.5 border border-[#c8aa6e]/40 bg-[#c8aa6e]/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.22em] text-[#e5c989] font-['Cinzel'] shadow-[0_0_12px_rgba(200,170,110,0.15)]">
+                <span className="text-[10px] text-[#c8aa6e]">✦</span>
                 Nivel actual
             </span>
         );
@@ -169,16 +169,16 @@ const LevelStatus = ({ state }) => {
 
     if (state === 'unlocked') {
         return (
-            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-[#8f7b52]">
-                <FiCheck className="h-3.5 w-3.5" />
+            <span className="inline-flex items-center gap-1.5 border border-[#8f7b52]/30 bg-[#8f7b52]/5 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.22em] text-[#a69268] font-['Cinzel']">
+                <FiCheck className="h-3 w-3 text-[#8f7b52]" />
                 Desbloqueado
             </span>
         );
     }
 
     return (
-        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-600">
-            <FiLock className="h-3.5 w-3.5" />
+        <span className="inline-flex items-center gap-1.5 border border-slate-700/50 bg-slate-800/30 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.22em] text-slate-500 font-['Cinzel']">
+            <FiLock className="h-3 w-3 text-slate-600" />
             Por desbloquear
         </span>
     );
