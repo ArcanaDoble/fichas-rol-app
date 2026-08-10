@@ -266,11 +266,11 @@ const ProgressionView = ({
                                     style={LEVEL_FRAME_CLIP}
                                 >
                                     <div
-                                        className={`grid min-h-[148px] grid-cols-[76px_minmax(0,1fr)] gap-4 bg-[#171e2b] px-4 py-5 sm:grid-cols-[156px_minmax(0,1fr)] sm:gap-7 sm:px-7 sm:py-6 ${isLocked ? 'bg-[#121927] text-slate-500' : ''}`}
+                                        className={`grid min-h-[140px] grid-cols-[88px_minmax(0,1fr)] gap-4 bg-[#171e2b] px-4 py-4 sm:grid-cols-[136px_minmax(0,1fr)] sm:gap-6 sm:px-7 sm:py-5 ${isLocked ? 'bg-[#121927] text-slate-500' : ''}`}
                                         style={LEVEL_FRAME_CLIP}
                                     >
                                         <div className="flex flex-col items-center justify-center text-center">
-                                            <div className="relative flex h-16 w-16 items-center justify-center shrink-0 sm:h-20 sm:w-20">
+                                            <div className="relative flex h-20 w-20 items-center justify-center shrink-0 sm:h-24 sm:w-24">
                                                 <svg className="h-full w-full overflow-visible" viewBox="0 0 64 64" fill="none">
                                                     {/* Thin ring with bottom-right gap */}
                                                     <path
@@ -283,10 +283,10 @@ const ProgressionView = ({
                                                     {/* Level Number */}
                                                     <text
                                                         x="32"
-                                                        y="39"
+                                                        y="40"
                                                         textAnchor="middle"
                                                         fill={isLocked ? '#64748b' : '#f0e6d2'}
-                                                        fontSize="22"
+                                                        fontSize="26"
                                                         fontWeight="600"
                                                         className="font-['Cinzel'] select-none"
                                                     >
@@ -312,7 +312,9 @@ const ProgressionView = ({
                                                     )}
                                                 </svg>
                                             </div>
-                                            <div className={`mt-2 text-[8px] font-bold uppercase tracking-[0.24em] ${isLocked ? 'text-slate-700' : 'text-[#c8aa6e]/65'}`}>Nivel</div>
+                                            <div className={`mt-1.5 font-['Cinzel'] text-[9px] font-bold uppercase tracking-[0.24em] ${isLocked ? 'text-slate-700' : 'text-[#c8aa6e]/75'}`}>
+                                                Nivel
+                                            </div>
                                         </div>
 
                                         <div className="min-w-0 self-center">
