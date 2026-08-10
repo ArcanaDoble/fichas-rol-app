@@ -2307,6 +2307,7 @@ const ClassList = ({
           levels.push({
             title: `Nivel ${i + 1} — Nuevo avance`,
             description: 'Describe el beneficio de este nivel.',
+            effects: [],
             maxLife: previousLevel.maxLife ?? draft.maxLife ?? draft.roguelite?.maxLife ?? null,
             movement: previousLevel.movement ?? draft.movement ?? draft.roguelite?.movement ?? null,
             resourceMaximum: previousLevel.resourceMaximum
@@ -5124,6 +5125,7 @@ const ClassList = ({
               onUpdateLevel={handleUpdateLevel}
               onAddLevel={addLevel}
               onRemoveLevel={removeLevel}
+              onResourceColorChange={(color) => updateMasterRogueliteResource('color', color)}
             />
           );
         case 'loadout':

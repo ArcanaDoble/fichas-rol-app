@@ -8,11 +8,24 @@ import {
     FiPlus,
     FiTrash2,
 } from 'react-icons/fi';
-import { Footprints, Heart, Sparkles } from 'lucide-react';
+import { Footprints, Gauge, Heart, Shield, Sparkles } from 'lucide-react';
+import {
+    getRogueliteEffectDefinition,
+    getRogueliteEffectLabel,
+    getRogueliteLevelEffects,
+    normalizeRogueliteLevelEffect,
+    ROGUELITE_LEVEL_EFFECT_TARGETS,
+} from '../features/roguelite/progression';
 
 const LEVEL_FRAME_CLIP = {
     clipPath: 'polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px)',
 };
+
+const getSafeHexColor = (value, fallback = '#c8aa6e') => (
+    /^#[0-9a-f]{6}$/i.test(String(value || '').trim())
+        ? String(value).trim().toLowerCase()
+        : fallback
+);
 
 const EditableText = ({
     value,
@@ -81,7 +94,7 @@ const EditableText = ({
     );
 };
 
-const LEVEL_METRIC_TONES = {
+const LEVEL_EFFECT_TONES = {
     life: {
         border: 'border-l-[#d98b92]',
         icon: 'text-[#ef9ca4]',
@@ -100,15 +113,68 @@ const LEVEL_METRIC_TONES = {
         label: 'text-[#c7a6df]',
         value: 'text-[#e0c7ed]',
     },
+    defense: {
+        border: 'border-l-[#c8c4b9]',
+        icon: 'text-[#d7d2c5]',
+        label: 'text-[#c8c4b9]',
+        value: 'text-[#ece8de]',
+    },
+    initiative: {
+        border: 'border-l-[#d5b76f]',
+        icon: 'text-[#d5b76f]',
+        label: 'text-[#d5b76f]',
+        value: 'text-[#ead7a1]',
+    },
+    custom: {
+        border: 'border-l-slate-600',
+        icon: 'text-slate-500',
+        label: 'text-slate-400',
+        value: 'text-slate-300',
+    },
 };
 
-const LevelMetric = ({ icon: Icon, label, value, editable, onChange, tone, isLocked = false }) => {
-    if (!editable && (value === null || value === undefined)) return null;
+const LEVEL_EFFECT_ICONS = {
+    'life.max': Heart,
+    'defense.max': Shield,
+    'movement.max': Footprints,
+    'initiative.max': Gauge,
+    'resource.max': Sparkles,
+    custom: Sparkles,
+};
 
-    const palette = LEVEL_METRIC_TONES[tone] || LEVEL_METRIC_TONES.resource;
-    const safeValue = Math.max(0, Math.min(99, Number(value) || 0));
-    const displayValue = `${safeValue}`;
+const EffectColorControl = ({ color, label, onChange }) => (
+    <label
+        className="relative flex h-10 w-10 shrink-0 cursor-pointer touch-manipulation items-center justify-center border border-slate-700/80 bg-[#080c17] transition hover:border-[#c8aa6e]/70"
+        title={`Cambiar color de ${label}`}
+    >
+        <span
+            className="h-4 w-4 rounded-sm border border-white/20 shadow-[0_0_8px_rgba(0,0,0,0.5)]"
+            style={{ backgroundColor: color }}
+            aria-hidden="true"
+        />
+        <input
+            type="color"
+            value={color}
+            onChange={(event) => onChange(event.target.value)}
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            aria-label={`Color de ${label}`}
+        />
+    </label>
+);
 
+const LevelEffect = ({ effect, resourceName, resourceColor, isLocked = false }) => {
+    const normalized = normalizeRogueliteLevelEffect(effect);
+    const definition = getRogueliteEffectDefinition(normalized.target);
+    const palette = LEVEL_EFFECT_TONES[definition.tone] || LEVEL_EFFECT_TONES.custom;
+    const Icon = LEVEL_EFFECT_ICONS[normalized.target] || Sparkles;
+    const customColor = normalized.target === 'resource.max'
+        ? resourceColor
+        : normalized.target === 'custom'
+            ? normalized.color
+            : '';
+    const displayValue = normalized.operation === 'set'
+        ? `= ${normalized.value}`
+        : `${normalized.value >= 0 ? '+' : ''}${normalized.value}`;
     const borderClass = isLocked ? 'border-l-slate-700/60' : palette.border;
     const iconClass = isLocked ? 'text-slate-600' : palette.icon;
     const labelClass = isLocked ? 'text-slate-600' : palette.label;
@@ -116,48 +182,159 @@ const LevelMetric = ({ icon: Icon, label, value, editable, onChange, tone, isLoc
 
     return (
         <div
-            data-metric-tone={tone}
-            className={`inline-flex min-w-[132px] w-[148px] items-center gap-2 border-l-2 py-1 pl-2.5 pr-1.5 ${borderClass}`}
+            data-effect-target={normalized.target}
+            className={`inline-flex min-w-[144px] items-center gap-1.5 border-l-2 py-1 pl-2.5 pr-1.5 ${borderClass}`}
+            style={!isLocked && customColor ? { borderLeftColor: customColor } : undefined}
         >
-            <div className="flex min-w-0 shrink-0 items-center gap-1.5">
-                <Icon className={`h-3.5 w-3.5 shrink-0 ${iconClass}`} strokeWidth={2} />
-                <span className={`truncate font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.14em] ${labelClass}`}>
-                    {label}
+            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                <Icon
+                    className={`h-3.5 w-3.5 shrink-0 ${iconClass}`}
+                    style={!isLocked && customColor ? { color: customColor } : undefined}
+                    strokeWidth={2}
+                />
+                <span
+                    className={`truncate font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.12em] ${labelClass}`}
+                    style={!isLocked && customColor ? { color: customColor } : undefined}
+                >
+                    {getRogueliteEffectLabel(normalized, resourceName)}
                 </span>
             </div>
+            <span
+                className={`ml-auto shrink-0 font-mono text-xs font-bold ${valueClass}`}
+                style={!isLocked && customColor ? { color: customColor } : undefined}
+            >
+                {displayValue}
+            </span>
+        </div>
+    );
+};
 
-            {editable ? (
-                <div className="ml-auto flex shrink-0 items-center gap-0.5">
-                    <button
-                        type="button"
-                        onClick={() => onChange(Math.max(0, safeValue - 1))}
-                        disabled={safeValue <= 0}
-                        className="p-0.5 text-slate-500 transition hover:text-[#f0e6d2] disabled:opacity-20 touch-manipulation"
-                        aria-label={`Reducir ${label}`}
+const LevelEffectEditor = ({
+    effect,
+    effectIndex,
+    levelNumber,
+    resourceName,
+    resourceColor,
+    onResourceColorChange,
+    onChange,
+    onRemove,
+}) => {
+    const normalized = normalizeRogueliteLevelEffect(effect, effectIndex);
+    const definition = getRogueliteEffectDefinition(normalized.target);
+    const palette = LEVEL_EFFECT_TONES[definition.tone] || LEVEL_EFFECT_TONES.custom;
+    const Icon = LEVEL_EFFECT_ICONS[normalized.target] || Sparkles;
+    const targetLabel = getRogueliteEffectLabel(normalized, resourceName);
+    const minimum = normalized.operation === 'set' ? 0 : -99;
+    const safeValue = Math.max(minimum, Math.min(99, normalized.value));
+    const editableColor = normalized.target === 'resource.max'
+        ? resourceColor
+        : normalized.target === 'custom'
+            ? (normalized.color || '#94a3b8')
+            : '';
+    const updateColor = normalized.target === 'resource.max'
+        ? onResourceColorChange
+        : (color) => onChange({ color });
+    const isCustom = normalized.target === 'custom';
+
+    return (
+        <div
+            data-effect-editor={normalized.target}
+            className={`grid grid-cols-[18px_minmax(0,1fr)_40px] items-start gap-2.5 border-l-2 border-y border-r border-y-slate-800/80 border-r-slate-800/40 bg-[#0d1424]/80 p-2.5 sm:p-3 ${palette.border}`}
+            style={editableColor ? { borderLeftColor: editableColor } : undefined}
+        >
+            <Icon
+                className={`col-start-1 row-start-1 h-3.5 w-3.5 mt-3 ${palette.icon}`}
+                style={editableColor ? { color: editableColor } : undefined}
+                strokeWidth={2}
+            />
+
+            <div className="col-start-2 row-start-1 flex min-w-0 flex-wrap items-center gap-2">
+                <select
+                    value={normalized.target}
+                    onChange={(event) => onChange({
+                        target: event.target.value,
+                        label: event.target.value === 'custom' ? 'Nueva mejora' : '',
+                    })}
+                    className="h-10 w-full min-w-0 sm:w-[150px] sm:flex-none cursor-pointer border border-slate-700/80 bg-[#080c17] px-2.5 font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.08em] text-[#e2d5b5] outline-none transition focus:border-[#c8aa6e]/70 hover:border-slate-600 shrink-0"
+                    aria-label={`Tipo de mejora ${effectIndex + 1} del nivel ${levelNumber}`}
+                >
+                    {ROGUELITE_LEVEL_EFFECT_TARGETS.map((target) => (
+                        <option key={target.key} value={target.key}>
+                            {target.key === 'resource.max'
+                                ? `${resourceName} máximo`
+                                : target.key === 'custom'
+                                    ? 'Personalizada'
+                                    : target.label}
+                        </option>
+                    ))}
+                </select>
+
+                {isCustom && (
+                    <input
+                        type="text"
+                        value={normalized.label}
+                        onChange={(event) => onChange({ label: event.target.value })}
+                        className="h-10 w-full min-w-0 sm:w-[233px] sm:flex-none border border-slate-700/80 bg-[#080c17] px-3 text-xs text-slate-200 placeholder:italic placeholder:text-slate-500 outline-none transition focus:border-[#c8aa6e]/70 hover:border-slate-600 shrink-0"
+                        aria-label={`Nombre de mejora ${effectIndex + 1} del nivel ${levelNumber}`}
+                        placeholder="Nombre de la mejora"
+                    />
+                )}
+
+                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                    {editableColor && (
+                        <EffectColorControl
+                            color={editableColor}
+                            label={targetLabel}
+                            onChange={updateColor}
+                        />
+                    )}
+                    <select
+                        value={normalized.operation}
+                        onChange={(event) => onChange({ operation: event.target.value })}
+                        className="h-10 w-full flex-1 min-w-0 sm:w-[105px] sm:flex-none cursor-pointer border border-slate-700/80 bg-[#080c17] px-2 font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.08em] text-slate-300 outline-none transition focus:border-[#c8aa6e]/70 hover:border-slate-600"
+                        aria-label={`Operación de ${targetLabel} en el nivel ${levelNumber}`}
                     >
-                        <FiMinus className="h-3 w-3" />
-                    </button>
-                    <span
-                        className={`min-w-[16px] text-center font-mono text-xs font-bold ${valueClass}`}
-                        aria-label={`${label}: ${safeValue}`}
-                    >
-                        {displayValue}
-                    </span>
-                    <button
-                        type="button"
-                        onClick={() => onChange(Math.min(99, safeValue + 1))}
-                        disabled={safeValue >= 99}
-                        className="p-0.5 text-slate-500 transition hover:text-[#f0e6d2] disabled:opacity-20 touch-manipulation"
-                        aria-label={`Aumentar ${label}`}
-                    >
-                        <FiPlus className="h-3 w-3" />
-                    </button>
+                        <option value="add">Aumentar</option>
+                        <option value="set">Fijar en</option>
+                    </select>
+
+                    <div className="flex h-10 w-full items-center border border-slate-700/80 bg-[#080c17] transition hover:border-slate-600 sm:w-[120px] sm:flex-none">
+                        <button
+                            type="button"
+                            onClick={() => onChange({ value: Math.max(minimum, safeValue - 1) })}
+                            disabled={safeValue <= minimum}
+                            className="flex h-10 w-10 shrink-0 touch-manipulation items-center justify-center text-slate-400 transition hover:bg-white/5 hover:text-[#c8aa6e] active:bg-white/10 disabled:opacity-20 sm:w-9"
+                            aria-label={`Reducir ${targetLabel}`}
+                        >
+                            <FiMinus className="h-3 w-3" />
+                        </button>
+                        <span
+                            className={`min-w-0 flex-1 text-center font-mono text-xs font-bold ${palette.value}`}
+                            style={editableColor ? { color: editableColor } : undefined}
+                        >
+                            {normalized.operation === 'add' && safeValue > 0 ? '+' : ''}{safeValue}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => onChange({ value: Math.min(99, safeValue + 1) })}
+                            disabled={safeValue >= 99}
+                            className="flex h-10 w-10 shrink-0 touch-manipulation items-center justify-center text-slate-400 transition hover:bg-white/5 hover:text-[#c8aa6e] active:bg-white/10 disabled:opacity-20 sm:w-9"
+                            aria-label={`Aumentar ${targetLabel}`}
+                        >
+                            <FiPlus className="h-3 w-3" />
+                        </button>
+                    </div>
                 </div>
-            ) : (
-                <span className={`ml-auto shrink-0 font-mono text-xs font-bold ${valueClass}`}>
-                    {displayValue}
-                </span>
-            )}
+            </div>
+
+            <button
+                type="button"
+                onClick={onRemove}
+                className="col-start-3 row-start-1 flex h-10 w-10 touch-manipulation items-center justify-center justify-self-end text-slate-500 transition hover:text-rose-400 active:text-rose-500"
+                aria-label={`Eliminar mejora ${effectIndex + 1} del nivel ${levelNumber}`}
+            >
+                <FiTrash2 className="h-3.5 w-3.5" />
+            </button>
         </div>
     );
 };
@@ -195,6 +372,7 @@ const ProgressionView = ({
     onUpdateLevel,
     onAddLevel,
     onRemoveLevel,
+    onResourceColorChange,
 }) => {
     const levels = Array.isArray(dndClass.classLevels) ? dndClass.classLevels : [];
     const totalLevels = levels.length;
@@ -204,6 +382,9 @@ const ProgressionView = ({
     const resourceName = dndClass.resource?.name
         || dndClass.roguelite?.resource?.name
         || 'Recurso';
+    const resourceColor = getSafeHexColor(dndClass.resource?.color
+        || dndClass.roguelite?.resource?.color
+        || '#c8aa6e');
 
     return (
         <div className="h-full min-h-screen w-full overflow-y-auto bg-[#09090b] pb-24 md:pb-12">
@@ -256,6 +437,34 @@ const ProgressionView = ({
                                         : 'locked';
                             const isCurrent = state === 'current';
                             const isLocked = state === 'locked';
+                            const levelEffects = getRogueliteLevelEffects(level, index, levels);
+                            const updateEffect = (effectIndex, patch) => {
+                                const nextEffects = levelEffects.map((effect, currentIndex) => (
+                                    currentIndex === effectIndex
+                                        ? normalizeRogueliteLevelEffect({ ...effect, ...patch }, currentIndex)
+                                        : normalizeRogueliteLevelEffect(effect, currentIndex)
+                                ));
+                                onUpdateLevel(index, 'effects', nextEffects);
+                            };
+                            const removeEffect = (effectIndex) => {
+                                onUpdateLevel(
+                                    index,
+                                    'effects',
+                                    levelEffects.filter((_, currentIndex) => currentIndex !== effectIndex),
+                                );
+                            };
+                            const addEffect = () => {
+                                onUpdateLevel(index, 'effects', [
+                                    ...levelEffects,
+                                    {
+                                        id: `effect-${levelNumber}-${Date.now()}`,
+                                        target: 'life.max',
+                                        operation: 'add',
+                                        value: 1,
+                                        label: '',
+                                    },
+                                ]);
+                            };
 
                             return (
                                 <article
@@ -329,11 +538,11 @@ const ProgressionView = ({
                                                         <EditableText
                                                             value={level.title}
                                                             onChange={(value) => onUpdateLevel(index, 'title', value)}
-                                                            className="font-['Cinzel'] text-lg font-semibold uppercase tracking-[0.08em] text-[#f0e6d2] sm:text-xl md:text-2xl"
+                                                            className="font-['Cinzel'] text-lg font-semibold uppercase leading-tight tracking-[0.08em] text-[#f0e6d2] sm:text-xl md:text-2xl"
                                                             placeholder={`Nivel ${levelNumber}`}
                                                         />
                                                     ) : (
-                                                        <h3 className={`font-['Cinzel'] text-lg font-semibold uppercase tracking-[0.08em] sm:text-xl md:text-2xl ${isLocked ? 'text-slate-500' : 'text-[#f0e6d2]'}`}>
+                                                        <h3 className={`font-['Cinzel'] text-lg font-semibold uppercase leading-tight tracking-[0.08em] sm:text-xl md:text-2xl ${isLocked ? 'text-slate-500' : 'text-[#f0e6d2]'}`}>
                                                             {level.title || `Nivel ${levelNumber}`}
                                                         </h3>
                                                     )}
@@ -346,7 +555,7 @@ const ProgressionView = ({
                                                 <button
                                                     type="button"
                                                     onClick={() => onRemoveLevel(index)}
-                                                    className="absolute right-4 top-4 flex h-8 w-8 touch-manipulation items-center justify-center border border-transparent text-slate-600 transition hover:border-rose-400/30 hover:bg-rose-400/5 hover:text-rose-400 active:bg-rose-400/10 sm:right-6 sm:top-5"
+                                                    className="absolute right-4 top-4 flex h-8 w-8 touch-manipulation items-center justify-center text-slate-600 transition hover:text-rose-400 active:text-rose-500 sm:right-6 sm:top-5"
                                                     aria-label={`Eliminar nivel ${levelNumber}`}
                                                     title="Eliminar nivel"
                                                 >
@@ -354,51 +563,60 @@ const ProgressionView = ({
                                                 </button>
                                             )}
 
-                                            <div className="mt-2.5 max-w-4xl">
+                                            <div className="mt-1.5 max-w-4xl">
                                                 {editorMode ? (
                                                     <EditableText
                                                         value={level.description}
                                                         onChange={(value) => onUpdateLevel(index, 'description', value)}
                                                         multiline
-                                                        className="text-sm leading-6 text-slate-400 sm:text-[15px]"
+                                                        className="text-sm leading-relaxed text-slate-400 sm:text-[15px]"
                                                         placeholder="Describe el beneficio que se obtiene al alcanzar este nivel."
                                                     />
                                                 ) : (
-                                                    <p className={`text-sm leading-6 sm:text-[15px] ${isLocked ? 'text-slate-600' : 'text-slate-400'}`}>
+                                                    <p className={`text-sm leading-relaxed sm:text-[15px] ${isLocked ? 'text-slate-600' : 'text-slate-400'}`}>
                                                         {level.description || 'Beneficio pendiente de definir por el máster.'}
                                                     </p>
                                                 )}
                                             </div>
 
-                                            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 sm:gap-x-7">
-                                                <LevelMetric
-                                                    icon={Heart}
-                                                    label="Vida"
-                                                    tone="life"
-                                                    value={level.maxLife}
-                                                    editable={editorMode}
-                                                    isLocked={isLocked}
-                                                    onChange={(value) => onUpdateLevel(index, 'maxLife', value)}
-                                                />
-                                                <LevelMetric
-                                                    icon={Footprints}
-                                                    label="Movimiento"
-                                                    tone="movement"
-                                                    value={level.movement}
-                                                    editable={editorMode}
-                                                    isLocked={isLocked}
-                                                    onChange={(value) => onUpdateLevel(index, 'movement', value)}
-                                                />
-                                                <LevelMetric
-                                                    icon={Sparkles}
-                                                    label={`${resourceName} máx.`}
-                                                    tone="resource"
-                                                    value={level.resourceMaximum}
-                                                    editable={editorMode}
-                                                    isLocked={isLocked}
-                                                    onChange={(value) => onUpdateLevel(index, 'resourceMaximum', value)}
-                                                />
-                                            </div>
+                                            {editorMode ? (
+                                                <div className="mt-4 space-y-2" data-level-effects={levelNumber}>
+                                                    {levelEffects.map((effect, effectIndex) => (
+                                                        <LevelEffectEditor
+                                                            key={effect.id || `${effect.target}-${effectIndex}`}
+                                                            effect={effect}
+                                                            effectIndex={effectIndex}
+                                                            levelNumber={levelNumber}
+                                                            resourceName={resourceName}
+                                                            resourceColor={resourceColor}
+                                                            onResourceColorChange={onResourceColorChange}
+                                                            onChange={(patch) => updateEffect(effectIndex, patch)}
+                                                            onRemove={() => removeEffect(effectIndex)}
+                                                        />
+                                                    ))}
+                                                    <button
+                                                        type="button"
+                                                        onClick={addEffect}
+                                                        className="inline-flex h-8 items-center gap-2 border border-[#c8aa6e]/25 px-3 font-['Cinzel'] text-[9px] font-bold uppercase tracking-[0.14em] text-[#c8aa6e]/75 transition hover:border-[#c8aa6e]/55 hover:text-[#e2d5b5]"
+                                                        aria-label={`Añadir mejora al nivel ${levelNumber}`}
+                                                    >
+                                                        <FiPlus className="h-3.5 w-3.5" />
+                                                        Añadir mejora
+                                                    </button>
+                                                </div>
+                                            ) : levelEffects.length > 0 ? (
+                                                <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3 sm:gap-x-8" data-level-effects={levelNumber}>
+                                                    {levelEffects.map((effect, effectIndex) => (
+                                                        <LevelEffect
+                                                            key={effect.id || `${effect.target}-${effectIndex}`}
+                                                            effect={effect}
+                                                            resourceName={resourceName}
+                                                            resourceColor={resourceColor}
+                                                            isLocked={isLocked}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            ) : null}
                                         </div>
                                     </div>
                                 </article>
@@ -429,13 +647,28 @@ EditableText.propTypes = {
     placeholder: PropTypes.string,
 };
 
-LevelMetric.propTypes = {
-    icon: PropTypes.elementType.isRequired,
+LevelEffect.propTypes = {
+    effect: PropTypes.object.isRequired,
+    resourceName: PropTypes.string.isRequired,
+    resourceColor: PropTypes.string.isRequired,
+    isLocked: PropTypes.bool,
+};
+
+EffectColorControl.propTypes = {
+    color: PropTypes.string.isRequired,
     label: PropTypes.string.isRequired,
-    value: PropTypes.number,
-    editable: PropTypes.bool.isRequired,
     onChange: PropTypes.func.isRequired,
-    tone: PropTypes.oneOf(['life', 'movement', 'resource']).isRequired,
+};
+
+LevelEffectEditor.propTypes = {
+    effect: PropTypes.object.isRequired,
+    effectIndex: PropTypes.number.isRequired,
+    levelNumber: PropTypes.number.isRequired,
+    resourceName: PropTypes.string.isRequired,
+    resourceColor: PropTypes.string.isRequired,
+    onResourceColorChange: PropTypes.func.isRequired,
+    onChange: PropTypes.func.isRequired,
+    onRemove: PropTypes.func.isRequired,
 };
 
 LevelStatus.propTypes = {
@@ -446,21 +679,23 @@ ProgressionView.propTypes = {
     dndClass: PropTypes.shape({
         level: PropTypes.number,
         classLevels: PropTypes.array,
-        resource: PropTypes.shape({ name: PropTypes.string }),
+        resource: PropTypes.shape({ name: PropTypes.string, color: PropTypes.string }),
         roguelite: PropTypes.shape({
-            resource: PropTypes.shape({ name: PropTypes.string }),
+            resource: PropTypes.shape({ name: PropTypes.string, color: PropTypes.string }),
         }),
     }).isRequired,
     readOnly: PropTypes.bool,
     onUpdateLevel: PropTypes.func,
     onAddLevel: PropTypes.func,
     onRemoveLevel: PropTypes.func,
+    onResourceColorChange: PropTypes.func,
 };
 
 ProgressionView.defaultProps = {
     onUpdateLevel: () => {},
     onAddLevel: () => {},
     onRemoveLevel: () => {},
+    onResourceColorChange: () => {},
 };
 
 export default ProgressionView;

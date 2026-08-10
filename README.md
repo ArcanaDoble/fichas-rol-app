@@ -88,6 +88,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Barajas en el tablero de cartas**: en encuentros de tablero, la biblioteca de cartas muestra las barajas normales disponibles para Master o jugador. Al seleccionarlas se crea un tablero con el nombre de la baraja y sus cartas distribuidas con holgura, manteniendo el orden original para poder moverlas juntas y reorganizarlas luego en mesa.
 - **Ocultación de cartas dentro de tableros**: el Master puede marcar un tablero de cartas desde el inspector para que los jugadores vean solo el tablero, sin revelar las cartas contenidas ni sus posiciones hasta que se saquen o se elimine el tablero.
 - **Ajustes de trampa y armadura en cartas**: las trampas y armaduras amplían el cuadro de texto al ocultar sus rasgos, y las armaduras usan ranuras específicas sin selector de consumo/elemento.
+- **Borrado visual de barajas y colecciones**: eliminar una baraja o colección base abre un aviso personalizado con la misma estética del borrado de cartas base.
+- **Barajas en el tablero de cartas**: en encuentros de tablero, la biblioteca de cartas muestra las barajas normales disponibles para Master o jugador. Al seleccionarlas se crea un tablero con el nombre de la baraja y sus cartas distribuidas con holgura, manteniendo el orden original para poder moverlas juntas y reorganizarlas luego en mesa.
+- **Ocultación de cartas dentro de tableros**: el Master puede marcar un tablero de cartas desde el inspector para que los jugadores vean solo el tablero, sin revelar las cartas contenidas ni sus posiciones hasta que se saquen o se elimine el tablero.
+- **Ajustes de trampa y armadura en cartas**: las trampas y armaduras amplían el cuadro de texto al ocultar sus rasgos, y las armaduras usan ranuras específicas sin selector de consumo/elemento.
 - **Separación de reglas y lore en cartas**: el cuadro de texto permite insertar separadores con `---` y marcar bloques narrativos con `[lore]...[/lore]`, con botones directos en la barra de formato del editor.
 - **Cartas de Minion**: el antiguo tipo `Habilidad` del constructor pasa a `Minion`, con dado, cantidad, alcance/regla, tipo de arma, una fila superior de atributos `Hambre`, `Cuerpo` y `Mente` con iconos y valores editables, y hasta 4 rasgos en las dos filas inferiores.
 - **Descripciones auto en cartas modulares**: cuando varias descripciones comparten el tramo final de la carta, el render reparte el alto disponible entre los contenedores para evitar cortes prematuros y aprovechar el espacio restante; los valores manuales de espacio actúan como reserva mínima, no como una caja rígida si todavía queda cuerpo libre.
@@ -95,13 +99,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Rendimiento del constructor de cartas**: el canvas agrupa redibujos rápidos, reutiliza cargas de imágenes en curso, precarga recursos comunes en segundo plano y usa una previsualización interna más ligera en móvil sin perder resolución al exportar.
 - **Edición directa de todos los campos**: haz clic en título, subtítulo, descripción, etiquetas, reglas o listas para actualizar la clase y guarda los cambios con un solo botón.
 - **Hitos con seguimiento**: marca la inspiración completada mediante checks persistentes y resaltados que mantienen el estilo luminiscente del panel.
-- **Rediseño Estético de Controles de Estadísticas (Fichas del Máster)**: Cápsula compacta para el límite máximo en cristal oscuro y acento dorado Cinzel. Los valores actuales (Vida, CD, Movimiento, Iniciativa, Recurso) se fijan pulsando o haciendo clic directamente sobre los segmentos rúnicos en escritorio y móvil.
-- **Selector de Colores de Recurso & Rediseño Estético de Progresión por Nivel**: Incorporación de esferas de color ("bolitas") con presets y selector HEX personalizado para la barra de recursos de clase. Rediseño de las métricas de incremento por nivel en disposición vertical adaptable y nuevo **icono de nivel rúnico** con anillo dorado abierto y checkmark de desbloqueo verde integrado.
-- **Iconografía de Dados de Acción Actualizada**: Sustitución completa de las ilustraciones de dados (`D4`, `D6`, `D8`, `D10`, `D12`, `DX`) por los nuevos recursos gráficos de alta resolución con transparencia optimizada tanto en fichas de clase como de jugador.
-- **Niveles de clase dinámicos**: controla el número de niveles con un deslizador configurable desde 0 en adelante y edita cada hito de progreso en línea.
-- **Equipación categorizada**: arma, armadura y habilidad cuentan con formularios propios y una vista previa sincronizada que refleja de inmediato los datos introducidos.
-- **Recorte de retratos mejorado** con mayor rango de zoom para ajustar imágenes verticales sin perder la estética de las cartas.
-- **Cartas de equipación enriquecidas** con estadísticas clave (daño, consumos, cargas, rasgos) resaltadas como palabras de poder enlazadas al glosario y paneles teñidos automáticamente según la rareza configurada.
+- **Rediseño Responsivo de Progresión por Nivel**: Optimización completa del editor de mejoramiento de nivel para másters y jugadores. Alineación milimétrica al píxel en PC para que el borde del campo de mejora personalizada iguale a los botones de steppers de las filas superiores, y maquetación adaptativa fluida sin desbordamientos ni deformaciones en teléfonos móviles.
 - **Ficha de configuración responsiva** que aprovecha todo el ancho disponible, evita recortes en pantallas ultrapanorámicas, ajusta el retrato a un ancho máximo seguro y mantiene contenedores desplazables dentro de cada bloque para conservar el layout compacto.
 - **Seguimiento de niveles completados** mediante casillas activables por nivel con resaltado esmeralda que conservan el progreso dentro de la ficha.
 - **Vista previa de equipación refinada** con iconos automáticos para consumos y cargas, categorías saneadas y paneles de rareza que conservan el efecto hover incluso en armas especiales.
@@ -1601,9 +1599,22 @@ firebase deploy    # Despliega a Firebase Hosting
   editar, añadir o eliminar niveles desde la misma vista; el catálogo global
   sincroniza esos cambios con todas las copias desbloqueadas.
 - La vista de Progresión presenta cada nivel como un hito vertical con marco
-  biselado, emblema circular y estado de obtención. Vida, Movimiento y recurso
-  quedan integrados como lecturas compactas y con color semántico, manteniendo
-  los controles directos exclusivamente para el máster.
+  biselado, emblema circular y estado de obtención. Los niveles usan una lista
+  flexible de efectos: Vida máxima, CD, Movimiento, Iniciativa, recurso de
+  clase o una mejora personalizada. Cada efecto puede sumar una cantidad o
+  fijar un valor; si un nivel no modifica estadísticas, no muestra filas vacías.
+  Las progresiones antiguas se convierten automáticamente comparando cada
+  nivel con el anterior.
+- El editor de cada efecto usa una composición compacta y estable: selector,
+  operación, valor y eliminación conservan su posición en escritorio, mientras
+  que en móvil se distribuyen en filas táctiles sin solaparse. El color del
+  recurso se puede modificar también desde Progresión y se comparte con su
+  barra del Resumen; las mejoras personalizadas pueden guardar un color propio.
+- La pantalla de Usuarios permite gestionar el nivel de cada combinación de
+  jugador y clase desbloqueada. Antes de subir o bajar muestra el hito afectado
+  y sus efectos; al confirmar solo escribe `level` en
+  `players/{playerId}/rogueliteClasses/{classId}`, sin alterar la definición
+  global ni las demás clases del mismo perfil.
 - El `Resumen` de la biblioteca del máster comparte el esquema Roguelite del
   jugador: tres dados de acción y barras para Vida, CD, Movimiento, Iniciativa
   y recurso de clase. En esta variante el máster conserva la edición de texto,
@@ -1615,13 +1626,10 @@ firebase deploy    # Despliega a Firebase Hosting
   `resource.initial/resource.maximum`. El máster los ajusta con un control
   compacto integrado en la cabecera de cada barra; las definiciones antiguas
   adoptan su valor existente como máximo para conservar compatibilidad.
-- Los valores numéricos editables usan `NumberStepper`, con objetivos táctiles
-  de 40 px y botones propios de incremento y reducción. Vida, Movimiento y
-  recurso se distinguen mediante acentos degradados discretos en carmesí, azul
-  verdoso y violeta, pero sus indicadores no se estiran para rellenar la fila:
-  miden 152 px en la vista del jugador y 176 px en el editor del máster, con
-  altura basada en contenido y envoltura automática. La acción de eliminar
-  permanece anclada arriba a la derecha y no desplaza el título.
+- Los efectos alcanzados se acumulan sobre los máximos base al construir la
+  ficha personal. El nombre del recurso se obtiene de cada clase —Furia, Maná
+  u otro— y nunca está codificado en la progresión. El estado actual de la
+  ficha no se cura automáticamente al aumentar un máximo.
 - Esta primera fase no conecta todavía el botón de aventura con Canvas ni
   modifica el combate o el BoardSection.
 

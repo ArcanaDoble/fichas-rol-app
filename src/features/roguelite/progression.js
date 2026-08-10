@@ -6,10 +6,101 @@ const normalizeName = (value) => String(value || '')
 
 const cloneLevels = (levels) => levels.map((level) => ({
   ...level,
+  effects: Array.isArray(level.effects)
+    ? level.effects.map((effect) => ({ ...effect }))
+    : undefined,
   additionalFeatures: Array.isArray(level.additionalFeatures)
     ? level.additionalFeatures.map((feature) => ({ ...feature }))
     : [],
 }));
+
+export const ROGUELITE_LEVEL_EFFECT_TARGETS = Object.freeze([
+  { key: 'life.max', label: 'Vida máxima', tone: 'life' },
+  { key: 'defense.max', label: 'CD máxima', tone: 'defense' },
+  { key: 'movement.max', label: 'Movimiento', tone: 'movement' },
+  { key: 'initiative.max', label: 'Iniciativa', tone: 'initiative' },
+  { key: 'resource.max', label: 'Recurso máximo', tone: 'resource' },
+  { key: 'custom', label: 'Mejora personalizada', tone: 'custom' },
+]);
+
+const EFFECT_TARGET_KEYS = new Set(ROGUELITE_LEVEL_EFFECT_TARGETS.map(({ key }) => key));
+
+const normalizeEffectOperation = (value) => (value === 'set' ? 'set' : 'add');
+
+const normalizeEffectColor = (value) => {
+  const color = String(value || '').trim();
+  return /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : '';
+};
+
+export const normalizeRogueliteLevelEffect = (effect, index = 0) => {
+  const source = effect && typeof effect === 'object' ? effect : {};
+  const target = EFFECT_TARGET_KEYS.has(source.target) ? source.target : 'custom';
+  const parsedValue = Number(source.value);
+
+  return {
+    id: String(source.id || `effect-${index + 1}`),
+    target,
+    operation: normalizeEffectOperation(source.operation),
+    value: Number.isFinite(parsedValue) ? parsedValue : 0,
+    label: target === 'custom' ? String(source.label || 'Nueva mejora') : '',
+    color: target === 'custom' ? normalizeEffectColor(source.color) : '',
+  };
+};
+
+const LEGACY_EFFECT_FIELDS = Object.freeze([
+  { field: 'maxLife', target: 'life.max' },
+  { field: 'defenseClass', target: 'defense.max' },
+  { field: 'movement', target: 'movement.max' },
+  { field: 'initiative', target: 'initiative.max' },
+  { field: 'resourceMaximum', target: 'resource.max' },
+]);
+
+const deriveLegacyEffects = (level, index, levels) => {
+  if (index <= 0 || !Array.isArray(levels)) return [];
+  const previousLevel = levels[index - 1] || {};
+
+  return LEGACY_EFFECT_FIELDS.flatMap(({ field, target }) => {
+    const currentValue = toOptionalNumber(level?.[field]);
+    const previousValue = toOptionalNumber(previousLevel?.[field]);
+    if (currentValue === null || previousValue === null || currentValue === previousValue) return [];
+
+    return [{
+      id: `legacy-${target.replace('.', '-')}`,
+      target,
+      operation: 'add',
+      value: currentValue - previousValue,
+      label: '',
+    }];
+  });
+};
+
+export const getRogueliteLevelEffects = (level, index = 0, levels = []) => {
+  if (Array.isArray(level?.effects)) {
+    return level.effects.map(normalizeRogueliteLevelEffect);
+  }
+  return deriveLegacyEffects(level, index, levels).map(normalizeRogueliteLevelEffect);
+};
+
+export const getRogueliteEffectDefinition = (target) => (
+  ROGUELITE_LEVEL_EFFECT_TARGETS.find((definition) => definition.key === target)
+  || ROGUELITE_LEVEL_EFFECT_TARGETS.at(-1)
+);
+
+export const getRogueliteEffectLabel = (effect, resourceName = 'Recurso') => {
+  const normalized = normalizeRogueliteLevelEffect(effect);
+  if (normalized.target === 'resource.max') return `${resourceName} máximo`;
+  if (normalized.target === 'custom') return normalized.label || 'Mejora personalizada';
+  return getRogueliteEffectDefinition(normalized.target).label;
+};
+
+export const describeRogueliteLevelEffect = (effect, resourceName = 'Recurso') => {
+  const normalized = normalizeRogueliteLevelEffect(effect);
+  const label = getRogueliteEffectLabel(normalized, resourceName);
+  const value = normalized.operation === 'set'
+    ? `se fija en ${normalized.value}`
+    : `${normalized.value >= 0 ? '+' : ''}${normalized.value}`;
+  return `${label}: ${value}`;
+};
 
 export const DOCUMENTED_BARBARIAN_LEVELS = Object.freeze([
   {
@@ -95,7 +186,7 @@ const toOptionalNumber = (value) => {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : null;
 };
 
-export const normalizeRogueliteProgressionLevel = (level, index) => {
+export const normalizeRogueliteProgressionLevel = (level, index, levels = []) => {
   const source = level && typeof level === 'object'
     ? level
     : { description: String(level || '') };
@@ -109,6 +200,7 @@ export const normalizeRogueliteProgressionLevel = (level, index) => {
     resourceMaximum: toOptionalNumber(
       source.resourceMaximum ?? source.resourceMax ?? source.furiaMaxima,
     ),
+    effects: getRogueliteLevelEffects(source, index, levels),
     completed: Boolean(source.completed),
     acquired: Boolean(source.acquired),
     additionalFeatures: Array.isArray(source.additionalFeatures)
@@ -131,6 +223,59 @@ export const resolveRogueliteClassLevels = (classItem = {}) => {
     ? documentedLevels
     : (Array.isArray(explicitLevels) ? explicitLevels : []);
 
-  return cloneLevels(sourceLevels).map(normalizeRogueliteProgressionLevel);
+  const clonedLevels = cloneLevels(sourceLevels);
+  return clonedLevels.map((level, index) => (
+    normalizeRogueliteProgressionLevel(level, index, clonedLevels)
+  ));
 };
 
+const applyNumericEffect = (currentValue, effect) => {
+  const base = Number(currentValue) || 0;
+  return effect.operation === 'set' ? effect.value : base + effect.value;
+};
+
+export const applyRogueliteLevelEffects = (classDefinition = {}, level = 1) => {
+  const levels = Array.isArray(classDefinition.classLevels) ? classDefinition.classLevels : [];
+  const maximumLevel = Math.max(1, levels.length || 1);
+  const resolvedLevel = Math.min(maximumLevel, Math.max(1, Math.trunc(Number(level) || 1)));
+  const result = {
+    maxLife: Number(classDefinition.maxLife ?? classDefinition.roguelite?.maxLife) || 0,
+    maxDefenseClass: Number(
+      classDefinition.maxDefenseClass
+      ?? classDefinition.defenseClass
+      ?? classDefinition.roguelite?.maxDefenseClass
+      ?? classDefinition.roguelite?.defenseClass,
+    ) || 0,
+    maxMovement: Number(
+      classDefinition.maxMovement
+      ?? classDefinition.movement
+      ?? classDefinition.roguelite?.maxMovement
+      ?? classDefinition.roguelite?.movement,
+    ) || 0,
+    maxInitiative: Number(
+      classDefinition.maxInitiative
+      ?? classDefinition.initiativeBase
+      ?? classDefinition.roguelite?.maxInitiative
+      ?? classDefinition.roguelite?.initiativeBase,
+    ) || 0,
+    resource: {
+      ...(classDefinition.roguelite?.resource || {}),
+      ...(classDefinition.resource || {}),
+    },
+  };
+
+  levels.slice(0, resolvedLevel).forEach((progressionLevel, index) => {
+    getRogueliteLevelEffects(progressionLevel, index, levels).forEach((rawEffect) => {
+      const effect = normalizeRogueliteLevelEffect(rawEffect);
+      if (effect.target === 'life.max') result.maxLife = applyNumericEffect(result.maxLife, effect);
+      if (effect.target === 'defense.max') result.maxDefenseClass = applyNumericEffect(result.maxDefenseClass, effect);
+      if (effect.target === 'movement.max') result.maxMovement = applyNumericEffect(result.maxMovement, effect);
+      if (effect.target === 'initiative.max') result.maxInitiative = applyNumericEffect(result.maxInitiative, effect);
+      if (effect.target === 'resource.max') {
+        result.resource.maximum = applyNumericEffect(result.resource.maximum, effect);
+      }
+    });
+  });
+
+  return result;
+};

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { motion } from 'framer-motion';
-import { FiSearch, FiUser, FiCalendar, FiPlus, FiKey, FiTrash2, FiCompass, FiCheck } from 'react-icons/fi';
+import { FiSearch, FiUser, FiCalendar, FiPlus, FiMinus, FiKey, FiTrash2, FiCompass, FiCheck } from 'react-icons/fi';
 import Boton from './Boton';
 import Modal from './Modal';
 import { deleteDoc } from 'firebase/firestore';
@@ -13,6 +13,18 @@ import {
     withRogueliteAccess,
 } from '../features/roguelite/access';
 import { mergeRogueliteClassCatalogs } from '../features/roguelite/classDefinition';
+import { normalizeRogueliteProfileLevel } from '../features/roguelite/profileClass';
+import {
+    describeRogueliteLevelEffect,
+    getRogueliteLevelEffects,
+} from '../features/roguelite/progression';
+
+const getProfileClassKey = (playerId, classId) => `${playerId}::${classId}`;
+
+const getClassMaximumLevel = (classItem) => Math.max(
+    1,
+    Array.isArray(classItem?.classLevels) ? classItem.classLevels.length : 10,
+);
 
 const UsersView = ({ onBack }) => {
     const [players, setPlayers] = useState([]);
@@ -20,6 +32,9 @@ const UsersView = ({ onBack }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [rogueliteClasses, setRogueliteClasses] = useState([]);
     const [rogueliteClassesLoading, setRogueliteClassesLoading] = useState(true);
+    const [rogueliteProfileLevels, setRogueliteProfileLevels] = useState({});
+    const [pendingLevelChange, setPendingLevelChange] = useState(null);
+    const [savingProfileLevel, setSavingProfileLevel] = useState('');
 
     const [isCreating, setIsCreating] = useState(false);
     const [editingPasswordFor, setEditingPasswordFor] = useState(null);
@@ -39,6 +54,25 @@ const UsersView = ({ onBack }) => {
                     };
                 });
                 setPlayers(data);
+
+                const profileLevelEntries = await Promise.all(data.map(async (player) => {
+                    try {
+                        const profileSnapshot = await getDocs(collection(
+                            db,
+                            'players',
+                            player.id,
+                            'rogueliteClasses',
+                        ));
+                        return profileSnapshot.docs.map((profileDoc) => [
+                            getProfileClassKey(player.id, profileDoc.id),
+                            normalizeRogueliteProfileLevel(profileDoc.data()?.level),
+                        ]);
+                    } catch (profileError) {
+                        console.error(`Error fetching roguelite levels for ${player.id}:`, profileError);
+                        return [];
+                    }
+                }));
+                setRogueliteProfileLevels(Object.fromEntries(profileLevelEntries.flat()));
             } catch (error) {
                 console.error("Error fetching players:", error);
             } finally {
@@ -259,6 +293,72 @@ const UsersView = ({ onBack }) => {
         persistRogueliteAccess(player, setRogueliteEnabled(player, !currentAccess.enabled));
     };
 
+    const requestProfileLevelChange = (player, classItem, direction) => {
+        const profileKey = getProfileClassKey(player.id, classItem.id);
+        const maximumLevel = getClassMaximumLevel(classItem);
+        const currentLevel = normalizeRogueliteProfileLevel(
+            rogueliteProfileLevels[profileKey] ?? 1,
+            maximumLevel,
+        );
+        const nextLevel = Math.min(maximumLevel, Math.max(1, currentLevel + direction));
+        if (nextLevel === currentLevel) return;
+
+        const changedLevelNumber = direction > 0 ? nextLevel : currentLevel;
+        const changedLevel = classItem.classLevels?.[changedLevelNumber - 1] || {};
+        const resourceName = classItem.resource?.name
+            || classItem.roguelite?.resource?.name
+            || 'Recurso';
+
+        setPendingLevelChange({
+            profileKey,
+            playerId: player.id,
+            playerName: player.name || player.id,
+            classId: classItem.id,
+            className: classItem.name || 'Clase',
+            currentLevel,
+            nextLevel,
+            direction,
+            changedLevelTitle: changedLevel.title || `Nivel ${changedLevelNumber}`,
+            effectDescriptions: getRogueliteLevelEffects(
+                changedLevel,
+                changedLevelNumber - 1,
+                classItem.classLevels || [],
+            ).map((effect) => describeRogueliteLevelEffect(effect, resourceName)),
+        });
+    };
+
+    const confirmProfileLevelChange = async () => {
+        if (!pendingLevelChange) return;
+        const change = pendingLevelChange;
+        setSavingProfileLevel(change.profileKey);
+
+        try {
+            await setDoc(doc(
+                db,
+                'players',
+                change.playerId,
+                'rogueliteClasses',
+                change.classId,
+            ), {
+                id: change.classId,
+                templateId: change.classId,
+                owner: change.playerId,
+                profileType: 'rogueliteClass',
+                level: change.nextLevel,
+            }, { merge: true });
+            setRogueliteProfileLevels((currentLevels) => ({
+                ...currentLevels,
+                [change.profileKey]: change.nextLevel,
+            }));
+            setPendingLevelChange(null);
+        } catch (error) {
+            console.error('Error updating personal roguelite level:', error);
+            alert('No se pudo actualizar el nivel de esta clase.');
+        } finally {
+            setSavingProfileLevel('');
+        }
+    };
+
     const handleRogueliteClassToggle = (player, classId) => {
         persistRogueliteAccess(player, toggleRogueliteClass(player, classId));
     };
@@ -463,23 +563,111 @@ const UsersView = ({ onBack }) => {
                                                             Aún no hay clases creadas en la Lista de Clases.
                                                         </p>
                                                     ) : (
-                                                        <div className="flex flex-wrap gap-1.5">
+                                                        <div className="divide-y divide-slate-800/80 border-y border-slate-800/80">
                                                             {rogueliteClasses.map((classItem) => {
                                                                 const isUnlocked = normalizeRogueliteAccess(player).unlockedClassIds.includes(classItem.id);
+                                                                const profileKey = getProfileClassKey(player.id, classItem.id);
+                                                                const maximumLevel = getClassMaximumLevel(classItem);
+                                                                const currentLevel = normalizeRogueliteProfileLevel(
+                                                                    rogueliteProfileLevels[profileKey] ?? 1,
+                                                                    maximumLevel,
+                                                                );
+                                                                const nextLevel = classItem.classLevels?.[currentLevel];
+                                                                const isSaving = savingProfileLevel === profileKey;
+                                                                const isConfirming = pendingLevelChange?.profileKey === profileKey;
                                                                 return (
-                                                                    <button
-                                                                        type="button"
-                                                                        key={classItem.id}
-                                                                        onClick={() => handleRogueliteClassToggle(player, classItem.id)}
-                                                                        aria-pressed={isUnlocked}
-                                                                        className={`rounded border px-2 py-1 font-['Cinzel'] text-[10px] font-bold transition-colors ${isUnlocked
-                                                                            ? 'border-[#c8aa6e]/50 bg-[#c8aa6e]/15 text-[#e7cf9a]'
-                                                                            : 'border-slate-700 bg-slate-900/50 text-slate-500 hover:border-[#c8aa6e]/30 hover:text-slate-300'
-                                                                            }`}
-                                                                    >
-                                                                        {isUnlocked && <FiCheck className="mr-1 inline h-3 w-3" />}
-                                                                        {classItem.name}
-                                                                    </button>
+                                                                    <div key={classItem.id} className="py-2" data-player-class={profileKey}>
+                                                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => handleRogueliteClassToggle(player, classItem.id)}
+                                                                                aria-pressed={isUnlocked}
+                                                                                className={`flex min-h-9 min-w-0 items-center gap-2 border-l-2 px-2 text-left font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.1em] transition-colors ${isUnlocked
+                                                                                    ? 'border-l-[#c8aa6e] text-[#e7cf9a]'
+                                                                                    : 'border-l-slate-700 text-slate-500 hover:border-l-[#c8aa6e]/50 hover:text-slate-300'
+                                                                                    }`}
+                                                                            >
+                                                                                <span className={`flex h-4 w-4 shrink-0 items-center justify-center border ${isUnlocked ? 'border-[#c8aa6e]/60 text-[#c8aa6e]' : 'border-slate-700 text-transparent'}`}>
+                                                                                    <FiCheck className="h-3 w-3" />
+                                                                                </span>
+                                                                                <span className="truncate">{classItem.name}</span>
+                                                                            </button>
+
+                                                                            {isUnlocked && (
+                                                                                <div
+                                                                                    className="flex h-10 shrink-0 items-stretch border border-[#c8aa6e]/20 bg-[#080c17]"
+                                                                                    aria-label={`Nivel de ${classItem.name} para ${player.name || player.id}`}
+                                                                                >
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => requestProfileLevelChange(player, classItem, -1)}
+                                                                                        disabled={currentLevel <= 1 || isSaving}
+                                                                                        className="flex w-10 touch-manipulation items-center justify-center border-r border-[#c8aa6e]/15 text-slate-500 transition hover:text-[#c8aa6e] disabled:cursor-not-allowed disabled:opacity-20"
+                                                                                        aria-label={`Bajar ${classItem.name} de ${player.name || player.id} al nivel ${Math.max(1, currentLevel - 1)}`}
+                                                                                    >
+                                                                                        <FiMinus className="h-3.5 w-3.5" />
+                                                                                    </button>
+                                                                                    <div className="flex min-w-[76px] flex-col items-center justify-center px-2 leading-none">
+                                                                                        <span className="font-['Cinzel'] text-[8px] font-bold uppercase tracking-[0.16em] text-slate-600">Nivel</span>
+                                                                                        <span className="mt-1 font-mono text-xs font-bold text-[#e2d5b5]">{currentLevel} / {maximumLevel}</span>
+                                                                                    </div>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => requestProfileLevelChange(player, classItem, 1)}
+                                                                                        disabled={currentLevel >= maximumLevel || isSaving}
+                                                                                        className="flex w-10 touch-manipulation items-center justify-center border-l border-[#c8aa6e]/15 text-[#9b8556] transition hover:bg-[#c8aa6e]/5 hover:text-[#e2d5b5] disabled:cursor-not-allowed disabled:opacity-20"
+                                                                                        aria-label={`Subir ${classItem.name} de ${player.name || player.id} al nivel ${Math.min(maximumLevel, currentLevel + 1)}`}
+                                                                                    >
+                                                                                        <FiPlus className="h-3.5 w-3.5" />
+                                                                                    </button>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {isUnlocked && nextLevel && !isConfirming && (
+                                                                            <p className="mt-1 pl-8 text-[10px] leading-relaxed text-slate-600">
+                                                                                Próximo: <span className="text-slate-400">{nextLevel.title || `Nivel ${currentLevel + 1}`}</span>
+                                                                            </p>
+                                                                        )}
+
+                                                                        {isUnlocked && isConfirming && (
+                                                                            <div className="mt-2 border-l-2 border-[#c8aa6e]/55 bg-[#0d1422] px-3 py-2.5" data-level-confirmation={profileKey}>
+                                                                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                                                                    <div className="min-w-0 flex-1">
+                                                                                        <p className="font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.12em] text-[#e2d5b5]">
+                                                                                            {pendingLevelChange.direction > 0 ? 'Subir de nivel' : 'Bajar de nivel'} · {pendingLevelChange.currentLevel} → {pendingLevelChange.nextLevel}
+                                                                                        </p>
+                                                                                        <p className="mt-1 text-[10px] text-slate-500">{pendingLevelChange.changedLevelTitle}</p>
+                                                                                        {pendingLevelChange.effectDescriptions.length > 0 && (
+                                                                                            <ul className="mt-1.5 space-y-0.5 text-[10px] text-[#c8aa6e]/75">
+                                                                                                {pendingLevelChange.effectDescriptions.map((description) => (
+                                                                                                    <li key={description}>{pendingLevelChange.direction > 0 ? '+' : '−'} {description}</li>
+                                                                                                ))}
+                                                                                            </ul>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <div className="flex shrink-0 gap-2">
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => setPendingLevelChange(null)}
+                                                                                            disabled={isSaving}
+                                                                                            className="h-9 border border-slate-700 px-3 font-['Cinzel'] text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500 transition hover:text-slate-300 disabled:opacity-40"
+                                                                                        >
+                                                                                            Cancelar
+                                                                                        </button>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={confirmProfileLevelChange}
+                                                                                            disabled={isSaving}
+                                                                                            className="h-9 border border-[#c8aa6e]/45 px-3 font-['Cinzel'] text-[9px] font-bold uppercase tracking-[0.12em] text-[#c8aa6e] transition hover:bg-[#c8aa6e]/10 hover:text-[#f0e6d2] disabled:opacity-40"
+                                                                                        >
+                                                                                            {isSaving ? 'Guardando…' : 'Confirmar'}
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
                                                                 );
                                                             })}
                                                         </div>

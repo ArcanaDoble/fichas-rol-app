@@ -14,7 +14,10 @@ const normalizeDice = (value) => {
 
 export const normalizeRogueliteClass = (classItem = {}) => {
   const rules = classItem.roguelite || classItem.ruleset || {};
-  const resource = rules.resource || classItem.resource || {};
+  const resource = {
+    ...(classItem.resource || {}),
+    ...(rules.resource || {}),
+  };
   const maxLife = Math.max(0, toNumber(rules.maxLife ?? classItem.maxLife, 0));
   const lifeInitial = Math.min(
     maxLife,

@@ -1,3 +1,5 @@
+import { applyRogueliteLevelEffects } from './progression';
+
 const DEFAULT_ATTRIBUTES = Object.freeze({
   destreza: 'd4',
   vigor: 'd4',
@@ -74,6 +76,11 @@ export const createRogueliteProfileClass = (
   const profileClass = hasStoredConfiguration
     ? { ...cleanConfiguration, ...clone(storedConfiguration) }
     : cleanConfiguration;
+  const maximumLevel = definition.rogueliteProgressionConfigured
+    ? Math.max(1, definition.classLevels?.length || 0)
+    : Math.max(10, definition.classLevels?.length || 0);
+  const resolvedLevel = normalizeRogueliteProfileLevel(profileClass.level, maximumLevel);
+  const progressionStats = applyRogueliteLevelEffects(definition, resolvedLevel);
 
   return {
     ...profileClass,
@@ -85,23 +92,20 @@ export const createRogueliteProfileClass = (
     portraitSource: definition.portraitSource,
     actionDice: clone(definition.actionDice || []),
     lifeInitial: definition.lifeInitial,
-    maxLife: definition.maxLife,
+    maxLife: progressionStats.maxLife,
     defenseClass: definition.defenseClass,
-    maxDefenseClass: definition.maxDefenseClass,
+    maxDefenseClass: progressionStats.maxDefenseClass,
     movement: definition.movement,
-    maxMovement: definition.maxMovement,
+    maxMovement: progressionStats.maxMovement,
     initiativeBase: definition.initiativeBase,
-    maxInitiative: definition.maxInitiative,
-    resource: clone(definition.resource || {}),
+    maxInitiative: progressionStats.maxInitiative,
+    resource: clone(progressionStats.resource),
     classLevels: resetProgression(definition.classLevels),
     rogueliteProgressionConfigured: Boolean(definition.rogueliteProgressionConfigured),
     id: definition.id,
     templateId: definition.id,
     owner: playerName,
     profileType: 'rogueliteClass',
-    level: normalizeRogueliteProfileLevel(
-      profileClass.level,
-      Math.max(10, definition.classLevels?.length || 0),
-    ),
+    level: resolvedLevel,
   };
 };

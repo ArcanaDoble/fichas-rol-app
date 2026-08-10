@@ -67,6 +67,20 @@ describe('roguelite class definitions', () => {
     });
   });
 
+  test('keeps a top-level resource when the dedicated rules do not override it', () => {
+    const [normalized] = mergeRogueliteClassCatalogs([], [{
+      id: 'mage',
+      name: 'Maga',
+      resource: { name: 'Maná', maximum: 5, initial: 2 },
+    }]);
+
+    expect(normalized.resource).toMatchObject({
+      name: 'Maná',
+      maximum: 5,
+      initial: 2,
+    });
+  });
+
   test('normalizes initial and maximum values for every class statistic', () => {
     const normalized = normalizeRogueliteClass({
       id: 'barbarian',

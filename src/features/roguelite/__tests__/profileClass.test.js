@@ -113,4 +113,39 @@ describe('personal roguelite class configuration', () => {
     expect(normalizeRogueliteProfileLevel(7.9)).toBe(7);
     expect(normalizeRogueliteProfileLevel(40)).toBe(10);
   });
+
+  test('clamps a profile when the master shortens a configured progression', () => {
+    const profileClass = createRogueliteProfileClass(
+      {
+        ...definition,
+        rogueliteProgressionConfigured: true,
+        classLevels: [{ title: 'Uno' }, { title: 'Dos' }, { title: 'Tres' }],
+      },
+      { level: 8 },
+      'Ada',
+    );
+
+    expect(profileClass.level).toBe(3);
+  });
+
+  test('derives effective statistics from the personal level without changing the template', () => {
+    const masterDefinition = {
+      ...definition,
+      maxLife: 8,
+      maxMovement: 2,
+      resource: { name: 'Furia', maximum: 3 },
+      classLevels: [
+        { title: 'Inicio', effects: [] },
+        { title: 'Vitalidad', effects: [{ target: 'life.max', operation: 'add', value: 1 }] },
+        { title: 'Reserva', effects: [{ target: 'resource.max', operation: 'add', value: 2 }] },
+      ],
+    };
+
+    const levelTwo = createRogueliteProfileClass(masterDefinition, { level: 2 }, 'Ada');
+    const levelThree = createRogueliteProfileClass(masterDefinition, { level: 3 }, 'Bran');
+
+    expect(levelTwo).toMatchObject({ level: 2, maxLife: 9, resource: { maximum: 3 } });
+    expect(levelThree).toMatchObject({ level: 3, maxLife: 9, resource: { maximum: 5 } });
+    expect(masterDefinition).toMatchObject({ maxLife: 8, resource: { maximum: 3 } });
+  });
 });
