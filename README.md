@@ -96,7 +96,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Edición directa de todos los campos**: haz clic en título, subtítulo, descripción, etiquetas, reglas o listas para actualizar la clase y guarda los cambios con un solo botón.
 - **Hitos con seguimiento**: marca la inspiración completada mediante checks persistentes y resaltados que mantienen el estilo luminiscente del panel.
 - **Rediseño Estético de Controles de Estadísticas (Fichas del Máster)**: Cápsula compacta para el límite máximo en cristal oscuro y acento dorado Cinzel. Los valores actuales (Vida, CD, Movimiento, Iniciativa, Recurso) se fijan pulsando o haciendo clic directamente sobre los segmentos rúnicos en escritorio y móvil.
-- **Selector de Colores de Recurso & Rediseño Estético de Progresión por Nivel**: Incorporación de esferas de color ("bolitas") con presets y selector HEX personalizado para la barra de recursos de clase. Rediseño de las métricas de incremento por nivel (Vida, Movimiento, Recurso Máximo) en píldoras horizontales elegantes de cristal oscuro con steppers integrados y acentos tipográficos RPG.
+- **Selector de Colores de Recurso & Rediseño Estético de Progresión por Nivel**: Incorporación de esferas de color ("bolitas") con presets y selector HEX personalizado para la barra de recursos de clase. Rediseño de las métricas de incremento por nivel en disposición vertical adaptable y nuevo **icono de nivel rúnico** con anillo dorado abierto y checkmark de desbloqueo verde integrado.
 - **Iconografía de Dados de Acción Actualizada**: Sustitución completa de las ilustraciones de dados (`D4`, `D6`, `D8`, `D10`, `D12`, `DX`) por los nuevos recursos gráficos de alta resolución con transparencia optimizada tanto en fichas de clase como de jugador.
 - **Niveles de clase dinámicos**: controla el número de niveles con un deslizador configurable desde 0 en adelante y edita cada hito de progreso en línea.
 - **Equipación categorizada**: arma, armadura y habilidad cuentan con formularios propios y una vista previa sincronizada que refleja de inmediato los datos introducidos.
@@ -1600,6 +1600,10 @@ firebase deploy    # Despliega a Firebase Hosting
   documentados, con Vida, Movimiento, Furia máxima y beneficio. El máster puede
   editar, añadir o eliminar niveles desde la misma vista; el catálogo global
   sincroniza esos cambios con todas las copias desbloqueadas.
+- La vista de Progresión presenta cada nivel como un hito vertical con marco
+  biselado, emblema circular y estado de obtención. Vida, Movimiento y recurso
+  quedan integrados como lecturas compactas y con color semántico, manteniendo
+  los controles directos exclusivamente para el máster.
 - El `Resumen` de la biblioteca del máster comparte el esquema Roguelite del
   jugador: tres dados de acción y barras para Vida, CD, Movimiento, Iniciativa
   y recurso de clase. En esta variante el máster conserva la edición de texto,

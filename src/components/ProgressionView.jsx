@@ -9,7 +9,10 @@ import {
     FiTrash2,
 } from 'react-icons/fi';
 import { Footprints, Heart, Sparkles } from 'lucide-react';
-import NumberStepper from './NumberStepper';
+
+const LEVEL_FRAME_CLIP = {
+    clipPath: 'polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px)',
+};
 
 const EditableText = ({
     value,
@@ -80,19 +83,22 @@ const EditableText = ({
 
 const LEVEL_METRIC_TONES = {
     life: {
-        surface: 'from-[#713b43]/[0.14]',
-        icon: 'text-[#ef4444]',
-        label: 'text-[#e2d5b5]',
+        border: 'border-l-[#d98b92]',
+        icon: 'text-[#ef9ca4]',
+        label: 'text-[#d99ba1]',
+        value: 'text-[#f1c5c9]',
     },
     movement: {
-        surface: 'from-[#31586a]/[0.14]',
-        icon: 'text-[#38bdf8]',
-        label: 'text-[#e2d5b5]',
+        border: 'border-l-[#76b7d8]',
+        icon: 'text-[#8ac7e8]',
+        label: 'text-[#8ac7e8]',
+        value: 'text-[#c1e1f1]',
     },
     resource: {
-        surface: 'from-[#523d68]/[0.14]',
+        border: 'border-l-[#bd95da]',
         icon: 'text-[#c8aa6e]',
-        label: 'text-[#e2d5b5]',
+        label: 'text-[#c7a6df]',
+        value: 'text-[#e0c7ed]',
     },
 };
 
@@ -101,35 +107,33 @@ const LevelMetric = ({ icon: Icon, label, value, editable, onChange, tone }) => 
 
     const palette = LEVEL_METRIC_TONES[tone] || LEVEL_METRIC_TONES.resource;
     const safeValue = Math.max(0, Math.min(99, Number(value) || 0));
-    const displayValue = safeValue > 0 ? `+${safeValue}` : `${safeValue}`;
+    const displayValue = `${safeValue}`;
 
     return (
         <div
             data-metric-tone={tone}
-            className={`flex min-w-0 w-full sm:w-auto overflow-hidden items-center justify-between gap-1.5 border-b border-[#c8aa6e]/25 pb-2 px-2 ${
-                editable ? 'sm:w-[176px] py-2.5' : 'sm:w-[152px] py-2'
-            } ${palette.surface}`}
+            className={`inline-flex min-w-[132px] items-center gap-2 border-l-2 py-1 pl-2.5 pr-1 ${palette.border}`}
         >
-            <div className="flex items-center gap-1.5 min-w-0 shrink-0">
+            <div className="flex min-w-0 shrink-0 items-center gap-1.5">
                 <Icon className={`h-3.5 w-3.5 shrink-0 ${palette.icon}`} strokeWidth={2} />
-                <span className="truncate text-[10.5px] sm:text-[11px] font-bold font-['Cinzel'] tracking-wide text-[#e2d5b5] uppercase">
+                <span className={`truncate font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.14em] ${palette.label}`}>
                     {label}
                 </span>
             </div>
 
             {editable ? (
-                <div className="flex shrink-0 items-center gap-0.5 ml-auto">
+                <div className="ml-auto flex shrink-0 items-center gap-0.5">
                     <button
                         type="button"
                         onClick={() => onChange(Math.max(0, safeValue - 1))}
                         disabled={safeValue <= 0}
-                        className="text-slate-400 hover:text-[#c8aa6e] transition p-0.5 disabled:opacity-20 touch-manipulation"
+                        className="p-0.5 text-slate-500 transition hover:text-[#f0e6d2] disabled:opacity-20 touch-manipulation"
                         aria-label={`Reducir ${label}`}
                     >
                         <FiMinus className="h-3 w-3" />
                     </button>
                     <span
-                        className="font-mono text-xs font-bold text-[#c8aa6e] min-w-[16px] text-center"
+                        className={`min-w-[16px] text-center font-mono text-xs font-bold ${palette.value}`}
                         aria-label={`${label}: ${safeValue}`}
                     >
                         {displayValue}
@@ -138,66 +142,17 @@ const LevelMetric = ({ icon: Icon, label, value, editable, onChange, tone }) => 
                         type="button"
                         onClick={() => onChange(Math.min(99, safeValue + 1))}
                         disabled={safeValue >= 99}
-                        className="text-slate-400 hover:text-[#c8aa6e] transition p-0.5 disabled:opacity-20 touch-manipulation"
+                        className="p-0.5 text-slate-500 transition hover:text-[#f0e6d2] disabled:opacity-20 touch-manipulation"
                         aria-label={`Aumentar ${label}`}
                     >
                         <FiPlus className="h-3 w-3" />
                     </button>
                 </div>
             ) : (
-                <span className="font-mono text-xs font-bold text-[#c8aa6e] shrink-0 ml-auto">
+                <span className={`ml-auto shrink-0 font-mono text-xs font-bold ${palette.value}`}>
                     {displayValue}
                 </span>
             )}
-        </div>
-    );
-};
-
-const ProgressionRail = ({ totalLevels, currentLevel, editorMode }) => {
-    if (totalLevels === 0) return null;
-
-    const progress = totalLevels <= 1
-        ? 0
-        : ((currentLevel - 1) / (totalLevels - 1)) * 100;
-
-    return (
-        <div className="overflow-x-auto custom-scrollbar pb-2" data-testid="roguelite-progression-rail">
-            <div
-                className="relative mx-auto flex h-24 items-start justify-between px-6 pt-1"
-                style={{ minWidth: `${Math.max(620, totalLevels * 76)}px` }}
-            >
-                <div className="absolute left-10 right-10 top-[22px] h-px bg-slate-800" />
-                {!editorMode && (
-                    <div
-                        className="absolute left-10 top-[22px] h-px bg-[#c8aa6e] shadow-[0_0_8px_rgba(200,170,110,0.45)] transition-all duration-700"
-                        style={{ width: `calc((100% - 80px) * ${progress / 100})` }}
-                    />
-                )}
-
-                {Array.from({ length: totalLevels }, (_, index) => {
-                    const level = index + 1;
-                    const isCurrent = !editorMode && level === currentLevel;
-                    const isUnlocked = editorMode || level <= currentLevel;
-
-                    return (
-                        <div key={level} className="relative z-10 flex w-12 flex-col items-center">
-                            <div
-                                className={`flex h-11 w-11 items-center justify-center rounded-full border bg-[#0b1120] font-['Cinzel'] text-sm font-bold transition ${isCurrent
-                                    ? 'scale-110 border-[#c8aa6e] text-[#f0e6d2] shadow-[0_0_18px_rgba(200,170,110,0.35)]'
-                                    : isUnlocked
-                                        ? 'border-[#c8aa6e]/60 text-[#c8aa6e]'
-                                        : 'border-slate-800 text-slate-600'
-                                    }`}
-                            >
-                                {level}
-                            </div>
-                            <span className={`mt-3 text-[9px] font-bold uppercase tracking-[0.16em] ${isCurrent ? 'text-[#c8aa6e]' : 'text-slate-700'}`}>
-                                {editorMode ? 'Definido' : isCurrent ? 'Actual' : isUnlocked ? 'Obtenido' : 'Pendiente'}
-                            </span>
-                        </div>
-                    );
-                })}
-            </div>
         </div>
     );
 };
@@ -283,14 +238,8 @@ const ProgressionView = ({
                     </div>
                 </header>
 
-                <ProgressionRail
-                    totalLevels={totalLevels}
-                    currentLevel={currentLevel}
-                    editorMode={editorMode}
-                />
-
                 {levels.length > 0 ? (
-                    <div className="mt-5 border-t border-[#c8aa6e]/15">
+                    <div className="space-y-4" data-progression-layout="level-frames">
                         {levels.map((level, index) => {
                             const levelNumber = index + 1;
                             const state = editorMode
@@ -307,95 +256,139 @@ const ProgressionView = ({
                                 <article
                                     key={`progression-level-${levelNumber}`}
                                     data-testid={`roguelite-progression-level-${levelNumber}`}
-                                    className={`relative grid grid-cols-[52px_minmax(0,1fr)] gap-4 border-b px-1 py-6 transition md:grid-cols-[72px_minmax(0,1fr)] md:gap-6 md:px-4 ${isCurrent
-                                        ? 'border-[#c8aa6e]/40 bg-[#c8aa6e]/[0.045]'
-                                        : 'border-slate-800/80'
-                                        } ${isLocked ? 'opacity-60' : ''}`}
+                                    data-level-state={state}
+                                    className={`relative overflow-hidden p-px ${isCurrent
+                                        ? 'bg-[#dfc789]'
+                                        : isLocked
+                                            ? 'bg-slate-700/75'
+                                            : 'bg-[#b69a61]'
+                                        }`}
+                                    style={LEVEL_FRAME_CLIP}
                                 >
-                                    {isCurrent && <div className="absolute bottom-0 left-0 top-0 w-[2px] bg-[#c8aa6e]" />}
-
-                                    <div className="pt-0.5 text-center">
-                                        <div className={`font-['Cinzel'] text-3xl ${isCurrent ? 'text-[#c8aa6e]' : isLocked ? 'text-slate-700' : 'text-[#8f7b52]'}`}>
-                                            {String(levelNumber).padStart(2, '0')}
+                                    <div
+                                        className={`grid min-h-[148px] grid-cols-[76px_minmax(0,1fr)] gap-4 bg-[#171e2b] px-4 py-5 sm:grid-cols-[156px_minmax(0,1fr)] sm:gap-7 sm:px-7 sm:py-6 ${isLocked ? 'bg-[#121927] text-slate-500' : ''}`}
+                                        style={LEVEL_FRAME_CLIP}
+                                    >
+                                        <div className="flex flex-col items-center justify-center text-center">
+                                            <div className="relative flex h-16 w-16 items-center justify-center shrink-0 sm:h-20 sm:w-20">
+                                                <svg className="h-full w-full overflow-visible" viewBox="0 0 64 64" fill="none">
+                                                    {/* Thin ring with bottom-right gap */}
+                                                    <path
+                                                        d={isLocked ? "M 36.3 56.6 A 25 25 0 1 1 55.5 40.5" : "M 36.3 56.6 A 25 25 0 1 1 56.8 34.0"}
+                                                        fill="none"
+                                                        stroke={isLocked ? '#475569' : '#d5b776'}
+                                                        strokeWidth="1.75"
+                                                        strokeLinecap="round"
+                                                    />
+                                                    {/* Level Number */}
+                                                    <text
+                                                        x="32"
+                                                        y="39"
+                                                        textAnchor="middle"
+                                                        fill={isLocked ? '#64748b' : '#f0e6d2'}
+                                                        fontSize="22"
+                                                        fontWeight="600"
+                                                        className="font-['Cinzel'] select-none"
+                                                    >
+                                                        {levelNumber}
+                                                    </text>
+                                                    {/* Green Checkmark at bottom-right gap */}
+                                                    {!isLocked && (
+                                                        <path
+                                                            d="M 39 48 L 45.5 54 L 56 42"
+                                                            fill="none"
+                                                            stroke="#40c057"
+                                                            strokeWidth="3.5"
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                        />
+                                                    )}
+                                                    {/* Lock icon at bottom-right gap if locked */}
+                                                    {isLocked && (
+                                                        <g transform="translate(39, 39)">
+                                                            <rect x="2" y="6" width="12" height="9" rx="1.5" fill="#121927" stroke="#475569" strokeWidth="1.5" />
+                                                            <path d="M 5 6 V 4 A 3 3 0 0 1 11 4 V 6" fill="none" stroke="#475569" strokeWidth="1.5" />
+                                                        </g>
+                                                    )}
+                                                </svg>
+                                            </div>
+                                            <div className={`mt-2 text-[8px] font-bold uppercase tracking-[0.24em] ${isLocked ? 'text-slate-700' : 'text-[#c8aa6e]/65'}`}>Nivel</div>
                                         </div>
-                                        <div className="mt-1 text-[8px] font-bold uppercase tracking-[0.22em] text-slate-700">Nivel</div>
-                                    </div>
 
-                                    <div className="min-w-0">
-                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                            <div className={`min-w-0 flex-1 ${editorMode ? 'pr-12' : ''}`}>
+                                        <div className="min-w-0 self-center">
+                                            <div className="flex min-w-0 items-start justify-between gap-4">
+                                                <div className={`min-w-0 flex-1 ${editorMode ? 'pr-8 sm:pr-10' : ''}`}>
+                                                    {editorMode ? (
+                                                        <EditableText
+                                                            value={level.title}
+                                                            onChange={(value) => onUpdateLevel(index, 'title', value)}
+                                                            className="font-['Cinzel'] text-lg font-semibold uppercase tracking-[0.08em] text-[#f0e6d2] sm:text-xl md:text-2xl"
+                                                            placeholder={`Nivel ${levelNumber}`}
+                                                        />
+                                                    ) : (
+                                                        <h3 className={`font-['Cinzel'] text-lg font-semibold uppercase tracking-[0.08em] sm:text-xl md:text-2xl ${isLocked ? 'text-slate-500' : 'text-[#f0e6d2]'}`}>
+                                                            {level.title || `Nivel ${levelNumber}`}
+                                                        </h3>
+                                                    )}
+                                                </div>
+
+                                                {!editorMode && <LevelStatus state={state} />}
+                                            </div>
+
+                                            {editorMode && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onRemoveLevel(index)}
+                                                    className="absolute right-4 top-4 flex h-8 w-8 touch-manipulation items-center justify-center border border-transparent text-slate-600 transition hover:border-rose-400/30 hover:bg-rose-400/5 hover:text-rose-400 active:bg-rose-400/10 sm:right-6 sm:top-5"
+                                                    aria-label={`Eliminar nivel ${levelNumber}`}
+                                                    title="Eliminar nivel"
+                                                >
+                                                    <FiTrash2 className="h-4 w-4" />
+                                                </button>
+                                            )}
+
+                                            <div className="mt-2.5 max-w-4xl">
                                                 {editorMode ? (
                                                     <EditableText
-                                                        value={level.title}
-                                                        onChange={(value) => onUpdateLevel(index, 'title', value)}
-                                                        className="font-['Cinzel'] text-lg font-semibold uppercase tracking-[0.08em] text-[#f0e6d2] md:text-xl"
-                                                        placeholder={`Nivel ${levelNumber}`}
+                                                        value={level.description}
+                                                        onChange={(value) => onUpdateLevel(index, 'description', value)}
+                                                        multiline
+                                                        className="text-sm leading-6 text-slate-400 sm:text-[15px]"
+                                                        placeholder="Describe el beneficio que se obtiene al alcanzar este nivel."
                                                     />
                                                 ) : (
-                                                    <h3 className={`font-['Cinzel'] text-lg font-semibold uppercase tracking-[0.08em] md:text-xl ${isLocked ? 'text-slate-500' : 'text-[#f0e6d2]'}`}>
-                                                        {level.title || `Nivel ${levelNumber}`}
-                                                    </h3>
+                                                    <p className={`text-sm leading-6 sm:text-[15px] ${isLocked ? 'text-slate-600' : 'text-slate-400'}`}>
+                                                        {level.description || 'Beneficio pendiente de definir por el máster.'}
+                                                    </p>
                                                 )}
                                             </div>
 
-                                            <div className="flex shrink-0 items-center gap-3">
-                                                {!editorMode && <LevelStatus state={state} />}
-                                            </div>
-                                        </div>
-
-                                        {editorMode && (
-                                            <button
-                                                type="button"
-                                                onClick={() => onRemoveLevel(index)}
-                                                className="absolute right-1 top-5 flex h-10 w-10 touch-manipulation items-center justify-center border border-transparent text-slate-700 transition hover:border-rose-400/30 hover:bg-rose-400/5 hover:text-rose-400 active:bg-rose-400/10 md:right-4"
-                                                aria-label={`Eliminar nivel ${levelNumber}`}
-                                                title="Eliminar nivel"
-                                            >
-                                                <FiTrash2 className="h-4 w-4" />
-                                            </button>
-                                        )}
-
-                                        <div className="mt-3 max-w-4xl">
-                                            {editorMode ? (
-                                                <EditableText
-                                                    value={level.description}
-                                                    onChange={(value) => onUpdateLevel(index, 'description', value)}
-                                                    multiline
-                                                    className="text-sm leading-6 text-slate-400"
-                                                    placeholder="Describe el beneficio que se obtiene al alcanzar este nivel."
+                                            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 sm:gap-x-7">
+                                                <LevelMetric
+                                                    icon={Heart}
+                                                    label="Vida"
+                                                    tone="life"
+                                                    value={level.maxLife}
+                                                    editable={editorMode}
+                                                    onChange={(value) => onUpdateLevel(index, 'maxLife', value)}
                                                 />
-                                            ) : (
-                                                <p className={`text-sm leading-6 ${isLocked ? 'text-slate-600' : 'text-slate-400'}`}>
-                                                    {level.description || 'Beneficio pendiente de definir por el máster.'}
-                                                </p>
-                                            )}
-                                        </div>
-
-                                        <div className="mt-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 sm:gap-6 md:gap-8">
-                                            <LevelMetric
-                                                icon={Heart}
-                                                label="Vida"
-                                                tone="life"
-                                                value={level.maxLife}
-                                                editable={editorMode}
-                                                onChange={(value) => onUpdateLevel(index, 'maxLife', value)}
-                                            />
-                                            <LevelMetric
-                                                icon={Footprints}
-                                                label="Movimiento"
-                                                tone="movement"
-                                                value={level.movement}
-                                                editable={editorMode}
-                                                onChange={(value) => onUpdateLevel(index, 'movement', value)}
-                                            />
-                                            <LevelMetric
-                                                icon={Sparkles}
-                                                label={`${resourceName} máx.`}
-                                                tone="resource"
-                                                value={level.resourceMaximum}
-                                                editable={editorMode}
-                                                onChange={(value) => onUpdateLevel(index, 'resourceMaximum', value)}
-                                            />
+                                                <LevelMetric
+                                                    icon={Footprints}
+                                                    label="Movimiento"
+                                                    tone="movement"
+                                                    value={level.movement}
+                                                    editable={editorMode}
+                                                    onChange={(value) => onUpdateLevel(index, 'movement', value)}
+                                                />
+                                                <LevelMetric
+                                                    icon={Sparkles}
+                                                    label={`${resourceName} máx.`}
+                                                    tone="resource"
+                                                    value={level.resourceMaximum}
+                                                    editable={editorMode}
+                                                    onChange={(value) => onUpdateLevel(index, 'resourceMaximum', value)}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </article>
@@ -433,12 +426,6 @@ LevelMetric.propTypes = {
     editable: PropTypes.bool.isRequired,
     onChange: PropTypes.func.isRequired,
     tone: PropTypes.oneOf(['life', 'movement', 'resource']).isRequired,
-};
-
-ProgressionRail.propTypes = {
-    totalLevels: PropTypes.number.isRequired,
-    currentLevel: PropTypes.number.isRequired,
-    editorMode: PropTypes.bool.isRequired,
 };
 
 LevelStatus.propTypes = {

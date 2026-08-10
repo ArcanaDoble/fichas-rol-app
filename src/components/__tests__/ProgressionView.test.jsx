@@ -18,7 +18,7 @@ test('shows acquired, current and pending levels without player editing controls
     />,
   );
 
-  expect(screen.getByTestId('roguelite-progression-rail')).toBeInTheDocument();
+  expect(screen.getByTestId('roguelite-progression-level-1').parentElement).toHaveAttribute('data-progression-layout', 'level-frames');
   expect(screen.getAllByTestId(/roguelite-progression-level-/)).toHaveLength(10);
   expect(screen.getByTestId('roguelite-progression-level-4')).toHaveTextContent('Nivel actual');
   expect(screen.getByTestId('roguelite-progression-level-5')).toHaveTextContent('Por desbloquear');
@@ -26,7 +26,8 @@ test('shows acquired, current and pending levels without player editing controls
   expect(screen.queryByRole('button', { name: 'Añadir nivel' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /Eliminar nivel/ })).not.toBeInTheDocument();
   expect(screen.queryByTitle('Editar')).not.toBeInTheDocument();
-  expect(screen.getByTestId('roguelite-progression-level-4').querySelector('[data-metric-tone="life"]')).toHaveClass('sm:w-[152px]', 'py-2');
+  expect(screen.getByTestId('roguelite-progression-level-4')).toHaveAttribute('data-level-state', 'current');
+  expect(screen.getByTestId('roguelite-progression-level-4').querySelector('[data-metric-tone="life"]')).toHaveClass('border-l-2', 'min-w-[132px]');
 });
 
 test('lets the master add, remove and edit progression content', () => {
@@ -55,13 +56,13 @@ test('lets the master add, remove and edit progression content', () => {
   expect(onUpdateLevel).toHaveBeenCalledWith(0, 'maxLife', 9);
   expect(onUpdateLevel).toHaveBeenCalledWith(0, 'title', 'Furia revisada');
   expect(container.querySelector('input[type="number"]')).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Eliminar nivel 1' })).toHaveClass('absolute', 'h-10', 'w-10');
+  expect(screen.getByRole('button', { name: 'Eliminar nivel 1' })).toHaveClass('absolute', 'h-8', 'w-8');
   const lifeMetric = container.querySelector('[data-metric-tone="life"]');
-  expect(lifeMetric).toHaveClass('from-[#713b43]/[0.14]');
-  expect(container.querySelector('[data-metric-tone="movement"]')).toHaveClass('from-[#31586a]/[0.14]');
-  expect(container.querySelector('[data-metric-tone="resource"]')).toHaveClass('from-[#523d68]/[0.14]');
-  expect(container.querySelector('[data-metric-tone="movement"]')).toHaveClass('sm:w-[176px]', 'py-2.5');
-  expect(container.querySelector('[data-metric-tone="resource"]')).toHaveClass('min-w-0', 'overflow-hidden');
-  expect(lifeMetric.parentElement).toHaveClass('flex', 'flex-wrap', 'gap-2.5');
+  expect(lifeMetric).toHaveClass('border-l-[#d98b92]');
+  expect(container.querySelector('[data-metric-tone="movement"]')).toHaveClass('border-l-[#76b7d8]');
+  expect(container.querySelector('[data-metric-tone="resource"]')).toHaveClass('border-l-[#bd95da]');
+  expect(container.querySelector('[data-metric-tone="movement"]')).toHaveClass('min-w-[132px]', 'py-1');
+  expect(container.querySelector('[data-metric-tone="resource"]')).toHaveClass('inline-flex');
+  expect(lifeMetric.parentElement).toHaveClass('flex', 'flex-wrap', 'gap-y-3');
   expect(lifeMetric.parentElement).not.toHaveClass('grid', 'lg:grid-cols-3');
 });
