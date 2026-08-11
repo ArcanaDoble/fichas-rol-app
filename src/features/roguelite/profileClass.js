@@ -100,7 +100,10 @@ export const createRogueliteProfileClass = (
     stats: clone(DEFAULT_STATS),
     equipment: clone(equipmentPool),
     equippedItems: { mainHand: null, offHand: null, body: null },
-    talents: { slots: Array(ROGUELITE_TALENT_SLOT_COUNT).fill(null) },
+    talents: {
+      ...(definition.talents || {}),
+      slots: Array(ROGUELITE_TALENT_SLOT_COUNT).fill(null),
+    },
     talentCatalog: clone(talentCatalog),
     equippedTalentIds: Array(ROGUELITE_TALENT_SLOT_COUNT).fill(null),
     storeItems: [],
@@ -148,6 +151,7 @@ export const createRogueliteProfileClass = (
     equippedTalentIds: clone(equippedTalentIds),
     talents: {
       ...(profileClass.talents || {}),
+      ...(definition.talents || {}),
       slots: clone(equippedTalentIds),
     },
     summary: {

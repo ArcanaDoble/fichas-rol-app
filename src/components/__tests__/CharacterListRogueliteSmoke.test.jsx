@@ -161,10 +161,13 @@ test('mounts the roguelite card and opens it in the shared character sheet', asy
   expect(screen.queryByLabelText('Editar imagen del recurso de clase')).not.toBeInTheDocument();
   expect(screen.getByTestId('talents-sidebar')).toHaveClass('overflow-visible');
   expect(screen.getByTestId('talents-sidebar')).not.toHaveClass('overflow-y-auto');
+  expect(screen.getByTestId('talents-sidebar')).toHaveClass('p-6');
+  expect(screen.getByTestId('talents-sidebar')).toHaveClass('noma-talents-shell--player');
   expect(screen.queryByText('Resistencia Máxima (Vida)')).not.toBeInTheDocument();
   expect(screen.queryByText('Carga del Equipamiento')).not.toBeInTheDocument();
   expect(screen.getByText('Competencias')).toBeInTheDocument();
-  expect(screen.getByText('Competencias').parentElement).toHaveClass('-mt-4');
+  expect(screen.queryByText('Dominio de clase')).not.toBeInTheDocument();
+  expect(screen.getByText('Competencias').parentElement).not.toHaveClass('-mt-4');
   expect(screen.getByText('Simples')).toHaveClass('border-slate-700', 'text-slate-600');
   expect(screen.getByText('Marciales')).toHaveClass('bg-[#c8aa6e]', 'text-[#0b1120]');
   expect(screen.getByText('Especiales')).toHaveClass('border-slate-700', 'text-slate-600');

@@ -243,6 +243,11 @@ describe('personal roguelite class configuration', () => {
     };
     const firstDefinition = {
       ...definition,
+      talents: {
+        title: 'Furia',
+        description: 'Recurso configurado por el máster.',
+        rarity: 'epica',
+      },
       resource: {
         name: 'Furia',
         description: 'Se obtiene al exponerse al peligro.',
@@ -260,6 +265,12 @@ describe('personal roguelite class configuration', () => {
 
     const firstProfile = createRogueliteProfileClass(firstDefinition, storedProfile, 'Ada');
     expect(firstProfile).toMatchObject({
+      talents: {
+        title: 'Furia',
+        description: 'Recurso configurado por el máster.',
+        rarity: 'epica',
+        slots: ['athletics', null, null],
+      },
       resource: {
         name: 'Furia',
         description: 'Se obtiene al exponerse al peligro.',
@@ -288,5 +299,30 @@ describe('personal roguelite class configuration', () => {
       description: 'Descripción actualizada por el máster.',
     });
     expect(updatedProfile.talentCatalog).not.toEqual(storedProfile.talentCatalog);
+  });
+
+  test('uses the current master talent appearance instead of a stale player copy', () => {
+    const profile = createRogueliteProfileClass({
+      ...definition,
+      talents: {
+        title: 'Furia',
+        description: 'Definición vigente.',
+        rarity: 'legendaria',
+      },
+    }, {
+      talents: {
+        title: 'Nombre antiguo',
+        description: 'Copia antigua.',
+        rarity: 'rara',
+        slots: [null, null, null],
+      },
+    }, 'Ada');
+
+    expect(profile.talents).toMatchObject({
+      title: 'Furia',
+      description: 'Definición vigente.',
+      rarity: 'legendaria',
+      slots: [null, null, null],
+    });
   });
 });

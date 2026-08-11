@@ -6,6 +6,13 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ## ✨ Características principales
 
+### Talentos Roguelite integrados con el inventario
+
+- El panel completo de Talentos adopta un marco continuo de ficha RPG; catálogo, ranuras y competencias se apoyan directamente sobre el fondo principal, sin cajas interiores ni grandes áreas de padding.
+- La ficha del jugador conserva la misma composición visual, espaciado y separadores del panel del máster, pero sustituye el catálogo editable por sus tres talentos equipados y mantiene todos los controles en modo lectura.
+- La imagen del recurso de clase se libera de la miniatura: ocupa la esquina superior derecha de la cabecera y se funde con el fondo mediante máscaras y degradados que mantienen legibles el nombre y la descripción superpuestos.
+- El catálogo del máster y las ranuras del jugador utilizan franjas abiertas separadas por líneas sutiles, conservando los flujos existentes de edición y selección sin convertir cada talento en una tarjeta independiente.
+
 ### ⚔️ Gestor de Combate del Bestiario (Estilo de Campaña Gótica)
 
 - **Estética Visual de Campaña Gótica**: Fusión estética total con el Bestiario, utilizando un fondo de pantalla oscuro de campaña (`bg-[#050b14]`), tarjetas carmesí profundo (`bg-[#1a0505]`), bordes finos óxido/carmesí (`border-red-900/30`), tipografía clásica medieval (`font-['Cinzel']`) y esquinas rectas (`rounded-none` / `rounded-sm`).
@@ -2881,7 +2888,9 @@ Guía rápida: ver `docs/Minimapa.md`.
 - La columna de Talentos del jugador usa altura natural y no captura la rueda del ratón; el scroll interno queda reservado al catálogo ampliado del máster.
 - Las imágenes de recurso y talento se almacenan como WebP mediante el optimizador común, con fuente limitada a 1600 px y recorte ligero de 640 px para la ficha.
 - Las clases de jugador ya no muestran Resistencia máxima ni Carga del equipamiento del sistema anterior: muestran las seis competencias heredadas con el mismo estilo del máster, en dorado las activas y en gris las inactivas, sin permitir editarlas.
-- Las Competencias se heredan desde la definición de clase a nivel de datos, sin modificar todavía su interfaz, y la pestaña Reliquias permanece intacta.
+- Las Competencias se heredan desde la definición de clase a nivel de datos y se presentan como el pie de dominio del mismo dossier; la pestaña Reliquias permanece intacta.
+- La rareza y los metadatos visuales de Talentos se heredan siempre desde la definición vigente del máster; las fichas antiguas dejan de conservar copias de color desactualizadas sin perder sus tres ranuras personales.
+- La cabecera, el catálogo del máster, las ranuras del jugador y el pie de Competencias comparten ahora una composición de dossier RPG: arte sangrado, estrella propia de Talentos, entradas numeradas y grupos de dominio compactos. La geometría se mantiene estable tanto en columnas estrechas como en vistas apiladas.
 
 ## Novedades: Catálogo de equipamiento Roguelite
 

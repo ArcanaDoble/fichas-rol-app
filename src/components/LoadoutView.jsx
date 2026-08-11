@@ -512,7 +512,7 @@ const LoadoutView = ({
 
     const renderProficiencyOption = (group, key, label) => {
         const isActive = summary.proficiencies?.[group]?.[key] === true;
-        const className = `flex min-h-9 items-center justify-center rounded border px-2 py-1 text-center text-[10px] font-bold uppercase tracking-wider transition-all ${isActive
+        const className = `noma-talent-proficiency ${isActive ? 'is-active' : 'is-inactive'} flex min-h-9 items-center justify-center rounded border px-2 py-1 text-center text-[10px] font-bold uppercase tracking-wider transition-all ${isActive
             ? 'bg-[#c8aa6e] border-[#c8aa6e] text-[#0b1120] shadow-[0_0_15px_rgba(200,170,110,0.4)]'
             : `bg-transparent border-slate-700 text-slate-600 ${rogueliteRole === 'player' ? '' : 'hover:border-slate-500 hover:text-slate-400'}`
             }`;
@@ -1880,16 +1880,18 @@ const LoadoutView = ({
                     {/* Right Column: Relic Slots (Vertical Stack) */}
                     <div
                         data-testid="talents-sidebar"
-                        className={`bg-[#0b1120] border border-[#c8aa6e]/20 rounded-xl p-6 shadow-2xl flex flex-col h-fit sticky top-8 ${rogueliteRole === 'player'
+                        className={`noma-talents-shell noma-talents-shell--${rogueliteRole} flex flex-col h-fit sticky top-8 p-6 ${rogueliteRole === 'player'
                             ? 'max-h-none overflow-visible'
                             : 'max-h-[850px] overflow-y-auto [&::-webkit-scrollbar]:hidden'
                             }`}
                         style={rogueliteRole === 'player' ? undefined : { scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                     >
-                        <h3 className="text-[#c8aa6e] font-['Cinzel'] text-lg tracking-widest mb-8 text-center flex items-center justify-center gap-2">
-                            <FiShield className="w-5 h-5" />
-                            TALENTOS
-                        </h3>
+                        {rogueliteRole === 'legacy' && (
+                            <h3 className="text-[#c8aa6e] font-['Cinzel'] text-lg tracking-widest mb-8 text-center flex items-center justify-center gap-2">
+                                <FiStar className="w-5 h-5" />
+                                TALENTOS
+                            </h3>
+                        )}
 
                         <div className="flex flex-col gap-8 items-center justify-between">
                             {rogueliteRole !== 'legacy' ? (
@@ -2197,28 +2199,30 @@ const LoadoutView = ({
                                     );
                                 })()
                             ) : (
-                                <div className="-mt-4 w-full space-y-4">
-                                    <h4 className="text-[#c8aa6e] font-['Cinzel'] text-xs uppercase tracking-widest text-center">Competencias</h4>
+                                <div className="noma-talent-proficiencies w-full space-y-4">
+                                    <div className="noma-talent-proficiencies__header">
+                                        <h4 className="text-[#c8aa6e] font-['Cinzel'] text-xs uppercase tracking-widest text-center">Competencias</h4>
+                                    </div>
 
                                     {/* Weapons */}
-                                    <div className="space-y-2">
-                                        <div className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Armas</div>
+                                    <section className="noma-talent-proficiencies__group space-y-2">
+                                        <div className="noma-talent-proficiencies__group-title text-center text-[10px] font-bold uppercase tracking-wider text-slate-500"><span>Armas</span></div>
                                         <div className="mx-auto grid w-full max-w-[390px] grid-cols-3 gap-2">
                                             {renderProficiencyOption('weapons', 'simple', 'Simples')}
                                             {renderProficiencyOption('weapons', 'martial', 'Marciales')}
                                             {renderProficiencyOption('weapons', 'special', 'Especiales')}
                                         </div>
-                                    </div>
+                                    </section>
 
                                     {/* Armor */}
-                                    <div className="space-y-2">
-                                        <div className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Armaduras</div>
+                                    <section className="noma-talent-proficiencies__group space-y-2">
+                                        <div className="noma-talent-proficiencies__group-title text-center text-[10px] font-bold uppercase tracking-wider text-slate-500"><span>Armaduras</span></div>
                                         <div className="mx-auto grid w-full max-w-[390px] grid-cols-3 gap-2">
                                             {renderProficiencyOption('armor', 'light', 'Ligera')}
                                             {renderProficiencyOption('armor', 'medium', 'Media')}
                                             {renderProficiencyOption('armor', 'heavy', 'Pesada')}
                                         </div>
-                                    </div>
+                                    </section>
                                 </div>
                             )}
                         </div>

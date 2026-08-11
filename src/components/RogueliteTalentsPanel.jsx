@@ -7,7 +7,6 @@ import {
   FiEdit2,
   FiImage,
   FiPlus,
-  FiShield,
   FiStar,
   FiTrash2,
   FiX,
@@ -23,27 +22,37 @@ const RARITIES = [
   {
     id: 'comun',
     label: 'Común',
-    classes: 'border-slate-500 bg-slate-700 text-slate-200',
+    accent: '#8d9aab',
+    soft: 'rgba(141, 154, 171, 0.32)',
+    faint: 'rgba(141, 154, 171, 0.1)',
   },
   {
     id: 'poco-comun',
     label: 'Poco común',
-    classes: 'border-emerald-500 bg-emerald-900 text-emerald-200',
+    accent: '#55b978',
+    soft: 'rgba(85, 185, 120, 0.32)',
+    faint: 'rgba(85, 185, 120, 0.1)',
   },
   {
     id: 'rara',
     label: 'Rara',
-    classes: 'border-blue-500 bg-blue-900 text-blue-200',
+    accent: '#54a8dc',
+    soft: 'rgba(84, 168, 220, 0.32)',
+    faint: 'rgba(84, 168, 220, 0.1)',
   },
   {
     id: 'epica',
     label: 'Épica',
-    classes: 'border-violet-500 bg-violet-950 text-violet-200',
+    accent: '#b96bd6',
+    soft: 'rgba(185, 107, 214, 0.32)',
+    faint: 'rgba(185, 107, 214, 0.1)',
   },
   {
     id: 'legendaria',
     label: 'Legendaria',
-    classes: 'border-amber-500 bg-amber-950 text-amber-200',
+    accent: '#e0a45b',
+    soft: 'rgba(224, 164, 91, 0.32)',
+    faint: 'rgba(224, 164, 91, 0.1)',
   },
 ];
 
@@ -132,6 +141,10 @@ const RogueliteTalentsPanel = ({
     talentCatalog.find((talent) => talent.id === selectedTalentId) || null;
   const selectedRarity =
     RARITIES.find((item) => item.id === rarity) || RARITIES[2];
+  const equippedTalentCount = equippedTalentIds.filter((talentId) => {
+    const talent = catalogById.get(talentId);
+    return talent && talent.available !== false;
+  }).length;
 
   const updateTalent = useCallback(
     (talentId, patch) => {
@@ -243,144 +256,160 @@ const RogueliteTalentsPanel = ({
 
   return (
     <>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleImageFile}
-        className="hidden"
-        aria-label="Subir imagen de talento"
-      />
+      <div className={`noma-talents-body ${isMaster ? 'is-master' : 'is-player'}`}>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleImageFile}
+          className="hidden"
+          aria-label="Subir imagen de talento"
+        />
 
-      <div className="relative flex w-full flex-col items-center">
-        <button
-          type="button"
-          onClick={() => requestImage({ type: 'resource' })}
-          disabled={!isMaster}
-          className={`group relative ${isMaster ? 'cursor-pointer' : 'cursor-default'}`}
-          aria-label={
-            isMaster ? 'Editar imagen del recurso de clase' : undefined
-          }
-        >
-          <TalentImage
-            image={resource.image}
-            name={resource.name || 'Recurso de clase'}
-            size="lg"
-          />
-          {isMaster && (
-            <span className="absolute inset-0 flex items-center justify-center bg-[#05080f]/75 text-[9px] font-bold uppercase tracking-[0.16em] text-[#f0e6d2] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-              <FiImage className="mr-1.5 h-3.5 w-3.5" /> Imagen
-            </span>
+      <section
+        className="noma-talent-stage"
+        style={{
+          '--noma-talent-accent': selectedRarity.accent,
+          '--noma-talent-accent-soft': selectedRarity.soft,
+          '--noma-talent-accent-faint': selectedRarity.faint,
+        }}
+      >
+        <div className="noma-talent-stage__art" aria-hidden="true">
+          {resource.image ? (
+            <img src={resource.image} alt="" />
+          ) : (
+            <FiStar />
           )}
-        </button>
+        </div>
+        <div className="noma-talent-stage__veil" aria-hidden="true" />
 
-        <div className="relative -mt-2">
+        <div className="noma-talent-stage__heading">
+          <FiStar aria-hidden="true" />
+          <span>Talentos</span>
+        </div>
+
+        <div className="noma-talent-stage__content">
+          <span className="noma-talent-stage__eyebrow">Recurso de clase</span>
+
+          <div className="noma-talent-stage__rarity-wrap">
+            <button
+              type="button"
+              disabled={!isMaster}
+              onClick={() => setShowRarityMenu((value) => !value)}
+              className="noma-talent-stage__rarity"
+            >
+              <span aria-hidden="true" />
+              {selectedRarity.label}
+            </button>
+            {isMaster && showRarityMenu && (
+              <div className="noma-talent-stage__rarity-menu">
+                {RARITIES.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      onRarityChange(item.id);
+                      setShowRarityMenu(false);
+                    }}
+                  >
+                    <span style={{ backgroundColor: item.accent }} aria-hidden="true" />
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {isMaster ? (
+            <input
+              value={resource.name || ''}
+              onChange={(event) => onResourceChange('name', event.target.value)}
+              className="noma-talent-stage__title-input"
+              aria-label="Nombre del recurso de clase"
+              placeholder="Recurso de clase"
+            />
+          ) : (
+            <h4 className="noma-talent-stage__title">
+              {resource.name || 'Recurso de clase'}
+            </h4>
+          )}
+
+          {isMaster ? (
+            <textarea
+              value={resource.description || ''}
+              onChange={(event) => onResourceChange('description', event.target.value)}
+              rows={4}
+              className="noma-talent-stage__description-input"
+              aria-label="Descripción del recurso de clase"
+              placeholder="Describe cómo funciona el recurso de esta clase."
+            />
+          ) : (
+            <p className="noma-talent-stage__description">
+              {resource.description ||
+                'El máster todavía no ha definido la descripción de este recurso.'}
+            </p>
+          )}
+        </div>
+
+        {isMaster && (
           <button
             type="button"
-            disabled={!isMaster}
-            onClick={() => setShowRarityMenu((value) => !value)}
-            className={`border px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] ${selectedRarity.classes} ${isMaster ? 'hover:brightness-125' : 'cursor-default'}`}
+            onClick={() => requestImage({ type: 'resource' })}
+            className="noma-talent-stage__edit-art"
+            aria-label="Editar imagen del recurso de clase"
           >
-            {selectedRarity.label}
+            <FiImage aria-hidden="true" />
+            <span>Cambiar arte</span>
           </button>
-          {isMaster && showRarityMenu && (
-            <div className="absolute left-1/2 top-full z-30 mt-1 w-36 -translate-x-1/2 border border-[#c8aa6e]/25 bg-[#080c17] py-1 shadow-xl">
-              {RARITIES.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    onRarityChange(item.id);
-                    setShowRarityMenu(false);
-                  }}
-                  className="block w-full px-3 py-2 text-left text-[10px] uppercase tracking-wider text-slate-300 hover:bg-[#c8aa6e]/10 hover:text-[#f0e6d2]"
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        )}
 
-        <div className="mt-5 w-full text-center">
-          {isMaster ? (
-            <>
-              <input
-                value={resource.name || ''}
-                onChange={(event) =>
-                  onResourceChange('name', event.target.value)
-                }
-                className="w-full border-0 border-b border-transparent bg-transparent px-2 py-1 text-center font-['Cinzel'] text-sm font-bold uppercase tracking-[0.12em] text-[#c8aa6e] outline-none transition focus:border-[#c8aa6e]/45"
-                aria-label="Nombre del recurso de clase"
-                placeholder="Recurso de clase"
-              />
-              <textarea
-                value={resource.description || ''}
-                onChange={(event) =>
-                  onResourceChange('description', event.target.value)
-                }
-                rows={3}
-                className="mt-1 w-full resize-none border border-transparent bg-transparent px-2 py-1 text-center text-xs leading-relaxed text-slate-400 outline-none transition focus:border-slate-700 focus:bg-[#05080f]/50"
-                aria-label="Descripción del recurso de clase"
-                placeholder="Describe cómo funciona el recurso de esta clase."
-              />
-            </>
-          ) : (
-            <>
-              <h4 className="font-['Cinzel'] text-sm font-bold uppercase tracking-[0.12em] text-[#c8aa6e]">
-                {resource.name || 'Recurso de clase'}
-              </h4>
-              <p className="mx-auto mt-2 max-w-[230px] text-xs leading-relaxed text-slate-400">
-                {resource.description ||
-                  'El máster todavía no ha definido la descripción de este recurso.'}
-              </p>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="my-6 h-px w-full bg-slate-800" />
+        <div className="noma-talent-stage__edge" aria-hidden="true" />
+      </section>
 
       {isMaster ? (
-        <div className="w-full">
-          <div className="mb-3 flex items-center justify-between gap-3">
+        <section className="noma-talent-ledger noma-talent-catalog w-full">
+          <div className="noma-talent-catalog__header">
             <div>
-              <h4 className="font-['Cinzel'] text-[11px] font-bold uppercase tracking-[0.14em] text-[#f0e6d2]">
+              <span className="noma-talent-catalog__eyebrow">Archivo de clase</span>
+              <h4>
                 Catálogo de talentos
               </h4>
-              <span className="text-[9px] uppercase tracking-[0.16em] text-slate-600">
+              <span className="noma-talent-catalog__meta">
                 {talentCatalog.length} definidos
               </span>
             </div>
             <button
               type="button"
               onClick={addTalent}
-              className="flex h-9 w-9 items-center justify-center border border-[#c8aa6e]/35 text-[#c8aa6e] transition hover:border-[#c8aa6e] hover:text-[#f0e6d2]"
+              className="noma-talent-catalog__add"
               aria-label="Añadir talento a la clase"
             >
               <FiPlus className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="space-y-1.5">
-            {talentCatalog.map((talent) => (
+          <div className="noma-talent-ledger__list">
+            {talentCatalog.map((talent, index) => (
               <button
                 key={talent.id}
                 type="button"
                 onClick={() => setSelectedTalentId(talent.id)}
-                className="group flex w-full items-center gap-3 border-l-2 border-slate-700 bg-[#111827]/45 px-2 py-2 text-left transition hover:border-[#c8aa6e] hover:bg-[#111827]"
+                className="noma-talent-entry group"
               >
+                <span className="noma-talent-entry__index" aria-hidden="true">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
                 <TalentImage image={talent.image} name={talent.name} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-bold uppercase tracking-wider text-[#f0e6d2]">
+                  <span className="noma-talent-entry__title block truncate">
                     {talent.name}
                   </span>
-                  <span className="mt-0.5 block truncate text-[10px] text-slate-500">
+                  <span className="noma-talent-entry__description block truncate">
                     {talent.description || 'Sin descripción'}
                   </span>
                 </span>
                 <span
-                  className={`h-2 w-2 shrink-0 ${talent.available !== false ? 'bg-emerald-400' : 'bg-slate-700'}`}
+                  className={`noma-talent-entry__status ${talent.available !== false ? 'is-active' : ''}`}
                 />
                 <FiEdit2 className="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:text-[#c8aa6e]" />
               </button>
@@ -391,43 +420,59 @@ const RogueliteTalentsPanel = ({
               </div>
             )}
           </div>
-        </div>
+        </section>
       ) : (
-        <div className="w-full space-y-1">
-          {Array.from({ length: ROGUELITE_TALENT_SLOT_COUNT }, (_, index) => {
-            const catalogTalent = catalogById.get(equippedTalentIds[index]);
-            const equippedTalent =
-              catalogTalent?.available !== false ? catalogTalent : null;
-            return (
-              <button
-                key={index}
-                type="button"
-                onClick={() => setActiveSlot(index)}
-                className="group flex min-h-14 w-full items-center gap-4 border border-transparent px-2 py-2 text-left transition hover:border-slate-800/70 hover:bg-slate-800/30 focus-visible:border-[#c8aa6e]/60 focus-visible:outline-none"
-                aria-label={`Seleccionar talento para ranura ${index + 1}`}
-              >
-                <TalentImage
-                  image={equippedTalent?.image}
-                  name={equippedTalent?.name || `Ranura ${index + 1}`}
-                />
-                <span className="min-w-0 flex-1">
-                  <span
-                    className={`block truncate text-xs font-bold uppercase tracking-wider ${equippedTalent ? 'text-[#c8aa6e]' : 'text-slate-600'}`}
-                  >
-                    {equippedTalent?.name || 'Ranura vacía'}
+        <section className="noma-talent-ledger noma-talent-slots w-full">
+          <div className="noma-talent-catalog__header">
+            <div>
+              <span className="noma-talent-catalog__eyebrow">Preparación</span>
+              <h4>Talentos equipados</h4>
+            </div>
+            <span className="noma-talent-ledger__counter" aria-label={`${equippedTalentCount} talentos equipados`}>
+              {equippedTalentCount}<small>/{ROGUELITE_TALENT_SLOT_COUNT}</small>
+            </span>
+          </div>
+
+          <div className="noma-talent-ledger__list">
+            {Array.from({ length: ROGUELITE_TALENT_SLOT_COUNT }, (_, index) => {
+              const catalogTalent = catalogById.get(equippedTalentIds[index]);
+              const equippedTalent =
+                catalogTalent?.available !== false ? catalogTalent : null;
+              return (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => setActiveSlot(index)}
+                  className={`noma-talent-entry group ${equippedTalent ? 'is-equipped' : 'is-empty'}`}
+                  aria-label={`Seleccionar talento para ranura ${index + 1}`}
+                >
+                  <span className="noma-talent-entry__index" aria-hidden="true">
+                    {String(index + 1).padStart(2, '0')}
                   </span>
-                  <span className="mt-0.5 block truncate text-[10px] text-slate-500">
-                    {equippedTalent?.description ||
-                      'Pulsa para elegir un talento'}
+                  <TalentImage
+                    image={equippedTalent?.image}
+                    name={equippedTalent?.name || `Ranura ${index + 1}`}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className="noma-talent-entry__title block truncate"
+                    >
+                      {equippedTalent?.name || 'Ranura vacía'}
+                    </span>
+                    <span className="noma-talent-entry__description block truncate">
+                      {equippedTalent?.description ||
+                        'Pulsa para elegir un talento'}
+                    </span>
                   </span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
       )}
 
-      <div className="my-6 h-px w-full bg-slate-800" />
+      <div className="noma-talent-divider" />
+      </div>
 
       {selectedTalent &&
         isMaster &&

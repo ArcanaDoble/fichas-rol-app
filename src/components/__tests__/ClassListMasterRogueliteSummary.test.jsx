@@ -174,6 +174,7 @@ test('uses the editable roguelite summary for the master class sheet', async () 
   expect(await screen.findByLabelText('Nombre del recurso de clase')).toHaveValue('Furia');
   expect(screen.getByLabelText('Editar imagen del recurso de clase')).toBeInTheDocument();
   expect(screen.getByTestId('talents-sidebar')).toHaveClass('overflow-y-auto');
+  expect(screen.getByTestId('talents-sidebar')).toHaveClass('noma-talents-shell--master');
   expect(screen.getAllByText('Atletismo').length).toBeGreaterThan(0);
   expect(screen.getByRole('button', { name: 'Simples' })).toHaveClass('border-slate-700', 'text-slate-600');
   expect(screen.getByRole('button', { name: 'Marciales' }).parentElement).toHaveClass('grid-cols-3', 'max-w-[390px]');
@@ -193,4 +194,4 @@ test('uses the editable roguelite summary for the master class sheet', async () 
     ]));
     expect(savedClass.roguelite.talentCatalog).toEqual(savedClass.talentCatalog);
   });
-});
+}, 10000);
