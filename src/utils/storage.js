@@ -33,6 +33,7 @@ const IMAGE_UPLOAD_PRESETS = {
   CanvasMaps: { maxWidth: 4096, maxHeight: 4096, quality: 0.84 },
   'canvas-assets': { maxWidth: 1024, maxHeight: 1024, quality: 0.84 },
   custom_icons: { maxWidth: 512, maxHeight: 512, quality: 0.86 },
+  'roguelite-class-assets': { maxWidth: 1600, maxHeight: 1600, quality: 0.86 },
   MinimapaIcons: { maxWidth: 512, maxHeight: 512, quality: 0.86 },
   RouteMapIcons: { maxWidth: 512, maxHeight: 512, quality: 0.86 },
 };
@@ -222,7 +223,7 @@ export const uploadFile = async (file, path) => {
 };
 
 export const uploadDataUrl = async (dataUrl, path) => {
-  const optimized = await optimizeDataUrl(dataUrl);
+  const optimized = await optimizeDataUrl(dataUrl, getUploadPreset(path));
   const uploadableDataUrl = optimized.dataUrl;
   const uploadPath = optimized.optimized
     ? withWebpExtension(path)

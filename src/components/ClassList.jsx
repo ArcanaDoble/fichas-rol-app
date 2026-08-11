@@ -68,7 +68,14 @@ import KarmaBar from './KarmaBar';
 import { LibraryCharacterCard } from './LibraryCharacterCard';
 import { isYuuzuName, KARMA_MIN, KARMA_MAX } from '../utils/karma';
 import { normalizeRogueliteProfileLevel } from '../features/roguelite/profileClass';
+import {
+  createEquipmentTemplateId,
+  equipItemInSlot,
+  normalizeEquippedHandSlots,
+  resolveEquipmentHandsRequired,
+} from '../features/roguelite/equipmentPool';
 import { resolveRogueliteClassLevels } from '../features/roguelite/progression';
+import { resolveRogueliteTalentCatalog } from '../features/roguelite/talents';
 import EditableTag from './EditableTag';
 import {
   parseTag,
@@ -316,24 +323,14 @@ const buildWeaponEntry = (weapon) => {
   const description = weapon.descripcion || weapon.description || '';
   const traits = joinTraits(weapon.rasgos || weapon.traits || '');
   const category = extractCategory(
-    [weapon.category, weapon.tipo, weapon.clase, weapon.origen, weapon.tipoDano],
+    [weapon.competence, weapon.competencia, weapon.category, weapon.tipo, weapon.clase],
     'Arma',
   );
 
   const consumption = convertNumericStringToIcons(
-    weapon.consumo || weapon.cost || '',
+    String(weapon.actionCost ?? weapon.consumo ?? weapon.cost ?? ''),
     '🟡',
     ['Consumo', 'Velocidad'],
-  );
-  const physicalLoad = convertNumericStringToIcons(
-    weapon.cargaFisica || weapon.carga || '',
-    '🔲',
-    ['Carga física', 'Carga fisica'],
-  );
-  const mentalLoad = convertNumericStringToIcons(
-    weapon.cargaMental || '',
-    '🧠',
-    ['Carga mental'],
   );
   const rarity = (weapon.rareza || weapon.rarity || '').toString().trim();
 
@@ -344,16 +341,18 @@ const buildWeaponEntry = (weapon) => {
     preview: description || traits || `${weapon.dano || ''} ${weapon.alcance || ''}`.trim(),
     origin: formatOrigin(weapon.fuente || weapon.source),
     payload: {
+      templateId: String(weapon.id || slugifyId(name) || name),
       name,
       category,
       damage: weapon.dano || weapon.damage || weapon.Dano || weapon.Damage || '',
       range: weapon.alcance || weapon.range || weapon.Alcance || weapon.Range || '',
       consumption,
-      physicalLoad,
-      mentalLoad,
       traits,
       rareza: rarity,
       description,
+      value: weapon.valor ?? weapon.value ?? '',
+      competence: weapon.competence ?? weapon.competencia ?? '',
+      handsRequired: resolveEquipmentHandsRequired(weapon),
     },
   };
 
@@ -375,37 +374,57 @@ const buildArmorEntry = (armor) => {
   const description = armor.descripcion || armor.description || '';
   const traits = joinTraits(armor.rasgos || armor.traits || '');
   const category = extractCategory(
-    [armor.tipo, armor.categoria, armor.category, armor.clase],
+    [armor.competence, armor.competencia, armor.tipo, armor.categoria, armor.category],
     'Armadura',
   );
-
-  const physicalLoad = convertNumericStringToIcons(
-    armor.cargaFisica || armor.carga || armor.peso || '',
-    '🔲',
-    ['Carga física', 'Carga fisica'],
-  );
-  const mentalLoad = convertNumericStringToIcons(
-    armor.cargaMental || '',
-    '🧠',
-    ['Carga mental'],
-  );
   const rarity = (armor.rareza || armor.rarity || '').toString().trim();
+  const defenseClass = armor.defenseClass ?? armor.cd ?? armor.defensa ?? armor.defense ?? '';
 
   return {
     id: armor.id || name,
     name,
     category,
-    preview: description || traits || `${armor.defensa || ''} ${armor.carga || ''}`.trim(),
+    preview: description || traits || (defenseClass ? `CD ${defenseClass}` : ''),
     origin: formatOrigin(armor.fuente || armor.source),
     payload: {
+      templateId: String(armor.id || slugifyId(name) || name),
       name,
       category,
-      defense: armor.defensa || armor.defense || armor.Defensa || armor.Defense || '',
-      physicalLoad,
-      mentalLoad,
+      defense: defenseClass,
+      defenseClass,
       traits,
       rareza: rarity,
       description,
+      value: armor.valor ?? armor.value ?? '',
+      competence: armor.competence ?? armor.competencia ?? '',
+    },
+  };
+};
+
+const buildAccessoryEntry = (accessory) => {
+  if (!accessory) return null;
+
+  const name = accessory.nombre || accessory.name || '';
+  if (!name) return null;
+
+  const description = accessory.descripcion || accessory.description || '';
+  const traits = joinTraits(accessory.rasgos || accessory.traits || '');
+  const rarity = (accessory.rareza || accessory.rarity || '').toString().trim();
+
+  return {
+    id: accessory.id || name,
+    name,
+    category: 'Accesorio',
+    preview: description || traits,
+    origin: formatOrigin(accessory.fuente || accessory.source),
+    payload: {
+      templateId: String(accessory.id || slugifyId(name) || name),
+      name,
+      category: 'Accesorio',
+      traits,
+      rareza: rarity,
+      description,
+      value: accessory.valor ?? accessory.value ?? '',
     },
   };
 };
@@ -432,12 +451,10 @@ const buildAbilityEntry = (ability) => {
   }
 
   const consumption = convertNumericStringToIcons(
-    ability.consumo || ability.cost || '',
+    String(ability.actionCost ?? ability.consumo ?? ability.cost ?? ''),
     '🟡',
     ['Consumo', 'Velocidad'],
   );
-  const body = convertNumericStringToIcons(ability.cuerpo || '', '🔲', ['Cuerpo']);
-  const mind = convertNumericStringToIcons(ability.mente || '', '🧠', ['Mente']);
   const trait = joinTraits(ability.rasgo || ability.etiqueta || ability.keyword || '');
   const rarity = (ability.rareza || ability.rarity || '').toString().trim();
 
@@ -450,13 +467,12 @@ const buildAbilityEntry = (ability) => {
     preview: description || meta,
     origin: formatOrigin(ability.fuente || ability.source),
     payload: {
+      templateId: String(ability.id || slugifyId(name) || name),
       name,
       category,
       damage: ability.dano || ability.damage || ability.Dano || ability.Damage || ability.daño || ability.Daño || ability.poder || ability.Poder || '',
       range: ability.alcance || ability.range || ability.Alcance || ability.Range || '',
       consumption,
-      body,
-      mind,
       trait: trait || traits,
       rareza: rarity,
       description: meta ? `${description}${description ? '\n' : ''}${meta}` : description,
@@ -826,6 +842,9 @@ const ensureClassDefaults = (classItem) => {
   });
 
   merged.tags = merged.tags || [];
+  merged.equippedItems = normalizeEquippedHandSlots(
+    merged.equippedItems || { mainHand: null, offHand: null, body: null },
+  );
 
   return merged;
 };
@@ -1491,6 +1510,7 @@ const ClassList = ({
   armas = [],
   armaduras = [],
   habilidades = [],
+  accesorios = [],
   glossary = [],
   rarityColorMap = {},
   readOnly = false,
@@ -1584,8 +1604,9 @@ const ClassList = ({
       weapons: (armas || []).map(buildWeaponEntry).filter(Boolean),
       armor: (armaduras || []).map(buildArmorEntry).filter(Boolean),
       abilities: (habilidades || []).map(buildAbilityEntry).filter(Boolean),
+      accessories: (accesorios || []).map(buildAccessoryEntry).filter(Boolean),
     }),
-    [armas, armaduras, habilidades],
+    [armas, armaduras, habilidades, accesorios],
   );
 
   const totalPhysicalLoad = useMemo(() => {
@@ -1954,6 +1975,7 @@ const ClassList = ({
 
     // Normalizar el item para asegurar que tiene todas las propiedades necesarias
     const normalized = {
+      templateId: createEquipmentTemplateId(payload, category),
       name: payload.name || payload.nombre || 'Item sin nombre',
       category: payload.category || 'General',
       itemType: itemType, // Campo nuevo para identificar el tipo de ítem
@@ -1969,6 +1991,9 @@ const ClassList = ({
       body: payload.body || '',
       mind: payload.mind || '',
       icon: payload.icon || '',
+      ...(category === 'weapons' || payload.itemType === 'weapon'
+        ? { handsRequired: resolveEquipmentHandsRequired(payload) }
+        : {}),
     };
 
     updateEditingClass((draft) => {
@@ -1984,7 +2009,12 @@ const ClassList = ({
         draft.equipment[targetCategory] = [];
       }
 
-      draft.equipment[targetCategory].push(normalized);
+      const alreadyIncluded = draft.equipment[targetCategory].some(
+        (item) => createEquipmentTemplateId(item, targetCategory) === normalized.templateId,
+      );
+      if (!alreadyIncluded) {
+        draft.equipment[targetCategory].push(normalized);
+      }
     });
   };
 
@@ -2029,6 +2059,26 @@ const ClassList = ({
         draft.talents = {};
       }
       draft.talents[field] = value;
+    });
+  };
+
+  const handleUpdateTalentCatalog = (talentCatalog) => {
+    updateEditingClass((draft) => {
+      draft.talentCatalog = talentCatalog;
+      draft.roguelite = {
+        ...(draft.roguelite || {}),
+        talentCatalog: deepClone(talentCatalog),
+      };
+    });
+  };
+
+  const handleUpdateEquippedTalentIds = (equippedTalentIds) => {
+    updateEditingClass((draft) => {
+      draft.equippedTalentIds = equippedTalentIds;
+      draft.talents = {
+        ...(draft.talents || {}),
+        slots: [...equippedTalentIds],
+      };
     });
   };
 
@@ -2116,8 +2166,11 @@ const ClassList = ({
 
   const handleUpdateEquipped = (slot, item) => {
     updateEditingClass((draft) => {
-      draft.equippedItems = draft.equippedItems || { mainHand: null, offHand: null, body: null };
-      draft.equippedItems[slot] = item;
+      draft.equippedItems = equipItemInSlot(
+        draft.equippedItems || { mainHand: null, offHand: null, body: null },
+        slot,
+        item,
+      );
     });
   };
 
@@ -2473,11 +2526,29 @@ const ClassList = ({
           cleanedData.tags,
           statusEffectsConfig,
         );
+        cleanedData.talentCatalog = resolveRogueliteTalentCatalog(cleanedData);
+        cleanedData.roguelite = {
+          ...(cleanedData.roguelite || {}),
+          talentCatalog: deepClone(cleanedData.talentCatalog),
+        };
       }
 
       // Guardar en Firebase con timeout extendido para evitar espera indefinida
       // Si Firebase está saturado (resource-exhausted), esto fallará después de 20s
-      const savePromise = setDoc(getDetailDocumentRef(classId), cleanedData, { merge: true });
+      const persistenceData = detailPersistence?.mode === 'roguelite'
+        ? (() => {
+          const personalData = { ...cleanedData };
+          delete personalData.talentCatalog;
+          delete personalData.equipment;
+          delete personalData.startingEquipmentPool;
+          if (personalData.roguelite) {
+            personalData.roguelite = { ...personalData.roguelite };
+            delete personalData.roguelite.talentCatalog;
+          }
+          return personalData;
+        })()
+        : cleanedData;
+      const savePromise = setDoc(getDetailDocumentRef(classId), persistenceData, { merge: true });
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Firebase está saturado o la conexión es lenta (Timeout 20s)')), 20000)
       );
@@ -3706,6 +3777,9 @@ const ClassList = ({
       actionData: editingClass.actionData,
       equipment: editingClass.equipment || [],
       talents: editingClass.talents || {},
+      resource: editingClass.resource || editingClass.roguelite?.resource || {},
+      talentCatalog: resolveRogueliteTalentCatalog(editingClass),
+      equippedTalentIds: editingClass.equippedTalentIds || [],
       summary: editingClass.summary || {},
       equippedItems: editingClass.equippedItems || { mainHand: null, offHand: null, body: null },
       storeItems: editingClass.storeItems || [],
@@ -5076,12 +5150,16 @@ const ClassList = ({
               key={dndClass.id}
               dndClass={dndClass}
               isCharacter={isPlayerMode}
+              rogueliteRole={isRoguelitePlayerClass ? 'player' : (!isPlayerMode ? 'master' : 'legacy')}
               equipmentCatalog={equipmentCatalog}
               glossary={glossary}
               rarityColorMap={rarityColorMap}
               onAddEquipment={handleAddEquipment}
               onRemoveEquipment={handleRemoveEquipment}
               onUpdateTalent={handleUpdateTalent}
+              onUpdateResource={updateMasterRogueliteResource}
+              onUpdateTalentCatalog={handleUpdateTalentCatalog}
+              onUpdateEquippedTalentIds={handleUpdateEquippedTalentIds}
               onUpdateProficiency={handleProficiencyChange}
               onUpdateEquipped={handleUpdateEquipped}
             />

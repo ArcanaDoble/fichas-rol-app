@@ -3,13 +3,53 @@ import { Tooltip } from 'react-tooltip';
 import PropTypes from 'prop-types';
 import { FiShield, FiX, FiCheck, FiAlertTriangle, FiStar, FiPlus, FiMinus, FiEdit2 } from 'react-icons/fi';
 import { GiBelt } from 'react-icons/gi';
-import { Sword, Shield, Zap, Gem } from 'lucide-react';
+import { Dices, Sword, Shield, Zap, Gem, LockKeyhole } from 'lucide-react';
 import HexIcon from './HexIcon';
+import RogueliteTalentsPanel from './RogueliteTalentsPanel';
 import { db } from '../firebase';
 import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { useCustomEquipmentImages, getCustomImage } from '../hooks/useCustomEquipmentImages';
 
 import { normalizeGlossaryWord, getGlossaryTooltipId } from '../utils/glossary';
+import {
+    normalizeEquippedHandSlots,
+    resolveEquippedHandOccupancy,
+    resolveEquipmentHandsRequired,
+} from '../features/roguelite/equipmentPool';
+
+const INVENTORY_CATEGORIES = [
+    { id: 'weapons', label: 'Armas' },
+    { id: 'armor', label: 'Armaduras' },
+    { id: 'abilities', label: 'Habilidades' },
+    { id: 'objects', label: 'Objetos' },
+    { id: 'accessories', label: 'Accesorios' },
+];
+
+const normalizeInventorySearch = (value) => String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+const resolveActionCost = (value) => {
+    const rawValue = String(value || '').trim();
+    if (!rawValue) return null;
+
+    const actionMarks = rawValue.match(/🟡/g);
+    if (actionMarks?.length) return Math.min(3, actionMarks.length);
+
+    const numericMatch = rawValue.match(/\d+/);
+    if (numericMatch) return Math.min(3, Math.max(0, Number(numericMatch[0])));
+
+    return rawValue;
+};
+
+const resolveVisibleTraits = (item, handsRequired) => {
+    const rawTraits = item.traits || item.rasgos || item.trait || '';
+    const traits = rawTraits.toString().split(',').map((trait) => trait.trim()).filter(Boolean);
+    if (handsRequired !== 2) return traits;
+
+    return traits.filter((trait) => !/(^|\W)(dos manos|2 manos|a dos manos|two handed|two-handed)(\W|$)/i.test(trait));
+};
 
 const RARITIES = [
     { id: 'comun', label: 'Común', color: 'bg-slate-600 border-slate-400 text-slate-200' },
@@ -237,10 +277,27 @@ const formatItemName = (name) => {
     return formatted;
 };
 
-const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary = [], rarityColorMap = {}, onAddEquipment, onRemoveEquipment, onUpdateTalent, onUpdateProficiency, onUpdateEquipped }) => {
+const LoadoutView = ({
+    dndClass,
+    isCharacter = false,
+    rogueliteRole = 'legacy',
+    equipmentCatalog,
+    glossary = [],
+    rarityColorMap = {},
+    onAddEquipment,
+    onRemoveEquipment,
+    onUpdateTalent,
+    onUpdateProficiency,
+    onUpdateEquipped,
+    onUpdateResource,
+    onUpdateTalentCatalog,
+    onUpdateEquippedTalentIds,
+}) => {
     const customEquipmentImages = useCustomEquipmentImages();
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState('weapons');
+    const [selectedCategory, setSelectedCategory] = useState(
+        rogueliteRole === 'player' ? 'all' : 'weapons',
+    );
     const [showRarityDropdown, setShowRarityDropdown] = useState(false);
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [isEditingDescription, setIsEditingDescription] = useState(false);
@@ -279,6 +336,12 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
 
     // Fetch custom items and accessories
     React.useEffect(() => {
+        if (rogueliteRole === 'player') {
+            setCustomItems([]);
+            setAccessories([]);
+            return undefined;
+        }
+
         const fetchCustomItems = async () => {
             try {
                 const snap = await getDocs(collection(db, 'customItems'));
@@ -304,7 +367,8 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
 
         fetchCustomItems();
         fetchAccessories(); // Call fetch function
-    }, []);
+        return undefined;
+    }, [rogueliteRole]);
 
     // Local editing state
     const [editingTitle, setEditingTitle] = useState('');
@@ -328,7 +392,16 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
     }, [activeSlotSelector, activeTalentSlotSelector, showRarityDropdown]);
 
     // Get equipped items from dndClass (Moved up for initialization)
-    const equippedItems = dndClass.equippedItems || { mainHand: null, offHand: null, body: null };
+    const equippedItems = useMemo(
+        () => normalizeEquippedHandSlots(
+            dndClass.equippedItems || { mainHand: null, offHand: null, body: null },
+        ),
+        [dndClass.equippedItems],
+    );
+    const handOccupancy = useMemo(
+        () => resolveEquippedHandOccupancy(equippedItems),
+        [equippedItems],
+    );
 
     // Calculate initial belt count based on equipped items as fallback
     const initialBeltCount = useMemo(() => {
@@ -419,6 +492,29 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
     const talentRarity = dndClass.talents?.rarity || 'rara';
     const summary = dndClass.summary || {};
 
+    const renderProficiencyOption = (group, key, label) => {
+        const isActive = summary.proficiencies?.[group]?.[key] === true;
+        const className = `flex min-h-9 items-center justify-center rounded border px-2 py-1 text-center text-[10px] font-bold uppercase tracking-wider transition-all ${isActive
+            ? 'bg-[#c8aa6e] border-[#c8aa6e] text-[#0b1120] shadow-[0_0_15px_rgba(200,170,110,0.4)]'
+            : `bg-transparent border-slate-700 text-slate-600 ${rogueliteRole === 'player' ? '' : 'hover:border-slate-500 hover:text-slate-400'}`
+            }`;
+
+        if (rogueliteRole === 'player') {
+            return <span key={key} className={className}>{label}</span>;
+        }
+
+        return (
+            <button
+                key={key}
+                type="button"
+                onClick={() => onUpdateProficiency && onUpdateProficiency(group, key)}
+                className={className}
+            >
+                {label}
+            </button>
+        );
+    };
+
     // Get equipped items from dndClass
     // const equippedItems = dndClass.equippedItems || { mainHand: null, offHand: null, body: null }; // MOVED UP
 
@@ -452,8 +548,38 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
         return equipment.filter(item => item._category === 'accessories');
     }, [equipment]);
 
+    const filteredInventory = useMemo(() => {
+        if (rogueliteRole !== 'player') return equipment;
+
+        const normalizedSearch = normalizeInventorySearch(searchTerm.trim());
+
+        return equipment.filter((item) => {
+            if (selectedCategory !== 'all' && item._category !== selectedCategory) return false;
+            if (!normalizedSearch) return true;
+
+            const searchableText = normalizeInventorySearch([
+                item.name,
+                item.category,
+                item.itemType,
+                item.traits,
+                item.rasgos,
+                item.trait,
+                item.description,
+                item.damage,
+                item.dano,
+                item.range,
+                item.alcance,
+                item.rareza,
+            ].filter(Boolean).join(' '));
+
+            return searchableText.includes(normalizedSearch);
+        });
+    }, [equipment, searchTerm, selectedCategory, rogueliteRole]);
+
     // Filtrar catálogo según búsqueda
     const filteredCatalog = useMemo(() => {
+        if (rogueliteRole === 'player') return [];
+
         let catalog = [];
 
         if (selectedCategory === 'objects') {
@@ -495,7 +621,7 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                 (item.category && item.category.toLowerCase().includes(searchTerm.toLowerCase()))
             )
             .slice(0, 5);
-    }, [equipmentCatalog, selectedCategory, searchTerm, dndClass.storeItems, customItems, accessories]);
+    }, [equipmentCatalog, selectedCategory, searchTerm, customItems, accessories, rogueliteRole]);
 
     // Check if character has proficiency with a weapon
     const hasWeaponProficiency = (item) => {
@@ -594,20 +720,17 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                         {/* --- INVENTORY VIEW --- */}
                         {activeTab === 'inventory' && (
                             <div className="animate-in fade-in slide-in-from-left-4 duration-300">
-                                {/* Buscador de Equipamiento */}
+                                {/* Catálogo del máster / filtros locales del jugador */}
                                 <div className="mb-6 p-4 bg-[#161f32]/60 border border-[#c8aa6e]/20 rounded-lg">
                                     <h4 className="text-[#c8aa6e] font-['Cinzel'] text-sm tracking-widest mb-3">
-                                        AGREGAR AL INVENTARIO
+                                        {rogueliteRole === 'player' ? 'FILTRAR INVENTARIO' : 'AGREGAR AL INVENTARIO'}
                                     </h4>
 
                                     {/* Tabs de categoría */}
                                     <div className="flex flex-wrap gap-2 mb-3">
                                         {[
-                                            { id: 'weapons', label: 'Armas' },
-                                            { id: 'armor', label: 'Armaduras' },
-                                            { id: 'abilities', label: 'Habilidades' },
-                                            { id: 'objects', label: 'Objetos' },
-                                            { id: 'accessories', label: 'Accesorios' }
+                                            ...(rogueliteRole === 'player' ? [{ id: 'all', label: 'Todo' }] : []),
+                                            ...INVENTORY_CATEGORIES,
                                         ].map(cat => (
                                             <button
                                                 key={cat.id}
@@ -627,11 +750,13 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                         type="text"
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
-                                        placeholder="Buscar en catálogo..."
+                                        placeholder={rogueliteRole === 'player' ? 'Buscar en tu inventario...' : 'Buscar en catálogo...'}
+                                        aria-label={rogueliteRole === 'player' ? 'Buscar en tu inventario' : 'Buscar en catálogo'}
                                         className="w-full px-3 py-2 bg-slate-900/50 border border-[#c8aa6e]/30 rounded text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#c8aa6e]"
                                     />
 
                                     {/* Resultados de búsqueda */}
+                                    {rogueliteRole !== 'player' && (
                                     <div className="mt-3 max-h-48 overflow-y-auto custom-scrollbar space-y-2">
                                         {filteredCatalog.length > 0 ? (
                                             filteredCatalog.map((item, idx) => (
@@ -657,18 +782,24 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                             </div>
                                         )}
                                     </div>
+                                    )}
                                 </div>
 
-                                <div className="flex items-center gap-3 mb-6">
-                                    <Shield className="w-5 h-5 text-[#c8aa6e]" />
-                                    <h3 className="text-[#c8aa6e] font-['Cinzel'] text-xl tracking-[0.3em] uppercase">
-                                        Inventario (Mochila)
-                                    </h3>
+                                <div className="mb-6 flex items-end justify-between gap-4 border-b border-slate-800/80 pb-3">
+                                    <div className="flex items-center gap-3">
+                                        <Shield className="w-5 h-5 text-[#c8aa6e]" />
+                                        <h3 className="text-[#c8aa6e] font-['Cinzel'] text-xl tracking-[0.3em] uppercase">
+                                            Inventario (Mochila)
+                                        </h3>
+                                    </div>
+                                    <span className="shrink-0 text-[10px] uppercase tracking-[0.22em] text-slate-600">
+                                        {filteredInventory.length} / {equipment.length}
+                                    </span>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-fr">
-                                    {equipment.length > 0 ? (
-                                        equipment.map((item, index) => {
+                                    {filteredInventory.length > 0 ? (
+                                        filteredInventory.map((item, index) => {
                                             // Determinar icono basado en itemType
                                             const getIcon = () => {
                                                 // Primero intentar usar itemType si existe
@@ -691,9 +822,22 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
 
                                             const rarityColors = getRarityColors(item, rarityColorMap);
                                             const objectImage = getObjectImage(item, customEquipmentImages);
+                                            const isWeapon = item._category === 'weapons' || item.itemType === 'weapon';
+                                            const handsRequired = isWeapon ? resolveEquipmentHandsRequired(item) : null;
+                                            const actionCost = resolveActionCost(item.consumption || item.consumo);
+                                            const visibleTraits = resolveVisibleTraits(item, handsRequired);
+                                            const proficiencyWarning = item._category === 'weapons'
+                                                ? getWeaponProficiencyWarning(item)
+                                                : item._category === 'armor'
+                                                    ? getArmorProficiencyWarning(item)
+                                                    : null;
 
                                             return (
-                                                <div key={index} className="group bg-[#161f32] border border-slate-700 hover:border-[#c8aa6e] p-1 rounded-lg transition-all duration-500 cursor-pointer hover:-translate-y-1 hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)] flex overflow-hidden relative h-full">
+                                                <div
+                                                    key={item.templateId || `${item._category}-${item._index}-${index}`}
+                                                    data-testid="inventory-item-card"
+                                                    className="group relative flex min-h-[190px] h-full cursor-pointer overflow-hidden rounded-lg border border-slate-700 bg-[#161f32] p-1 transition-all duration-500 hover:-translate-y-1 hover:border-[#c8aa6e] hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)]"
+                                                >
 
                                                     {/* Dynamic Background Gradient & Particles (Hover Effect) */}
                                                     <div
@@ -716,7 +860,7 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                     ></div>
 
                                                     {/* Image/Icon Section */}
-                                                    <div className="w-24 bg-black/50 relative shrink-0 ml-2 flex flex-col z-10 backdrop-blur-sm overflow-hidden rounded-l">
+                                                    <div className="relative z-10 ml-2 flex w-28 shrink-0 flex-col overflow-hidden rounded-l bg-black/50 sm:w-32">
                                                         {objectImage && (
                                                             <>
                                                                 <img
@@ -749,14 +893,17 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
 
                                                     {/* Content */}
                                                     <div className="flex-1 p-3 flex flex-col relative z-0 min-w-0">
-                                                        <div className="flex justify-between items-start mb-2">
-                                                            <h4 className="text-[#f0e6d2] font-bold text-sm font-['Cinzel'] tracking-wide group-hover:text-[#c8aa6e] transition-colors uppercase truncate pr-6">
+                                                        <div className="mb-2 pr-6">
+                                                            <span className="mb-1 block text-[8px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                                                                {item.category || INVENTORY_CATEGORIES.find((category) => category.id === item._category)?.label}
+                                                            </span>
+                                                            <h4 className="font-['Cinzel'] text-sm font-bold uppercase leading-snug tracking-wide text-[#f0e6d2] transition-colors group-hover:text-[#c8aa6e]">
                                                                 {item.name}
                                                             </h4>
                                                         </div>
 
                                                         {/* Stats Grid */}
-                                                        <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] mb-3 border-b border-slate-700/50 pb-2">
+                                                        <div className="mb-3 grid grid-cols-2 gap-x-3 gap-y-1.5 border-b border-slate-700/50 pb-2 text-[10px]">
                                                             {/* Weapon/Ability Stats */}
                                                             {(item.damage || item.dano) && (
                                                                 <div className="col-span-2 flex justify-between">
@@ -776,19 +923,32 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                                     <span className="text-slate-300">{item.range || item.alcance}</span>
                                                                 </div>
                                                             )}
-                                                            {(item.consumption || item.consumo) && (
-                                                                <div className="col-span-1 text-right">
-                                                                    <span className="text-slate-500 uppercase font-bold mr-1">Coste:</span>
-                                                                    <span className="">{item.consumption || item.consumo}</span>
+                                                            {actionCost !== null && (
+                                                                <div className="col-span-1 flex items-center justify-end gap-1.5" aria-label={`Coste: ${actionCost} dados de acción`}>
+                                                                    <span className="text-slate-500 uppercase font-bold">Coste:</span>
+                                                                    <Dices className="h-3.5 w-3.5 text-[#c8aa6e]" aria-hidden="true" />
+                                                                    <span className="font-mono text-[#e8cf93]">{actionCost}</span>
+                                                                </div>
+                                                            )}
+                                                            {handsRequired && (
+                                                                <div className="col-span-2 flex justify-between border-t border-slate-800/70 pt-1.5">
+                                                                    <span className="text-slate-500 uppercase font-bold">Empuñadura:</span>
+                                                                    <span className="text-slate-300">{handsRequired === 2 ? 'Dos manos' : 'Una mano'}</span>
                                                                 </div>
                                                             )}
                                                         </div>
 
+                                                        {rogueliteRole === 'player' && proficiencyWarning && (
+                                                            <div className="mb-2 text-[9px] uppercase tracking-wider text-amber-300/70">
+                                                                {proficiencyWarning}
+                                                            </div>
+                                                        )}
+
                                                         {/* Traits */}
-                                                        {(item.traits || item.rasgos || item.trait) && (
+                                                        {visibleTraits.length > 0 && (
                                                             <div className="mb-2">
                                                                 <div className="flex flex-wrap gap-1">
-                                                                    {(item.traits || item.rasgos || item.trait).toString().split(',').map((t, i) => renderTrait(t, i))}
+                                                                    {visibleTraits.map((trait, traitIndex) => renderTrait(trait, traitIndex))}
                                                                 </div>
                                                             </div>
                                                         )}
@@ -802,6 +962,7 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                     </div>
 
                                                     {/* Botón eliminar */}
+                                                    {rogueliteRole !== 'player' && (
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
@@ -812,6 +973,7 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                     >
                                                         <FiX className="w-3 h-3" />
                                                     </button>
+                                                    )}
 
                                                     {/* Hover Glow */}
                                                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 pointer-events-none"></div>
@@ -820,7 +982,9 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                         })
                                     ) : (
                                         <div className="col-span-2 text-center py-8 text-slate-500 italic">
-                                            No hay objetos en el inventario.
+                                            {equipment.length > 0
+                                                ? 'No hay objetos que coincidan con estos filtros.'
+                                                : 'No hay objetos en el inventario.'}
                                         </div>
                                     )}
                                 </div>
@@ -845,12 +1009,17 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                 { key: 'mainHand', label: 'Mano Hábil', badge: 'HÁBIL', badgeClass: 'bg-green-900/40 text-green-400' },
                                                 { key: 'offHand', label: 'Mano Torpe', badge: 'TORPE', badgeClass: 'bg-red-900/40 text-red-400' }
                                             ].map(({ key, label, badge, badgeClass }) => {
-                                                const equippedItem = equippedItems[key];
+                                                const isOccupiedByTwoHanded = handOccupancy?.blockedSlot === key;
+                                                const occupyingItem = isOccupiedByTwoHanded ? handOccupancy.item : null;
+                                                const equippedItem = isOccupiedByTwoHanded ? null : equippedItems[key];
                                                 const proficiencyWarning = equippedItem ? getWeaponProficiencyWarning(equippedItem) : null;
-                                                const isSlotActive = activeSlotSelector === key;
+                                                const isSlotActive = !isOccupiedByTwoHanded && activeSlotSelector === key;
                                                 const rarityColors = equippedItem ? getRarityColors(equippedItem, rarityColorMap) : null;
 
                                                 const weaponImage = equippedItem ? getObjectImage(equippedItem, customEquipmentImages) : null;
+                                                const occupyingWeaponImage = occupyingItem
+                                                    ? getObjectImage(occupyingItem, customEquipmentImages)
+                                                    : null;
 
                                                 return (
                                                     <div key={key} className="relative group">
@@ -858,10 +1027,18 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                         <div
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
+                                                                if (isOccupiedByTwoHanded) return;
                                                                 setActiveSlotSelector(isSlotActive ? null : key);
                                                             }}
+                                                            role={isOccupiedByTwoHanded ? 'status' : undefined}
+                                                            aria-disabled={isOccupiedByTwoHanded || undefined}
+                                                            aria-label={isOccupiedByTwoHanded
+                                                                ? `${label} ocupada por ${occupyingItem?.name || 'arma a dos manos'}`
+                                                                : undefined}
                                                             className={`h-52 border-2 rounded-lg flex flex-col items-center justify-center transition-all cursor-pointer relative overflow-hidden p-3
-                                                                ${equippedItem
+                                                                ${isOccupiedByTwoHanded
+                                                                    ? 'cursor-not-allowed border-[#c8aa6e]/30 bg-[#0b1120]'
+                                                                    : equippedItem
                                                                     ? proficiencyWarning
                                                                         ? 'border-orange-500/50'
                                                                         : `${rarityColors?.border || 'border-[#c8aa6e]/50'}`
@@ -871,7 +1048,26 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                             `}
                                                             style={equippedItem && !proficiencyWarning ? rarityColors?.borderStyle || undefined : undefined}
                                                         >
-                                                            {equippedItem ? (
+                                                            {isOccupiedByTwoHanded ? (
+                                                                <>
+                                                                    {occupyingWeaponImage && (
+                                                                        <img
+                                                                            src={occupyingWeaponImage}
+                                                                            alt=""
+                                                                            aria-hidden="true"
+                                                                            className="absolute inset-0 h-full w-full scale-105 object-cover opacity-20 grayscale"
+                                                                        />
+                                                                    )}
+                                                                    <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(11,17,32,0.7),rgba(11,17,32,0.94))]"></div>
+                                                                    <LockKeyhole className="relative z-10 mb-3 h-7 w-7 text-[#c8aa6e]/80" />
+                                                                    <span className="relative z-10 text-center font-['Cinzel'] text-[11px] font-bold uppercase tracking-[0.18em] text-[#d8c18d]">
+                                                                        Arma a dos manos
+                                                                    </span>
+                                                                    <span className="relative z-10 mt-2 max-w-full truncate px-3 text-center text-[10px] uppercase tracking-[0.12em] text-slate-500">
+                                                                        Ocupada por {occupyingItem?.name}
+                                                                    </span>
+                                                                </>
+                                                            ) : equippedItem ? (
                                                                 <>
                                                                     {/* Weapon Image Background */}
                                                                     {weaponImage && (
@@ -917,6 +1113,12 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                                             style={rarityColors?.textStyle || undefined}
                                                                         >
                                                                             {equippedItem.rareza}
+                                                                        </span>
+                                                                    )}
+
+                                                                    {resolveEquipmentHandsRequired(equippedItem) === 2 && (
+                                                                        <span className="relative z-10 border border-[#c8aa6e]/45 bg-[#0b1120]/80 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.16em] text-[#d8c18d]">
+                                                                            2 manos
                                                                         </span>
                                                                     )}
 
@@ -979,15 +1181,24 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                                             )}
                                                         </div>
 
+                                                        {isOccupiedByTwoHanded && (
+                                                            <div
+                                                                aria-hidden="true"
+                                                                className={`pointer-events-none absolute top-1/2 z-20 h-px w-6 -translate-y-1/2 bg-gradient-to-r from-[#c8aa6e]/20 via-[#c8aa6e] to-[#c8aa6e]/20 ${key === 'offHand' ? '-left-6' : '-right-6'}`}
+                                                            >
+                                                                <span className={`absolute top-1/2 h-2 w-2 -translate-y-1/2 rotate-45 border border-[#c8aa6e] bg-[#0b1120] ${key === 'offHand' ? '-left-1' : '-right-1'}`}></span>
+                                                            </div>
+                                                        )}
+
                                                         {/* Hand Badge */}
                                                         <div className="absolute top-2 right-2">
-                                                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${badgeClass}`}>
-                                                                {badge}
+                                                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${isOccupiedByTwoHanded ? 'bg-[#c8aa6e]/10 text-[#c8aa6e]/70' : badgeClass}`}>
+                                                                {isOccupiedByTwoHanded ? 'OCUPADA' : badge}
                                                             </span>
                                                         </div>
 
                                                         {/* Equipment Selector Dropdown */}
-                                                        {isSlotActive && (
+                                                        {isSlotActive && !isOccupiedByTwoHanded && (
                                                             <div
                                                                 onClick={(e) => e.stopPropagation()}
                                                                 className="absolute top-full left-0 right-0 mt-2 z-50 bg-[#0b1120] border border-[#c8aa6e]/30 rounded-lg shadow-xl max-h-60 overflow-y-auto"
@@ -1749,13 +1960,35 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                     </div>
 
                     {/* Right Column: Relic Slots (Vertical Stack) */}
-                    <div className="bg-[#0b1120] border border-[#c8aa6e]/20 rounded-xl p-6 shadow-2xl flex flex-col h-fit max-h-[850px] overflow-y-auto sticky top-8 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                    <div
+                        data-testid="talents-sidebar"
+                        className={`bg-[#0b1120] border border-[#c8aa6e]/20 rounded-xl p-6 shadow-2xl flex flex-col h-fit sticky top-8 ${rogueliteRole === 'player'
+                            ? 'max-h-none overflow-visible'
+                            : 'max-h-[850px] overflow-y-auto [&::-webkit-scrollbar]:hidden'
+                            }`}
+                        style={rogueliteRole === 'player' ? undefined : { scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                    >
                         <h3 className="text-[#c8aa6e] font-['Cinzel'] text-lg tracking-widest mb-8 text-center flex items-center justify-center gap-2">
                             <FiShield className="w-5 h-5" />
                             TALENTOS
                         </h3>
 
                         <div className="flex flex-col gap-8 items-center justify-between">
+                            {rogueliteRole !== 'legacy' ? (
+                                <RogueliteTalentsPanel
+                                    role={rogueliteRole}
+                                    classId={dndClass.id}
+                                    resource={dndClass.resource || {}}
+                                    talentCatalog={dndClass.talentCatalog || []}
+                                    equippedTalentIds={dndClass.equippedTalentIds || []}
+                                    rarity={dndClass.talents?.rarity || 'rara'}
+                                    onResourceChange={onUpdateResource}
+                                    onCatalogChange={onUpdateTalentCatalog}
+                                    onEquippedTalentIdsChange={onUpdateEquippedTalentIds}
+                                    onRarityChange={(value) => onUpdateTalent && onUpdateTalent('rarity', value)}
+                                />
+                            ) : (
+                                <>
                             {/* Active Relic */}
                             <div className="relative group w-full flex flex-col items-center">
                                 <div className="relative z-10">
@@ -1987,9 +2220,11 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
 
                             {/* SEPARATOR */}
                             <div className="w-full h-[1px] bg-slate-800 my-1"></div>
+                                </>
+                            )}
 
                             {/* LOAD AND LIFE COUNTERS BLOCK */}
-                            {isCharacter ? (
+                            {isCharacter && rogueliteRole === 'legacy' ? (
                                 (() => {
                                     const maxVida = dndClass.stats?.vida?.max ?? dndClass.vida ?? 0;
                                     const isOverloaded = totalPhysicalLoad > maxVida;
@@ -2044,52 +2279,26 @@ const LoadoutView = ({ dndClass, isCharacter = false, equipmentCatalog, glossary
                                     );
                                 })()
                             ) : (
-                                <div className="w-full space-y-3">
+                                <div className="-mt-4 w-full space-y-4">
                                     <h4 className="text-[#c8aa6e] font-['Cinzel'] text-xs uppercase tracking-widest text-center">Competencias</h4>
 
                                     {/* Weapons */}
-                                    <div>
-                                        <div className="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider text-center">Armas</div>
-                                        <div className="flex flex-wrap gap-2 justify-center">
-                                            {['Simples', 'Marciales', 'Especiales'].map(type => {
-                                                const key = type === 'Simples' ? 'simple' : type === 'Marciales' ? 'martial' : 'special';
-                                                const isActive = summary.proficiencies?.weapons?.[key];
-                                                return (
-                                                    <button
-                                                        key={key}
-                                                        onClick={() => onUpdateProficiency && onUpdateProficiency('weapons', key)}
-                                                        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded border transition-all ${isActive
-                                                            ? 'bg-[#c8aa6e] border-[#c8aa6e] text-[#0b1120] shadow-[0_0_15px_rgba(200,170,110,0.4)]'
-                                                            : 'bg-transparent border-slate-700 text-slate-600 hover:border-slate-500 hover:text-slate-400'
-                                                            }`}
-                                                    >
-                                                        {type}
-                                                    </button>
-                                                )
-                                            })}
+                                    <div className="space-y-2">
+                                        <div className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Armas</div>
+                                        <div className="mx-auto grid w-full max-w-[390px] grid-cols-3 gap-2">
+                                            {renderProficiencyOption('weapons', 'simple', 'Simples')}
+                                            {renderProficiencyOption('weapons', 'martial', 'Marciales')}
+                                            {renderProficiencyOption('weapons', 'special', 'Especiales')}
                                         </div>
                                     </div>
 
                                     {/* Armor */}
-                                    <div>
-                                        <div className="text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider text-center">Armaduras</div>
-                                        <div className="flex flex-wrap gap-2 justify-center">
-                                            {['Ligera', 'Media', 'Pesada'].map(type => {
-                                                const key = type === 'Ligera' ? 'light' : type === 'Media' ? 'medium' : 'heavy';
-                                                const isActive = summary.proficiencies?.armor?.[key];
-                                                return (
-                                                    <button
-                                                        key={key}
-                                                        onClick={() => onUpdateProficiency && onUpdateProficiency('armor', key)}
-                                                        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded border transition-all ${isActive
-                                                            ? 'bg-[#c8aa6e] border-[#c8aa6e] text-[#0b1120] shadow-[0_0_15px_rgba(200,170,110,0.4)]'
-                                                            : 'bg-transparent border-slate-700 text-slate-600 hover:border-slate-500 hover:text-slate-400'
-                                                            }`}
-                                                    >
-                                                        {type}
-                                                    </button>
-                                                )
-                                            })}
+                                    <div className="space-y-2">
+                                        <div className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Armaduras</div>
+                                        <div className="mx-auto grid w-full max-w-[390px] grid-cols-3 gap-2">
+                                            {renderProficiencyOption('armor', 'light', 'Ligera')}
+                                            {renderProficiencyOption('armor', 'medium', 'Media')}
+                                            {renderProficiencyOption('armor', 'heavy', 'Pesada')}
                                         </div>
                                     </div>
                                 </div>
@@ -2134,6 +2343,7 @@ LoadoutView.propTypes = {
         }),
         talents: PropTypes.object
     }).isRequired,
+    rogueliteRole: PropTypes.oneOf(['legacy', 'master', 'player']),
     equipmentCatalog: PropTypes.shape({
         weapons: PropTypes.array,
         armor: PropTypes.array,
@@ -2144,7 +2354,10 @@ LoadoutView.propTypes = {
     onRemoveEquipment: PropTypes.func,
     onUpdateTalent: PropTypes.func,
     onUpdateProficiency: PropTypes.func,
-    onUpdateEquipped: PropTypes.func
+    onUpdateEquipped: PropTypes.func,
+    onUpdateResource: PropTypes.func,
+    onUpdateTalentCatalog: PropTypes.func,
+    onUpdateEquippedTalentIds: PropTypes.func,
 };
 
 export default LoadoutView;

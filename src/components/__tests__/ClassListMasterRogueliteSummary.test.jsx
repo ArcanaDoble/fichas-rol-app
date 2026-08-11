@@ -42,6 +42,13 @@ beforeEach(() => {
           initiativeBase: 2,
           maxInitiative: 4,
           resource: { name: 'Furia', maximum: 3, initial: 1 },
+          talentCatalog: [{
+            id: 'athletics',
+            name: 'Atletismo',
+            description: 'Avanza con un impulso feroz.',
+            image: '',
+            available: true,
+          }],
         },
       }),
     }],
@@ -161,5 +168,29 @@ test('uses the editable roguelite summary for the master class sheet', async () 
       resource: { name: 'Furia', maximum: 4, initial: 1 },
       actionDice: ['d12', 'd6', 'd4'],
     },
+  });
+
+  fireEvent.click(screen.getByText('MAZO INICIAL').closest('button'));
+  expect(await screen.findByLabelText('Nombre del recurso de clase')).toHaveValue('Furia');
+  expect(screen.getByLabelText('Editar imagen del recurso de clase')).toBeInTheDocument();
+  expect(screen.getByTestId('talents-sidebar')).toHaveClass('overflow-y-auto');
+  expect(screen.getAllByText('Atletismo').length).toBeGreaterThan(0);
+  expect(screen.getByRole('button', { name: 'Simples' })).toHaveClass('border-slate-700', 'text-slate-600');
+  expect(screen.getByRole('button', { name: 'Marciales' }).parentElement).toHaveClass('grid-cols-3', 'max-w-[390px]');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Añadir talento a la clase' }));
+  const talentNameInput = screen.getByDisplayValue('Nuevo talento');
+  fireEvent.change(talentNameInput, { target: { value: 'Intimidación' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Cerrar editor de talento' }));
+  expect(screen.getAllByText('Intimidación').length).toBeGreaterThan(0);
+
+  fireEvent.click(document.getElementById('save-btn-sidebar'));
+  await waitFor(() => {
+    const savedClass = require('firebase/firestore').setDoc.mock.calls.at(-1)[1];
+    expect(savedClass.talentCatalog).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'athletics', name: 'Atletismo' }),
+      expect.objectContaining({ name: 'Intimidación', available: true }),
+    ]));
+    expect(savedClass.roguelite.talentCatalog).toEqual(savedClass.talentCatalog);
   });
 });

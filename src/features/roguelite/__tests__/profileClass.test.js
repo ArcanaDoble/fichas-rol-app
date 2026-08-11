@@ -33,7 +33,17 @@ describe('personal roguelite class configuration', () => {
         intelecto: 'd4',
         voluntad: 'd4',
       },
-      equipment: { weapons: [], armor: [], abilities: [], objects: [], accessories: [] },
+      equipment: {
+        weapons: [expect.objectContaining({
+          name: 'Hacha antigua',
+          templateId: 'weapons:hacha-antigua',
+          handsRequired: 1,
+        })],
+        armor: [],
+        abilities: [],
+        objects: [],
+        accessories: [],
+      },
       equippedItems: { mainHand: null, offHand: null, body: null },
       money: 0,
       tags: [],
@@ -106,6 +116,43 @@ describe('personal roguelite class configuration', () => {
       classLevels: [{ title: 'Furia', acquired: false, completed: false }],
       level: 4,
     });
+  });
+
+  test('always inherits the current master equipment pool instead of a personal catalog copy', () => {
+    const storedProfile = {
+      equipment: {
+        weapons: [{ name: 'Arma añadida desde el catálogo del jugador' }],
+      },
+      equippedItems: {
+        mainHand: { name: 'Hacha antigua', templateId: 'weapons:hacha-antigua' },
+        offHand: null,
+        body: null,
+      },
+    };
+
+    const profileClass = createRogueliteProfileClass(definition, storedProfile, 'Ada');
+
+    expect(profileClass.equipment.weapons).toEqual([
+      expect.objectContaining({ name: 'Hacha antigua', templateId: 'weapons:hacha-antigua' }),
+    ]);
+    expect(profileClass.equipment.weapons).not.toEqual(storedProfile.equipment.weapons);
+    expect(profileClass.equippedItems.mainHand).toMatchObject({
+      name: 'Hacha antigua',
+      templateId: 'weapons:hacha-antigua',
+    });
+  });
+
+  test('repairs legacy loadouts that filled the second hand beside a two-handed weapon', () => {
+    const profileClass = createRogueliteProfileClass(definition, {
+      equippedItems: {
+        mainHand: { name: 'Mandoble', handsRequired: 2 },
+        offHand: { name: 'Daga', handsRequired: 1 },
+        body: null,
+      },
+    }, 'Ada');
+
+    expect(profileClass.equippedItems.mainHand.name).toBe('Mandoble');
+    expect(profileClass.equippedItems.offHand).toBeNull();
   });
 
   test('inherits current master tags while keeping player status effects personal', () => {
@@ -186,5 +233,60 @@ describe('personal roguelite class configuration', () => {
     expect(levelTwo).toMatchObject({ level: 2, maxLife: 9, resource: { maximum: 3 } });
     expect(levelThree).toMatchObject({ level: 3, maxLife: 9, resource: { maximum: 5 } });
     expect(masterDefinition).toMatchObject({ maxLife: 8, resource: { maximum: 3 } });
+  });
+
+  test('inherits the current talent catalog while preserving only the player slot ids', () => {
+    const storedProfile = {
+      equippedTalentIds: ['athletics', null, null],
+      talentCatalog: [{ id: 'stale', name: 'Copia antigua' }],
+      talents: { slots: [{ id: 'stale', name: 'Copia antigua' }] },
+    };
+    const firstDefinition = {
+      ...definition,
+      resource: {
+        name: 'Furia',
+        description: 'Se obtiene al exponerse al peligro.',
+        image: 'furia.webp',
+        maximum: 3,
+      },
+      talentCatalog: [{
+        id: 'athletics',
+        name: 'Atletismo',
+        description: 'Avanza con ímpetu.',
+        image: 'athletics.webp',
+        available: true,
+      }],
+    };
+
+    const firstProfile = createRogueliteProfileClass(firstDefinition, storedProfile, 'Ada');
+    expect(firstProfile).toMatchObject({
+      resource: {
+        name: 'Furia',
+        description: 'Se obtiene al exponerse al peligro.',
+        image: 'furia.webp',
+      },
+      equippedTalentIds: ['athletics', null, null],
+      talentCatalog: [expect.objectContaining({
+        id: 'athletics',
+        name: 'Atletismo',
+        description: 'Avanza con ímpetu.',
+      })],
+    });
+
+    const updatedProfile = createRogueliteProfileClass({
+      ...firstDefinition,
+      talentCatalog: [{
+        ...firstDefinition.talentCatalog[0],
+        name: 'Atletismo feroz',
+        description: 'Descripción actualizada por el máster.',
+      }],
+    }, storedProfile, 'Ada');
+
+    expect(updatedProfile.equippedTalentIds).toEqual(['athletics', null, null]);
+    expect(updatedProfile.talentCatalog[0]).toMatchObject({
+      name: 'Atletismo feroz',
+      description: 'Descripción actualizada por el máster.',
+    });
+    expect(updatedProfile.talentCatalog).not.toEqual(storedProfile.talentCatalog);
   });
 });

@@ -1588,12 +1588,21 @@ firebase deploy    # Despliega a Firebase Hosting
   Las tarjetas comparten marco y animación de hover, no muestran acciones de
   retrato o eliminación y reflejan el nivel personal mediante diez estrellas.
 - La definición global nunca aporta progreso alcanzado al jugador. Una clase
-  recién desbloqueada comienza limpia y en nivel 1; sus atributos, equipo,
-  Talentos y nivel actual se guardan de forma independiente en
+  recién desbloqueada comienza limpia y en nivel 1; sus atributos, Talentos,
+  nivel actual y selección de objetos equipados se guardan de forma independiente en
   `players/{playerId}/rogueliteClasses/{classId}`. Dos perfiles pueden usar la
   misma clase con niveles y configuraciones completamente distintos. Los datos
   autorales, el combate base y la tabla de niveles del máster prevalecen sobre
   cualquier copia antigua guardada en el perfil del jugador.
+- En `Mazo inicial · Inventario`, el máster conserva el catálogo completo y
+  define la pool inicial de cada clase. El jugador hereda siempre esa pool y
+  reutiliza la misma cabecera únicamente para filtrar sus opciones por categoría
+  o texto: no puede consultar, añadir ni retirar elementos del catálogo global.
+  Cada opción guarda una identidad estable de catálogo y las armas normalizan
+  `handsRequired`; el rasgo antiguo `Dos manos` se migra automáticamente. Las
+  tarjetas priorizan imagen, daño, alcance, coste en dados de acción, empuñadura,
+  rasgos y descripción. La vista y el funcionamiento de `Equipables` permanecen
+  intactos en esta fase.
 - En las fichas de clase Roguelite, `Colección · Baraja` se sustituye por
   `Progresión · Nivel`. El Bárbaro recibe como base sus diez niveles
   documentados, con Vida, Movimiento, Furia máxima y beneficio. El máster puede
@@ -2860,5 +2869,26 @@ Guía rápida: ver `docs/Minimapa.md`.
 - Los efectos de estado se guardan aparte en `personalStatusTags`, por lo que cada perfil conserva sus propios estados sin copiar ni bloquear futuras modificaciones de las etiquetas globales.
 - Los perfiles anteriores se migran al leerlos: se mantienen sus estados simples, se descartan copias antiguas de etiquetas autorales y no se mezclan los accesos especiales de Canvas o Tablero.
 - Una etiqueta vacía se elimina al confirmar con `Enter` o al clicar fuera del editor, tanto en clases como en Bestiario, sin añadir controles de borrado visuales.
+
+## Novedades: Recursos y talentos de clase Roguelite
+
+- El panel de Talentos de `Mazo inicial` distingue ahora entre la definición global del máster y la configuración personal del jugador.
+- El máster puede definir el nombre, descripción e imagen del recurso de clase, además de administrar un catálogo de talentos con imagen, descripción y disponibilidad.
+- Las imágenes del recurso y de cada talento utilizan un editor cuadrado con rejilla, arrastre y zoom táctil; se conserva tanto la fuente como el recorte optimizado en Firebase Storage.
+- Cada jugador mantiene tres ranuras personales y guarda únicamente `equippedTalentIds`. El contenido visual se resuelve siempre desde el `talentCatalog` actual del máster, evitando copias desincronizadas.
+- Los talentos antiguos de `actionData.reaction` y las ranuras que guardaban objetos completos se migran automáticamente al nuevo modelo mediante identificadores estables.
+- El selector del jugador se abre como una capa desplazable apta para móvil, permite repetir un mismo talento en varias ranuras y excluye opciones deshabilitadas por el máster.
+- La columna de Talentos del jugador usa altura natural y no captura la rueda del ratón; el scroll interno queda reservado al catálogo ampliado del máster.
+- Las imágenes de recurso y talento se almacenan como WebP mediante el optimizador común, con fuente limitada a 1600 px y recorte ligero de 640 px para la ficha.
+- Las clases de jugador ya no muestran Resistencia máxima ni Carga del equipamiento del sistema anterior: muestran las seis competencias heredadas con el mismo estilo del máster, en dorado las activas y en gris las inactivas, sin permitir editarlas.
+- Las Competencias se heredan desde la definición de clase a nivel de datos, sin modificar todavía su interfaz, y la pestaña Reliquias permanece intacta.
+
+## Novedades: Catálogo de equipamiento Roguelite
+
+- Los editores del máster para armas, armaduras, accesorios y habilidades utilizan ahora el modelo del Roguelite en lugar de las cargas física/mental del sistema anterior.
+- Las armas definen perfil de daño, alcance, competencia, coste de 1 a 3 dados de acción y empuñadura explícita de una o dos manos. `Dos manos` y `Pesada` permanecen como conceptos independientes.
+- Las armaduras definen directamente su CD y competencia; los accesorios conservan rasgos, descripción, rareza y precio/valor; las habilidades admiten alcance, perfil o efecto y coste de 0 a 3 dados.
+- Al editar contenido antiguo se migran los campos heredados y se conservan únicamente los alias de compatibilidad todavía usados por el combate. El catálogo de accesorios también queda disponible para configurar la pool inicial de clase.
+- En `Equipables`, un arma configurada a dos manos ocupa las dos ranuras: permanece guardada una sola vez en su mano de origen y la mano opuesta muestra un bloqueo enlazado al arma. Equiparla libera automáticamente cualquier arma previa de la otra mano.
 
 

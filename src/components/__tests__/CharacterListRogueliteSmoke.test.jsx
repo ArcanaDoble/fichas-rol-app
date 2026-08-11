@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { CharacterListView } from '../CharacterListView';
 
 jest.mock('../../firebase', () => ({ db: {}, storage: {} }));
@@ -62,13 +62,26 @@ beforeEach(() => {
             subtitle: 'Furia desatada',
             description: 'Furia de prueba',
             tags: ['Vanguardia|#f59e0b'],
+            summary: {
+              proficiencies: {
+                weapons: { simple: false, martial: true, special: false },
+                armor: { light: false, medium: true, heavy: false },
+              },
+            },
             roguelite: {
               actionDice: ['d8', 'd6', 'd4'],
               maxLife: 8,
               defenseClass: 7,
               movement: 2,
               initiativeBase: 2,
-              resource: { name: 'Furia', maximum: 3, initial: 0 },
+              resource: { name: 'Furia', description: 'La rabia del Bárbaro alimenta sus talentos.', maximum: 3, initial: 0 },
+              talentCatalog: [{
+                id: 'athletics',
+                name: 'Atletismo',
+                description: 'Avanza con un impulso feroz.',
+                image: '',
+                available: true,
+              }],
             },
           }),
         }],
@@ -121,7 +134,7 @@ test('mounts the roguelite card and opens it in the shared character sheet', asy
 
   fireEvent.click(screen.getByRole('button', { name: 'Gestionar estados' }));
   fireEvent.click(screen.getByRole('button', { name: 'Sangrado' }));
-  fireEvent.click(screen.getByRole('button', { name: /Guardar Cambios/i }));
+  fireEvent.click(document.getElementById('save-btn-sidebar'));
 
   await waitFor(() => {
     const savedProfile = require('firebase/firestore').setDoc.mock.calls.at(-1)[1];
@@ -140,4 +153,42 @@ test('mounts the roguelite card and opens it in the shared character sheet', asy
   });
   expect(screen.getByTestId('roguelite-progression-level-1')).toHaveTextContent('Nivel actual');
   expect(screen.getByTestId('roguelite-progression-level-2')).toHaveTextContent('Por desbloquear');
+
+  fireEvent.click(screen.getByText('MAZO INICIAL').closest('button'));
+  await waitFor(() => {
+    expect(screen.getByText('La rabia del Bárbaro alimenta sus talentos.')).toBeInTheDocument();
+  });
+  expect(screen.queryByLabelText('Editar imagen del recurso de clase')).not.toBeInTheDocument();
+  expect(screen.getByTestId('talents-sidebar')).toHaveClass('overflow-visible');
+  expect(screen.getByTestId('talents-sidebar')).not.toHaveClass('overflow-y-auto');
+  expect(screen.queryByText('Resistencia Máxima (Vida)')).not.toBeInTheDocument();
+  expect(screen.queryByText('Carga del Equipamiento')).not.toBeInTheDocument();
+  expect(screen.getByText('Competencias')).toBeInTheDocument();
+  expect(screen.getByText('Competencias').parentElement).toHaveClass('-mt-4');
+  expect(screen.getByText('Simples')).toHaveClass('border-slate-700', 'text-slate-600');
+  expect(screen.getByText('Marciales')).toHaveClass('bg-[#c8aa6e]', 'text-[#0b1120]');
+  expect(screen.getByText('Especiales')).toHaveClass('border-slate-700', 'text-slate-600');
+  expect(screen.getByText('Ligera')).toHaveClass('border-slate-700', 'text-slate-600');
+  expect(screen.getByText('Media')).toHaveClass('bg-[#c8aa6e]', 'text-[#0b1120]');
+  expect(screen.getByText('Pesada')).toHaveClass('border-slate-700', 'text-slate-600');
+  expect(screen.getByText('Marciales').parentElement).toHaveClass('grid-cols-3', 'max-w-[390px]');
+  expect(screen.getByText('Media').parentElement.className).toBe(screen.getByText('Marciales').parentElement.className);
+  expect(screen.queryByRole('button', { name: 'Marciales' })).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Seleccionar talento para ranura 1' }));
+  fireEvent.click(screen.getByRole('button', { name: /Atletismo Avanza con un impulso feroz/i }));
+  expect(screen.getByRole('button', { name: 'Seleccionar talento para ranura 1' })).toHaveTextContent('Atletismo');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Seleccionar talento para ranura 2' }));
+  const talentDialog = screen.getByRole('dialog', { name: 'Elegir talento para la ranura 2' });
+  fireEvent.click(within(talentDialog).getByRole('button', { name: /Atletismo Avanza con un impulso feroz/i }));
+  expect(screen.getByRole('button', { name: 'Seleccionar talento para ranura 2' })).toHaveTextContent('Atletismo');
+
+  fireEvent.click(document.getElementById('save-btn-sidebar'));
+  await waitFor(() => {
+    const savedProfile = require('firebase/firestore').setDoc.mock.calls.at(-1)[1];
+    expect(savedProfile.equippedTalentIds).toEqual(['athletics', 'athletics', null]);
+    expect(savedProfile.talentCatalog).toBeUndefined();
+    expect(savedProfile.roguelite?.talentCatalog).toBeUndefined();
+  });
 });

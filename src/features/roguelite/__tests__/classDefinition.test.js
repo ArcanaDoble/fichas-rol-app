@@ -81,6 +81,26 @@ describe('roguelite class definitions', () => {
     });
   });
 
+  test('uses the dedicated talent catalog when it extends a legacy class', () => {
+    const [normalized] = mergeRogueliteClassCatalogs(
+      [{
+        id: 'barbarian',
+        name: 'Bárbaro',
+        talentCatalog: [{ id: 'legacy', name: 'Talento antiguo' }],
+      }],
+      [{
+        id: 'barbarian',
+        roguelite: {
+          talentCatalog: [{ id: 'athletics', name: 'Atletismo' }],
+        },
+      }],
+    );
+
+    expect(normalized.talentCatalog).toEqual([
+      expect.objectContaining({ id: 'athletics', name: 'Atletismo' }),
+    ]);
+  });
+
   test('normalizes initial and maximum values for every class statistic', () => {
     const normalized = normalizeRogueliteClass({
       id: 'barbarian',

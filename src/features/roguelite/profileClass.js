@@ -5,6 +5,15 @@ import {
   mergeInheritedAndPersonalTags,
   resolveClassAuthorTags,
 } from '../../utils/tags';
+import {
+  ROGUELITE_TALENT_SLOT_COUNT,
+  resolveEquippedTalentIds,
+  resolveRogueliteTalentCatalog,
+} from './talents';
+import {
+  normalizeEquippedHandSlots,
+  resolveRogueliteEquipmentPool,
+} from './equipmentPool';
 
 const DEFAULT_ATTRIBUTES = Object.freeze({
   destreza: 'd4',
@@ -19,14 +28,6 @@ const DEFAULT_STATS = Object.freeze({
   ingenio: { current: 2, max: 3 },
   cordura: { current: 3, max: 3 },
   armadura: { current: 1, max: 2 },
-});
-
-const DEFAULT_EQUIPMENT = Object.freeze({
-  weapons: [],
-  armor: [],
-  abilities: [],
-  objects: [],
-  accessories: [],
 });
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -84,6 +85,9 @@ export const createRogueliteProfileClass = (
   );
   const inheritedTags = resolveInheritedTags(definition);
   const personalStatusTags = resolveStoredPersonalStatuses(storedConfiguration, inheritedTags);
+  const talentCatalog = resolveRogueliteTalentCatalog(definition);
+  const equippedTalentIds = resolveEquippedTalentIds(storedConfiguration, talentCatalog);
+  const equipmentPool = resolveRogueliteEquipmentPool(definition);
   const cleanConfiguration = {
     ...definition,
     id: definition.id,
@@ -94,9 +98,11 @@ export const createRogueliteProfileClass = (
     rating: 1,
     attributes: clone(DEFAULT_ATTRIBUTES),
     stats: clone(DEFAULT_STATS),
-    equipment: clone(DEFAULT_EQUIPMENT),
+    equipment: clone(equipmentPool),
     equippedItems: { mainHand: null, offHand: null, body: null },
-    talents: {},
+    talents: { slots: Array(ROGUELITE_TALENT_SLOT_COUNT).fill(null) },
+    talentCatalog: clone(talentCatalog),
+    equippedTalentIds: Array(ROGUELITE_TALENT_SLOT_COUNT).fill(null),
     storeItems: [],
     money: 0,
     tags: clone(inheritedTags),
@@ -134,6 +140,25 @@ export const createRogueliteProfileClass = (
     initiativeBase: definition.initiativeBase,
     maxInitiative: progressionStats.maxInitiative,
     resource: clone(progressionStats.resource),
+    equipment: clone(equipmentPool),
+    equippedItems: normalizeEquippedHandSlots(
+      profileClass.equippedItems || cleanConfiguration.equippedItems,
+    ),
+    talentCatalog: clone(talentCatalog),
+    equippedTalentIds: clone(equippedTalentIds),
+    talents: {
+      ...(profileClass.talents || {}),
+      slots: clone(equippedTalentIds),
+    },
+    summary: {
+      ...(profileClass.summary || {}),
+      ...(definition.summary || {}),
+      proficiencies: clone(
+        definition.summary?.proficiencies
+        || profileClass.summary?.proficiencies
+        || { weapons: {}, armor: {} },
+      ),
+    },
     classTags: clone(inheritedTags),
     personalStatusTags: clone(personalStatusTags),
     tags: mergeInheritedAndPersonalTags(inheritedTags, personalStatusTags),

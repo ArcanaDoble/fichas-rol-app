@@ -1,4 +1,6 @@
 import { resolveRogueliteClassLevels } from './progression';
+import { resolveRogueliteTalentCatalog } from './talents';
+import { resolveRogueliteEquipmentPool } from './equipmentPool';
 
 const toNumber = (value, fallback) => {
   const parsed = Number(value);
@@ -75,11 +77,14 @@ export const normalizeRogueliteClass = (classItem = {}) => {
       classItem.rogueliteProgressionConfigured ?? rules.progressionConfigured,
     ),
     resource: {
+      ...resource,
       name: String(resource.name || '').trim(),
       color: resource.color || '#c8aa6e',
       maximum: resourceMaximum,
       initial: resourceInitial,
     },
+    talentCatalog: resolveRogueliteTalentCatalog(classItem),
+    equipment: resolveRogueliteEquipmentPool(classItem),
   };
 };
 
@@ -96,10 +101,15 @@ export const mergeRogueliteClassCatalogs = (
     const previousClass = classById.get(classId) || {};
     const previousRules = previousClass.roguelite || {};
     const nextRules = classItem.roguelite || {};
+    const mergedTalentCatalog = classItem.talentCatalog
+      ?? nextRules.talentCatalog
+      ?? previousClass.talentCatalog
+      ?? previousRules.talentCatalog;
     classById.set(classId, {
       ...previousClass,
       ...classItem,
       id: classId,
+      ...(Array.isArray(mergedTalentCatalog) ? { talentCatalog: mergedTalentCatalog } : {}),
       roguelite: {
         ...previousRules,
         ...nextRules,
@@ -107,6 +117,7 @@ export const mergeRogueliteClassCatalogs = (
           ...(previousRules.resource || {}),
           ...(nextRules.resource || {}),
         },
+        ...(Array.isArray(mergedTalentCatalog) ? { talentCatalog: mergedTalentCatalog } : {}),
       },
     });
   });
