@@ -113,6 +113,14 @@ export const normalizeEquipmentPoolItem = (item = {}, category = 'objects') => {
     templateId: createEquipmentTemplateId(item, category),
   };
 
+  if (category === 'armor' || item.itemType === 'armor') {
+    delete normalized.actionCost;
+    delete normalized.consumption;
+    delete normalized.consumo;
+    delete normalized.cost;
+    delete normalized.coste;
+  }
+
   if (category === 'weapons' || item.itemType === 'weapon') {
     normalized.handsRequired = resolveEquipmentHandsRequired(item);
   }

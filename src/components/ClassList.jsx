@@ -1973,6 +1973,8 @@ const ClassList = ({
     else if (category === 'objects') itemType = 'object';
     else if (category === 'accessories') itemType = 'accessory';
 
+    const supportsActionCost = category === 'weapons' || category === 'abilities';
+
     // Normalizar el item para asegurar que tiene todas las propiedades necesarias
     const normalized = {
       templateId: createEquipmentTemplateId(payload, category),
@@ -1981,7 +1983,12 @@ const ClassList = ({
       itemType: itemType, // Campo nuevo para identificar el tipo de ítem
       damage: payload.damage || payload.dano || '',
       range: payload.range || payload.alcance || '',
-      consumption: payload.consumption || payload.consumo || '',
+      ...(supportsActionCost
+        ? {
+          actionCost: payload.actionCost ?? payload.consumption ?? payload.consumo ?? '',
+          consumption: payload.consumption || payload.consumo || '',
+        }
+        : {}),
       physicalLoad: payload.physicalLoad || payload.cargaFisica || '',
       mentalLoad: payload.mentalLoad || payload.cargaMental || '',
       defense: payload.defense || payload.defensa || '',

@@ -3,9 +3,10 @@ import { Tooltip } from 'react-tooltip';
 import PropTypes from 'prop-types';
 import { FiShield, FiX, FiCheck, FiAlertTriangle, FiStar, FiPlus, FiMinus, FiEdit2 } from 'react-icons/fi';
 import { GiBelt } from 'react-icons/gi';
-import { Dices, Sword, Shield, Zap, Gem, LockKeyhole } from 'lucide-react';
+import { Sword, Shield, Zap, Gem, LockKeyhole } from 'lucide-react';
 import HexIcon from './HexIcon';
 import RogueliteTalentsPanel from './RogueliteTalentsPanel';
+import RogueliteInventoryCard from './RogueliteInventoryCard';
 import { db } from '../firebase';
 import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { useCustomEquipmentImages, getCustomImage } from '../hooks/useCustomEquipmentImages';
@@ -63,10 +64,12 @@ const RARITIES = [
 const getWeaponProficiencyType = (item) => {
     const traits = (item.traits || item.rasgos || item.trait || '').toString().toLowerCase();
     const category = (item.category || item.categoria || '').toString().toLowerCase();
+    const competence = (item.competence || item.competencia || item.weaponCompetence || '').toString().toLowerCase();
+    const source = `${competence} ${category} ${traits}`;
 
-    if (traits.includes('simple') || category.includes('simple')) return 'simple';
-    if (traits.includes('marcial') || category.includes('marcial')) return 'martial';
-    if (traits.includes('especial') || category.includes('especial')) return 'special';
+    if (source.includes('simple')) return 'simple';
+    if (source.includes('marcial')) return 'martial';
+    if (source.includes('especial') || source.includes('arcana') || source.includes('arcano')) return 'special';
 
     // Default to simple if no type found
     return null;
@@ -76,10 +79,12 @@ const getWeaponProficiencyType = (item) => {
 const getArmorProficiencyType = (item) => {
     const traits = (item.traits || item.rasgos || item.trait || '').toString().toLowerCase();
     const category = (item.category || item.categoria || '').toString().toLowerCase();
+    const competence = (item.competence || item.competencia || item.armorCompetence || '').toString().toLowerCase();
+    const source = `${competence} ${category} ${traits}`;
 
-    if (traits.includes('ligera') || category.includes('ligera')) return 'light';
-    if (traits.includes('media') || category.includes('media')) return 'medium';
-    if (traits.includes('pesada') || category.includes('pesada')) return 'heavy';
+    if (source.includes('ligera')) return 'light';
+    if (source.includes('media')) return 'medium';
+    if (source.includes('pesada')) return 'heavy';
 
     return null;
 };
@@ -153,6 +158,19 @@ const getRarityColors = (itemOrRarity, rarityColorMap = {}) => {
         glowStyle: { background: `linear-gradient(90deg, ${hexToRgba(customColor, 0.5)}, transparent 72%)` },
         gradientStyle: { background: `linear-gradient(135deg, ${hexToRgba(customColor, 0.35)}, transparent 70%)` }
     };
+};
+
+const getRarityAccent = (itemOrRarity, rarityColorMap = {}) => {
+    const rarityName = getRarityName(itemOrRarity);
+    const customColor = resolveRarityColor(rarityName, rarityColorMap);
+    if (customColor) return customColor;
+
+    const rarity = normalizeRarityKey(rarityName);
+    if (rarity.includes('legendari')) return '#e0a45b';
+    if (rarity.includes('epic')) return '#b96bd6';
+    if (rarity.includes('rar')) return '#54a8dc';
+    if (rarity.includes('poco com')) return '#55b978';
+    return '#8d9aab';
 };
 
 // Función para obtener imagen de objetos genéricos (public/objetos)
@@ -639,6 +657,7 @@ const LoadoutView = ({
 
     // Get proficiency warning message for weapons
     const getWeaponProficiencyWarning = (item) => {
+        if (rogueliteRole === 'legacy') return null;
         const weaponType = getWeaponProficiencyType(item);
         if (!weaponType) return null;
         if (hasWeaponProficiency(item)) return null;
@@ -649,6 +668,7 @@ const LoadoutView = ({
 
     // Get proficiency warning message for armor
     const getArmorProficiencyWarning = (item) => {
+        if (rogueliteRole === 'legacy') return null;
         const armorType = getArmorProficiencyType(item);
         if (!armorType) return null;
         if (hasArmorProficiency(item)) return null;
@@ -659,6 +679,14 @@ const LoadoutView = ({
 
     // Handle equipping an item
     const handleEquipItem = (slot, item) => {
+        const proficiencyWarning = slot === 'body'
+            ? getArmorProficiencyWarning(item)
+            : slot === 'mainHand' || slot === 'offHand'
+                ? getWeaponProficiencyWarning(item)
+                : null;
+
+        if (proficiencyWarning) return;
+
         if (onUpdateEquipped) {
             // Initialize quantity for belt items if not present
             const newItem = slot.startsWith('belt_')
@@ -820,164 +848,42 @@ const LoadoutView = ({
                                                 return <Shield className="w-10 h-10 text-slate-400" />;
                                             };
 
-                                            const rarityColors = getRarityColors(item, rarityColorMap);
                                             const objectImage = getObjectImage(item, customEquipmentImages);
                                             const isWeapon = item._category === 'weapons' || item.itemType === 'weapon';
                                             const handsRequired = isWeapon ? resolveEquipmentHandsRequired(item) : null;
-                                            const actionCost = resolveActionCost(item.consumption || item.consumo);
+                                            const supportsActionCost = item._category === 'weapons' || item._category === 'abilities';
+                                            const actionCost = supportsActionCost
+                                                ? resolveActionCost(item.actionCost ?? item.consumption ?? item.consumo)
+                                                : null;
                                             const visibleTraits = resolveVisibleTraits(item, handsRequired);
                                             const proficiencyWarning = item._category === 'weapons'
                                                 ? getWeaponProficiencyWarning(item)
                                                 : item._category === 'armor'
                                                     ? getArmorProficiencyWarning(item)
                                                     : null;
+                                            const rarityAccent = getRarityAccent(item, rarityColorMap);
+                                            const categoryLabel = item.category
+                                                || INVENTORY_CATEGORIES.find((category) => category.id === item._category)?.label
+                                                || 'Objeto';
 
                                             return (
-                                                <div
+                                                <RogueliteInventoryCard
                                                     key={item.templateId || `${item._category}-${item._index}-${index}`}
-                                                    data-testid="inventory-item-card"
-                                                    className="group relative flex min-h-[190px] h-full cursor-pointer overflow-hidden rounded-lg border border-slate-700 bg-[#161f32] p-1 transition-all duration-500 hover:-translate-y-1 hover:border-[#c8aa6e] hover:shadow-[0_10px_30px_rgba(0,0,0,0.5)]"
-                                                >
-
-                                                    {/* Dynamic Background Gradient & Particles (Hover Effect) */}
-                                                    <div
-                                                        className={`absolute inset-0 bg-gradient-to-r ${rarityColors.glow} via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-0`}
-                                                        style={rarityColors.glowStyle || undefined}
-                                                    ></div>
-
-                                                    {/* Stardust/Noise Texture Overlay */}
-                                                    <div className="absolute inset-0 opacity-0 group-hover:opacity-30 transition-opacity duration-700 z-0 pointer-events-none"
-                                                        style={{
-                                                            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.5'/%3E%3C/svg%3E")`,
-                                                            backgroundSize: '100px 100px'
-                                                        }}
-                                                    ></div>
-
-                                                    {/* Rarity Stripe */}
-                                                    <div
-                                                        className={`w-1 absolute left-0 top-0 bottom-0 z-20 ${rarityColors.stripe}`}
-                                                        style={rarityColors.stripeStyle || undefined}
-                                                    ></div>
-
-                                                    {/* Image/Icon Section */}
-                                                    <div className="relative z-10 ml-2 flex w-28 shrink-0 flex-col overflow-hidden rounded-l bg-black/50 sm:w-32">
-                                                        {objectImage && (
-                                                            <>
-                                                                <img
-                                                                    src={objectImage}
-                                                                    alt={item.name}
-                                                                    className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-90 transition-opacity duration-500"
-                                                                />
-                                                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
-                                                            </>
-                                                        )}
-                                                        <div className="w-full h-full flex flex-col items-center justify-center border-r border-slate-700/50 relative z-20">
-                                                            {!objectImage && (
-                                                                <div className="text-3xl mb-2 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">
-                                                                    {getIcon()}
-                                                                </div>
-                                                            )}
-                                                            {/* Rarity Label - Only show if exists */}
-                                                            {item.rareza ? (
-                                                                <span
-                                                                    className={`text-[0.6rem] uppercase font-bold ${rarityColors.text} text-center leading-tight px-1 drop-shadow-md`}
-                                                                    style={rarityColors.textStyle || undefined}
-                                                                >
-                                                                    {item.rareza}
-                                                                </span>
-                                                            ) : (
-                                                                !objectImage && <div className="w-8 h-[1px] bg-slate-700/50 mt-2"></div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Content */}
-                                                    <div className="flex-1 p-3 flex flex-col relative z-0 min-w-0">
-                                                        <div className="mb-2 pr-6">
-                                                            <span className="mb-1 block text-[8px] font-bold uppercase tracking-[0.2em] text-slate-500">
-                                                                {item.category || INVENTORY_CATEGORIES.find((category) => category.id === item._category)?.label}
-                                                            </span>
-                                                            <h4 className="font-['Cinzel'] text-sm font-bold uppercase leading-snug tracking-wide text-[#f0e6d2] transition-colors group-hover:text-[#c8aa6e]">
-                                                                {item.name}
-                                                            </h4>
-                                                        </div>
-
-                                                        {/* Stats Grid */}
-                                                        <div className="mb-3 grid grid-cols-2 gap-x-3 gap-y-1.5 border-b border-slate-700/50 pb-2 text-[10px]">
-                                                            {/* Weapon/Ability Stats */}
-                                                            {(item.damage || item.dano) && (
-                                                                <div className="col-span-2 flex justify-between">
-                                                                    <span className="text-slate-500 uppercase font-bold">Daño:</span>
-                                                                    <span className="text-red-300 font-mono">{item.damage || item.dano}</span>
-                                                                </div>
-                                                            )}
-                                                            {(item.defense || item.defensa) && (
-                                                                <div className="col-span-2 flex justify-between">
-                                                                    <span className="text-slate-500 uppercase font-bold">Defensa:</span>
-                                                                    <span className="text-blue-300 font-mono">{item.defense || item.defensa}</span>
-                                                                </div>
-                                                            )}
-                                                            {(item.range || item.alcance) && (
-                                                                <div className="col-span-1">
-                                                                    <span className="text-slate-500 uppercase font-bold mr-1">Alc:</span>
-                                                                    <span className="text-slate-300">{item.range || item.alcance}</span>
-                                                                </div>
-                                                            )}
-                                                            {actionCost !== null && (
-                                                                <div className="col-span-1 flex items-center justify-end gap-1.5" aria-label={`Coste: ${actionCost} dados de acción`}>
-                                                                    <span className="text-slate-500 uppercase font-bold">Coste:</span>
-                                                                    <Dices className="h-3.5 w-3.5 text-[#c8aa6e]" aria-hidden="true" />
-                                                                    <span className="font-mono text-[#e8cf93]">{actionCost}</span>
-                                                                </div>
-                                                            )}
-                                                            {handsRequired && (
-                                                                <div className="col-span-2 flex justify-between border-t border-slate-800/70 pt-1.5">
-                                                                    <span className="text-slate-500 uppercase font-bold">Empuñadura:</span>
-                                                                    <span className="text-slate-300">{handsRequired === 2 ? 'Dos manos' : 'Una mano'}</span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-
-                                                        {rogueliteRole === 'player' && proficiencyWarning && (
-                                                            <div className="mb-2 text-[9px] uppercase tracking-wider text-amber-300/70">
-                                                                {proficiencyWarning}
-                                                            </div>
-                                                        )}
-
-                                                        {/* Traits */}
-                                                        {visibleTraits.length > 0 && (
-                                                            <div className="mb-2">
-                                                                <div className="flex flex-wrap gap-1">
-                                                                    {visibleTraits.map((trait, traitIndex) => renderTrait(trait, traitIndex))}
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-                                                        {/* Description */}
-                                                        <div className="mt-auto pt-1">
-                                                            <p className="text-[10px] text-emerald-100/60 italic leading-relaxed font-serif border-l-2 border-emerald-500/20 pl-2">
-                                                                "{item.detail || item.description || 'Sin descripción.'}"
-                                                            </p>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Botón eliminar */}
-                                                    {rogueliteRole !== 'player' && (
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            onRemoveEquipment && onRemoveEquipment(item._index, item._category);
-                                                        }}
-                                                        className="absolute top-2 right-2 p-1 bg-red-500/10 hover:bg-red-500/30 text-red-400/70 hover:text-red-400 rounded opacity-0 group-hover:opacity-100 transition-all z-20"
-                                                        title="Eliminar"
-                                                    >
-                                                        <FiX className="w-3 h-3" />
-                                                    </button>
-                                                    )}
-
-                                                    {/* Hover Glow */}
-                                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 pointer-events-none"></div>
-                                                </div>
+                                                    item={item}
+                                                    image={objectImage}
+                                                    fallbackIcon={getIcon()}
+                                                    categoryLabel={categoryLabel}
+                                                    rarityAccent={rarityAccent}
+                                                    raritySoft={hexToRgba(rarityAccent, 0.34)}
+                                                    rarityFaint={hexToRgba(rarityAccent, 0.12)}
+                                                    actionCost={actionCost}
+                                                    handsRequired={handsRequired}
+                                                    visibleTraits={visibleTraits}
+                                                    glossary={glossary}
+                                                    proficiencyWarning={rogueliteRole !== 'legacy' ? proficiencyWarning : null}
+                                                    canRemove={rogueliteRole !== 'player'}
+                                                    onRemove={() => onRemoveEquipment && onRemoveEquipment(item._index, item._category)}
+                                                />
                                             );
                                         })
                                     ) : (
@@ -1219,10 +1125,11 @@ const LoadoutView = ({
                                                                             <button
                                                                                 key={weapon.id || weapon.name || idx}
                                                                                 onClick={() => handleEquipItem(key, weapon)}
-                                                                                disabled={isAlreadyEquipped}
+                                                                                disabled={isAlreadyEquipped || Boolean(warning)}
+                                                                                title={warning || undefined}
                                                                                 className={`w-full p-3 text-left flex items-center gap-3 hover:bg-[#c8aa6e]/10 transition-colors border-b border-slate-800 last:border-b-0
                                                                                     ${isAlreadyEquipped ? 'opacity-40 cursor-not-allowed' : ''}
-                                                                                    ${warning ? 'bg-orange-900/10' : ''}
+                                                                                    ${warning ? 'cursor-not-allowed bg-orange-950/20 opacity-60 hover:bg-orange-950/20' : ''}
                                                                                 `}
                                                                             >
                                                                                 <div className="w-8 h-8 flex items-center justify-center shrink-0 text-[#c8aa6e] bg-slate-900/50 rounded overflow-hidden border border-slate-700/50">
@@ -1245,7 +1152,12 @@ const LoadoutView = ({
                                                                                         </div>
                                                                                     )}
                                                                                 </div>
-                                                                                {isAlreadyEquipped && (
+                                                                                {warning ? (
+                                                                                    <span className="flex shrink-0 items-center gap-1 text-[9px] font-bold uppercase tracking-[0.1em] text-orange-400">
+                                                                                        <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />
+                                                                                        No equipable
+                                                                                    </span>
+                                                                                ) : isAlreadyEquipped && (
                                                                                     <span className="text-[10px] text-slate-500 uppercase">Equipado</span>
                                                                                 )}
                                                                             </button>
@@ -1442,10 +1354,11 @@ const LoadoutView = ({
                                                                             <button
                                                                                 key={armor.id || armor.name || idx}
                                                                                 onClick={() => handleEquipItem('body', armor)}
-                                                                                disabled={isAlreadyEquipped}
+                                                                                disabled={isAlreadyEquipped || Boolean(warning)}
+                                                                                title={warning || undefined}
                                                                                 className={`w-full p-3 text-left flex items-center gap-3 hover:bg-[#c8aa6e]/10 transition-colors border-b border-slate-800 last:border-b-0
                                                                                     ${isAlreadyEquipped ? 'opacity-40 cursor-not-allowed' : ''}
-                                                                                    ${warning ? 'bg-orange-900/10' : ''}
+                                                                                    ${warning ? 'cursor-not-allowed bg-orange-950/20 opacity-60 hover:bg-orange-950/20' : ''}
                                                                                 `}
                                                                             >
                                                                                 <div className="w-8 h-8 flex items-center justify-center shrink-0 text-[#c8aa6e] bg-slate-900/50 rounded overflow-hidden border border-slate-700/50">
@@ -1468,7 +1381,12 @@ const LoadoutView = ({
                                                                                         </div>
                                                                                     )}
                                                                                 </div>
-                                                                                {isAlreadyEquipped && (
+                                                                                {warning ? (
+                                                                                    <span className="flex shrink-0 items-center gap-1 text-[9px] font-bold uppercase tracking-[0.1em] text-orange-400">
+                                                                                        <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />
+                                                                                        No equipable
+                                                                                    </span>
+                                                                                ) : isAlreadyEquipped && (
                                                                                     <span className="text-[10px] text-slate-500 uppercase">Equipado</span>
                                                                                 )}
                                                                             </button>

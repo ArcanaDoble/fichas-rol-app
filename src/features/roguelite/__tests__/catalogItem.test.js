@@ -41,13 +41,27 @@ describe('roguelite catalog item migration', () => {
     expect(stored).not.toHaveProperty('tipoDano');
   });
 
-  test('stores armor CD under the canonical and compatible field names', () => {
-    const form = armorCatalogItemToForm({ nombre: 'Placas', defensa: 8, tipo: 'Pesada' });
+  test('stores armor CD and removes every obsolete action-cost field', () => {
+    const form = armorCatalogItemToForm({
+      nombre: 'Placas',
+      defensa: 8,
+      tipo: 'Pesada',
+      actionCost: 2,
+      consumo: '🔷🔷🔷🔷🔷🔷',
+      consumption: '6',
+      coste: '6',
+    });
     const stored = armorCatalogItemToStorage(form);
 
     expect(stored.defenseClass).toBe('8');
     expect(stored.defensa).toBe('8');
     expect(stored.competence).toBe('Pesada');
+    expect(form).not.toHaveProperty('actionCost');
+    expect(form).not.toHaveProperty('consumo');
+    expect(stored).not.toHaveProperty('actionCost');
+    expect(stored).not.toHaveProperty('consumo');
+    expect(stored).not.toHaveProperty('consumption');
+    expect(stored).not.toHaveProperty('coste');
   });
 
   test('allows an ability without action-die cost and removes old loads', () => {

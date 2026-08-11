@@ -26,7 +26,7 @@ describe('roguelite starting equipment pool', () => {
         { id: 'great-axe', name: 'Gran hacha', traits: 'Dos manos' },
         { id: 'great-axe', name: 'Gran hacha duplicada' },
       ],
-      armor: [{ name: 'Cuero' }],
+      armor: [{ name: 'Cuero', consumption: '🔷🔷🔷🔷🔷🔷', actionCost: 6 }],
     });
 
     expect(pool.weapons).toEqual([
@@ -40,6 +40,8 @@ describe('roguelite starting equipment pool', () => {
       templateId: 'armor:cuero',
       name: 'Cuero',
     });
+    expect(pool.armor[0]).not.toHaveProperty('consumption');
+    expect(pool.armor[0]).not.toHaveProperty('actionCost');
     expect(pool.objects).toEqual([]);
   });
 

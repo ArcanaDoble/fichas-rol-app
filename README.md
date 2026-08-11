@@ -2890,5 +2890,7 @@ Guía rápida: ver `docs/Minimapa.md`.
 - Las armaduras definen directamente su CD y competencia; los accesorios conservan rasgos, descripción, rareza y precio/valor; las habilidades admiten alcance, perfil o efecto y coste de 0 a 3 dados.
 - Al editar contenido antiguo se migran los campos heredados y se conservan únicamente los alias de compatibilidad todavía usados por el combate. El catálogo de accesorios también queda disponible para configurar la pool inicial de clase.
 - En `Equipables`, un arma configurada a dos manos ocupa las dos ranuras: permanece guardada una sola vez en su mano de origen y la mano opuesta muestra un bloqueo enlazado al arma. Equiparla libera automáticamente cualquier arma previa de la otra mano.
+- Las tarjetas del Inventario Roguelite usan una presentación propia tipo tooltip de RPG: integran la ilustración en la cabecera, aplican el color configurado de rareza a la identidad y al marco, y ordenan estadísticas, rasgos y descripción en franjas compactas. Este cambio visual no afecta a `Equipables`.
+- Las armaduras no conservan ni muestran costes de dados heredados. En `Equipables`, las armas y armaduras incompatibles con las competencias de la clase permanecen visibles en el selector, pero aparecen como `No equipable` y no pueden seleccionarse; las fichas tradicionales conservan su comportamiento anterior.
 
 

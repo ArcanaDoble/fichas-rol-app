@@ -64,6 +64,14 @@ const commonLegacyFields = [
   'technology',
 ];
 
+const armorCostFields = [
+  'actionCost',
+  'consumo',
+  'consumption',
+  'cost',
+  'coste',
+];
+
 export const createEmptyWeaponCatalogItem = () => ({
   id: '',
   nombre: '',
@@ -120,7 +128,7 @@ export const weaponCatalogItemToForm = (item = {}) => ({
 
 export const armorCatalogItemToForm = (item = {}) => ({
   ...createEmptyArmorCatalogItem(),
-  ...omitLegacyFields(item, commonLegacyFields),
+  ...omitLegacyFields(item, [...commonLegacyFields, ...armorCostFields]),
   defenseClass: item.defenseClass ?? item.cd ?? item.defensa ?? item.defense ?? '',
   competence: item.competence ?? item.competencia ?? item.armorCompetence ?? item.tipo ?? 'Ligera',
   rasgos: joinTraits(item.rasgos ?? item.traits),
@@ -165,7 +173,11 @@ export const weaponCatalogItemToStorage = (item = {}) => {
 };
 
 export const armorCatalogItemToStorage = (item = {}) => {
-  const clean = omitLegacyFields(item, [...commonLegacyFields, 'defense']);
+  const clean = omitLegacyFields(item, [
+    ...commonLegacyFields,
+    ...armorCostFields,
+    'defense',
+  ]);
   const defenseClass = String(item.defenseClass ?? item.cd ?? item.defensa ?? '').trim();
 
   return {
