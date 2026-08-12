@@ -1,8 +1,12 @@
 import {
+  activateWeaponSet,
   createEquipmentTemplateId,
   equipItemInSlot,
+  equipItemInWeaponSet,
   normalizeRogueliteEquipmentPool,
   normalizeEquippedHandSlots,
+  normalizeEquippedWeaponSets,
+  resolveEquippedWeaponSet,
   resolveEquippedHandOccupancy,
   resolveEquipmentHandsRequired,
 } from '../equipmentPool';
@@ -100,5 +104,58 @@ describe('roguelite starting equipment pool', () => {
     expect(equipped.mainHand.name).toBe('Mandoble');
     expect(equipped.offHand).toBeNull();
     expect(equipped.body.name).toBe('Cuero');
+  });
+
+  test('migrates the legacy hands into set one and creates an empty set two', () => {
+    const dagger = { name: 'Daga', handsRequired: 1 };
+    const equipped = normalizeEquippedWeaponSets({
+      mainHand: dagger,
+      offHand: null,
+      body: { name: 'Cuero' },
+    });
+
+    expect(equipped.weaponSets).toEqual([
+      { mainHand: dagger, offHand: null },
+      { mainHand: null, offHand: null },
+    ]);
+    expect(equipped.activeWeaponSet).toBe(0);
+    expect(equipped.mainHand).toBe(dagger);
+    expect(equipped.body.name).toBe('Cuero');
+  });
+
+  test('edits the inactive set without changing the compatibility aliases', () => {
+    const dagger = { name: 'Daga', handsRequired: 1 };
+    const bow = { name: 'Arco', handsRequired: 2 };
+    const initial = normalizeEquippedWeaponSets({ mainHand: dagger, offHand: null });
+    const equipped = equipItemInWeaponSet(initial, 1, 'mainHand', bow);
+
+    expect(resolveEquippedWeaponSet(equipped, 1)).toEqual({
+      mainHand: bow,
+      offHand: null,
+    });
+    expect(equipped.activeWeaponSet).toBe(0);
+    expect(equipped.mainHand).toBe(dagger);
+    expect(equipped.offHand).toBeNull();
+  });
+
+  test('activating set two exposes its hands to existing consumers', () => {
+    const dagger = { name: 'Daga', handsRequired: 1 };
+    const bow = { name: 'Arco', handsRequired: 2 };
+    const withSecondSet = equipItemInWeaponSet(
+      normalizeEquippedWeaponSets({ mainHand: dagger, offHand: null }),
+      1,
+      'mainHand',
+      bow,
+    );
+    const equipped = activateWeaponSet(withSecondSet, 1);
+
+    expect(equipped.activeWeaponSet).toBe(1);
+    expect(equipped.mainHand).toBe(bow);
+    expect(equipped.offHand).toBeNull();
+    expect(resolveEquippedHandOccupancy(equipped)).toMatchObject({
+      sourceSlot: 'mainHand',
+      blockedSlot: 'offHand',
+      item: bow,
+    });
   });
 });

@@ -16,8 +16,8 @@ import {
 } from '../../utils/cardBoard';
 import { RECENT_LOCAL_WRITE_PROTECTION_MS } from '../../utils/scenarioSync';
 import { getOrUploadFile } from '../../utils/storage';
-import { isCombatTokenItem } from '../canvas/combatRules';
-import { WORLD_SIZE } from '../canvas/spatial';
+import { isCombatTokenItem } from '../tactical-shared/legacyCombatRules';
+import { WORLD_SIZE } from '../tactical-shared/spatial';
 import {
     BOARD_DICE_ROLL_SIDES, MAX_BOARD_DICE_EXPLOSIONS, MAX_BOARD_DICE_ROLL,
 } from './components/BoardObjects';

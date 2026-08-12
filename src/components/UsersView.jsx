@@ -24,6 +24,10 @@ import {
 import { mergeRogueliteClassCatalogs } from '../features/roguelite/classDefinition';
 import { normalizeRogueliteProfileLevel } from '../features/roguelite/profileClass';
 import {
+    resolveRogueliteProfileSyncState,
+    resolveRogueliteTemplateRevision,
+} from '../features/roguelite/activeRun';
+import {
     describeRogueliteLevelEffect,
     getRogueliteLevelEffects,
 } from '../features/roguelite/progression';
@@ -42,8 +46,10 @@ const UsersView = ({ onBack }) => {
     const [rogueliteClasses, setRogueliteClasses] = useState([]);
     const [rogueliteClassesLoading, setRogueliteClassesLoading] = useState(true);
     const [rogueliteProfileLevels, setRogueliteProfileLevels] = useState({});
+    const [rogueliteProfiles, setRogueliteProfiles] = useState({});
     const [pendingLevelChange, setPendingLevelChange] = useState(null);
     const [savingProfileLevel, setSavingProfileLevel] = useState('');
+    const [savingProfileSync, setSavingProfileSync] = useState('');
 
     const [isCreating, setIsCreating] = useState(false);
     const [editingPasswordFor, setEditingPasswordFor] = useState(null);
@@ -64,7 +70,7 @@ const UsersView = ({ onBack }) => {
                 });
                 setPlayers(data);
 
-                const profileLevelEntries = await Promise.all(data.map(async (player) => {
+                const profileEntries = await Promise.all(data.map(async (player) => {
                     try {
                         const profileSnapshot = await getDocs(collection(
                             db,
@@ -72,16 +78,27 @@ const UsersView = ({ onBack }) => {
                             player.id,
                             'rogueliteClasses',
                         ));
-                        return profileSnapshot.docs.map((profileDoc) => [
-                            getProfileClassKey(player.id, profileDoc.id),
-                            normalizeRogueliteProfileLevel(profileDoc.data()?.level),
-                        ]);
+                        return profileSnapshot.docs.map((profileDoc) => {
+                            const profileData = profileDoc.data() || {};
+                            return [getProfileClassKey(player.id, profileDoc.id), {
+                                ...profileData,
+                                id: profileDoc.id,
+                                owner: player.id,
+                            }];
+                        });
                     } catch (profileError) {
                         console.error(`Error fetching roguelite levels for ${player.id}:`, profileError);
                         return [];
                     }
                 }));
-                setRogueliteProfileLevels(Object.fromEntries(profileLevelEntries.flat()));
+                const nextProfiles = Object.fromEntries(profileEntries.flat());
+                setRogueliteProfiles(nextProfiles);
+                setRogueliteProfileLevels(Object.fromEntries(
+                    Object.entries(nextProfiles).map(([key, profile]) => [
+                        key,
+                        normalizeRogueliteProfileLevel(profile?.level),
+                    ]),
+                ));
             } catch (error) {
                 console.error("Error fetching players:", error);
             } finally {
@@ -356,12 +373,56 @@ const UsersView = ({ onBack }) => {
                 ...currentLevels,
                 [change.profileKey]: change.nextLevel,
             }));
+            setRogueliteProfiles((currentProfiles) => ({
+                ...currentProfiles,
+                [change.profileKey]: {
+                    ...(currentProfiles[change.profileKey] || {}),
+                    id: change.classId,
+                    templateId: change.classId,
+                    owner: change.playerId,
+                    profileType: 'rogueliteClass',
+                    level: change.nextLevel,
+                },
+            }));
             setPendingLevelChange(null);
         } catch (error) {
             console.error('Error updating personal roguelite level:', error);
             alert('No se pudo actualizar el nivel de esta clase.');
         } finally {
             setSavingProfileLevel('');
+        }
+    };
+
+    const resetProfileRun = async (player, classItem) => {
+        if (!window.confirm(`¿Finalizar la aventura de ${player.name || player.id} con ${classItem.name}? La ficha volverá a sus valores base y conservará su nivel.`)) return;
+
+        const profileKey = getProfileClassKey(player.id, classItem.id);
+        const templateRevision = resolveRogueliteTemplateRevision(classItem);
+        const storedProfile = rogueliteProfiles[profileKey] || {};
+        const resetFields = {
+            activeRun: null,
+            appliedTemplateRevision: templateRevision,
+            personalStatusTags: [],
+            money: 0,
+            equippedItems: { mainHand: null, offHand: null, body: null, activeWeaponSet: 0 },
+        };
+
+        setSavingProfileSync(profileKey);
+        try {
+            await setDoc(
+                doc(db, 'players', player.id, 'rogueliteClasses', classItem.id),
+                resetFields,
+                { merge: true },
+            );
+            setRogueliteProfiles((currentProfiles) => ({
+                ...currentProfiles,
+                [profileKey]: { ...storedProfile, ...resetFields },
+            }));
+        } catch (error) {
+            console.error('Error resetting personal roguelite run:', error);
+            alert('No se pudo finalizar y restablecer esta aventura.');
+        } finally {
+            setSavingProfileSync('');
         }
     };
 
@@ -637,6 +698,12 @@ const UsersView = ({ onBack }) => {
                                                                 );
                                                                 const nextLevel = classItem.classLevels?.[currentLevel];
                                                                 const isSaving = savingProfileLevel === profileKey;
+                                                                const storedProfile = rogueliteProfiles[profileKey] || {};
+                                                                const syncState = resolveRogueliteProfileSyncState(
+                                                                    classItem,
+                                                                    { ...storedProfile, owner: player.id },
+                                                                );
+                                                                const isSyncing = savingProfileSync === profileKey;
                                                                 const isConfirming = pendingLevelChange?.profileKey === profileKey;
 
                                                                 return (
@@ -720,6 +787,31 @@ const UsersView = ({ onBack }) => {
                                                                             <p className="mt-1.5 pl-6 text-[10px] leading-relaxed text-slate-500">
                                                                                 Próximo perk: <span className="text-slate-300 font-['Cinzel']">{nextLevel.title || `Nivel ${currentLevel + 1}`}</span>
                                                                             </p>
+                                                                        )}
+
+                                                                        {isUnlocked && !isConfirming && (
+                                                                            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/70 pt-2 pl-6">
+                                                                                <span className={`text-[9px] uppercase tracking-[0.14em] ${syncState.hasActiveRun
+                                                                                    ? 'text-sky-300/80'
+                                                                                    : 'text-emerald-300/70'
+                                                                                    }`}>
+                                                                                    {syncState.hasActiveRun
+                                                                                        ? 'Aventura activa'
+                                                                                        : 'Ficha preparada'}
+                                                                                </span>
+                                                                                <div className="flex flex-wrap gap-1.5">
+                                                                                    {syncState.hasActiveRun && (
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => resetProfileRun(player, classItem)}
+                                                                                            disabled={isSyncing}
+                                                                                            className="min-h-8 border border-rose-900/50 px-2.5 font-['Cinzel'] text-[8px] font-bold uppercase tracking-[0.12em] text-rose-300/75 transition hover:border-rose-700 hover:text-rose-200 disabled:opacity-40"
+                                                                                        >
+                                                                                            Finalizar aventura
+                                                                                        </button>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
                                                                         )}
 
                                                                         {/* Level Confirmation Banner */}

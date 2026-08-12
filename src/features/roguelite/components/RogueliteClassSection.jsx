@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { ShieldQuestion } from 'lucide-react';
 import { collection, doc, onSnapshot } from 'firebase/firestore';
@@ -8,12 +8,18 @@ import { normalizeRogueliteAccess } from '../access';
 import { mergeRogueliteClassCatalogs } from '../classDefinition';
 import { createRogueliteProfileClass } from '../profileClass';
 
-const RogueliteClassSection = ({ playerName, onOpenClass }) => {
+const RogueliteClassSection = ({
+  playerName,
+  onOpenClass,
+  onClassesChange,
+  initialClassId,
+}) => {
   const [access, setAccess] = useState(null);
   const [classDefinitions, setClassDefinitions] = useState([]);
   const [profileConfigurations, setProfileConfigurations] = useState({});
   const [accessError, setAccessError] = useState('');
   const [catalogError, setCatalogError] = useState('');
+  const openedInitialClassId = useRef(null);
 
   useEffect(() => {
     if (!playerName) {
@@ -118,6 +124,25 @@ const RogueliteClassSection = ({ playerName, onOpenClass }) => {
       ));
   }, [access, classDefinitions, playerName, profileConfigurations]);
 
+  useEffect(() => {
+    onClassesChange?.(unlockedClasses);
+  }, [onClassesChange, unlockedClasses]);
+
+  useEffect(() => {
+    if (!initialClassId || openedInitialClassId.current === initialClassId || unlockedClasses.length === 0) return;
+    const initialClass = unlockedClasses.find((classItem) => classItem.id === initialClassId);
+    if (!initialClass) return;
+
+    openedInitialClassId.current = initialClassId;
+    onOpenClass(initialClass, {
+      mode: 'roguelite',
+      collectionPathSegments: ['players', playerName, 'rogueliteClasses'],
+      collectionLabel: `players/${playerName}/rogueliteClasses`,
+      storagePrefix: `roguelite-profiles/${playerName}`,
+      updateMainLibrary: false,
+    });
+  }, [initialClassId, onOpenClass, playerName, unlockedClasses]);
+
   const missingClassCount = access?.enabled
     ? Math.max(0, access.unlockedClassIds.length - unlockedClasses.length)
     : 0;
@@ -156,21 +181,30 @@ const RogueliteClassSection = ({ playerName, onOpenClass }) => {
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {unlockedClasses.map((classItem) => (
-            <LibraryCharacterCard
-              key={classItem.id}
-              item={classItem}
-              onOpen={() => onOpenClass(classItem, {
-                mode: 'roguelite',
-                collectionPathSegments: ['players', playerName, 'rogueliteClasses'],
-                collectionLabel: `players/${playerName}/rogueliteClasses`,
-                storagePrefix: `roguelite-profiles/${playerName}`,
-                updateMainLibrary: false,
-              })}
-              starCount={10}
-              starValue={classItem.level}
-              levelPrefix="Nivel"
-              ariaLabel={`Abrir clase ${classItem.name}`}
-            />
+            <div key={classItem.id} className="min-w-0">
+              <LibraryCharacterCard
+                item={classItem}
+                onOpen={() => onOpenClass(classItem, {
+                  mode: 'roguelite',
+                  collectionPathSegments: ['players', playerName, 'rogueliteClasses'],
+                  collectionLabel: `players/${playerName}/rogueliteClasses`,
+                  storagePrefix: `roguelite-profiles/${playerName}`,
+                  updateMainLibrary: false,
+                })}
+                starCount={10}
+                starValue={classItem.level}
+                levelPrefix="Nivel"
+                ariaLabel={`Abrir clase ${classItem.name}`}
+              />
+              <div className="mt-2 flex items-center justify-center gap-2 text-center text-[9px] uppercase tracking-[0.16em]">
+                <span className={`h-1 w-1 ${classItem.hasActiveRun
+                  ? 'bg-sky-300' : 'bg-emerald-400'
+                  }`} />
+                <span className={classItem.hasActiveRun ? 'text-sky-300/70' : 'text-slate-500'}>
+                  {classItem.hasActiveRun ? 'Aventura activa' : 'Preparada'}
+                </span>
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -181,6 +215,12 @@ const RogueliteClassSection = ({ playerName, onOpenClass }) => {
 RogueliteClassSection.propTypes = {
   playerName: PropTypes.string.isRequired,
   onOpenClass: PropTypes.func.isRequired,
+  onClassesChange: PropTypes.func,
+  initialClassId: PropTypes.string,
+};
+
+RogueliteClassSection.defaultProps = {
+  initialClassId: null,
 };
 
 export default RogueliteClassSection;

@@ -67,15 +67,26 @@ import { RelicsView } from './RelicsView';
 import KarmaBar from './KarmaBar';
 import { LibraryCharacterCard } from './LibraryCharacterCard';
 import { isYuuzuName, KARMA_MIN, KARMA_MAX } from '../utils/karma';
-import { normalizeRogueliteProfileLevel } from '../features/roguelite/profileClass';
 import {
+  createRogueliteProfileClass,
+  normalizeRogueliteProfileLevel,
+} from '../features/roguelite/profileClass';
+import {
+  activateWeaponSet,
   createEquipmentTemplateId,
   equipItemInSlot,
+  equipItemInWeaponSet,
   normalizeEquippedHandSlots,
+  normalizeRogueliteEquipmentPool,
   resolveEquipmentHandsRequired,
 } from '../features/roguelite/equipmentPool';
 import { resolveRogueliteClassLevels } from '../features/roguelite/progression';
 import { resolveRogueliteTalentCatalog } from '../features/roguelite/talents';
+import {
+  rebaseRogueliteActiveRun,
+  resolveRogueliteTemplateRevision,
+  updateRogueliteActiveRunFromProfile,
+} from '../features/roguelite/activeRun';
 import EditableTag from './EditableTag';
 import {
   parseTag,
@@ -1563,6 +1574,7 @@ const ClassList = ({
   const imageRef = useRef(null);
 
   const [editingClass, setEditingClass] = useState(null);
+  const hasLocalClassDraftRef = useRef(false);
   const [levelSliderLimit, setLevelSliderLimit] = useState(12);
   const [equipmentSearchTerms, setEquipmentSearchTerms] = useState({
     weapons: '',
@@ -1870,6 +1882,7 @@ const ClassList = ({
     const sanitized = ensureClassDefaults(classItem);
     setSelectedClass(sanitized);
     setEditingClass(deepClone(sanitized));
+    hasLocalClassDraftRef.current = false;
     const targetLimit = Math.max(12, (sanitized.classLevels?.length || 0) + 2);
     setLevelSliderLimit(targetLimit);
     setActiveDetailTab('overview');
@@ -1884,6 +1897,7 @@ const ClassList = ({
     setDetailPersistence(null);
     setActiveDetailTab('overview');
     setEditingClass(null);
+    hasLocalClassDraftRef.current = false;
     if (isMobile) {
       setMobileActiveView('list');
     }
@@ -1901,6 +1915,7 @@ const ClassList = ({
   );
 
   const updateEditingClass = (mutator) => {
+    hasLocalClassDraftRef.current = true;
     setEditingClass((prev) => {
       if (!prev) return prev;
       const draft = deepClone(prev);
@@ -2171,13 +2186,29 @@ const ClassList = ({
     });
   };
 
-  const handleUpdateEquipped = (slot, item) => {
+  const handleUpdateEquipped = (slot, item, options = {}) => {
     updateEditingClass((draft) => {
-      draft.equippedItems = equipItemInSlot(
-        draft.equippedItems || { mainHand: null, offHand: null, body: null },
-        slot,
-        item,
-      );
+      const equippedItems = draft.equippedItems || { mainHand: null, offHand: null, body: null };
+
+      if (slot === 'activeWeaponSet') {
+        draft.equippedItems = activateWeaponSet(equippedItems, item);
+        return;
+      }
+
+      if (
+        (slot === 'mainHand' || slot === 'offHand')
+        && Number.isInteger(options.weaponSetIndex)
+      ) {
+        draft.equippedItems = equipItemInWeaponSet(
+          equippedItems,
+          options.weaponSetIndex,
+          slot,
+          item,
+        );
+        return;
+      }
+
+      draft.equippedItems = equipItemInSlot(equippedItems, slot, item);
     });
   };
 
@@ -2492,6 +2523,64 @@ const ClassList = ({
     });
   };
 
+  const synchronizeMasterClassProfiles = async (classDefinition) => {
+    const classId = classDefinition?.id;
+    if (!classId) return;
+
+    const playersSnapshot = await getDocs(collection(db, 'players'));
+    const results = await Promise.allSettled(playersSnapshot.docs.map(async (playerDoc) => {
+      const playerId = playerDoc.id;
+      const profilesSnapshot = await getDocs(collection(
+        db,
+        'players',
+        playerId,
+        'rogueliteClasses',
+      ));
+      const matchingProfile = profilesSnapshot.docs.find((profileDoc) => profileDoc.id === classId);
+      if (!matchingProfile) return;
+
+      const storedProfile = matchingProfile.data() || {};
+      if (storedProfile.activeRun?.status !== 'active') return;
+
+      const baseProfile = createRogueliteProfileClass(
+        classDefinition,
+        { ...storedProfile, activeRun: null },
+        playerId,
+      );
+      const nextActiveRun = rebaseRogueliteActiveRun(storedProfile.activeRun, baseProfile);
+      await setDoc(doc(db, 'players', playerId, 'rogueliteClasses', classId), {
+        appliedTemplateRevision: resolveRogueliteTemplateRevision(classDefinition),
+        activeRun: nextActiveRun,
+      }, { merge: true });
+    }));
+
+    const failures = results.filter((result) => result.status === 'rejected');
+    if (failures.length > 0) {
+      console.error('No se pudieron actualizar todos los perfiles de la clase:', failures);
+      throw new Error(`No se pudieron actualizar ${failures.length} perfiles personales.`);
+    }
+  };
+
+  const syncOpenClassDetails = useCallback((nextClasses = []) => {
+    if (detailPersistence?.mode !== 'roguelite' || !selectedClass?.id) return;
+
+    const nextClass = nextClasses.find((classItem) => classItem.id === selectedClass.id);
+    if (!nextClass) return;
+
+    // La ficha abierta también es un borrador. Los cambios remotos se aplican
+    // cuando está limpia, pero nunca pisan una edición local sin confirmar.
+    if (hasLocalClassDraftRef.current) return;
+
+    const sanitized = ensureClassDefaults(nextClass);
+    if (JSON.stringify(sanitized) === JSON.stringify(selectedClass)) return;
+
+    setSelectedClass(sanitized);
+    setEditingClass(deepClone(sanitized));
+    hasLocalClassDraftRef.current = false;
+    const targetLimit = Math.max(12, (sanitized.classLevels?.length || 0) + 2);
+    setLevelSliderLimit(targetLimit);
+  }, [detailPersistence?.mode, editingClass, selectedClass]);
+
   const handleSaveChanges = async () => {
     if (!editingClass) return;
 
@@ -2528,7 +2617,18 @@ const ClassList = ({
           cleanedData.tags,
           statusEffectsConfig,
         );
+        if (cleanedData.activeRun?.status === 'active') {
+          cleanedData.activeRun = updateRogueliteActiveRunFromProfile(cleanedData);
+        }
       } else if (!isPlayerMode) {
+        const previousTemplateRevision = Math.max(
+          1,
+          Math.trunc(Number(selectedClass?.templateRevision || cleanedData.templateRevision) || 1),
+        );
+        cleanedData.templateRevision = selectedClass?.id
+          ? previousTemplateRevision + 1
+          : previousTemplateRevision;
+        cleanedData.templateUpdatedAt = Date.now();
         cleanedData.classTags = resolveClassAuthorTags(
           cleanedData.tags,
           statusEffectsConfig,
@@ -2546,8 +2646,12 @@ const ClassList = ({
         ? (() => {
           const personalData = { ...cleanedData };
           delete personalData.talentCatalog;
+          delete personalData.classEquipmentPool;
           delete personalData.equipment;
           delete personalData.startingEquipmentPool;
+          delete personalData.templateUpdateAvailable;
+          delete personalData.templateSyncStatus;
+          delete personalData.hasActiveRun;
           if (personalData.roguelite) {
             personalData.roguelite = { ...personalData.roguelite };
             delete personalData.roguelite.talentCatalog;
@@ -2571,6 +2675,10 @@ const ClassList = ({
         throw saveError;
       }
 
+      if (detailPersistence?.mode !== 'roguelite' && !isPlayerMode) {
+        await synchronizeMasterClassProfiles(cleanedData);
+      }
+
       // Usar cleanedData para el estado local para que coincida exactamente con lo guardado
       const savedData = ensureClassDefaults(cleanedData);
 
@@ -2589,6 +2697,7 @@ const ClassList = ({
       // para que hasUnsavedChanges sea false
       setSelectedClass(savedData);
       setEditingClass(deepClone(savedData));
+      hasLocalClassDraftRef.current = false;
 
       // Notificar a toda la aplicación que se ha guardado una ficha
       // Esto permite que el Canvas se sincronice en tiempo real
@@ -2616,6 +2725,7 @@ const ClassList = ({
     if (selectedClass) {
       const reset = ensureClassDefaults(selectedClass);
       setEditingClass(deepClone(reset));
+      hasLocalClassDraftRef.current = false;
       const targetLimit = Math.max(levelSliderLimit, (reset.classLevels?.length || 0) + 2);
       setLevelSliderLimit(targetLimit);
     }
@@ -4602,7 +4712,11 @@ const ClassList = ({
                         <button
                           onClick={() => {
                             if (onLaunchCanvas) {
-                              onLaunchCanvas(editingClass.name, {
+                              onLaunchCanvas(editingClass.name, isRoguelitePlayerClass ? {
+                                ...editingClass,
+                                profileType: 'rogueliteClass',
+                                launchSource: 'rogueliteClass',
+                              } : {
                                 name: editingClass.name,
                                 avatar: editingClass.avatar || editingClass.portraitSource || editingClass.image || '',
                                 attributes: editingClass.attributes || {},
@@ -5414,9 +5528,6 @@ const ClassList = ({
                     />
                   ))}
                 </div>
-                {typeof additionalLibrarySection === 'function'
-                  ? additionalLibrarySection({ openClassDetails })
-                  : additionalLibrarySection}
               </div>
             )}
           </motion.div>
@@ -5433,6 +5544,17 @@ const ClassList = ({
           </motion.div>
         )}
       </AnimatePresence>
+
+      <div
+        className={selectedClass || isAutoOpening
+          ? 'hidden'
+          : 'mx-auto mt-10 w-full max-w-[1600px]'}
+        aria-hidden={selectedClass || isAutoOpening ? 'true' : undefined}
+      >
+        {typeof additionalLibrarySection === 'function'
+          ? additionalLibrarySection({ openClassDetails, syncOpenClassDetails })
+          : additionalLibrarySection}
+      </div>
 
 
     </div >

@@ -18,6 +18,7 @@ export const CharacterListView = ({
     onLaunchBoard,
     onLaunchMinigame,
     initialCharacterName = null,
+    initialRogueliteClassId = null,
 }) => {
     return (
         <ClassList
@@ -44,10 +45,12 @@ export const CharacterListView = ({
             onLaunchBoard={onLaunchBoard}
             currentUserId={playerName}
 
-            additionalLibrarySection={({ openClassDetails }) => (
+            additionalLibrarySection={({ openClassDetails, syncOpenClassDetails }) => (
                 <RogueliteClassSection
                     playerName={playerName}
                     onOpenClass={openClassDetails}
+                    onClassesChange={syncOpenClassDetails}
+                    initialClassId={initialRogueliteClassId}
                 />
             )}
 

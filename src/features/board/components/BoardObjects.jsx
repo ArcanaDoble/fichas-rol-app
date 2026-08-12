@@ -6,10 +6,11 @@ import {
     getBoardDieReferenceDiameter, getBoardDieWorldBounds, isBoardDieMotionSettled,
     shouldFinishBoardDieRoll,
 } from '../../../utils/boardDicePhysics';
+import {
+    ACTIVE_BOARD_DIE_ROLL_IDS, BOARD_DICE_ROLL_SIDES, BOARD_DIE_SIDES,
+} from '../../../utils/boardDiceRuntime';
 
-export const BOARD_DIE_SIDES = [4, 6, 8, 10, 12, 20];
-
-export const BOARD_DICE_ROLL_SIDES = [4, 6, 8, 10, 12, 20];
+export { ACTIVE_BOARD_DIE_ROLL_IDS, BOARD_DICE_ROLL_SIDES, BOARD_DIE_SIDES };
 
 export const MAX_BOARD_DICE_ROLL = 80;
 
@@ -23,8 +24,6 @@ const D4_VERTEX_VALUES = [
     { value: 3, vertex: { x: -1, y: 1, z: -1 } },
     { value: 4, vertex: { x: 1, y: -1, z: -1 } },
 ];
-
-export const ACTIVE_BOARD_DIE_ROLL_IDS = new Set();
 
 const BOARD_DIE_RUNTIME_REGISTRY = new Map();
 
@@ -1390,4 +1389,3 @@ export const BoardMarkerVisual = ({ marker, className = '', renderCoin = true, s
         </div>
     );
 };
-

@@ -2055,8 +2055,8 @@ function App() {
   const [characterSheetOverlayName, setCharacterSheetOverlayName] = useState(null);
   const [sheetOverlayVisible, setSheetOverlayVisible] = useState(false);
 
-  const handleOpenCharacterSheet = useCallback((charName) => {
-    setCharacterSheetOverlayName(charName);
+  const handleOpenCharacterSheet = useCallback((sheetTarget) => {
+    setCharacterSheetOverlayName(sheetTarget);
     // Trigger fade-in on next frame
     requestAnimationFrame(() => setSheetOverlayVisible(true));
   }, []);
@@ -4460,7 +4460,12 @@ function App() {
                 onLaunchCanvas={handleLaunchCanvas}
                 onLaunchBoard={handleLaunchBoard}
                 onBack={handleCloseCharacterSheet}
-                initialCharacterName={characterSheetOverlayName}
+                initialCharacterName={typeof characterSheetOverlayName === 'string' ? characterSheetOverlayName : null}
+                initialRogueliteClassId={
+                  typeof characterSheetOverlayName === 'object'
+                    ? characterSheetOverlayName?.classId || null
+                    : null
+                }
               />
 
               {/* Close Button */}

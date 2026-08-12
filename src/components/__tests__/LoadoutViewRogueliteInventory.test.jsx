@@ -240,3 +240,48 @@ test('a two-handed weapon visually occupies and blocks the opposite hand', () =>
   expect(onUpdateEquipped).not.toHaveBeenCalled();
   expect(screen.queryByText('Seleccionar arma del inventario')).not.toBeInTheDocument();
 });
+
+test('the same two hand slots edit two independent weapon sets', () => {
+  const onUpdateEquipped = jest.fn();
+
+  render(
+    <LoadoutView
+      dndClass={createClass({
+        equippedItems: {
+          mainHand: equipment.weapons[0],
+          offHand: null,
+          body: null,
+          activeWeaponSet: 0,
+          weaponSets: [
+            { mainHand: equipment.weapons[0], offHand: null },
+            { mainHand: null, offHand: null },
+          ],
+        },
+      })}
+      equipmentCatalog={{ weapons: [], armor: [], abilities: [] }}
+      glossary={[]}
+      rarityColorMap={{}}
+      rogueliteRole="player"
+      onUpdateEquipped={onUpdateEquipped}
+    />,
+  );
+
+  expect(screen.getByRole('tab', { name: 'Ver conjunto I, activo' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByText('2 manos')).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('tab', { name: 'Ver conjunto II' }));
+  expect(screen.queryByText('2 manos')).not.toBeInTheDocument();
+  expect(screen.getByText('Mano Hábil')).toBeInTheDocument();
+  expect(screen.getByText('Mano Torpe')).toBeInTheDocument();
+
+  fireEvent.click(screen.getByText('Mano Hábil'));
+  fireEvent.click(screen.getByRole('button', { name: /Gran hacha/i }));
+  expect(onUpdateEquipped).toHaveBeenCalledWith(
+    'mainHand',
+    expect.objectContaining({ templateId: 'great-axe', name: 'Gran hacha' }),
+    { weaponSetIndex: 1 },
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: 'Activar' }));
+  expect(onUpdateEquipped).toHaveBeenCalledWith('activeWeaponSet', 1);
+});

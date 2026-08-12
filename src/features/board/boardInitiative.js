@@ -6,7 +6,7 @@ import {
     isLegacyTokenHandCard,
     normalizeHandSeatId,
 } from '../../utils/cardBoard';
-import { isCombatTokenItem } from '../canvas/combatRules';
+import { isCombatTokenItem } from '../tactical-shared/legacyCombatRules';
 
 /** Board initiative is derived exclusively from the cards held by each seat. */
 export const buildBoardTimelineTokens = (items = []) => {

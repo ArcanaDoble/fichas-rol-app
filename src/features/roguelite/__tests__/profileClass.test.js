@@ -142,6 +142,28 @@ describe('personal roguelite class configuration', () => {
     });
   });
 
+  test('does not let an empty legacy active run hide the current master equipment pool', () => {
+    const profileClass = createRogueliteProfileClass(definition, {
+      activeRun: {
+        version: 1,
+        id: 'run-legacy',
+        status: 'active',
+        classId: 'barbarian',
+        owner: 'Ada',
+        stats: {},
+        inventory: {},
+        equippedItems: {},
+      },
+    }, 'Ada');
+
+    expect(profileClass.equipment.weapons).toEqual([
+      expect.objectContaining({ name: 'Hacha antigua', templateId: 'weapons:hacha-antigua' }),
+    ]);
+    expect(profileClass.activeRun.inventory.weapons).toEqual([
+      expect.objectContaining({ name: 'Hacha antigua', templateId: 'weapons:hacha-antigua' }),
+    ]);
+  });
+
   test('repairs legacy loadouts that filled the second hand beside a two-handed weapon', () => {
     const profileClass = createRogueliteProfileClass(definition, {
       equippedItems: {
@@ -153,6 +175,29 @@ describe('personal roguelite class configuration', () => {
 
     expect(profileClass.equippedItems.mainHand.name).toBe('Mandoble');
     expect(profileClass.equippedItems.offHand).toBeNull();
+  });
+
+  test('keeps both personal weapon sets and resolves the active one for compatibility', () => {
+    const dagger = { name: 'Daga', handsRequired: 1 };
+    const bow = { name: 'Arco', handsRequired: 2 };
+    const profileClass = createRogueliteProfileClass(definition, {
+      equippedItems: {
+        activeWeaponSet: 1,
+        weaponSets: [
+          { mainHand: dagger, offHand: null },
+          { mainHand: bow, offHand: null },
+        ],
+        body: { name: 'Cuero' },
+      },
+    }, 'Ada');
+
+    expect(profileClass.equippedItems.weaponSets).toEqual([
+      { mainHand: dagger, offHand: null },
+      { mainHand: bow, offHand: null },
+    ]);
+    expect(profileClass.equippedItems.activeWeaponSet).toBe(1);
+    expect(profileClass.equippedItems.mainHand).toEqual(bow);
+    expect(profileClass.equippedItems.body.name).toBe('Cuero');
   });
 
   test('inherits current master tags while keeping player status effects personal', () => {

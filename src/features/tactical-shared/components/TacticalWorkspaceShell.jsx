@@ -14,18 +14,21 @@ import {
     canCombatTokenActNow, canUseTouchAgainstAdjacentLockedTarget,
     getTokenDistanceInCells, getTokenDuelContextAgainstAttacker,
     isCombatTokenItem, isSmallCombatToken,
-} from '../../canvas/combatRules';
-import { GRID_LINE_COLOR_PRESETS, PRESET_COLORS } from '../../canvas/constants';
-import { CardImageWithLoader } from '../../canvas/components/CanvasAssetImage';
-import { CanvasThumbnail, SaveToast, SpeedTimeline } from '../../canvas/components/CanvasFeedback';
-import { CanvasSidebar } from '../../canvas/components/CanvasSidebar';
-import { CanvasViewport } from '../../canvas/components/CanvasViewport';
-import {
-    BOARD_DICE_ROLL_SIDES, BOARD_DIE_SIDES, BoardDieVisual, BoardMarkerVisual,
-} from '../../board/components/BoardObjects';
+} from '../legacyCombatRules';
+import { GRID_LINE_COLOR_PRESETS, PRESET_COLORS } from '../constants';
+import { CardImageWithLoader } from './TacticalAssetImage';
+import { CanvasThumbnail, SaveToast, SpeedTimeline } from './TacticalFeedback';
+import { CanvasSidebar } from './TacticalSidebar';
+import { CanvasViewport } from './TacticalViewport';
 
 /** Stateless composition layer for the canvas workspace and its HUD overlays. */
 export const TacticalWorkspaceShell = ({
+    BOARD_DICE_ROLL_SIDES,
+    BOARD_DIE_SIDES,
+    BoardDieVisual,
+    BoardMarkerVisual,
+    EquipmentSectionComponent,
+    TokenResourcesComponent,
     accesorios,
     activeBoardHandTokenId,
     activeCombatAnimations,
@@ -428,6 +431,8 @@ export const TacticalWorkspaceShell = ({
                     BOARD_DIE_SIDES={BOARD_DIE_SIDES}
                     BoardDieVisual={BoardDieVisual}
                     BoardMarkerVisual={BoardMarkerVisual}
+                    EquipmentSectionComponent={EquipmentSectionComponent}
+                    TokenResourcesComponent={TokenResourcesComponent}
                     GRID_LINE_COLOR_PRESETS={GRID_LINE_COLOR_PRESETS}
                     PRESET_COLORS={PRESET_COLORS}
                     accesorios={accesorios}
@@ -923,11 +928,15 @@ export const TacticalWorkspaceShell = ({
 
                 if (rawHudToken) {
                     const hudToken = enrichTokenWithCharacterData(rawHudToken);
-                    const canOpenSheet = !!hudToken.linkedCharacterId;
+                    const canOpenSheet = !!(hudToken.linkedCharacterId || hudToken.linkedClassId);
 
                     const handlePortraitClick = (charName) => {
                         if (canOpenSheet && onOpenCharacterSheet) {
-                            onOpenCharacterSheet(charName);
+                            onOpenCharacterSheet(hudToken.linkedClassId ? {
+                                name: hudToken.name || charName,
+                                profileType: 'rogueliteClass',
+                                classId: hudToken.linkedClassId,
+                            } : charName);
                         } else {
                             // Feedback visual de advertencia
                             triggerToast(
@@ -964,7 +973,7 @@ export const TacticalWorkspaceShell = ({
                             onAction={(actionId, data) => handleCombatAction(hudToken.id, actionId, data)}
                             onEndTurn={() => handleEndTurn(hudToken.id)}
                             onPortraitClick={handlePortraitClick}
-                            canOpenSheet={!!(availableCharacters.find(c => c.name === hudToken.name))}
+                            canOpenSheet={canOpenSheet}
                             pendingCost={pendingTurnState?.tokenId === hudToken.id ? (pendingTurnState.moveCost + pendingTurnState.actionCost) : 0}
                             pendingActions={pendingTurnState?.tokenId === hudToken.id ? (pendingTurnState.actions || []) : []}
                             onCancelAction={(idx) => handleCancelAction(hudToken.id, idx)}
@@ -1093,10 +1102,14 @@ export const TacticalWorkspaceShell = ({
                                 // Fusionamos datos de la ficha vinculada
                                 const hudToken = enrichTokenWithCharacterData(rawHudToken);
 
-                                const canOpenSheet = !!hudToken.linkedCharacterId;
+                                const canOpenSheet = !!(hudToken.linkedCharacterId || hudToken.linkedClassId);
                                 const handlePortraitClick = (charName) => {
                                     if (canOpenSheet && onOpenCharacterSheet) {
-                                        onOpenCharacterSheet(charName);
+                                        onOpenCharacterSheet(hudToken.linkedClassId ? {
+                                            name: hudToken.name || charName,
+                                            profileType: 'rogueliteClass',
+                                            classId: hudToken.linkedClassId,
+                                        } : charName);
                                     } else {
                                         triggerToast(
                                             "Token sin ficha vinculada",

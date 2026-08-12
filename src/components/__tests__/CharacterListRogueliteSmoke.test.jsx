@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { CharacterListView } from '../CharacterListView';
 
 jest.mock('../../firebase', () => ({ db: {}, storage: {} }));
@@ -94,6 +94,7 @@ beforeEach(() => {
 });
 
 test('mounts the roguelite card and opens it in the shared character sheet', async () => {
+  const onLaunchCanvas = jest.fn();
   render(
     <CharacterListView
       playerName="Ada"
@@ -103,6 +104,7 @@ test('mounts the roguelite card and opens it in the shared character sheet', asy
       glossary={[]}
       rarityColorMap={{}}
       onBack={jest.fn()}
+      onLaunchCanvas={onLaunchCanvas}
     />,
   );
 
@@ -131,6 +133,23 @@ test('mounts the roguelite card and opens it in the shared character sheet', asy
   expect(screen.queryByRole('button', { name: 'Añadir etiqueta' })).not.toBeInTheDocument();
   expect(screen.getByText('Vanguardia')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Editar etiqueta Vanguardia' })).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: /Jugar Aventura/i }));
+  expect(onLaunchCanvas).toHaveBeenCalledWith(
+    'Bárbaro',
+    expect.objectContaining({
+      id: 'barbarian',
+      profileType: 'rogueliteClass',
+      launchSource: 'rogueliteClass',
+      actionDice: ['d8', 'd6', 'd4'],
+      maxLife: 8,
+      defenseClass: 7,
+      movement: 2,
+      initiativeBase: 2,
+      resource: expect.objectContaining({ name: 'Furia', maximum: 3 }),
+      equippedItems: expect.any(Object),
+    }),
+  );
 
   fireEvent.click(screen.getByRole('button', { name: 'Gestionar estados' }));
   fireEvent.click(screen.getByRole('button', { name: 'Sangrado' }));
@@ -193,5 +212,119 @@ test('mounts the roguelite card and opens it in the shared character sheet', asy
     expect(savedProfile.equippedTalentIds).toEqual(['athletics', 'athletics', null]);
     expect(savedProfile.talentCatalog).toBeUndefined();
     expect(savedProfile.roguelite?.talentCatalog).toBeUndefined();
+  });
+});
+
+test('opens a linked Roguelite class directly from the Canvas target', async () => {
+  render(
+    <CharacterListView
+      playerName="Ada"
+      armas={[]}
+      armaduras={[]}
+      habilidades={[]}
+      glossary={[]}
+      rarityColorMap={{}}
+      onBack={jest.fn()}
+      initialRogueliteClassId="barbarian"
+    />,
+  );
+
+  await waitFor(() => {
+    expect(screen.getByText(/Furia de prueba/)).toBeInTheDocument();
+  });
+  expect(screen.getByTestId('roguelite-action-dice')).toBeInTheDocument();
+  expect(screen.queryByText('PERSONAJES DISPONIBLES')).not.toBeInTheDocument();
+});
+
+test('refreshes an open Roguelite sheet when its active run changes remotely', async () => {
+  const firestore = require('firebase/firestore');
+  let profileListener;
+
+  firestore.onSnapshot.mockImplementation((ref, onNext) => {
+    if (ref.path === 'players/Ada') {
+      onNext({
+        exists: () => true,
+        data: () => ({
+          gameAccess: {
+            roguelite: { enabled: true, unlockedClassIds: ['barbarian'] },
+          },
+        }),
+      });
+    } else if (ref.path === 'classes') {
+      onNext({
+        ...emptySnapshot,
+        empty: false,
+        docs: [{
+          id: 'barbarian',
+          data: () => ({
+            name: 'Bárbaro',
+            subtitle: 'Furia desatada',
+            description: 'Furia de prueba',
+            roguelite: {
+              actionDice: ['d8', 'd6', 'd4'],
+              maxLife: 8,
+              defenseClass: 7,
+              movement: 2,
+              initiativeBase: 2,
+              resource: { name: 'Furia', maximum: 3, initial: 0 },
+            },
+          }),
+        }],
+      });
+    } else if (ref.path === 'players/Ada/rogueliteClasses') {
+      profileListener = onNext;
+      onNext(emptySnapshot);
+    } else {
+      onNext(emptySnapshot);
+    }
+    return jest.fn();
+  });
+
+  render(
+    <CharacterListView
+      playerName="Ada"
+      armas={[]}
+      armaduras={[]}
+      habilidades={[]}
+      glossary={[]}
+      rarityColorMap={{}}
+      onBack={jest.fn()}
+    />,
+  );
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Abrir clase Bárbaro' }));
+  expect(await screen.findByTestId('roguelite-stat-vida')).toHaveTextContent('8 / 8');
+
+  act(() => {
+    profileListener({
+      docs: [{
+        id: 'barbarian',
+        data: () => ({
+          level: 1,
+          activeRun: {
+            id: 'run-1',
+            status: 'active',
+            classId: 'barbarian',
+            owner: 'Ada',
+            revision: 2,
+            stats: {
+              vida: { current: 5, max: 8 },
+              cd: { current: 7, max: 7 },
+              movimiento: { current: 2, max: 2 },
+              iniciativa: { current: 2, max: 2 },
+              recurso: { current: 1, max: 3, label: 'Furia', color: '#ef4444' },
+            },
+            inventory: { weapons: [], armor: [], abilities: [], objects: [], accessories: [] },
+            equippedItems: {},
+            statusEffects: [],
+          },
+        }),
+      }],
+    });
+  });
+
+  await waitFor(() => {
+    expect(screen.getByTestId('roguelite-stat-vida')).toHaveTextContent('5 / 8');
+    expect(screen.getByTestId('roguelite-stat-furia')).toHaveTextContent('1 / 3');
   });
 });

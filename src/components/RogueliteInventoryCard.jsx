@@ -19,6 +19,7 @@ const RogueliteInventoryCard = ({
     proficiencyWarning,
     canRemove,
     onRemove,
+    variant,
 }) => {
     const damage = item.damage || item.dano;
     const defense = item.defense || item.defensa;
@@ -48,7 +49,7 @@ const RogueliteInventoryCard = ({
     return (
         <article
             data-testid="inventory-item-card"
-            className="noma-inventory-card"
+            className={`noma-inventory-card ${variant === 'inspector' ? 'noma-inventory-card--inspector' : ''}`}
             style={{
                 '--noma-item-accent': rarityAccent,
                 '--noma-item-accent-soft': raritySoft,
@@ -169,6 +170,7 @@ RogueliteInventoryCard.propTypes = {
     proficiencyWarning: PropTypes.string,
     canRemove: PropTypes.bool,
     onRemove: PropTypes.func,
+    variant: PropTypes.oneOf(['default', 'inspector']),
 };
 
 RogueliteInventoryCard.defaultProps = {
@@ -182,6 +184,7 @@ RogueliteInventoryCard.defaultProps = {
     proficiencyWarning: null,
     canRemove: false,
     onRemove: undefined,
+    variant: 'default',
 };
 
 export default RogueliteInventoryCard;

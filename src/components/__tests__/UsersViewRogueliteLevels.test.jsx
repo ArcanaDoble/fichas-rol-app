@@ -37,13 +37,27 @@ beforeEach(() => {
       }]);
     }
     if (ref.path === 'players/Ada/rogueliteClasses') {
-      return snapshot([{ id: 'barbarian', level: 2 }]);
+      return snapshot([{
+        id: 'barbarian',
+        level: 2,
+        owner: 'Ada',
+        activeRun: {
+          id: 'run-1',
+          status: 'active',
+          classId: 'barbarian',
+          owner: 'Ada',
+          templateRevision: 1,
+          stats: {},
+          inventory: {},
+        },
+      }]);
     }
     if (ref.path === 'classes') return snapshot();
     if (ref.path === 'rogueliteClasses') {
       return snapshot([{
         id: 'barbarian',
         name: 'Bárbaro',
+        templateRevision: 2,
         resource: { name: 'Furia', maximum: 3 },
         roguelite: { resource: { name: 'Furia', maximum: 3 } },
         rogueliteProgressionConfigured: true,
@@ -89,5 +103,20 @@ test('lets the master confirm a level change for one specific player class', asy
   });
   await waitFor(() => {
     expect(screen.getByText('3 / 3')).toBeInTheDocument();
+  });
+});
+
+test('lets the master finish and reset one personal active run', async () => {
+  window.confirm = jest.fn(() => true);
+  render(<UsersView onBack={jest.fn()} />);
+
+  expect(await screen.findByText('Aventura activa')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Finalizar aventura' }));
+  await waitFor(() => {
+    expect(require('firebase/firestore').setDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'players/Ada/rogueliteClasses/barbarian' }),
+      expect.objectContaining({ activeRun: null, appliedTemplateRevision: 2 }),
+      { merge: true },
+    );
   });
 });

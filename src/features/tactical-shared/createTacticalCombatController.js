@@ -28,7 +28,7 @@ import {
     getTokenProneStatusMeta, isSmallCombatToken, isSweepEligibleWeapon,
     isTokenDerribado, isWeaponWithinCombatRange, normalizeFluidaState,
     normalizeTokenStatusIds, resolveEmpujeMovement, sanitizeForFirestore,
-} from '../canvas/combatRules';
+} from './legacyCombatRules';
 
 /**
  * Current shared baseline for tactical combat command handlers. Canvas and board

@@ -13,6 +13,13 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - La imagen del recurso de clase se libera de la miniatura: ocupa la esquina superior derecha de la cabecera y se funde con el fondo mediante máscaras y degradados que mantienen legibles el nombre y la descripción superpuestos.
 - El catálogo del máster y las ranuras del jugador utilizan franjas abiertas separadas por líneas sutiles, conservando los flujos existentes de edición y selección sin convertir cada talento en una tarjeta independiente.
 
+### Dos conjuntos de armas Roguelite
+
+- Equipables conserva las dos ranuras originales de mano y añade un selector compacto de conjuntos I/II, evitando duplicar cuatro casillas en escritorio y móvil.
+- Cada conjunto guarda sus propias manos y aplica de forma independiente ocupación a dos manos y validación de competencias; armadura, accesorios y cinturón continúan compartidos.
+- El conjunto visible puede prepararse sin cambiar el activo. Al activar otro conjunto, los alias `mainHand` y `offHand` se actualizan para mantener compatibles Canvas, inspector y datos anteriores.
+- Las configuraciones antiguas migran automáticamente su equipo actual al conjunto I y reciben un conjunto II vacío.
+
 ### ⚔️ Gestor de Combate del Bestiario (Estilo de Campaña Gótica)
 
 - **Estética Visual de Campaña Gótica**: Fusión estética total con el Bestiario, utilizando un fondo de pantalla oscuro de campaña (`bg-[#050b14]`), tarjetas carmesí profundo (`bg-[#1a0505]`), bordes finos óxido/carmesí (`border-red-900/30`), tipografía clásica medieval (`font-['Cinzel']`) y esquinas rectas (`rounded-none` / `rounded-sm`).
@@ -2901,5 +2908,37 @@ Guía rápida: ver `docs/Minimapa.md`.
 - En `Equipables`, un arma configurada a dos manos ocupa las dos ranuras: permanece guardada una sola vez en su mano de origen y la mano opuesta muestra un bloqueo enlazado al arma. Equiparla libera automáticamente cualquier arma previa de la otra mano.
 - Las tarjetas del Inventario Roguelite usan una presentación propia tipo tooltip de RPG: integran la ilustración en la cabecera, aplican el color configurado de rareza a la identidad y al marco, y ordenan estadísticas, rasgos y descripción en franjas compactas. Este cambio visual no afecta a `Equipables`.
 - Las armaduras no conservan ni muestran costes de dados heredados. En `Equipables`, las armas y armaduras incompatibles con las competencias de la clase permanecen visibles en el selector, pero aparecen como `No equipable` y no pueden seleccionarse; las fichas tradicionales conservan su comportamiento anterior.
+
+## Novedades: frontera independiente entre Canvas y Board
+
+- Canvas y Board ya no contienen importaciones directas entre sus módulos de producción. Una prueba de arquitectura recorre el grafo de imports y bloquea cualquier nueva dependencia cruzada.
+- La cuadrícula, geometría, persistencia de escenarios, interacción base, sincronización heredada de fichas y presentación táctica existente se han trasladado a `features/tactical-shared` como infraestructura congelada.
+- Las reglas antiguas quedan identificadas como `legacyCombatRules`: preservan el comportamiento actual del Board y no deben ampliarse con reglas del Roguelite.
+- Los componentes del dado físico del Board se inyectan mediante su definición de modo. El núcleo compartido ya no importa componentes concretos de Board ni de Canvas.
+- Los antiguos imports del Canvas se mantienen mediante entradas de compatibilidad, evitando una migración destructiva mientras el nuevo motor Roguelite se sustituye por partes.
+
+## Novedades: entrada de clases Roguelite al Canvas
+
+- `Jugar aventura` desde una ficha de clase de jugador envía ahora el perfil Roguelite completo al Canvas; las fichas de personaje tradicionales conservan su recorrido anterior.
+- Si existe un encuentro activo y el jugador tiene permiso, el Canvas crea una única ficha vinculada a la clase con su retrato, nivel, dados de acción y estados personales.
+- El inspector utiliza las estadísticas Roguelite `Vida`, `CD`, `Movimiento`, `Iniciativa` y el recurso propio de la clase. Tanto el valor actual como el máximo pueden editarse durante el encuentro sin alterar la definición maestra.
+- El token carga el inventario completo de la clase personal y conserva por separado la configuración equipada. El inspector identifica visualmente qué piezas están en uso y permite retirar objetos durante la aventura.
+- Las piezas del inventario reutilizan en el inspector el lenguaje visual de las tarjetas Roguelite mediante una variante compacta.
+- La adaptación de ficha a token, los recursos del inspector y la presentación del equipamiento se inyectan desde la definición del modo Canvas. Board continúa usando su sincronización e inspector heredados.
+- Las estadísticas del inspector recuperan la interacción táctil de barras: cada bloque modifica el valor actual y un único control compacto ajusta el máximo. Los nombres y colores siguen procediendo del nuevo modelo Roguelite.
+- El retrato de un token con `linkedClassId` abre directamente esa clase desbloqueada dentro de la ficha del jugador, sin detenerse en la biblioteca de personajes tradicionales.
+
+## Novedades: estado persistente de run Roguelite
+
+- Cada clase personal puede mantener una `activeRun` independiente con estadísticas actuales y máximas, estados, inventario completo, equipamiento, conjunto de armas activo, dinero, encuentro vigente y revisión.
+- La definición de clase del máster continúa siendo la referencia de reglas y contenido. Los cambios realizados desde el Canvas se escriben exclusivamente en `players/{jugador}/rogueliteClasses/{clase}` y nunca modifican el catálogo maestro.
+- `Confirmar cambios` conserva el flujo único del inspector: guarda la sala y, cuando existe el aviso `Hay cambios pendientes` bajo la vinculación, sincroniza también Vida, CD, Movimiento, Iniciativa, recurso, estados, inventario, equipo y dinero con la ficha personal.
+- Al cambiar de encuentro, el Canvas crea el nuevo token desde la última revisión de la run sin exigir que el jugador vuelva a la ficha. Los tokens de salas anteriores quedan como instantáneas históricas y no pueden sobrescribir una revisión más reciente.
+- Guardar cambios en la ficha personal actualiza la preparación de la run y sincroniza explícitamente el token del encuentro vigente. Board conserva por completo su flujo heredado.
+- Cada guardado de la definición maestra incrementa su revisión y actualiza automáticamente todas las fichas personales existentes de esa clase. Una aventura activa recibe estadísticas y pool vigentes sin perder daño actual, estados ni botín. Las runs antiguas que guardaron un inventario vacío se reparan automáticamente al cargarse.
+- La sincronización explícita de la ficha copia primero sus cinco estadísticas a `activeRun`; el token recibe esa misma revisión y ya no puede recuperar valores personales obsoletos guardados antes de resolver la definición maestra.
+- La gestión de usuarios muestra por jugador y clase si la ficha está preparada o mantiene una aventura activa. `Finalizar aventura` elimina el estado temporal y devuelve esa ficha a la base vigente conservando su nivel y sus talentos personales.
+- El listado del jugador muestra el estado de cada clase. En el Canvas, cualquier cambio relevante en el inspector activa `Hay cambios pendientes` dentro del bloque de vinculación; mover el token por el mapa no lo activa.
+- Las fichas personales que ya están abiertas permanecen suscritas a su definición y configuración Roguelite: `Confirmar cambios`, los guardados del máster y `Finalizar aventura` actualizan estadísticas, estados e inventario sin recargar la página. Un borrador local sin guardar se conserva y recibe la última versión remota al confirmarlo o descartarlo.
 
 

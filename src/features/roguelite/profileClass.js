@@ -11,9 +11,13 @@ import {
   resolveRogueliteTalentCatalog,
 } from './talents';
 import {
-  normalizeEquippedHandSlots,
+  normalizeEquippedWeaponSets,
   resolveRogueliteEquipmentPool,
 } from './equipmentPool';
+import {
+  applyRogueliteActiveRunToProfile,
+  resolveRogueliteProfileSyncState,
+} from './activeRun';
 
 const DEFAULT_ATTRIBUTES = Object.freeze({
   destreza: 'd4',
@@ -98,6 +102,7 @@ export const createRogueliteProfileClass = (
     rating: 1,
     attributes: clone(DEFAULT_ATTRIBUTES),
     stats: clone(DEFAULT_STATS),
+    classEquipmentPool: clone(equipmentPool),
     equipment: clone(equipmentPool),
     equippedItems: { mainHand: null, offHand: null, body: null },
     talents: {
@@ -125,7 +130,7 @@ export const createRogueliteProfileClass = (
   const resolvedLevel = normalizeRogueliteProfileLevel(profileClass.level, maximumLevel);
   const progressionStats = applyRogueliteLevelEffects(definition, resolvedLevel);
 
-  return {
+  const projectedProfile = applyRogueliteActiveRunToProfile({
     ...profileClass,
     name: definition.name,
     subtitle: definition.subtitle,
@@ -143,8 +148,9 @@ export const createRogueliteProfileClass = (
     initiativeBase: definition.initiativeBase,
     maxInitiative: progressionStats.maxInitiative,
     resource: clone(progressionStats.resource),
+    classEquipmentPool: clone(equipmentPool),
     equipment: clone(equipmentPool),
-    equippedItems: normalizeEquippedHandSlots(
+    equippedItems: normalizeEquippedWeaponSets(
       profileClass.equippedItems || cleanConfiguration.equippedItems,
     ),
     talentCatalog: clone(talentCatalog),
@@ -173,5 +179,10 @@ export const createRogueliteProfileClass = (
     owner: playerName,
     profileType: 'rogueliteClass',
     level: resolvedLevel,
+  });
+
+  return {
+    ...projectedProfile,
+    ...resolveRogueliteProfileSyncState(definition, projectedProfile),
   };
 };

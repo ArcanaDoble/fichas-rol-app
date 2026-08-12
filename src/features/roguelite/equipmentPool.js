@@ -7,6 +7,13 @@ const EQUIPMENT_CATEGORIES = Object.freeze([
 ]);
 
 const HAND_SLOTS = Object.freeze(['mainHand', 'offHand']);
+export const ROGUELITE_WEAPON_SET_COUNT = 2;
+
+const clampWeaponSetIndex = (value) => {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) return 0;
+  return Math.min(ROGUELITE_WEAPON_SET_COUNT - 1, Math.max(0, parsed));
+};
 
 const createEmptyEquipmentPool = () => Object.fromEntries(
   EQUIPMENT_CATEGORIES.map((category) => [category, []]),
@@ -75,6 +82,90 @@ export const normalizeEquippedHandSlots = (equippedItems = {}) => {
 
   if (occupancy) normalized[occupancy.blockedSlot] = null;
   return normalized;
+};
+
+const createEmptyWeaponSet = () => ({ mainHand: null, offHand: null });
+
+const normalizeWeaponSet = (weaponSet = {}) => {
+  const normalized = normalizeEquippedHandSlots({
+    mainHand: weaponSet?.mainHand || null,
+    offHand: weaponSet?.offHand || null,
+  });
+
+  return {
+    mainHand: normalized.mainHand || null,
+    offHand: normalized.offHand || null,
+  };
+};
+
+export const normalizeEquippedWeaponSets = (equippedItems = {}) => {
+  const source = equippedItems && typeof equippedItems === 'object'
+    ? equippedItems
+    : {};
+  const activeWeaponSet = clampWeaponSetIndex(source.activeWeaponSet);
+  const legacySet = normalizeWeaponSet(source);
+  const storedSets = Array.isArray(source.weaponSets) ? source.weaponSets : [];
+  const weaponSets = Array.from(
+    { length: ROGUELITE_WEAPON_SET_COUNT },
+    (_, index) => normalizeWeaponSet(
+      storedSets[index]
+      || (index === 0 ? legacySet : createEmptyWeaponSet()),
+    ),
+  );
+  const activeSet = weaponSets[activeWeaponSet];
+
+  return {
+    ...source,
+    weaponSets,
+    activeWeaponSet,
+    // Alias de compatibilidad para Canvas, inspector y consumidores antiguos.
+    mainHand: activeSet.mainHand,
+    offHand: activeSet.offHand,
+  };
+};
+
+export const resolveEquippedWeaponSet = (equippedItems = {}, index = 0) => {
+  const normalized = normalizeEquippedWeaponSets(equippedItems);
+  return normalized.weaponSets[clampWeaponSetIndex(index)];
+};
+
+export const equipItemInWeaponSet = (
+  equippedItems = {},
+  weaponSetIndex = 0,
+  slot,
+  item,
+) => {
+  const normalized = normalizeEquippedWeaponSets(equippedItems);
+  const resolvedIndex = clampWeaponSetIndex(weaponSetIndex);
+  const nextSet = equipItemInSlot(
+    normalized.weaponSets[resolvedIndex],
+    slot,
+    item,
+  );
+  const weaponSets = normalized.weaponSets.map((weaponSet, index) => (
+    index === resolvedIndex ? normalizeWeaponSet(nextSet) : weaponSet
+  ));
+  const activeSet = weaponSets[normalized.activeWeaponSet];
+
+  return {
+    ...normalized,
+    weaponSets,
+    mainHand: activeSet.mainHand,
+    offHand: activeSet.offHand,
+  };
+};
+
+export const activateWeaponSet = (equippedItems = {}, weaponSetIndex = 0) => {
+  const normalized = normalizeEquippedWeaponSets(equippedItems);
+  const activeWeaponSet = clampWeaponSetIndex(weaponSetIndex);
+  const activeSet = normalized.weaponSets[activeWeaponSet];
+
+  return {
+    ...normalized,
+    activeWeaponSet,
+    mainHand: activeSet.mainHand,
+    offHand: activeSet.offHand,
+  };
 };
 
 export const equipItemInSlot = (equippedItems = {}, slot, item) => {

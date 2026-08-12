@@ -158,3 +158,104 @@ test.each([
         throw error.errors?.[0] || error;
     }
 });
+
+test('creates a Roguelite class token in the active Canvas encounter', async () => {
+    const firestore = require('firebase/firestore');
+    const scenario = {
+        ...makeScenario('canvas'),
+        allowedPlayers: ['Ada'],
+        items: [],
+    };
+    let persistedItems = null;
+    let persistedRun = null;
+
+    firestore.getDoc.mockImplementation((reference) => Promise.resolve(
+        reference?.path === 'players/Ada/rogueliteClasses/barbarian'
+            ? { exists: () => false, data: () => ({}) }
+            : { exists: () => true, data: () => scenario },
+    ));
+    firestore.runTransaction.mockImplementation(async (_database, callback) => callback({
+        get: jest.fn((reference) => Promise.resolve(
+            reference?.path === 'players/Ada/rogueliteClasses/barbarian'
+                ? { exists: () => false, data: () => ({}) }
+                : { exists: () => true, data: () => scenario },
+        )),
+        update: jest.fn((_reference, payload) => {
+            persistedItems = payload.items;
+        }),
+        set: jest.fn((_reference, payload) => {
+            persistedRun = payload.activeRun;
+        }),
+    }));
+    firestore.onSnapshot.mockImplementation((ref, onNext) => {
+        if (ref?.path === 'gameSettings/canvasVisibility') {
+            onNext({ exists: () => true, data: () => ({ activeScenarioId: scenario.id }) });
+        } else if (ref?.path === `canvas_scenarios/${scenario.id}`) {
+            onNext({ id: scenario.id, exists: () => true, data: () => scenario });
+        } else if (ref?.path === 'canvas_scenarios') {
+            onNext({ docs: [{ id: scenario.id, data: () => scenario }], forEach: () => {}, docChanges: () => [] });
+        } else {
+            onNext({ docs: [], forEach: () => {}, docChanges: () => [] });
+        }
+        return () => {};
+    });
+
+    const { unmount } = render(
+        <CanvasSection
+            onBack={jest.fn()}
+            playerName="Ada"
+            currentUserId="Ada"
+            isPlayerView
+            isMaster={false}
+            characterData={{
+                id: 'barbarian',
+                owner: 'Ada',
+                profileType: 'rogueliteClass',
+                launchSource: 'rogueliteClass',
+                name: 'Bárbaro',
+                avatar: 'barbarian.webp',
+                lifeInitial: 8,
+                maxLife: 10,
+                defenseClass: 3,
+                maxDefenseClass: 4,
+                movement: 2,
+                maxMovement: 3,
+                initiativeBase: 2,
+                maxInitiative: 3,
+                resource: { name: 'Furia', current: 1, maximum: 3, color: '#aa1515' },
+                equippedItems: {
+                    mainHand: { name: 'Mandoble', handsRequired: 2 },
+                    body: { name: 'Mallas', itemType: 'armor' },
+                },
+            }}
+        />,
+    );
+
+    await waitFor(() => expect(persistedItems).not.toBeNull());
+    expect(firestore.runTransaction).toHaveBeenCalledTimes(2);
+    expect(persistedItems).toHaveLength(1);
+    expect(persistedItems[0]).toEqual(expect.objectContaining({
+        name: 'Bárbaro',
+        controlledBy: ['Ada'],
+        linkedClassId: 'barbarian',
+        profileType: 'rogueliteClass',
+        portrait: 'barbarian.webp',
+        stats: expect.objectContaining({
+            vida: expect.objectContaining({ current: 8, max: 10 }),
+            cd: expect.objectContaining({ current: 3, max: 4 }),
+            movimiento: expect.objectContaining({ current: 2, max: 3 }),
+            iniciativa: expect.objectContaining({ current: 2, max: 3 }),
+            recurso: expect.objectContaining({ current: 1, max: 3, label: 'Furia' }),
+        }),
+    }));
+    expect(persistedItems[0].equippedItems.map((item) => item.name)).toEqual(['Mandoble', 'Mallas']);
+    expect(persistedRun).toEqual(expect.objectContaining({
+        classId: 'barbarian',
+        owner: 'Ada',
+        currentScenarioId: scenario.id,
+        stats: expect.objectContaining({
+            vida: expect.objectContaining({ current: 8, max: 10 }),
+        }),
+    }));
+    unmount();
+});

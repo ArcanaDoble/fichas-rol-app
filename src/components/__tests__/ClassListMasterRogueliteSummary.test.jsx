@@ -63,7 +63,40 @@ beforeEach(() => {
   firestore.doc.mockImplementation(reference);
   firestore.query.mockImplementation((ref) => ref);
   firestore.where.mockReturnValue({});
-  firestore.getDocs.mockResolvedValue(classSnapshot);
+  firestore.getDocs.mockImplementation(async (ref) => {
+    if (ref?.path === 'players') {
+      return {
+        empty: false,
+        docs: [{ id: 'Ada', data: () => ({ name: 'Ada' }) }],
+      };
+    }
+    if (ref?.path === 'players/Ada/rogueliteClasses') {
+      return {
+        empty: false,
+        docs: [{
+          id: 'barbarian',
+          data: () => ({
+            id: 'barbarian',
+            owner: 'Ada',
+            level: 1,
+            activeRun: {
+              id: 'run-1',
+              status: 'active',
+              classId: 'barbarian',
+              owner: 'Ada',
+              templateRevision: 1,
+              stats: {
+                vida: { current: 4, max: 8 },
+              },
+              inventory: {},
+              baseInventoryTemplateIds: [],
+            },
+          }),
+        }],
+      };
+    }
+    return classSnapshot;
+  });
   firestore.onSnapshot.mockImplementation((ref, onNext) => {
     onNext({ docs: [], empty: true, forEach: () => {} });
     return jest.fn();
@@ -148,7 +181,9 @@ test('uses the editable roguelite summary for the master class sheet', async () 
     expect(require('firebase/firestore').setDoc).toHaveBeenCalled();
   });
 
-  const savedData = require('firebase/firestore').setDoc.mock.calls.at(-1)[1];
+  const savedData = [...require('firebase/firestore').setDoc.mock.calls]
+    .reverse()
+    .find(([, data]) => data.classTags?.includes('Veterano|#a78bfa'))[1];
   expect(savedData).toMatchObject({
     lifeInitial: 7,
     maxLife: 9,
@@ -187,11 +222,28 @@ test('uses the editable roguelite summary for the master class sheet', async () 
 
   fireEvent.click(document.getElementById('save-btn-sidebar'));
   await waitFor(() => {
-    const savedClass = require('firebase/firestore').setDoc.mock.calls.at(-1)[1];
+    const savedClass = [...require('firebase/firestore').setDoc.mock.calls]
+      .reverse()
+      .find(([, data]) => data.talentCatalog?.some((talent) => talent.name === 'Intimidación'))[1];
     expect(savedClass.talentCatalog).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'athletics', name: 'Atletismo' }),
       expect.objectContaining({ name: 'Intimidación', available: true }),
     ]));
     expect(savedClass.roguelite.talentCatalog).toEqual(savedClass.talentCatalog);
   });
+
+  expect(require('firebase/firestore').setDoc).toHaveBeenCalledWith(
+    expect.objectContaining({ path: 'players/Ada/rogueliteClasses/barbarian' }),
+    expect.objectContaining({
+      activeRun: expect.objectContaining({
+        classId: 'barbarian',
+        owner: 'Ada',
+        templateRevision: expect.any(Number),
+        stats: expect.objectContaining({
+          vida: expect.objectContaining({ current: 4, max: expect.any(Number) }),
+        }),
+      }),
+    }),
+    { merge: true },
+  );
 }, 10000);

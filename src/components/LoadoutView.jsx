@@ -14,6 +14,8 @@ import { useCustomEquipmentImages, getCustomImage } from '../hooks/useCustomEqui
 import { normalizeGlossaryWord, getGlossaryTooltipId } from '../utils/glossary';
 import {
     normalizeEquippedHandSlots,
+    normalizeEquippedWeaponSets,
+    resolveEquippedWeaponSet,
     resolveEquippedHandOccupancy,
     resolveEquipmentHandsRequired,
 } from '../features/roguelite/equipmentPool';
@@ -392,6 +394,9 @@ const LoadoutView = ({
     const [editingTitle, setEditingTitle] = useState('');
     const [editingDescription, setEditingDescription] = useState('');
     const [activeTab, setActiveTab] = useState('loadout');
+    const [selectedWeaponSet, setSelectedWeaponSet] = useState(() => (
+        Number(dndClass.equippedItems?.activeWeaponSet) === 1 ? 1 : 0
+    ));
 
     // Equipment slot selection state
     const [activeSlotSelector, setActiveSlotSelector] = useState(null); // 'mainHand', 'offHand', 'body', or null
@@ -411,14 +416,26 @@ const LoadoutView = ({
 
     // Get equipped items from dndClass (Moved up for initialization)
     const equippedItems = useMemo(
-        () => normalizeEquippedHandSlots(
-            dndClass.equippedItems || { mainHand: null, offHand: null, body: null },
-        ),
-        [dndClass.equippedItems],
+        () => {
+            const source = dndClass.equippedItems || { mainHand: null, offHand: null, body: null };
+            return rogueliteRole === 'legacy'
+                ? normalizeEquippedHandSlots(source)
+                : normalizeEquippedWeaponSets(source);
+        },
+        [dndClass.equippedItems, rogueliteRole],
+    );
+    const activeWeaponSet = rogueliteRole === 'legacy'
+        ? 0
+        : equippedItems.activeWeaponSet;
+    const selectedHandItems = useMemo(
+        () => (rogueliteRole === 'legacy'
+            ? equippedItems
+            : resolveEquippedWeaponSet(equippedItems, selectedWeaponSet)),
+        [equippedItems, rogueliteRole, selectedWeaponSet],
     );
     const handOccupancy = useMemo(
-        () => resolveEquippedHandOccupancy(equippedItems),
-        [equippedItems],
+        () => resolveEquippedHandOccupancy(selectedHandItems),
+        [selectedHandItems],
     );
 
     // Calculate initial belt count based on equipped items as fallback
@@ -692,7 +709,10 @@ const LoadoutView = ({
             const newItem = slot.startsWith('belt_')
                 ? { ...item, quantity: item.quantity || 1 }
                 : item;
-            onUpdateEquipped(slot, newItem);
+            const options = rogueliteRole !== 'legacy' && (slot === 'mainHand' || slot === 'offHand')
+                ? { weaponSetIndex: selectedWeaponSet }
+                : undefined;
+            onUpdateEquipped(slot, newItem, options);
         }
         setActiveSlotSelector(null);
     };
@@ -700,8 +720,23 @@ const LoadoutView = ({
     // Handle unequipping an item
     const handleUnequipItem = (slot) => {
         if (onUpdateEquipped) {
-            onUpdateEquipped(slot, null);
+            const options = rogueliteRole !== 'legacy' && (slot === 'mainHand' || slot === 'offHand')
+                ? { weaponSetIndex: selectedWeaponSet }
+                : undefined;
+            onUpdateEquipped(slot, null, options);
         }
+    };
+
+    const handleSelectWeaponSet = (index) => {
+        setSelectedWeaponSet(index);
+        setActiveSlotSelector(null);
+    };
+
+    const handleActivateWeaponSet = () => {
+        if (onUpdateEquipped && selectedWeaponSet !== activeWeaponSet) {
+            onUpdateEquipped('activeWeaponSet', selectedWeaponSet);
+        }
+        setActiveSlotSelector(null);
     };
 
     // Handle updating quantity for belt items
@@ -904,11 +939,51 @@ const LoadoutView = ({
 
                                     {/* 1. MANOS (Hands) */}
                                     <div>
-                                        <div className="flex items-center gap-3 mb-4">
-                                            <Sword className="w-5 h-5 text-[#c8aa6e]" />
-                                            <h3 className="text-[#c8aa6e] font-['Cinzel'] text-md tracking-[0.2em] uppercase">
-                                                Manos
-                                            </h3>
+                                        <div className="noma-weapon-set-header mb-4">
+                                            <div className="flex items-center gap-3">
+                                                <Sword className="w-5 h-5 text-[#c8aa6e]" />
+                                                <h3 className="text-[#c8aa6e] font-['Cinzel'] text-md tracking-[0.2em] uppercase">
+                                                    Manos
+                                                </h3>
+                                            </div>
+
+                                            {rogueliteRole !== 'legacy' && (
+                                                <div className="noma-weapon-set-switcher">
+                                                    <span className="noma-weapon-set-switcher__label">Conjunto</span>
+                                                    <div className="noma-weapon-set-switcher__tabs" role="tablist" aria-label="Conjuntos de armas">
+                                                        {[0, 1].map((setIndex) => {
+                                                            const isSelected = selectedWeaponSet === setIndex;
+                                                            const isActive = activeWeaponSet === setIndex;
+                                                            const setLabel = setIndex === 0 ? 'I' : 'II';
+                                                            return (
+                                                                <button
+                                                                    key={setIndex}
+                                                                    type="button"
+                                                                    role="tab"
+                                                                    aria-selected={isSelected}
+                                                                    aria-label={`Ver conjunto ${setLabel}${isActive ? ', activo' : ''}`}
+                                                                    onClick={() => handleSelectWeaponSet(setIndex)}
+                                                                    className={`noma-weapon-set-tab ${isSelected ? 'is-selected' : ''} ${isActive ? 'is-active' : ''}`}
+                                                                >
+                                                                    <span>{setLabel}</span>
+                                                                    {isActive && <i aria-hidden="true" />}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                    {selectedWeaponSet === activeWeaponSet ? (
+                                                        <span className="noma-weapon-set-switcher__active-label">Activo</span>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleActivateWeaponSet}
+                                                            className="noma-weapon-set-switcher__activate"
+                                                        >
+                                                            Activar
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="grid grid-cols-2 gap-6">
                                             {[
@@ -917,7 +992,7 @@ const LoadoutView = ({
                                             ].map(({ key, label, badge, badgeClass }) => {
                                                 const isOccupiedByTwoHanded = handOccupancy?.blockedSlot === key;
                                                 const occupyingItem = isOccupiedByTwoHanded ? handOccupancy.item : null;
-                                                const equippedItem = isOccupiedByTwoHanded ? null : equippedItems[key];
+                                                const equippedItem = isOccupiedByTwoHanded ? null : selectedHandItems[key];
                                                 const proficiencyWarning = equippedItem ? getWeaponProficiencyWarning(equippedItem) : null;
                                                 const isSlotActive = !isOccupiedByTwoHanded && activeSlotSelector === key;
                                                 const rarityColors = equippedItem ? getRarityColors(equippedItem, rarityColorMap) : null;
@@ -1117,8 +1192,8 @@ const LoadoutView = ({
                                                                 {inventoryWeapons.length > 0 ? (
                                                                     inventoryWeapons.map((weapon, idx) => {
                                                                         const isAlreadyEquipped =
-                                                                            (equippedItems.mainHand && equippedItems.mainHand._index === weapon._index) ||
-                                                                            (equippedItems.offHand && equippedItems.offHand._index === weapon._index);
+                                                                            (selectedHandItems.mainHand && selectedHandItems.mainHand._index === weapon._index) ||
+                                                                            (selectedHandItems.offHand && selectedHandItems.offHand._index === weapon._index);
                                                                         const warning = getWeaponProficiencyWarning(weapon);
 
                                                                         return (
@@ -2255,7 +2330,12 @@ LoadoutView.propTypes = {
         equippedItems: PropTypes.shape({
             mainHand: PropTypes.object,
             offHand: PropTypes.object,
-            body: PropTypes.object
+            body: PropTypes.object,
+            activeWeaponSet: PropTypes.number,
+            weaponSets: PropTypes.arrayOf(PropTypes.shape({
+                mainHand: PropTypes.object,
+                offHand: PropTypes.object,
+            })),
         }),
         summary: PropTypes.shape({
             proficiencies: PropTypes.shape({

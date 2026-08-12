@@ -16,26 +16,28 @@ import { getCombatQueueDisplayState, sortCombatQueueEntries } from '../../utils/
 import { getCardStackIds, isCardContainerItem, isCardHiddenByContainerForPlayer, isCardItem, isMasterLibraryDeck, preservePendingHandTransferState } from '../../utils/cardBoard';
 import { RECENT_LOCAL_WRITE_PROTECTION_MS, createSerialPersistQueue, getChangedItemFields, getRemoteModifiedItemIds, normalizeRecentLocalWrite, shouldTreatRemotePositionAsConflict } from '../../utils/scenarioSync';
 import { applyBoardDieRolls } from '../../utils/boardDicePhysics';
+import {
+    ACTIVE_BOARD_DIE_ROLL_IDS, BOARD_DICE_ROLL_SIDES, BOARD_DIE_SIDES,
+} from '../../utils/boardDiceRuntime';
 import { isBoardLightItem, selectAnimatedBoardLightIds } from '../../utils/boardLighting';
 
 // --- Constants ---
  // Importamos releaseFile para limpiar
 
-import { MIN_GRID_CELL_SIZE, DEFAULT_GRID_CONFIG, normalizeGridConfig, getFiniteMapDimensions, getGridPixelDimensions, getExactBackgroundGridPresets, getBackgroundGridPresetIndex } from '../canvas/grid';
-import { isBoardDieItem, isCombatTokenItem, getCardCenter, isPointInsideExpandedItem, getDefaultTokenDimensions, getReactionBudgetForEvent, getReactionSpeedSpentByEvent, isValidSelectionBox } from '../canvas/combatRules';
-import { WORLD_SIZE, snapWorldPositionToGrid, getCenteredSpawnPosition } from '../canvas/spatial';
+import { MIN_GRID_CELL_SIZE, DEFAULT_GRID_CONFIG, normalizeGridConfig, getFiniteMapDimensions, getGridPixelDimensions, getExactBackgroundGridPresets, getBackgroundGridPresetIndex } from './grid';
+import { isBoardDieItem, isCombatTokenItem, getCardCenter, isPointInsideExpandedItem, getDefaultTokenDimensions, getReactionBudgetForEvent, getReactionSpeedSpentByEvent, isValidSelectionBox } from './legacyCombatRules';
+import { WORLD_SIZE, snapWorldPositionToGrid, getCenteredSpawnPosition } from './spatial';
 
 
-import { syncTokenWithSheet } from '../canvas/tokenSheetSync';
-import { createSceneItemRenderer } from '../canvas/components/createSceneItemRenderer';
+import { syncTokenWithSheet } from './tokenSheetSync';
+import { createSceneItemRenderer } from './components/createSceneItemRenderer';
 
 
-import { useCanvasGridController } from '../canvas/useCanvasGridController';
-import { ACTIVE_BOARD_DIE_ROLL_IDS, BOARD_DICE_ROLL_SIDES, BoardDieVisual, BoardMarkerVisual } from '../board/components/BoardObjects';
-import { useCanvasInteractionController } from '../canvas/useCanvasInteractionController';
-import { areScenarioFieldValuesEqual } from '../canvas/scenarioState';
-import { createCanvasScenarioController } from '../canvas/createCanvasScenarioController';
-import { createCanvasTokenController } from '../canvas/createCanvasTokenController';
+import { useCanvasGridController } from './useTacticalGridController';
+import { useCanvasInteractionController } from './useTacticalInteractionController';
+import { areScenarioFieldValuesEqual } from './scenarioState';
+import { createCanvasScenarioController } from './createTacticalScenarioController';
+import { createCanvasTokenController } from './createTacticalTokenController';
 
 
 
@@ -188,6 +190,8 @@ import { createCanvasTokenController } from '../canvas/createCanvasTokenControll
 // Mirrors the aesthetic of LoadoutView / Mazo Inicial / Inventario
 // =============================================================================
 
+const EmptySceneItemVisual = () => null;
+
 const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm', isMaster = true, playerName = '', isPlayerView = false, existingPlayers = [], characterData = null, onOpenCharacterSheet = null, armas = [], armaduras = [], habilidades = [], accesorios = [], glossary = [], rarityColorMap = {}, highlightText = (t) => t }) => {
     const {
         id: mode,
@@ -199,7 +203,17 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         createCombatController,
         useFeatureController,
         WorkspaceShell,
+        sceneItemVisuals = {},
+        syncTokenWithSheet: syncModeTokenWithSheet = syncTokenWithSheet,
+        loadRuntimeSheet,
+        persistRuntimeItems,
+        TokenResourcesComponent,
+        EquipmentSectionComponent,
     } = modeDefinition;
+    const {
+        BoardDieVisual = EmptySceneItemVisual,
+        BoardMarkerVisual = EmptySceneItemVisual,
+    } = sceneItemVisuals;
     // Estado de la cámara (separado en zoom y offset como en MinimapV2)
     const [zoom, setZoom] = useState(1);
     const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -348,7 +362,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         if (!rawToken || !rawToken.linkedCharacterId || availableCharacters.length === 0) return rawToken;
         const charData = availableCharacters.find(c => c.id === rawToken.linkedCharacterId);
         if (!charData) return rawToken;
-        return syncTokenWithSheet(
+        return syncModeTokenWithSheet(
             rawToken,
             charData,
             {
@@ -359,7 +373,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
             },
             { preserveTokenState: true, skipArmorSync: true }
         );
-    }, [availableCharacters, armas, armaduras, habilidades, accesorios]);
+    }, [availableCharacters, armas, armaduras, habilidades, accesorios, syncModeTokenWithSheet]);
 
     // Tabs del Sidebar
     const [activeTab, setActiveTab] = useState(isPlayerView ? 'TOKENS' : 'CONFIG'); // 'CONFIG' | 'TOKENS' | 'ACCESS' | 'INSPECTOR'
@@ -1739,45 +1753,83 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
     }, [activeScenario, selectedTokenIds, clipboard, scenarioCollectionName]);
 
     // Auto-create player token when entering with character data
-    const hasCreatedAutoToken = useRef(false);
+    const autoTokenScenarioReservationRef = useRef(null);
     // Auto-create OR sync player token on join / characterData change
     // ⚠ CRITICAL: Este efecto SIEMPRE lee datos frescos del servidor antes de escribir,
     // para evitar que un jugador con datos locales antiguos sobrescriba los tokens del Master.
     useEffect(() => {
         if (!isPlayerView || !characterData || !activeScenario?.id) return;
-        if (hasCreatedAutoToken.current) return;
+        if (autoTokenScenarioReservationRef.current === activeScenario.id) return;
+        // Reservar la creación antes de iniciar la lectura asíncrona. En desarrollo,
+        // React puede ejecutar el efecto dos veces y no debe duplicar el token.
+        autoTokenScenarioReservationRef.current = activeScenario.id;
 
         const characterName = characterData.name || playerName;
         const scenarioId = activeScenario.id;
 
         const safeSync = async () => {
             try {
+                const runtimeSheet = loadRuntimeSheet
+                    ? await loadRuntimeSheet(characterData, { playerName, scenarioId })
+                    : characterData;
                 // 1. SIEMPRE leer datos FRESCOS del servidor (nunca confiar en el estado local)
                 const freshSnap = await getDoc(doc(db, scenarioCollectionName, scenarioId));
-                if (!freshSnap.exists()) return;
+                if (!freshSnap.exists()) {
+                    autoTokenScenarioReservationRef.current = null;
+                    return;
+                }
                 const freshData = freshSnap.data();
                 const freshItems = freshData.items || [];
 
                 // 2. Buscar si el token del jugador ya existe en los datos FRESCOS del servidor
-                const existingToken = freshItems.find(i =>
-                    i.controlledBy?.includes(playerName) && i.name === characterName
-                );
+                const isRogueliteClassLaunch = runtimeSheet.profileType === 'rogueliteClass';
+                const existingToken = freshItems.find((item) => {
+                    if (!item.controlledBy?.includes(playerName)) return false;
+                    if (isRogueliteClassLaunch) {
+                        const activeRunId = runtimeSheet.activeRun?.id;
+                        const belongsToActiveRun = !activeRunId || !item.runId || item.runId === activeRunId;
+                        return belongsToActiveRun && (
+                            item.linkedClassId === runtimeSheet.id
+                            || (item.profileType === 'rogueliteClass' && item.name === characterName)
+                        );
+                    }
+                    return item.name === characterName;
+                });
 
                 if (existingToken) {
+                    const isHistoricalRunSnapshot = Boolean(
+                        isRogueliteClassLaunch
+                        && runtimeSheet.activeRun?.currentScenarioId
+                        && runtimeSheet.activeRun.currentScenarioId !== scenarioId
+                        && existingToken.runId === runtimeSheet.activeRun.id
+                    );
+                    if (isHistoricalRunSnapshot) {
+                        setActiveScenario(prev => prev?.id === scenarioId ? { ...prev, items: freshItems } : prev);
+                        return;
+                    }
+
                     // Sincronizar datos de ficha al token existente (stats, atributos, etc.)
-                    const syncedToken = syncTokenWithSheet(existingToken, characterData, {
+                    const syncedToken = syncModeTokenWithSheet(existingToken, runtimeSheet, {
                         armas,
                         armaduras,
                         habilidades,
                         accesorios,
-                    });
+                    }, isRogueliteClassLaunch
+                        ? { scenarioId, preserveTokenState: false }
+                        : { scenarioId });
 
                     if (JSON.stringify(syncedToken) !== JSON.stringify(existingToken)) {
                         console.log('[SafeSync] Sincronizando token existente al entrar:', characterName);
                         // Modificar SOLO el token del jugador en la lista fresca del servidor
                         const updatedItems = freshItems.map(i => i.id === existingToken.id ? syncedToken : i);
                         setActiveScenario(prev => prev?.id === scenarioId ? { ...prev, items: updatedItems } : prev);
-                        await safePersistItems(scenarioId, updatedItems, freshItems);
+                        await safePersistItems(
+                            scenarioId,
+                            updatedItems,
+                            freshItems,
+                            [existingToken.id],
+                            { persistRuntime: isRogueliteClassLaunch },
+                        );
                     } else {
                         // Si no hay cambios, solo actualizar estado local con datos frescos
                         setActiveScenario(prev => prev?.id === scenarioId ? { ...prev, items: freshItems } : prev);
@@ -1806,12 +1858,12 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                         isCircular: true,
                     };
 
-                    const newToken = syncTokenWithSheet(baseToken, characterData, {
+                    const newToken = syncModeTokenWithSheet(baseToken, runtimeSheet, {
                         armas,
                         armaduras,
                         habilidades,
                         accesorios,
-                    });
+                    }, { scenarioId });
                     console.log('🎭 [SafeSync] Auto-creating player token:', newToken.name);
 
                     // Añadir a la lista fresca del servidor (no a la local)
@@ -1825,11 +1877,17 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                         y: -(spawnPosition.y + defaultTokenDimensions.height / 2 - WORLD_SIZE / 2) * playerZoom,
                     });
 
-                    await safePersistItems(scenarioId, updatedItems, freshItems);
+                    await safePersistItems(
+                        scenarioId,
+                        updatedItems,
+                        freshItems,
+                        [newToken.id],
+                        { persistRuntime: isRogueliteClassLaunch },
+                    );
                 }
 
-                hasCreatedAutoToken.current = true;
             } catch (err) {
+                autoTokenScenarioReservationRef.current = null;
                 console.error(' [SafeSync] Error en sincronización segura:', err);
             }
         };
@@ -1845,6 +1903,8 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         armaduras,
         habilidades,
         accesorios,
+        loadRuntimeSheet,
+        syncModeTokenWithSheet,
     ]);
 
     // Listener para sincronización en tiempo real desde edición de fichas
@@ -1855,6 +1915,11 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
             const currentScenario = activeScenarioRef.current;
 
             if (!name || !sheet || !currentScenario?.id) return;
+            if (
+                sheet.profileType === 'rogueliteClass'
+                && sheet.activeRun?.currentScenarioId
+                && sheet.activeRun.currentScenarioId !== currentScenario.id
+            ) return;
 
             try {
                 // Leer datos frescos del servidor
@@ -1865,15 +1930,21 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
 
                 let hasChanges = false;
                 const updatedItems = freshItems.map(item => {
-                    const isMatch = (item.linkedCharacterId && item.linkedCharacterId === sheet.id) ||
+                    const isMatch = (sheet.profileType === 'rogueliteClass'
+                        && item.linkedClassId
+                        && item.linkedClassId === sheet.id) ||
+                        (item.linkedCharacterId && item.linkedCharacterId === sheet.id) ||
                         (!item.linkedCharacterId && item.name === name);
 
                     if (isMatch && item.layer === 'TOKEN') {
-                        const synced = syncTokenWithSheet(item, sheet, {
+                        const synced = syncModeTokenWithSheet(item, sheet, {
                             armas,
                             armaduras,
                             habilidades,
                             accesorios,
+                        }, {
+                            scenarioId: currentScenario.id,
+                            preserveTokenState: sheet.profileType === 'rogueliteClass' ? false : undefined,
                         });
                         if (JSON.stringify(synced) !== JSON.stringify(item)) {
                             hasChanges = true;
@@ -1896,7 +1967,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
 
         window.addEventListener('playerSheetSaved', handleSyncEvent);
         return () => window.removeEventListener('playerSheetSaved', handleSyncEvent);
-    }, [armas, armaduras, habilidades, accesorios]);
+    }, [armas, armaduras, habilidades, accesorios, syncModeTokenWithSheet]);
 
     // --- HELPER: renderItemJSX ---
     // Usamos una función que devuelve JSX en lugar de un "Componente" de React definido dentro de otro,
@@ -1933,6 +2004,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         pendingBoardHandTransferLocksRef,
         pendingImageFile,
         persistQueueRef,
+        persistRuntimeItems,
         playerName,
         recentLocalWritesRef,
         registerLocalConfigDraft,
@@ -2287,6 +2359,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         triggerToast,
         updateItem,
         zoom,
+        syncTokenWithSheet: syncModeTokenWithSheet,
     });
 
     const handleResizeMouseDown = (e, item) => {
@@ -2514,6 +2587,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
             addCardToHand, addDeckToBoard, addLightToCanvas, addTokenToCanvas, adjustBoardDiceCount, animatedBoardLightIds,
             applyBackgroundGridPreset, armaduras, armas, availableCharacters, backgroundGridPresets, bleed,
             boardDecks, boardDiceExplosive, boardDicePool, boardDiceRollLog, boardLights, canUseBoardMobileTacticalMove,
+            BOARD_DICE_ROLL_SIDES, BOARD_DIE_SIDES, BoardDieVisual, BoardMarkerVisual,
             canvasRenderItemGroups, cards, clearBackgroundImage, clearBoardDicePool, closeBoardCardPreview, combatLog,
             combatQueueDisplay, commitGridDraft, consumeMobileMoveTemplateEvent, consumeSweepTemplateEvent, containerRef, createNewScenario,
             currentBackgroundGridPresetIndex, deleteCard, deleteItem, deleteScenario, deleteToken, dragOverLibraryItemId,
@@ -2539,6 +2613,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
             toastMessage, toastSubMessage, toastType, toggleBoardDiceExplosive, toggleBoardDiceRollDie, toggleHandCardFace,
             tokenOriginalPos, tokens, triggerToast, unlinkCharacter, unstackSpecificCard, updateItem,
             uploadingCard, uploadingToken, viewMode, wallDrawingCurrent, wallDrawingStart, zoom,
+            TokenResourcesComponent, EquipmentSectionComponent,
         }} />
     );
 };
@@ -2554,6 +2629,14 @@ TacticalSectionCore.propTypes = {
         createCombatController: PropTypes.func.isRequired,
         useFeatureController: PropTypes.func.isRequired,
         WorkspaceShell: PropTypes.elementType.isRequired,
+        loadRuntimeSheet: PropTypes.func,
+        persistRuntimeItems: PropTypes.func,
+        TokenResourcesComponent: PropTypes.elementType,
+        EquipmentSectionComponent: PropTypes.elementType,
+        sceneItemVisuals: PropTypes.shape({
+            BoardDieVisual: PropTypes.elementType,
+            BoardMarkerVisual: PropTypes.elementType,
+        }),
     }).isRequired,
     onBack: PropTypes.func.isRequired,
 };
