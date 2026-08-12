@@ -229,7 +229,6 @@ test('a two-handed weapon visually occupies and blocks the opposite hand', () =>
     />,
   );
 
-  expect(screen.getByText('2 manos')).toBeInTheDocument();
   const occupiedSlot = screen.getByRole('status', {
     name: 'Mano Torpe ocupada por Gran hacha',
   });
@@ -266,11 +265,11 @@ test('the same two hand slots edit two independent weapon sets', () => {
     />,
   );
 
-  expect(screen.getByRole('tab', { name: 'Ver conjunto I, activo' })).toHaveAttribute('aria-selected', 'true');
-  expect(screen.getByText('2 manos')).toBeInTheDocument();
+  expect(screen.getByText('CONJUNTO I')).toBeInTheDocument();
 
-  fireEvent.click(screen.getByRole('tab', { name: 'Ver conjunto II' }));
-  expect(screen.queryByText('2 manos')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Cambiar a conjunto II' }));
+  expect(onUpdateEquipped).toHaveBeenCalledWith('activeWeaponSet', 1);
+  expect(screen.getByText('CONJUNTO II')).toBeInTheDocument();
   expect(screen.getByText('Mano Hábil')).toBeInTheDocument();
   expect(screen.getByText('Mano Torpe')).toBeInTheDocument();
 
@@ -281,7 +280,4 @@ test('the same two hand slots edit two independent weapon sets', () => {
     expect.objectContaining({ templateId: 'great-axe', name: 'Gran hacha' }),
     { weaponSetIndex: 1 },
   );
-
-  fireEvent.click(screen.getByRole('button', { name: 'Activar' }));
-  expect(onUpdateEquipped).toHaveBeenCalledWith('activeWeaponSet', 1);
 });

@@ -3,7 +3,7 @@ import { Tooltip } from 'react-tooltip';
 import PropTypes from 'prop-types';
 import { FiShield, FiX, FiCheck, FiAlertTriangle, FiStar, FiPlus, FiMinus, FiEdit2 } from 'react-icons/fi';
 import { GiBelt } from 'react-icons/gi';
-import { Sword, Shield, Zap, Gem, LockKeyhole } from 'lucide-react';
+import { Sword, Shield, Zap, Gem, LockKeyhole, RefreshCw } from 'lucide-react';
 import HexIcon from './HexIcon';
 import RogueliteTalentsPanel from './RogueliteTalentsPanel';
 import RogueliteInventoryCard from './RogueliteInventoryCard';
@@ -397,6 +397,7 @@ const LoadoutView = ({
     const [selectedWeaponSet, setSelectedWeaponSet] = useState(() => (
         Number(dndClass.equippedItems?.activeWeaponSet) === 1 ? 1 : 0
     ));
+    const [isSwappingWeaponSet, setIsSwappingWeaponSet] = useState(false);
 
     // Equipment slot selection state
     const [activeSlotSelector, setActiveSlotSelector] = useState(null); // 'mainHand', 'offHand', 'body', or null
@@ -727,16 +728,23 @@ const LoadoutView = ({
         }
     };
 
-    const handleSelectWeaponSet = (index) => {
-        setSelectedWeaponSet(index);
-        setActiveSlotSelector(null);
-    };
-
-    const handleActivateWeaponSet = () => {
-        if (onUpdateEquipped && selectedWeaponSet !== activeWeaponSet) {
-            onUpdateEquipped('activeWeaponSet', selectedWeaponSet);
+    // Sincronizar conjunto seleccionado con el activo si cambian las props
+    React.useEffect(() => {
+        if (rogueliteRole !== 'legacy' && activeWeaponSet !== undefined) {
+            setSelectedWeaponSet(activeWeaponSet);
         }
+    }, [activeWeaponSet, rogueliteRole]);
+
+    const handleCycleWeaponSet = () => {
+        const nextSet = selectedWeaponSet === 0 ? 1 : 0;
+        setSelectedWeaponSet(nextSet);
         setActiveSlotSelector(null);
+        setIsSwappingWeaponSet(true);
+        setTimeout(() => setIsSwappingWeaponSet(false), 350);
+
+        if (onUpdateEquipped) {
+            onUpdateEquipped('activeWeaponSet', nextSet);
+        }
     };
 
     // Handle updating quantity for belt items
@@ -938,7 +946,7 @@ const LoadoutView = ({
                                 <div className="space-y-8">
 
                                     {/* 1. MANOS (Hands) */}
-                                    <div>
+                                    <div className={`relative ${['mainHand', 'offHand'].includes(activeSlotSelector) ? 'z-40' : 'z-20'}`}>
                                         <div className="noma-weapon-set-header mb-4">
                                             <div className="flex items-center gap-3">
                                                 <Sword className="w-5 h-5 text-[#c8aa6e]" />
@@ -948,44 +956,21 @@ const LoadoutView = ({
                                             </div>
 
                                             {rogueliteRole !== 'legacy' && (
-                                                <div className="noma-weapon-set-switcher">
-                                                    <span className="noma-weapon-set-switcher__label">Conjunto</span>
-                                                    <div className="noma-weapon-set-switcher__tabs" role="tablist" aria-label="Conjuntos de armas">
-                                                        {[0, 1].map((setIndex) => {
-                                                            const isSelected = selectedWeaponSet === setIndex;
-                                                            const isActive = activeWeaponSet === setIndex;
-                                                            const setLabel = setIndex === 0 ? 'I' : 'II';
-                                                            return (
-                                                                <button
-                                                                    key={setIndex}
-                                                                    type="button"
-                                                                    role="tab"
-                                                                    aria-selected={isSelected}
-                                                                    aria-label={`Ver conjunto ${setLabel}${isActive ? ', activo' : ''}`}
-                                                                    onClick={() => handleSelectWeaponSet(setIndex)}
-                                                                    className={`noma-weapon-set-tab ${isSelected ? 'is-selected' : ''} ${isActive ? 'is-active' : ''}`}
-                                                                >
-                                                                    <span>{setLabel}</span>
-                                                                    {isActive && <i aria-hidden="true" />}
-                                                                </button>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                    {selectedWeaponSet === activeWeaponSet ? (
-                                                        <span className="noma-weapon-set-switcher__active-label">Activo</span>
-                                                    ) : (
-                                                        <button
-                                                            type="button"
-                                                            onClick={handleActivateWeaponSet}
-                                                            className="noma-weapon-set-switcher__activate"
-                                                        >
-                                                            Activar
-                                                        </button>
-                                                    )}
-                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleCycleWeaponSet}
+                                                    aria-label={`Cambiar a conjunto ${selectedWeaponSet === 0 ? 'II' : 'I'}`}
+                                                    title={`Cambiar a conjunto ${selectedWeaponSet === 0 ? 'II' : 'I'}`}
+                                                    className={`noma-weapon-set-switcher ${isSwappingWeaponSet ? 'is-swapping' : ''}`}
+                                                >
+                                                    <span className="noma-weapon-set-switcher__badge">
+                                                        {`CONJUNTO ${selectedWeaponSet === 0 ? 'I' : 'II'}`}
+                                                    </span>
+                                                    <RefreshCw className="w-3.5 h-3.5" />
+                                                </button>
                                             )}
                                         </div>
-                                        <div className="grid grid-cols-2 gap-6">
+                                        <div key={`weapon-set-${selectedWeaponSet}`} className="grid grid-cols-2 gap-6 noma-weapon-slots-container">
                                             {[
                                                 { key: 'mainHand', label: 'Mano Hábil', badge: 'HÁBIL', badgeClass: 'bg-green-900/40 text-green-400' },
                                                 { key: 'offHand', label: 'Mano Torpe', badge: 'TORPE', badgeClass: 'bg-red-900/40 text-red-400' }
@@ -1003,7 +988,7 @@ const LoadoutView = ({
                                                     : null;
 
                                                 return (
-                                                    <div key={key} className="relative group">
+                                                    <div key={key} className={`relative group ${isSlotActive ? 'z-50' : 'z-10'}`}>
                                                         {/* Slot Card */}
                                                         <div
                                                             onClick={(e) => {
@@ -1097,11 +1082,7 @@ const LoadoutView = ({
                                                                         </span>
                                                                     )}
 
-                                                                    {resolveEquipmentHandsRequired(equippedItem) === 2 && (
-                                                                        <span className="relative z-10 border border-[#c8aa6e]/45 bg-[#0b1120]/80 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.16em] text-[#d8c18d]">
-                                                                            2 manos
-                                                                        </span>
-                                                                    )}
+
 
                                                                     {/* Name */}
                                                                     <span className="text-[#f0e6d2] font-['Cinzel'] text-sm uppercase tracking-wider text-center px-2 font-bold mt-1 relative z-10">
@@ -1254,14 +1235,14 @@ const LoadoutView = ({
                                     </div>
 
                                     {/* 2. ARMADURA (Armor) */}
-                                    <div>
+                                    <div className={`relative ${activeSlotSelector === 'body' ? 'z-40' : 'z-10'}`}>
                                         <div className="flex items-center gap-3 mb-4">
                                             <Shield className="w-5 h-5 text-[#c8aa6e]" />
                                             <h3 className="text-[#c8aa6e] font-['Cinzel'] text-md tracking-[0.2em] uppercase">
                                                 Cuerpo
                                             </h3>
                                         </div>
-                                        <div className="relative group">
+                                        <div className={`relative group ${activeSlotSelector === 'body' ? 'z-50' : 'z-10'}`}>
                                             {(() => {
                                                 const equippedArmor = equippedItems.body;
                                                 const proficiencyWarning = equippedArmor ? getArmorProficiencyWarning(equippedArmor) : null;
@@ -1483,7 +1464,7 @@ const LoadoutView = ({
                                     </div>
 
                                     {/* 3. CINTURON (Belt - Consumables) */}
-                                    <div>
+                                    <div className={`relative ${activeSlotSelector?.startsWith('belt_') ? 'z-40' : 'z-10'}`}>
                                         <div className="flex items-center gap-3 mb-4">
                                             <GiBelt className="w-5 h-5 text-[#c8aa6e]" />
                                             <h3 className="text-[#c8aa6e] font-['Cinzel'] text-md tracking-[0.2em] uppercase">
@@ -1501,7 +1482,7 @@ const LoadoutView = ({
                                                 const itemRarityColors = equippedItem ? getRarityColors(equippedItem, rarityColorMap) : null;
 
                                                 return (
-                                                    <div key={idx} className="relative">
+                                                    <div key={idx} className={`relative ${isSlotActive ? 'z-50' : 'z-10'}`}>
                                                         <div
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
@@ -1769,7 +1750,7 @@ const LoadoutView = ({
                                     </div>
 
                                     {/* 4. ACCESORIOS (Accessories) */}
-                                    <div>
+                                    <div className={`relative ${activeSlotSelector?.startsWith('accessory_') ? 'z-40' : 'z-10'}`}>
                                         <div className="flex items-center gap-3 mb-4">
                                             <Gem className="w-5 h-5 text-[#c8aa6e]" />
                                             <h3 className="text-[#c8aa6e] font-['Cinzel'] text-md tracking-[0.2em] uppercase">
@@ -1785,7 +1766,7 @@ const LoadoutView = ({
                                                 const accessoryImage = equippedAccessory ? getObjectImage(equippedAccessory, customEquipmentImages) : null;
 
                                                 return (
-                                                    <div key={slotNum} className="relative group">
+                                                    <div key={slotNum} className={`relative group ${isSlotActive ? 'z-50' : 'z-10'}`}>
                                                         <div
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
@@ -2276,7 +2257,7 @@ const LoadoutView = ({
                             ) : (
                                 <div className="noma-talent-proficiencies w-full space-y-4">
                                     <div className="noma-talent-proficiencies__header">
-                                        <h4 className="text-[#c8aa6e] font-['Cinzel'] text-xs uppercase tracking-widest text-center">Competencias</h4>
+                                        <h4 className="text-[#e7dac0] font-['Cinzel'] text-[0.7rem] font-bold uppercase tracking-[0.14em] text-center">Competencias</h4>
                                     </div>
 
                                     {/* Weapons */}

@@ -15,9 +15,9 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ### Dos conjuntos de armas Roguelite
 
-- Equipables conserva las dos ranuras originales de mano y añade un selector compacto de conjuntos I/II, evitando duplicar cuatro casillas en escritorio y móvil.
+- Equipables conserva las dos ranuras originales de mano y cuenta con un selector minimalista de conjunto con botón de ciclo (`CONJUNTO I` / `CONJUNTO II`), evitando la duplicación de casillas y eliminando botones de activación redundantes.
+- Al pulsar el botón de ciclo, la interfaz conmuta y activa inmediatamente el conjunto visible ("lo que ves es lo activo"), ejecutando una animación fluida de transición en las ranuras de equipamiento (*Mano Hábil* y *Mano Torpe*).
 - Cada conjunto guarda sus propias manos y aplica de forma independiente ocupación a dos manos y validación de competencias; armadura, accesorios y cinturón continúan compartidos.
-- El conjunto visible puede prepararse sin cambiar el activo. Al activar otro conjunto, los alias `mainHand` y `offHand` se actualizan para mantener compatibles Canvas, inspector y datos anteriores.
 - Las configuraciones antiguas migran automáticamente su equipo actual al conjunto I y reciben un conjunto II vacío.
 
 ### ⚔️ Gestor de Combate del Bestiario (Estilo de Campaña Gótica)
