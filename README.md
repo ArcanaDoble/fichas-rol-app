@@ -2980,6 +2980,8 @@ Guía rápida: ver `docs/Minimapa.md`.
 - Las piezas del suelo se mueven directamente. Al soltarlas encima de una ficha controlada, esa ficha concreta las recoge sin equiparlas automáticamente; un jugador no puede entregar objetos a fichas ajenas y el máster puede usar el mismo gesto con enemigos y aliados.
 - Señalar una pieza del suelo abre sobre el mapa la tarjeta completa del inventario con su arte, rareza y reglas. No abre ni sustituye el inspector táctico.
 - Soltar y recoger se persisten inmediatamente en el encuentro y en la run personal para que todos los jugadores vean la transferencia y no reaparezcan copias al cambiar de sala.
+- El inventario persistido desde un token es autoritativo durante la aventura: la ficha personal no vuelve a introducir el equipamiento previo ni filtra botín recogido por coincidir con la pool maestra. Las runs anteriores guardadas desde Canvas se migran sin perder sus intercambios.
+- La sincronización valida ahora la relación inventario–equipables: retirar o entregar un objeto libera todas sus ranuras aunque la copia del inspector use un identificador runtime distinto. El botín recogido normaliza nombres legacy y datos anidados, y conserva rareza, descripción y arte dentro del propio objeto al pasar del suelo a otra ficha.
 - El arrastre incorpora una previsualización flotante y, en móvil, aparta temporalmente el inspector para dejar visible el mapa durante la caída.
 
 ## Novedades: bestiario Roguelite independiente

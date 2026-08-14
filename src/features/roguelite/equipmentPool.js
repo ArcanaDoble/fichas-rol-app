@@ -199,9 +199,70 @@ export const createEquipmentTemplateId = (item = {}, category = 'objects') => {
 };
 
 export const normalizeEquipmentPoolItem = (item = {}, category = 'objects') => {
+  const payload = item.payload && typeof item.payload === 'object' ? item.payload : {};
+  const details = item.details && typeof item.details === 'object'
+    ? item.details
+    : (item.detalles && typeof item.detalles === 'object' ? item.detalles : {});
+  const rawDetails = details.raw && typeof details.raw === 'object' ? details.raw : {};
+  const firstValue = (...values) => values.find((value) => (
+    value !== undefined
+    && value !== null
+    && (typeof value !== 'string' || value.trim() !== '')
+  ));
+  const name = firstValue(
+    item.name,
+    item.nombre,
+    payload.name,
+    payload.nombre,
+    rawDetails.name,
+    rawDetails.nombre,
+    details.name,
+    details.nombre,
+  );
+  const rarity = firstValue(
+    item.rareza,
+    item.rarity,
+    payload.rareza,
+    payload.rarity,
+    rawDetails.rareza,
+    rawDetails.rarity,
+  );
+  const image = firstValue(
+    item.image,
+    item.imagen,
+    item.imageUrl,
+    item.img,
+    payload.image,
+    payload.imagen,
+    payload.imageUrl,
+    payload.img,
+    rawDetails.image,
+    rawDetails.imagen,
+    rawDetails.imageUrl,
+    rawDetails.img,
+  );
+  const description = firstValue(
+    item.description,
+    item.descripcion,
+    item.detail,
+    payload.description,
+    payload.descripcion,
+    payload.detail,
+    rawDetails.description,
+    rawDetails.descripcion,
+    details.description,
+    details.descripcion,
+  );
   const normalized = {
+    ...payload,
+    ...rawDetails,
+    ...details,
     ...item,
-    templateId: createEquipmentTemplateId(item, category),
+    ...(name ? { name } : {}),
+    ...(rarity ? { rareza: rarity, rarity } : {}),
+    ...(image ? { image } : {}),
+    ...(description ? { description } : {}),
+    templateId: createEquipmentTemplateId({ ...payload, ...rawDetails, ...details, ...item, name }, category),
   };
 
   if (category === 'armor' || item.itemType === 'armor') {

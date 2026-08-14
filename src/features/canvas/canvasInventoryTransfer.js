@@ -8,14 +8,129 @@ export const CANVAS_INVENTORY_DRAG_END_EVENT = 'noma:canvas-inventory-drag-end';
 
 export const isCanvasLootItem = (item) => item?.sceneItemKind === 'canvasLoot';
 
+const firstMeaningfulValue = (...values) => values.find((value) => (
+    value !== undefined
+    && value !== null
+    && (typeof value !== 'string' || value.trim() !== '')
+));
+
+export const normalizeCanvasInventoryItem = (candidate = {}, fallbackImage = null) => {
+    if (!candidate || typeof candidate !== 'object') return candidate;
+
+    const payload = candidate.payload && typeof candidate.payload === 'object'
+        ? candidate.payload
+        : {};
+    const details = candidate.details && typeof candidate.details === 'object'
+        ? candidate.details
+        : (candidate.detalles && typeof candidate.detalles === 'object' ? candidate.detalles : {});
+    const rawDetails = details.raw && typeof details.raw === 'object' ? details.raw : {};
+    const merged = {
+        ...payload,
+        ...rawDetails,
+        ...details,
+        ...candidate,
+    };
+    const name = firstMeaningfulValue(
+        candidate.name,
+        candidate.nombre,
+        payload.name,
+        payload.nombre,
+        rawDetails.name,
+        rawDetails.nombre,
+        details.name,
+        details.nombre,
+        candidate.label,
+    );
+    const rarity = firstMeaningfulValue(
+        candidate.rareza,
+        candidate.rarity,
+        payload.rareza,
+        payload.rarity,
+        rawDetails.rareza,
+        rawDetails.rarity,
+        details.rareza,
+        details.rarity,
+    );
+    const image = firstMeaningfulValue(
+        candidate.image,
+        candidate.imagen,
+        candidate.imageUrl,
+        candidate.img,
+        candidate.icon,
+        payload.image,
+        payload.imagen,
+        payload.imageUrl,
+        payload.img,
+        payload.icon,
+        rawDetails.image,
+        rawDetails.imagen,
+        rawDetails.imageUrl,
+        rawDetails.img,
+        fallbackImage,
+    );
+    const description = firstMeaningfulValue(
+        candidate.description,
+        candidate.descripcion,
+        candidate.detail,
+        payload.description,
+        payload.descripcion,
+        payload.detail,
+        rawDetails.description,
+        rawDetails.descripcion,
+        details.description,
+        details.descripcion,
+    );
+
+    return {
+        ...merged,
+        ...(name ? { name, nombre: firstMeaningfulValue(candidate.nombre, payload.nombre, name) } : {}),
+        ...(rarity ? { rareza: rarity, rarity } : {}),
+        ...(image ? { image, imageUrl: firstMeaningfulValue(candidate.imageUrl, payload.imageUrl, image) } : {}),
+        ...(description ? { description } : {}),
+    };
+};
+
 export const resolveCanvasInventoryItemIdentity = (item) => (
-    item?.runItemId || item?.instanceId || item?.templateId || item?.id || item?.name || item?.nombre || null
+    item?.runItemId
+    || item?.instanceId
+    || item?.templateId
+    || item?.catalogId
+    || item?.id
+    || item?.name
+    || item?.nombre
+    || item?.payload?.runItemId
+    || item?.payload?.instanceId
+    || item?.payload?.templateId
+    || item?.payload?.catalogId
+    || item?.payload?.id
+    || item?.payload?.name
+    || item?.payload?.nombre
+    || null
 );
 
+const resolveCanvasInventoryIdentityKeys = (item) => {
+    if (!item) return [];
+    if (typeof item !== 'object') return [String(item).trim().toLowerCase()].filter(Boolean);
+    const normalized = normalizeCanvasInventoryItem(item);
+    return [
+        normalized?.templateId,
+        normalized?.catalogId,
+        normalized?.id,
+        normalized?.name,
+        normalized?.nombre,
+    ]
+        .map((value) => String(value || '').trim().toLowerCase())
+        .filter(Boolean);
+};
+
 export const canvasInventoryItemsMatch = (left, right) => {
-    const leftIdentity = resolveCanvasInventoryItemIdentity(left);
-    const rightIdentity = resolveCanvasInventoryItemIdentity(right);
-    return Boolean(leftIdentity && rightIdentity && leftIdentity === rightIdentity);
+    if (!left || !right) return false;
+    const leftInstance = typeof left === 'object' ? left.runItemId || left.instanceId : null;
+    const rightInstance = typeof right === 'object' ? right.runItemId || right.instanceId : null;
+    if (leftInstance && rightInstance) return String(leftInstance) === String(rightInstance);
+
+    const rightKeys = new Set(resolveCanvasInventoryIdentityKeys(right));
+    return resolveCanvasInventoryIdentityKeys(left).some((key) => rightKeys.has(key));
 };
 
 export const reorderCanvasInventory = (inventory = [], fromIndex, toIndex) => {
@@ -57,7 +172,7 @@ export const removeCanvasItemFromLoadout = (loadout = {}, removedItem) => {
 
 export const detachCanvasInventoryItem = (token, itemIndex) => {
     const inventory = Array.isArray(token?.inventory) ? token.inventory : [];
-    const removedItem = inventory[itemIndex];
+    const removedItem = normalizeCanvasInventoryItem(inventory[itemIndex]);
     if (!removedItem) return null;
 
     const nextInventory = inventory.filter((_, index) => index !== itemIndex);
@@ -73,11 +188,11 @@ export const detachCanvasInventoryItem = (token, itemIndex) => {
     }
 
     const wasPrepared = removedItem.isEquipped || removedItem.isPrepared;
-    const nextLoadout = wasPrepared
-        ? removeCanvasItemFromLoadout(token.equipmentLoadout || {}, removedItem)
-        : (token.equipmentLoadout || {});
+    // La pertenencia real a una ranura manda sobre las marcas visuales del
+    // inventario. Algunos objetos antiguos no conservan `isEquipped`, pero no
+    // pueden seguir en el loadout después de abandonar la mochila.
+    const nextLoadout = removeCanvasItemFromLoadout(token.equipmentLoadout || {}, removedItem);
     const nextEquipped = resolveRogueliteEquippedItems(nextLoadout);
-    const equippedIdentities = new Set(nextEquipped.items.map(resolveCanvasInventoryItemIdentity).filter(Boolean));
     const removedIdentity = resolveCanvasInventoryItemIdentity(removedItem);
     const isAbility = removedItem.type === 'ability'
         || removedItem.itemType === 'ability'
@@ -88,13 +203,19 @@ export const detachCanvasInventoryItem = (token, itemIndex) => {
         updates: {
             inventory: nextInventory.map((item) => ({
                 ...item,
-                isEquipped: equippedIdentities.has(resolveCanvasInventoryItemIdentity(item)),
+                isEquipped: nextEquipped.items.some((equippedItem) => (
+                    canvasInventoryItemsMatch(equippedItem, item)
+                )),
             })),
             equipmentLoadout: nextEquipped.loadout,
             equippedItems: nextEquipped.items,
             activeWeaponSet: nextEquipped.activeWeaponSet,
             equippedSkillIds: isAbility && wasPrepared
-                ? (token.equippedSkillIds || []).map((skillId) => (skillId === removedIdentity ? null : skillId))
+                ? (token.equippedSkillIds || []).map((skillId) => (
+                    canvasInventoryItemsMatch(skillId, removedItem) || skillId === removedIdentity
+                        ? null
+                        : skillId
+                ))
                 : token.equippedSkillIds,
             runtimeDirty: true,
         },
@@ -426,42 +547,48 @@ const createLootId = () => (
     globalThis.crypto?.randomUUID?.() || `canvas-loot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 );
 
-export const createCanvasLootSceneItem = ({ item, image, sourceToken, position }) => ({
-    id: createLootId(),
-    type: 'scenePickup',
-    sceneItemKind: 'canvasLoot',
-    layer: 'TOKEN',
-    name: item?.name || item?.nombre || 'Objeto',
-    img: image || item?.image || item?.img || item?.imageUrl || null,
-    x: position.x,
-    y: position.y,
-    width: position.width,
-    height: position.height,
-    rotation: 0,
-    snapToGrid: false,
-    isCircular: false,
-    lootItem: {
-        ...item,
-        isEquipped: false,
-        isPrepared: false,
-    },
-    droppedByTokenId: sourceToken?.id || null,
-    droppedByName: sourceToken?.name || null,
-    droppedAt: Date.now(),
-});
-
-export const addCanvasLootToInventory = (token, lootItem) => ({
-    ...token,
-    inventory: [
-        ...(Array.isArray(token?.inventory) ? token.inventory : []),
-        {
-            ...lootItem,
+export const createCanvasLootSceneItem = ({ item, image, sourceToken, position }) => {
+    const normalizedItem = normalizeCanvasInventoryItem(item, image);
+    return ({
+        id: createLootId(),
+        type: 'scenePickup',
+        sceneItemKind: 'canvasLoot',
+        layer: 'TOKEN',
+        name: normalizedItem?.name || normalizedItem?.nombre || 'Objeto',
+        img: normalizedItem?.image || normalizedItem?.img || normalizedItem?.imageUrl || null,
+        x: position.x,
+        y: position.y,
+        width: position.width,
+        height: position.height,
+        rotation: 0,
+        snapToGrid: false,
+        isCircular: false,
+        lootItem: {
+            ...normalizedItem,
             isEquipped: false,
             isPrepared: false,
         },
-    ],
-    runtimeDirty: true,
-});
+        droppedByTokenId: sourceToken?.id || null,
+        droppedByName: sourceToken?.name || null,
+        droppedAt: Date.now(),
+    });
+};
+
+export const addCanvasLootToInventory = (token, lootItem, fallbackImage = null) => {
+    const normalizedItem = normalizeCanvasInventoryItem(lootItem, fallbackImage);
+    return ({
+        ...token,
+        inventory: [
+            ...(Array.isArray(token?.inventory) ? token.inventory : []),
+            {
+                ...normalizedItem,
+                isEquipped: false,
+                isPrepared: false,
+            },
+        ],
+        runtimeDirty: true,
+    });
+};
 
 export const pickUpCanvasLootForToken = ({
     token,
@@ -527,7 +654,7 @@ export const pickUpCanvasLootForToken = ({
     const pickedIds = new Set(pickedLoots.map((l) => l.id));
     let currentToken = token;
     pickedLoots.forEach((loot) => {
-        currentToken = addCanvasLootToInventory(currentToken, loot.lootItem);
+        currentToken = addCanvasLootToInventory(currentToken, loot.lootItem, loot.img);
     });
 
     const nextToken = {

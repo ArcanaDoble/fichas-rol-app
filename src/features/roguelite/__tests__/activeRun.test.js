@@ -242,6 +242,115 @@ describe('Roguelite active run', () => {
     expect(nextRun.equippedItems.mainHand).toBeNull();
   });
 
+  test('keeps a token inventory authoritative after dropping an equipped base item', () => {
+    const sheet = makeSheet();
+    const previousRun = createRogueliteActiveRun(sheet, {
+      runId: 'run-1',
+      scenarioId: 'room-1',
+      now: 100,
+    });
+    const persistedRun = createRogueliteActiveRunFromToken({
+      id: 'token-1',
+      runId: 'run-1',
+      linkedClassId: 'barbarian',
+      linkedClassOwner: 'Ada',
+      stats: previousRun.stats,
+      inventory: [],
+      equipmentLoadout: { mainHand: null, offHand: null },
+    }, previousRun, {
+      scenarioId: 'room-1',
+      revision: 1,
+      now: 200,
+    });
+
+    const projected = applyRogueliteActiveRunToProfile({
+      ...sheet,
+      // La configuración personal de antes de la run aún puede conservar el
+      // arma. No debe imponerse a la instantánea guardada desde el Canvas.
+      equippedItems: sheet.equippedItems,
+      // Compatibilidad con intercambios ya escritos por la versión anterior.
+      activeRun: { ...persistedRun, version: 1 },
+    });
+
+    expect(flattenRogueliteRunInventory(projected.equipment)).toEqual([]);
+    expect(projected.equippedItems.mainHand).toBeNull();
+  });
+
+  test('repairs a stale equipped slot when its item no longer exists in the run inventory', () => {
+    const sheet = makeSheet();
+    const staleWeapon = {
+      name: 'Mandoble',
+      templateId: 'weapon:mandoble',
+      itemType: 'weapon',
+    };
+    const projected = applyRogueliteActiveRunToProfile({
+      ...sheet,
+      activeRun: {
+        ...createRogueliteActiveRun(sheet, { runId: 'run-1', now: 100 }),
+        version: 2,
+        lastTokenId: 'token-1',
+        inventory: {},
+        equippedItems: {
+          activeWeaponSet: 0,
+          weaponSets: [
+            { mainHand: staleWeapon, offHand: null },
+            { mainHand: null, offHand: null },
+          ],
+          mainHand: staleWeapon,
+          offHand: null,
+        },
+      },
+    });
+
+    expect(flattenRogueliteRunInventory(projected.equipment)).toEqual([]);
+    expect(projected.equippedItems.mainHand).toBeNull();
+    expect(projected.equippedItems.weaponSets[0].mainHand).toBeNull();
+  });
+
+  test('keeps newly collected loot even when its template belongs to the class pool', () => {
+    const sheet = {
+      ...makeSheet(),
+      equipment: {
+        weapons: [
+          { name: 'Mandoble', templateId: 'weapon:mandoble' },
+          { name: 'Daga', templateId: 'weapon:daga' },
+        ],
+      },
+    };
+    const previousRun = createRogueliteActiveRun(sheet, {
+      runId: 'run-1',
+      scenarioId: 'room-1',
+      now: 100,
+    });
+    const persistedRun = createRogueliteActiveRunFromToken({
+      id: 'token-1',
+      runId: 'run-1',
+      linkedClassId: 'barbarian',
+      linkedClassOwner: 'Ada',
+      stats: previousRun.stats,
+      inventory: [{
+        name: 'Daga',
+        templateId: 'weapon:daga',
+        runItemId: 'loot-daga-1',
+        _category: 'weapons',
+      }],
+      equipmentLoadout: { mainHand: null, offHand: null },
+    }, previousRun, {
+      scenarioId: 'room-1',
+      revision: 1,
+      now: 200,
+    });
+
+    const projected = applyRogueliteActiveRunToProfile({
+      ...sheet,
+      activeRun: persistedRun,
+    });
+
+    expect(flattenRogueliteRunInventory(projected.equipment)).toEqual([
+      expect.objectContaining({ name: 'Daga', runItemId: 'loot-daga-1' }),
+    ]);
+  });
+
   test('prevents an older encounter snapshot from reclaiming the current run', () => {
     const activeRun = { id: 'run-1', revision: 6, currentScenarioId: 'room-2' };
 
@@ -291,6 +400,7 @@ describe('Roguelite active run', () => {
       classEquipmentPool: sheet.equipment,
       activeRun: {
         ...createRogueliteActiveRun(sheet, { runId: 'run-legacy', now: 100 }),
+        version: 1,
         inventory: {},
         baseInventoryTemplateIds: undefined,
       },

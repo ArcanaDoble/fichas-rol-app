@@ -49,6 +49,32 @@ describe('roguelite starting equipment pool', () => {
     expect(pool.objects).toEqual([]);
   });
 
+  test('canonicalizes collected legacy items so inventory cards keep their identity and art', () => {
+    const pool = normalizeRogueliteEquipmentPool({
+      armor: [{
+        type: 'armor',
+        payload: {
+          id: 'mail-armor',
+          nombre: 'Armadura de mallas',
+          rareza: 'Poco común',
+          imagen: '/armaduras/mallas.webp',
+          descripcion: 'Neutraliza ataques cortantes.',
+        },
+        defensa: 7,
+      }],
+    });
+
+    expect(pool.armor[0]).toEqual(expect.objectContaining({
+      templateId: 'mail-armor',
+      name: 'Armadura de mallas',
+      rareza: 'Poco común',
+      rarity: 'Poco común',
+      image: '/armaduras/mallas.webp',
+      description: 'Neutraliza ataques cortantes.',
+      defensa: 7,
+    }));
+  });
+
   test('equipping a two-handed weapon clears and occupies the opposite hand', () => {
     const shield = { name: 'Escudo' };
     const greatSword = { name: 'Mandoble', handsRequired: 2 };

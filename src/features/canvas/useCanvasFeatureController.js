@@ -226,7 +226,7 @@ export const useCanvasFeatureController = ({
 
             if (recipient && recipient.id !== sourceToken.id) {
                 const nextRecipient = {
-                    ...addCanvasLootToInventory(recipient, detached.item),
+                    ...addCanvasLootToInventory(recipient, detached.item, detail.image),
                     runtimeDirty: false,
                 };
                 const nextSourceToken = { ...sourceToken, ...detached.updates, runtimeDirty: false };

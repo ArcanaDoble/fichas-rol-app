@@ -5,6 +5,7 @@ import {
     findCanvasLootPosition,
     getCanvasLootRenderPlacement,
     isCanvasLootItem,
+    normalizeCanvasInventoryItem,
     pickUpCanvasLootForToken,
     reorderCanvasInventory,
     resolveCanvasLootRecipient,
@@ -34,6 +35,38 @@ describe('canvas inventory transfer', () => {
         expect(result.updates.equippedItems).toEqual([]);
         expect(result.updates.equipmentLoadout.mainHand).toBeNull();
         expect(result.updates.runtimeDirty).toBe(true);
+    });
+
+    test('clears an equipped slot even when the inventory copy uses a runtime identity', () => {
+        const inventorySword = {
+            name: 'Mandoble',
+            templateId: 'weapon:mandoble',
+            runItemId: 'weapon:mandoble:0',
+            type: 'weapon',
+        };
+        const equippedSword = {
+            nombre: 'Mandoble',
+            templateId: 'weapon:mandoble',
+            type: 'weapon',
+        };
+        const result = detachCanvasInventoryItem({
+            profileType: 'rogueliteClass',
+            inventory: [inventorySword],
+            equipmentLoadout: {
+                activeWeaponSet: 0,
+                weaponSets: [
+                    { mainHand: equippedSword, offHand: null },
+                    { mainHand: null, offHand: null },
+                ],
+                mainHand: equippedSword,
+                offHand: null,
+            },
+        }, 0);
+
+        expect(result.updates.inventory).toEqual([]);
+        expect(result.updates.equipmentLoadout.mainHand).toBeNull();
+        expect(result.updates.equipmentLoadout.weaponSets[0].mainHand).toBeNull();
+        expect(result.updates.equippedItems).toEqual([]);
     });
 
     test('places loot in the nearest unoccupied grid cell', () => {
@@ -98,6 +131,45 @@ describe('canvas inventory transfer', () => {
         }));
     });
 
+    test('preserves nested catalog identity, rarity and art through a ground transfer', () => {
+        const sourceItem = {
+            type: 'armor',
+            payload: {
+                id: 'armor-mail',
+                nombre: 'Armadura de mallas',
+                rareza: 'Poco común',
+                descripcion: 'Neutraliza impactos cortantes.',
+            },
+            defensa: 7,
+        };
+        const normalized = normalizeCanvasInventoryItem(sourceItem, '/armaduras/mallas.webp');
+        const loot = createCanvasLootSceneItem({
+            item: sourceItem,
+            image: '/armaduras/mallas.webp',
+            sourceToken: { id: 'enemy', name: 'Guardia' },
+            position: { x: 10, y: 20, width: 30, height: 30 },
+        });
+        const recipient = addCanvasLootToInventory({ id: 'hero', inventory: [] }, loot.lootItem);
+
+        expect(normalized).toEqual(expect.objectContaining({
+            name: 'Armadura de mallas',
+            rareza: 'Poco común',
+            image: '/armaduras/mallas.webp',
+            description: 'Neutraliza impactos cortantes.',
+        }));
+        expect(loot).toEqual(expect.objectContaining({
+            name: 'Armadura de mallas',
+            img: '/armaduras/mallas.webp',
+        }));
+        expect(recipient.inventory[0]).toEqual(expect.objectContaining({
+            name: 'Armadura de mallas',
+            rareza: 'Poco común',
+            image: '/armaduras/mallas.webp',
+            description: 'Neutraliza impactos cortantes.',
+            isEquipped: false,
+        }));
+    });
+
     test('detaches enemy equipment so an enemy can be disarmed onto the canvas', () => {
         const sword = { id: 'enemy-sword', name: 'Espada mellada', type: 'weapon' };
         const result = detachCanvasInventoryItem({
@@ -107,7 +179,7 @@ describe('canvas inventory transfer', () => {
             enemyAbilities: [],
         }, 0);
 
-        expect(result.item).toBe(sword);
+        expect(result.item).toEqual(expect.objectContaining(sword));
         expect(result.updates.inventory).toEqual([]);
         expect(result.updates.equippedItems).toEqual([]);
     });
@@ -212,8 +284,9 @@ describe('canvas inventory transfer', () => {
         const potionLoot = {
             id: 'loot-potion',
             name: 'Poción de Vida',
+            img: '/objetos/pocion.webp',
             sceneItemKind: 'canvasLoot',
-            lootItem: { name: 'Poción de Vida', type: 'consumable' },
+            lootItem: { nombre: 'Poción de Vida', rareza: 'Raro', type: 'consumable' },
             x: 112,
             y: 112,
             width: 25,
@@ -244,6 +317,8 @@ describe('canvas inventory transfer', () => {
         expect(result.pickedLoots[0].id).toBe('loot-potion');
         expect(result.nextToken.inventory).toHaveLength(1);
         expect(result.nextToken.inventory[0].name).toBe('Poción de Vida');
+        expect(result.nextToken.inventory[0].rareza).toBe('Raro');
+        expect(result.nextToken.inventory[0].image).toBe('/objetos/pocion.webp');
         expect(result.nextItems.find((item) => item.id === 'loot-potion')).toBeUndefined();
     });
 

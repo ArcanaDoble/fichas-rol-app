@@ -1,9 +1,10 @@
 import {
   EQUIPMENT_CATEGORIES,
+  normalizeEquippedWeaponSets,
   normalizeRogueliteEquipmentPool,
 } from './equipmentPool';
 
-export const ROGUELITE_ACTIVE_RUN_VERSION = 1;
+export const ROGUELITE_ACTIVE_RUN_VERSION = 2;
 
 export const resolveRogueliteTemplateRevision = (classDefinition = {}) => (
   Math.max(1, Math.trunc(Number(classDefinition.templateRevision) || 1))
@@ -72,6 +73,45 @@ const resolveInventoryIdentityKeys = (item) => {
     .filter(Boolean);
 };
 
+const inventoryItemsMatch = (left, right) => {
+  if (!left || !right) return false;
+  const leftInstance = typeof left === 'object' ? left.runItemId || left.instanceId : null;
+  const rightInstance = typeof right === 'object' ? right.runItemId || right.instanceId : null;
+  if (leftInstance && rightInstance) return String(leftInstance) === String(rightInstance);
+
+  const rightKeys = new Set(resolveInventoryIdentityKeys(right));
+  return resolveInventoryIdentityKeys(left).some((key) => rightKeys.has(key));
+};
+
+export const pruneRogueliteEquippedItemsToInventory = (equippedItems = {}, inventory = {}) => {
+  const normalizedInventory = normalizeRunInventory(inventory);
+  const inventoryItems = EQUIPMENT_CATEGORIES.flatMap((category) => normalizedInventory[category]);
+  const keepIfOwned = (item) => (
+    item && inventoryItems.some((inventoryItem) => inventoryItemsMatch(item, inventoryItem))
+      ? item
+      : null
+  );
+  const normalizedLoadout = normalizeEquippedWeaponSets(equippedItems);
+  const weaponSets = normalizedLoadout.weaponSets.map((weaponSet) => ({
+    ...weaponSet,
+    mainHand: keepIfOwned(weaponSet.mainHand),
+    offHand: keepIfOwned(weaponSet.offHand),
+  }));
+  const prunedLoadout = {
+    ...normalizedLoadout,
+    weaponSets,
+    body: keepIfOwned(normalizedLoadout.body),
+    accessory_1: keepIfOwned(normalizedLoadout.accessory_1),
+    accessory_2: keepIfOwned(normalizedLoadout.accessory_2),
+  };
+
+  Object.keys(prunedLoadout).forEach((slot) => {
+    if (slot.startsWith('belt_')) prunedLoadout[slot] = keepIfOwned(prunedLoadout[slot]);
+  });
+
+  return normalizeEquippedWeaponSets(prunedLoadout);
+};
+
 const resolveInventoryTemplateIds = (inventory) => (
   flattenRogueliteRunInventory(inventory)
     .map(resolveInventoryItemId)
@@ -101,19 +141,26 @@ const mergeInventorySources = (...sources) => {
   return normalizeRunInventory(merged);
 };
 
-const collectEquippedItems = (value, items = []) => {
+const collectEquippedItems = (value, items = [], categoryHint = null) => {
   if (!value || typeof value !== 'object') return items;
 
   if (resolveInventoryItemId(value)) {
-    items.push(value);
+    items.push(categoryHint ? { ...value, _category: categoryHint } : value);
     return items;
   }
 
-  Object.values(value).forEach((entry) => {
+  Object.entries(value).forEach(([slot, entry]) => {
+    const nestedCategory = ['mainHand', 'offHand'].includes(slot)
+      ? 'weapons'
+      : (slot === 'body'
+        ? 'armor'
+        : (slot.startsWith('accessory_')
+          ? 'accessories'
+          : (slot.startsWith('belt_') ? 'objects' : categoryHint)));
     if (Array.isArray(entry)) {
-      entry.forEach((item) => collectEquippedItems(item, items));
+      entry.forEach((item) => collectEquippedItems(item, items, nestedCategory));
     } else {
-      collectEquippedItems(entry, items);
+      collectEquippedItems(entry, items, nestedCategory);
     }
   });
   return items;
@@ -125,6 +172,7 @@ export const createPreparedRogueliteRunInventory = (sheetData = {}) => {
   // hizo sobre `equipment`. Reunimos todas las fuentes para no perder una
   // habilidad válida al materializar la run.
   const classPool = normalizeRunInventory(resolveClassEquipmentPool(sheetData));
+  const equippedItemCandidates = collectEquippedItems(sheetData.equippedItems);
   const abilityCandidates = mergeInventorySources(
     classPool,
     sheetData.classEquipmentPool,
@@ -133,13 +181,19 @@ export const createPreparedRogueliteRunInventory = (sheetData = {}) => {
     sheetData.equipment,
   );
   classPool.abilities = abilityCandidates.abilities;
+  const preparationCandidates = hasInventoryItems(classPool)
+    ? classPool
+    // Compatibilidad con fichas antiguas que guardaron el loadout pero no una
+    // copia del inventario. Solo usamos el loadout como origen si no existe
+    // ninguna pool; así no revivimos equipo retirado al actualizar la clase.
+    : mergeInventorySources(classPool, equippedItemCandidates);
   const selectedKeys = new Set([
-    ...collectEquippedItems(sheetData.equippedItems),
+    ...equippedItemCandidates,
     ...(Array.isArray(sheetData.equippedSkillIds) ? sheetData.equippedSkillIds : []),
   ].flatMap(resolveInventoryIdentityKeys));
   return normalizeRunInventory(Object.fromEntries(EQUIPMENT_CATEGORIES.map((category) => [
     category,
-    classPool[category].filter((item) => (
+    preparationCandidates[category].filter((item) => (
       resolveInventoryIdentityKeys(item).some((key) => selectedKeys.has(key))
     )),
   ])));
@@ -165,6 +219,25 @@ const pruneUnpreparedBaseItems = (sheetData, activeRun) => {
       ...inventory[category].filter((item) => !baseIds.has(resolveInventoryItemId(item))),
     ],
   ])));
+};
+
+const hasAuthoritativeRuntimeInventory = (activeRun = {}) => (
+  Number(activeRun.version) >= ROGUELITE_ACTIVE_RUN_VERSION
+  // Las runs guardadas desde un token ya representan una instantánea real de
+  // la partida, aunque procedan de la versión anterior del modelo.
+  || Boolean(activeRun.lastTokenId)
+);
+
+const resolveActiveRunInventory = (sheetData, activeRun = {}) => {
+  if (hasAuthoritativeRuntimeInventory(activeRun)) {
+    return normalizeRunInventory(activeRun.inventory);
+  }
+
+  // Solo las runs legacy necesitan reconstruirse desde la antigua selección
+  // personal. En una run moderna el inventario guardado es la fuente de verdad:
+  // volver a mezclar aquí la pool maestra reintroduciría objetos arrojados y
+  // ocultaría botín recogido que comparta identidad con la pool de la clase.
+  return pruneUnpreparedBaseItems(sheetData, activeRun);
 };
 
 const resolveClassEquipmentPool = (sheetData = {}) => {
@@ -271,14 +344,19 @@ export const createRogueliteActiveRun = (sheetData = {}, options = {}) => {
     : null;
 
   if (existingRun) {
+    const inventory = resolveActiveRunInventory(sheetData, existingRun);
+    const equippedItems = hasAuthoritativeRuntimeInventory(existingRun)
+      ? existingRun.equippedItems
+      : (sheetData.equippedItems || existingRun.equippedItems);
     return {
       ...clone(existingRun),
-      inventory: pruneUnpreparedBaseItems(sheetData, existingRun),
+      version: ROGUELITE_ACTIVE_RUN_VERSION,
+      inventory,
       baseInventoryTemplateIds: Array.isArray(existingRun.baseInventoryTemplateIds)
         ? clone(existingRun.baseInventoryTemplateIds)
         : resolveInventoryTemplateIds(resolveClassEquipmentPool(sheetData)),
       removedBaseInventoryTemplateIds: clone(existingRun.removedBaseInventoryTemplateIds || []),
-      equippedItems: clone(sheetData.equippedItems || existingRun.equippedItems || {}),
+      equippedItems: clone(pruneRogueliteEquippedItemsToInventory(equippedItems || {}, inventory)),
       equippedSkillIds: clone(
         sheetData.equippedSkillIds || existingRun.equippedSkillIds || [],
       ),
@@ -304,7 +382,7 @@ export const createRogueliteActiveRun = (sheetData = {}, options = {}) => {
     inventory,
     baseInventoryTemplateIds: resolveInventoryTemplateIds(resolveClassEquipmentPool(sheetData)),
     removedBaseInventoryTemplateIds: [],
-    equippedItems: clone(sheetData.equippedItems || {}),
+    equippedItems: clone(pruneRogueliteEquippedItemsToInventory(sheetData.equippedItems || {}, inventory)),
     equippedSkillIds: clone(sheetData.equippedSkillIds || []),
     activeWeaponSet: Number(sheetData.equippedItems?.activeWeaponSet) === 1 ? 1 : 0,
     money: clampNumber(sheetData.money, 0),
@@ -351,13 +429,16 @@ export const rebaseRogueliteActiveRun = (activeRun, resolvedBaseProfile = {}, op
     }];
   }));
   const classEquipment = resolveClassEquipmentPool(resolvedBaseProfile);
+  const inventory = pruneUnpreparedBaseItems(resolvedBaseProfile, activeRun);
 
   return {
     ...clone(activeRun),
+    version: ROGUELITE_ACTIVE_RUN_VERSION,
     templateRevision: resolveRogueliteTemplateRevision(resolvedBaseProfile),
     revision: Math.max(0, Number(activeRun.revision) || 0) + 1,
     stats,
-    inventory: pruneUnpreparedBaseItems(resolvedBaseProfile, activeRun),
+    inventory,
+    equippedItems: pruneRogueliteEquippedItemsToInventory(activeRun.equippedItems || {}, inventory),
     baseInventoryTemplateIds: resolveInventoryTemplateIds(classEquipment),
     updatedAt: options.now ?? Date.now(),
   };
@@ -392,7 +473,7 @@ export const createRogueliteActiveRunFromToken = (
     inventory,
     baseInventoryTemplateIds: clone(previousBaseIds),
     removedBaseInventoryTemplateIds,
-    equippedItems: clone(equipmentLoadout),
+    equippedItems: clone(pruneRogueliteEquippedItemsToInventory(equipmentLoadout, inventory)),
     equippedSkillIds: clone(token?.equippedSkillIds || previousRun?.equippedSkillIds || []),
     activeWeaponSet: Number(token?.activeWeaponSet ?? equipmentLoadout.activeWeaponSet) === 1 ? 1 : 0,
     money: clampNumber(token?.money ?? previousRun?.money, 0),
@@ -410,11 +491,15 @@ export const updateRogueliteActiveRunFromProfile = (profileClass = {}, options =
 
   return {
     ...clone(activeRun),
+    version: ROGUELITE_ACTIVE_RUN_VERSION,
     revision: Math.max(0, Number(activeRun.revision) || 0) + (options.incrementRevision === false ? 0 : 1),
     stats: createRogueliteRunStats(profileClass),
     inventory,
     baseInventoryTemplateIds: resolveInventoryTemplateIds(classEquipment),
-    equippedItems: clone(profileClass.equippedItems || activeRun.equippedItems || {}),
+    equippedItems: clone(pruneRogueliteEquippedItemsToInventory(
+      profileClass.equippedItems || activeRun.equippedItems || {},
+      inventory,
+    )),
     equippedSkillIds: clone(profileClass.equippedSkillIds || activeRun.equippedSkillIds || []),
     activeWeaponSet: Number(profileClass.equippedItems?.activeWeaponSet) === 1 ? 1 : 0,
     money: clampNumber(profileClass.money, activeRun.money),
@@ -435,12 +520,17 @@ export const applyRogueliteActiveRunToProfile = (profileClass = {}) => {
 
   const reconciledRun = {
     ...clone(activeRun),
-    inventory: pruneUnpreparedBaseItems(profileClass, activeRun),
+    version: ROGUELITE_ACTIVE_RUN_VERSION,
+    inventory: resolveActiveRunInventory(profileClass, activeRun),
     baseInventoryTemplateIds: Array.isArray(activeRun.baseInventoryTemplateIds)
       ? clone(activeRun.baseInventoryTemplateIds)
       : resolveInventoryTemplateIds(resolveClassEquipmentPool(profileClass)),
     removedBaseInventoryTemplateIds: clone(activeRun.removedBaseInventoryTemplateIds || []),
   };
+  reconciledRun.equippedItems = pruneRogueliteEquippedItemsToInventory(
+    reconciledRun.equippedItems || {},
+    reconciledRun.inventory,
+  );
   const stats = reconciledRun.stats || {};
   const vida = stats.vida || {};
   const cd = stats.cd || {};

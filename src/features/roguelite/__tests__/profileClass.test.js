@@ -164,6 +164,71 @@ describe('personal roguelite class configuration', () => {
     ]);
   });
 
+  test('projects the exact Canvas inventory after an equipped item is dropped', () => {
+    const profileClass = createRogueliteProfileClass(definition, {
+      equippedItems: {
+        mainHand: { name: 'Hacha antigua', templateId: 'weapons:hacha-antigua' },
+      },
+      activeRun: {
+        version: 2,
+        id: 'run-1',
+        status: 'active',
+        classId: 'barbarian',
+        owner: 'Ada',
+        lastTokenId: 'token-1',
+        stats: {},
+        inventory: { weapons: [], armor: [], abilities: [], objects: [], accessories: [] },
+        baseInventoryTemplateIds: ['weapons:hacha-antigua'],
+        removedBaseInventoryTemplateIds: ['weapons:hacha-antigua'],
+        equippedItems: { mainHand: null, offHand: null, body: null },
+      },
+    }, 'Ada');
+
+    expect(profileClass.equipment.weapons).toEqual([]);
+    expect(profileClass.equippedItems.mainHand).toBeNull();
+  });
+
+  test('projects collected loot even when it also exists in the master pool', () => {
+    const definitionWithDagger = {
+      ...definition,
+      equipment: {
+        weapons: [
+          { name: 'Hacha antigua' },
+          { name: 'Daga', templateId: 'weapons:daga' },
+        ],
+      },
+    };
+    const profileClass = createRogueliteProfileClass(definitionWithDagger, {
+      activeRun: {
+        version: 2,
+        id: 'run-1',
+        status: 'active',
+        classId: 'barbarian',
+        owner: 'Ada',
+        lastTokenId: 'token-1',
+        stats: {},
+        inventory: {
+          weapons: [{
+            name: 'Daga',
+            templateId: 'weapons:daga',
+            runItemId: 'loot-daga-1',
+          }],
+        },
+        baseInventoryTemplateIds: ['weapons:hacha-antigua', 'weapons:daga'],
+        removedBaseInventoryTemplateIds: ['weapons:hacha-antigua'],
+        equippedItems: { mainHand: null, offHand: null, body: null },
+      },
+    }, 'Ada');
+
+    expect(profileClass.equipment.weapons).toEqual([
+      expect.objectContaining({
+        name: 'Daga',
+        templateId: 'weapons:daga',
+        runItemId: 'loot-daga-1',
+      }),
+    ]);
+  });
+
   test('repairs legacy loadouts that filled the second hand beside a two-handed weapon', () => {
     const profileClass = createRogueliteProfileClass(definition, {
       equippedItems: {
