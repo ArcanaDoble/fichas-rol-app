@@ -1,6 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { Dices } from 'lucide-react';
+import { Dices, GripVertical } from 'lucide-react';
 import { FiX } from 'react-icons/fi';
 import { normalizeGlossaryWord } from '../utils/glossary';
 
@@ -17,6 +17,12 @@ const RogueliteInventoryCard = ({
     visibleTraits,
     glossary,
     proficiencyWarning,
+    canDrag,
+    onDragPointerDown,
+    onDragKeyDown,
+    dragTitle,
+    isDragging,
+    isDropTarget,
     canRemove,
     onRemove,
     variant,
@@ -24,13 +30,20 @@ const RogueliteInventoryCard = ({
     const damage = item.damage || item.dano;
     const defense = item.defense || item.defensa;
     const range = item.range || item.alcance;
-    const description = item.detail || item.description || 'Sin descripción.';
+    const rawDescription = item.detail || item.description || item.descripcion || '';
+    const isBlankDescription = !rawDescription
+        || rawDescription.trim() === '-'
+        || rawDescription.trim() === '—'
+        || rawDescription.trim() === 'Sin descripción.'
+        || rawDescription.trim() === '';
+    const description = isBlankDescription ? null : rawDescription.trim();
     const rarity = item.rareza || item.rarity || 'Sin rareza';
 
     const renderTrait = (trait, index) => {
         const glossaryEntry = (glossary || []).find(
             (entry) => normalizeGlossaryWord(entry.word) === normalizeGlossaryWord(trait),
         );
+        const traitColor = glossaryEntry?.color || glossaryEntry?.hex;
 
         return (
             <span
@@ -38,9 +51,9 @@ const RogueliteInventoryCard = ({
                 className="noma-inventory-card__trait"
                 data-tooltip-id={glossaryEntry ? 'trait-tooltip' : undefined}
                 data-tooltip-content={glossaryEntry?.info}
-                style={glossaryEntry?.color ? { color: glossaryEntry.color } : undefined}
+                style={traitColor ? { color: traitColor } : undefined}
             >
-                <span aria-hidden="true">◆</span>
+                <span aria-hidden="true" style={traitColor ? { color: traitColor } : undefined}>◆</span>
                 {trait}
             </span>
         );
@@ -49,14 +62,21 @@ const RogueliteInventoryCard = ({
     return (
         <article
             data-testid="inventory-item-card"
-            className={`noma-inventory-card ${variant === 'inspector' ? 'noma-inventory-card--inspector' : ''}`}
+            className={`noma-inventory-card ${variant === 'inspector' ? 'noma-inventory-card--inspector' : ''} ${isDragging ? 'is-dragging' : ''} ${isDropTarget ? 'is-drop-target' : ''}`}
             style={{
                 '--noma-item-accent': rarityAccent,
                 '--noma-item-accent-soft': raritySoft,
                 '--noma-item-accent-faint': rarityFaint,
             }}
         >
-            <header className="noma-inventory-card__hero">
+            <header
+                className={`noma-inventory-card__hero ${canDrag ? 'noma-inventory-card__hero--draggable' : ''}`}
+                onPointerDown={(event) => {
+                    if (canDrag && onDragPointerDown && !event.target.closest('button')) {
+                        onDragPointerDown(event);
+                    }
+                }}
+            >
                 {image ? (
                     <img
                         src={image}
@@ -77,16 +97,32 @@ const RogueliteInventoryCard = ({
                     <span className="noma-inventory-card__rarity">{rarity}</span>
                 </div>
 
-                {canRemove && (
-                    <button
-                        type="button"
-                        onClick={onRemove}
-                        className="noma-inventory-card__remove"
-                        title="Eliminar"
-                        aria-label={`Eliminar ${item.name || 'objeto'}`}
-                    >
-                        <FiX aria-hidden="true" />
-                    </button>
+                {(canDrag || canRemove) && (
+                    <div className="noma-inventory-card__actions">
+                        {canDrag && (
+                            <button
+                                type="button"
+                                onPointerDown={onDragPointerDown}
+                                onKeyDown={onDragKeyDown}
+                                className="noma-inventory-card__drag-handle"
+                                title={dragTitle || "Arrastra para ordenar o suelta en el mapa"}
+                                aria-label={`Mover ${item.name || 'objeto'}`}
+                            >
+                                <GripVertical size={13} aria-hidden="true" />
+                            </button>
+                        )}
+                        {canRemove && (
+                            <button
+                                type="button"
+                                onClick={onRemove}
+                                className="noma-inventory-card__remove"
+                                title="Eliminar"
+                                aria-label={`Eliminar ${item.name || 'objeto'}`}
+                            >
+                                <FiX aria-hidden="true" />
+                            </button>
+                        )}
+                    </div>
                 )}
             </header>
 
@@ -144,10 +180,12 @@ const RogueliteInventoryCard = ({
                     </div>
                 )}
 
-                <div className="noma-inventory-card__description">
-                    <span aria-hidden="true">◆</span>
-                    <p>{description}</p>
-                </div>
+                {description && (
+                    <div className="noma-inventory-card__description">
+                        <span aria-hidden="true">◆</span>
+                        <p>{description}</p>
+                    </div>
+                )}
             </div>
 
             <div className="noma-inventory-card__rarity-line" aria-hidden="true" />
@@ -168,6 +206,12 @@ RogueliteInventoryCard.propTypes = {
     visibleTraits: PropTypes.arrayOf(PropTypes.string),
     glossary: PropTypes.arrayOf(PropTypes.object),
     proficiencyWarning: PropTypes.string,
+    canDrag: PropTypes.bool,
+    onDragPointerDown: PropTypes.func,
+    onDragKeyDown: PropTypes.func,
+    dragTitle: PropTypes.string,
+    isDragging: PropTypes.bool,
+    isDropTarget: PropTypes.bool,
     canRemove: PropTypes.bool,
     onRemove: PropTypes.func,
     variant: PropTypes.oneOf(['default', 'inspector']),
@@ -182,6 +226,12 @@ RogueliteInventoryCard.defaultProps = {
     visibleTraits: [],
     glossary: [],
     proficiencyWarning: null,
+    canDrag: false,
+    onDragPointerDown: undefined,
+    onDragKeyDown: undefined,
+    dragTitle: 'Arrastra para ordenar o suelta en el mapa',
+    isDragging: false,
+    isDropTarget: false,
     canRemove: false,
     onRemove: undefined,
     variant: 'default',

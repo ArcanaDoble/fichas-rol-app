@@ -13,6 +13,7 @@ import {
     resolveCanvasLootRecipient,
     resolveCanvasInventoryItemIdentity,
 } from './canvasInventoryTransfer';
+import { useCanvasCombatRuntime } from './combat/useCanvasCombatRuntime';
 
 const noop = () => undefined;
 const emptyList = () => [];
@@ -30,11 +31,21 @@ export const useCanvasFeatureController = ({
     isPlayerView,
     playerName,
     safePersistItems,
+    scenarioCollectionName,
     setActiveScenario,
     setSelectedTokenIds,
     triggerToast,
 }) => {
     const [sceneDropPreview, setSceneDropPreview] = useState(null);
+    const combatRuntime = useCanvasCombatRuntime({
+        activeScenario,
+        activeScenarioRef,
+        isPlayerView,
+        playerName,
+        scenarioCollectionName,
+        setActiveScenario,
+        triggerToast,
+    });
 
     const handleModeItemDrop = useCallback(({
         draggedItemId,
@@ -310,6 +321,7 @@ export const useCanvasFeatureController = ({
     return {
         handleModeItemDrop,
         sceneDropPreview,
+        combatRuntime,
         handleBoardCardBackUpload: noop,
         addCardToBoard: noop,
         getHandCardsForToken: emptyList,

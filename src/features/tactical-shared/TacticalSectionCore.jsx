@@ -1062,8 +1062,11 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                         nextName !== current.name ||
                         JSON.stringify(nextAllowedPlayers || []) !== JSON.stringify(current.allowedPlayers || [])
                     );
+                    const combatStateChanged = mode === 'canvas' && (
+                        JSON.stringify(remoteData.canvasCombat || null) !== JSON.stringify(current.canvasCombat || null)
+                    );
 
-                    if (itemsChanged || lastModifiedChanged || configChanged || scenarioFieldsChanged) {
+                    if (itemsChanged || lastModifiedChanged || configChanged || scenarioFieldsChanged || combatStateChanged) {
                         console.log("Sincronizando tablero con datos remotos (Merging local locks)...");
                         return {
                             ...current,
@@ -1071,6 +1074,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                             lastModified: remoteData.lastModified,
                             name: nextName,
                             allowedPlayers: nextAllowedPlayers,
+                            ...(mode === 'canvas' ? { canvasCombat: remoteData.canvasCombat || null } : {}),
                             ...(synchronizedConfig ? { config: synchronizedConfig } : {}),
                         };
                     }
@@ -2056,6 +2060,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         unstackSpecificCard,
         handleModeItemDrop,
         sceneDropPreview,
+        combatRuntime,
     } = useFeatureController({
         activeBoardHandTokenId,
         activeScenario,
@@ -2513,6 +2518,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         lastSelectedIdRef,
         pendingTurnState,
         playerName,
+        rarityColorMap,
         removeCardFromContainer,
         resizingTokenId,
         rotateItem,
@@ -2530,6 +2536,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         unstackSpecificCard,
         updateItem,
         zoom,
+        glossary,
     });
 
     const selectionBoxContainerRect = isValidSelectionBox(selectionBox)
@@ -2544,8 +2551,8 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         }
         : null;
     const timelineTokens = useMemo(
-        () => buildTimelineTokens(activeScenario?.items || []),
-        [activeScenario?.items, buildTimelineTokens]
+        () => buildTimelineTokens(activeScenario?.items || [], { combatState: activeScenario?.canvasCombat }),
+        [activeScenario?.items, activeScenario?.canvasCombat, buildTimelineTokens]
     );
     const activeScenarioItems = useMemo(() => activeScenario?.items || [], [activeScenario?.items]);
     const boardLights = useMemo(
@@ -2633,6 +2640,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
             TokenResourcesComponent, EquipmentSectionComponent,
             isScenePickupItem,
             sceneDropPreview,
+            combatRuntime,
         }} />
     );
 };

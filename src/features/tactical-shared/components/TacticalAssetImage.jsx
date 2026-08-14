@@ -4,10 +4,11 @@ import { getCustomImage } from '../../../hooks/useCustomEquipmentImages';
 import { isImageUrlLoaded, markImageUrlLoaded } from '../../../utils/imageLoadCache';
 
 export const getObjectImage = (item, customImages) => {
+    if (!item) return null;
     if (item.icon && (item.icon.startsWith('data:') || item.icon.startsWith('http'))) return item.icon;
 
-    // Check custom uploaded images from Gestor de Equipamiento
-    if (customImages && customImages.size > 0) {
+    // Check custom uploaded images from Gestor de Equipamiento first
+    if (customImages && typeof getCustomImage === 'function') {
         const custom = getCustomImage(item, customImages);
         if (custom) return custom;
     }
@@ -16,12 +17,12 @@ export const getObjectImage = (item, customImages) => {
     const type = (item.type || '').toLowerCase();
     const category = (item.category || '').toLowerCase();
     const target = `${name} ${type} ${category}`;
+
     // Weapons
     if (name.includes('llave inglesa')) return '/armas/llave_inglesa.webp';
     if (name.includes('gancho de alcantarilla')) return '/armas/gancho_de_alcantarilla.webp';
     if (target.includes('antorcha')) return '/armas/antorcha.webp';
     if (name.includes('porra de jade')) return '/armas/Porra de jade.webp';
-    if (name.includes('sanguinaria')) return '/armas/la_sanguinaria.webp';
     if (name.includes('mazo glacial')) return '/armas/mazo_glacial.webp';
     if (name.includes('cuchillo')) return '/armas/cuchillo.webp';
     if (name.includes('tuberia') || name.includes('tubería')) return '/armas/tuberia.webp';

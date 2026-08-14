@@ -1,5 +1,14 @@
 Original prompt: Perfecto. Ahora necesito que vayas implementando cada cambio que ya hicimos antes, pero lo haremos poco a poco.
 
+- Tarjetas de previsualización e información de objetos en el suelo (`CanvasLootVisual`, `RogueliteInventoryCard`):
+  1. Detección completa de rareza y acento cromático (`resolveRarityAccent`): las tarjetas en el suelo ahora respetan la paleta de rarezas del juego (`rarityColorMap`, sin importar mayúsculas, minúsculas, tildes o género gramatical) aplicando el tono exacto en bordes, sombras, brillos, título y líneas decorativas.
+  2. Integración con el Glosario de Rasgos (`glossary`): los rasgos de las armas y objetos (como "AGUDEZA", "DESTREZA", "SIN GUARDIA") heredan sus colores definidos en el glosario junto a sus respectivos símbolos `◆`.
+  3. Limpieza de guiones y rasgos vacíos: se eliminó el renderizado residual de viñetas huérfanas (`♦ -`) filtrando descripciones o rasgos con valor `-` o vacíos.
+  4. Ilustraciones personalizadas: integración con `useCustomEquipmentImages` para que la tarjeta del mapa muestre la misma ilustración asignada en el catálogo o inventario del token.
+- Sincronización instantánea de equipamiento entre Ficha de Clase y Token en Canvas (`rogueliteTokenSheetSync`, `equipmentPool`, `ClassList`):
+  1. Actualización reactiva al equipar (`ClassList`): al equipar o desequipar cualquier objeto o habilidad en los slots de la ficha, se emite inmediatamente la notificación en tiempo real (`{ notify: true }`).
+  2. Mapeo de estado en tiempo real en el Token (`rogueliteTokenSheetSync`): se recalcula `isEquipped`, `isPrepared` y `equippedSlots` para cada objeto del inventario del token (incluyendo botín y objetos recogidos del suelo), actualizando de inmediato `equippedItems` y `equipmentLoadout` del token sin resetear la vida ni los recursos consumidos en combate.
+  3. Soporte transparente en `equipItemInSlot` (`equipmentPool`): compatibilidad completa con ranuras directas y `weaponSets` de combate.
 - Depuración y ajuste estético de la elevación de token (`createSceneItemRenderer`):
   1. Se eliminó la sombra ovalada externa adicional que quedaba desalineada y poco armónica con la forma de la ficha.
   2. La sombra de elevación ahora se ciñe con precisión matemática al contorno nativo de la ficha (`rounded-full` para circulares o `rounded-sm` para cuadradas) junto a un sutil anillo dorado (`ring-2 ring-[#c8aa6e]/80 shadow-[0_12px_24px_rgba(0,0,0,0.85)]`), logrando un efecto limpio, profesional y perfectamente integrado con la estética del juego.
@@ -518,3 +527,21 @@ Original prompt: Perfecto. Ahora necesito que vayas implementando cada cambio qu
 - Los objetos transferidos se normalizan al soltarlos, entregarlos y recogerlos. Nombre/`nombre`, rareza, descripción, datos anidados e imagen pasan a una forma canónica; el arte usado por la pieza del suelo queda almacenado también en el objeto recogible y las fichas ya guardadas recuperan sus alias legacy al cargarse.
 - Las fichas antiguas que solo conservaron un loadout materializan ese equipo en el inventario al iniciar una nueva aventura, pero esta compatibilidad no se utiliza para revivir objetos retirados durante una run existente.
 - Validación final: 81 suites correctas, 342 tests superados y 1 omitido; `npm run build` compila y `git diff --check` queda limpio. El cliente Playwright oficial se ejecutó sin errores visibles; la captura inspeccionada confirma que la sesión automatizada continúa en el selector de rol, por lo que el intercambio autenticado queda para la prueba del usuario.
+- Eliminado el asset local `public/armas/la_sanguinaria.webp` y purgados los fallbacks estáticos de 'sanguinaria' en todo el código (`TacticalAssetImage`, `CombatHUD`, `CombatReactionModal`, `LoadoutView`, `EquipmentImageManager`).
+- Corregida la resolución de imágenes personalizadas en `CanvasLootVisual` (resolución canónica por clave/nombre contra `useCustomEquipmentImages`).
+- `EquipmentImageManager` y `useCustomEquipmentImages` garantizan ahora prioridad absoluta a las imágenes subidas por el usuario, registrando metadatos de reemplazo para no depender más de assets estáticos locales.
+- Rediseñado el agarre de arrastre del inventario en el inspector de tokens: eliminado el tirador rectangular exterior que sobresalía por el lateral izquierdo. Se integró un botón de agarre sutil (`⠿`) en la cabecera superior derecha junto a la acción de eliminar, con soporte de arrastre directo desde toda la cabecera de la tarjeta y navegación accesible por teclado.
+- Alineado el efecto de feedback visual de reordenación de inventario con el estándar del Bestiario Roguelite: la tarjeta en movimiento aplica `.is-dragging` (`opacity: 0.48, scale: 0.992`) y la tarjeta destino activa `.is-drop-target` (`border-color` e `inset shadow` sutil de acento), sin etiquetas de posición ni líneas adicionales.
+- Validación final: 81 suites correctas, 345 tests pasando (1 omitido).
+
+## 2026-08-14 — Dados de acción e iniciativa Roguelite del Canvas
+
+- Añadido un modelo de combate exclusivo de `features/canvas/combat` con fases de preparación, tiradas, turnos, fin de ronda y final de combate.
+- Las fichas de clase aportan directamente `actionDice`; la tirada inicial calcula `iniciativa base + resultado mayor` y se conserva como pool de acciones de la ronda 1.
+- Añadidas tiradas digitales y entrada de resultados físicos, con validación individual por dado (`d4`, `d6`, `d8`, etc.).
+- La iniciativa agrupa aliados consecutivos en bloques flexibles, prioriza jugadores en empates y agrupa enemigos del mismo perfil.
+- Creado el panel lateral Canvas `Ronda`, con estado visible de dados (disponible, comprometido y gastado), activaciones, siguiente ronda, deshacer y finalizar combate.
+- Creada una línea de iniciativa Canvas propia y compacta; BoardCards conserva su adaptador y su interfaz sin importar módulos del Canvas.
+- El estado se persiste en `canvas_scenarios.canvasCombat` y se fusiona por el listener en tiempo real. Las mutaciones de ronda usan transacciones para evitar que dos tiradas simultáneas se sobrescriban.
+- Añadidas pruebas unitarias del modelo y del panel. No se realizó comprobación en navegador porque el usuario indicó que hará la validación visual personalmente.
+- Validación final: 83 suites correctas, 353 tests superados y 1 omitido; `npm run build` compila y `git diff --check` queda limpio. Los avisos de consola pertenecen a pruebas legacy ya existentes.

@@ -104,7 +104,7 @@ export const syncCanvasTokenWithSheet = (token, sheetData, catalogs = {}, option
     owner: sheetData.owner,
     scenarioId: options.scenarioId,
   });
-  const equipped = resolveRogueliteEquippedItems(activeRun.equippedItems);
+  const equipped = resolveRogueliteEquippedItems(sheetData.equippedItems || activeRun.equippedItems);
   const isExistingClassToken = Boolean(
     token?.profileType === 'rogueliteClass'
     && token?.linkedClassId
@@ -119,24 +119,49 @@ export const syncCanvasTokenWithSheet = (token, sheetData, catalogs = {}, option
     || token.portrait
     || token.img;
 
+  const resolveItemIdentityKeys = (item) => {
+    if (!item) return [];
+    if (typeof item !== 'object') {
+      return [String(item).trim().toLowerCase()].filter(Boolean);
+    }
+    return [
+      item.templateId, item.catalogId, item.id, item.runItemId, item.name, item.nombre,
+      item.payload?.templateId, item.payload?.catalogId, item.payload?.id,
+      item.payload?.name, item.payload?.nombre,
+    ]
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter(Boolean);
+  };
+
   const equippedSlotsByTemplate = equipped.items.reduce((slotsByTemplate, item) => {
-    const key = item.templateId || item.id || item.runItemId || item.name || item.nombre;
-    if (!key) return slotsByTemplate;
-    slotsByTemplate.set(key, [...(slotsByTemplate.get(key) || []), item.canvasSlot]);
+    const keys = resolveItemIdentityKeys(item);
+    keys.forEach((key) => {
+      slotsByTemplate.set(key, [...(slotsByTemplate.get(key) || []), item.canvasSlot]);
+    });
     return slotsByTemplate;
   }, new Map());
-  const preparedSkillIds = new Set(activeRun.equippedSkillIds || sheetData.equippedSkillIds || []);
-  const runInventory = flattenRogueliteRunInventory(activeRun.inventory).map((item) => {
-    const key = item.templateId || item.id || item.runItemId || item.name || item.nombre;
-    const equippedSlots = key ? (equippedSlotsByTemplate.get(key) || []) : [];
-    const isPrepared = Boolean(key && preparedSkillIds.has(key));
+
+  const preparedSkillIds = new Set(
+    (activeRun.equippedSkillIds || sheetData.equippedSkillIds || [])
+      .flatMap((id) => resolveItemIdentityKeys({ id }))
+  );
+
+  const mapItemFlags = (item) => {
+    const keys = resolveItemIdentityKeys(item);
+    const equippedSlots = keys.flatMap((key) => equippedSlotsByTemplate.get(key) || []);
+    const isPrepared = keys.some((key) => preparedSkillIds.has(key));
     return {
       ...item,
       isEquipped: equippedSlots.length > 0,
       isPrepared,
-      equippedSlots,
+      equippedSlots: Array.from(new Set(equippedSlots)),
     };
-  });
+  };
+
+  const baseInventory = preserveRuntimeState && Array.isArray(token.inventory) && token.inventory.length > 0
+    ? token.inventory
+    : flattenRogueliteRunInventory(activeRun.inventory);
+  const syncedInventory = baseInventory.map(mapItemFlags);
 
   return {
     ...token,
@@ -160,19 +185,11 @@ export const syncCanvasTokenWithSheet = (token, sheetData, catalogs = {}, option
     stats: preserveRuntimeState && token.stats
       ? token.stats
       : activeRun.stats,
-    equippedItems: preserveRuntimeState && token.equippedItems
-      ? token.equippedItems
-      : equipped.items,
-    equippedSkillIds: preserveRuntimeState && token.equippedSkillIds
-      ? token.equippedSkillIds
-      : (activeRun.equippedSkillIds || sheetData.equippedSkillIds || []),
-    equipmentLoadout: preserveRuntimeState && token.equipmentLoadout
-      ? token.equipmentLoadout
-      : equipped.loadout,
-    activeWeaponSet: preserveRuntimeState && token.activeWeaponSet !== undefined
-      ? token.activeWeaponSet
-      : equipped.activeWeaponSet,
-    inventory: preserveRuntimeState && token.inventory ? token.inventory : runInventory,
+    equippedItems: equipped.items,
+    equippedSkillIds: (activeRun.equippedSkillIds || sheetData.equippedSkillIds || []),
+    equipmentLoadout: equipped.loadout,
+    activeWeaponSet: equipped.activeWeaponSet,
+    inventory: syncedInventory,
     money: preserveRuntimeState && token.money !== undefined ? token.money : activeRun.money,
     velocidad: token.velocidad || 0,
   };

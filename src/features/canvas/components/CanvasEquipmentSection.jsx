@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
-import { Gem, GripVertical, Package, Shield, Sword, Zap } from 'lucide-react';
+import { Gem, Package, Shield, Sword, Zap } from 'lucide-react';
 import RogueliteInventoryCard from '../../../components/RogueliteInventoryCard';
 import { useCustomEquipmentImages } from '../../../hooks/useCustomEquipmentImages';
 import { resolveEquipmentHandsRequired } from '../../roguelite/equipmentPool';
@@ -127,12 +127,13 @@ const CanvasEquipmentSection = (props) => {
   };
 
   const beginInventoryDrag = (event, item, index, image) => {
-    if (!onUpdateToken || event.button !== 0) return;
+    if (!onUpdateToken || (typeof event.button === 'number' && event.button !== 0)) return;
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture?.(event.pointerId);
+    const pointerId = event.pointerId ?? 1;
     dragStateRef.current = {
-      pointerId: event.pointerId,
+      pointerId,
       startX: event.clientX,
       startY: event.clientY,
       currentIndex: index,
@@ -144,7 +145,8 @@ const CanvasEquipmentSection = (props) => {
 
     const handlePointerMove = (pointerEvent) => {
       const drag = dragStateRef.current;
-      if (!drag || drag.pointerId !== pointerEvent.pointerId) return;
+      if (!drag) return;
+      if (pointerEvent.pointerId !== undefined && drag.pointerId !== undefined && drag.pointerId !== pointerEvent.pointerId) return;
       const distance = Math.hypot(pointerEvent.clientX - drag.startX, pointerEvent.clientY - drag.startY);
       if (!drag.dragging && distance < 6) return;
       if (!drag.dragging) {
@@ -156,9 +158,12 @@ const CanvasEquipmentSection = (props) => {
       }
       pointerEvent.preventDefault();
 
-      const hovered = document.elementFromPoint(pointerEvent.clientX, pointerEvent.clientY)
-        ?.closest?.('[data-canvas-inventory-index]');
-      const hoveredIndex = Number(hovered?.dataset?.canvasInventoryIndex);
+      const hoveredRaw = document.elementFromPoint?.(pointerEvent.clientX, pointerEvent.clientY);
+      const hovered = hoveredRaw?.getAttribute?.('data-canvas-inventory-index')
+        ? hoveredRaw
+        : hoveredRaw?.closest?.('[data-canvas-inventory-index]');
+      const rawIndex = hovered?.getAttribute?.('data-canvas-inventory-index') ?? hovered?.dataset?.canvasInventoryIndex;
+      const hoveredIndex = rawIndex !== null && rawIndex !== undefined && rawIndex !== '' ? Number(rawIndex) : NaN;
       if (Number.isInteger(hoveredIndex)) drag.targetIndex = hoveredIndex;
 
       const overCanvas = isPointOverCanvas(pointerEvent.clientX, pointerEvent.clientY);
@@ -175,12 +180,15 @@ const CanvasEquipmentSection = (props) => {
         image: drag.image,
         name: drag.item.name || drag.item.nombre || 'Objeto',
         overCanvas,
+        currentIndex: drag.currentIndex,
+        targetIndex: drag.targetIndex,
       });
     };
 
     const finishDrag = (pointerEvent) => {
       const drag = dragStateRef.current;
-      if (!drag || drag.pointerId !== pointerEvent.pointerId) return;
+      if (!drag) return;
+      if (pointerEvent?.pointerId !== undefined && drag.pointerId !== undefined && drag.pointerId !== pointerEvent.pointerId) return;
       const dropTarget = isPointOverCanvas(pointerEvent.clientX, pointerEvent.clientY);
 
       if (drag.dragging && dropTarget) {
@@ -240,28 +248,20 @@ const CanvasEquipmentSection = (props) => {
             const supportsCost = item.type === 'weapon' || item.type === 'ability';
             const itemImage = getObjectImage(item, customEquipmentImages);
 
+            const isDraggingThis = Boolean(dragPreview && dragPreview.currentIndex === index);
+            const isTargetSlot = Boolean(
+              dragPreview
+              && !dragPreview.overCanvas
+              && dragPreview.targetIndex === index
+              && dragPreview.currentIndex !== index,
+            );
+
             return (
               <div
                 key={`${item.canvasSlot || item.type || 'item'}-${item.runItemId || item.instanceId || item.templateId || item.id || item.name || 'item'}-${index}`}
                 className="group/inventory-item relative"
                 data-canvas-inventory-index={index}
               >
-                {onUpdateToken && (
-                  <button
-                    type="button"
-                    className="absolute -left-2 top-1/2 z-20 flex h-11 w-7 -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center border border-slate-700/90 bg-[#080d18]/95 text-slate-500 shadow-lg transition-colors hover:border-[#c8aa6e]/70 hover:text-[#d8bd7b] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#c8aa6e]"
-                    onPointerDown={(event) => beginInventoryDrag(event, item, index, itemImage)}
-                    onKeyDown={(event) => {
-                      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-                      event.preventDefault();
-                      moveInventoryItem(index, event.key === 'ArrowUp' ? -1 : 1);
-                    }}
-                    aria-label={`Mover ${item.name}`}
-                    title="Arrastra para ordenar o suelta en el mapa"
-                  >
-                    <GripVertical size={15} aria-hidden="true" />
-                  </button>
-                )}
                 <RogueliteInventoryCard
                   variant="inspector"
                   item={item}
@@ -277,6 +277,16 @@ const CanvasEquipmentSection = (props) => {
                   handsRequired={hands}
                   visibleTraits={resolveTraits(item, hands)}
                   glossary={glossary}
+                  canDrag={Boolean(onUpdateToken)}
+                  onDragPointerDown={(event) => beginInventoryDrag(event, item, index, itemImage)}
+                  onDragKeyDown={(event) => {
+                    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                    event.preventDefault();
+                    moveInventoryItem(index, event.key === 'ArrowUp' ? -1 : 1);
+                  }}
+                  dragTitle="Arrastra para ordenar o suelta en el mapa"
+                  isDragging={isDraggingThis}
+                  isDropTarget={isTargetSlot}
                   canRemove={Boolean(onUpdateToken)}
                   onRemove={() => removeInventoryItem(item, index)}
                 />
@@ -290,7 +300,7 @@ const CanvasEquipmentSection = (props) => {
         <div
           className={`pointer-events-none fixed z-[200] flex min-w-44 -translate-x-1/2 -translate-y-1/2 items-center gap-3 border px-3 py-2 shadow-2xl transition-colors ${dragPreview.overCanvas
             ? 'border-[#c8aa6e] bg-[#080d18]/95 text-[#f0e6d2]'
-            : 'border-slate-700 bg-[#080d18]/90 text-slate-300'}`}
+            : 'border-[#c8aa6e]/60 bg-[#080d18]/95 text-[#f0e6d2]'}`}
           style={{ left: dragPreview.x, top: dragPreview.y }}
           data-testid="canvas-inventory-drag-preview"
         >
@@ -303,8 +313,8 @@ const CanvasEquipmentSection = (props) => {
           </div>
           <div>
             <strong className="block max-w-44 truncate font-fantasy text-xs uppercase tracking-[0.12em]">{dragPreview.name}</strong>
-            <span className={`mt-1 block text-[8px] font-black uppercase tracking-[0.18em] ${dragPreview.overCanvas ? 'text-[#c8aa6e]' : 'text-slate-500'}`}>
-              {dragPreview.overCanvas ? 'Soltar en el mapa' : 'Ordenando inventario'}
+            <span className={`mt-1 block text-[8px] font-black uppercase tracking-[0.18em] ${dragPreview.overCanvas ? 'text-[#c8aa6e]' : 'text-slate-400'}`}>
+              {dragPreview.overCanvas ? '✦ Soltar en el mapa' : '↕ Reordenar'}
             </span>
           </div>
         </div>,

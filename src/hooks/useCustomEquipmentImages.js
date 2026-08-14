@@ -42,9 +42,30 @@ export const useCustomEquipmentImages = () => {
  * Returns the custom image URL or null.
  */
 export const getCustomImage = (item, customImages) => {
-    if (!customImages || customImages.size === 0) return null;
+    if (!customImages || !item) return null;
 
-    const name = item.name || item.nombre || '';
+    const getImageFromMap = (key) => {
+        if (!key) return null;
+        if (typeof customImages.get === 'function') {
+            return customImages.get(key) || null;
+        }
+        return customImages[key] || null;
+    };
+
+    const name = item.name || item.nombre || item.displayName || item._displayName || '';
     const key = normalizeKey(name);
-    return customImages.get(key) || null;
+    const byKey = getImageFromMap(key);
+    if (byKey) return byKey;
+
+    if (item.id) {
+        const byId = getImageFromMap(item.id) || getImageFromMap(normalizeKey(item.id));
+        if (byId) return byId;
+    }
+
+    if (item._key) {
+        const byUnderKey = getImageFromMap(item._key);
+        if (byUnderKey) return byUnderKey;
+    }
+
+    return null;
 };

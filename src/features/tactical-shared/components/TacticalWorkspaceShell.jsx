@@ -27,6 +27,7 @@ export const TacticalWorkspaceShell = ({
     BOARD_DIE_SIDES,
     BoardDieVisual,
     BoardMarkerVisual,
+    CombatPanelComponent,
     EquipmentSectionComponent,
     TokenResourcesComponent,
     accesorios,
@@ -65,6 +66,7 @@ export const TacticalWorkspaceShell = ({
     clearBoardDicePool,
     closeBoardCardPreview,
     combatLog,
+    combatRuntime,
     combatQueueDisplay,
     commitGridDraft,
     consumeMobileMoveTemplateEvent,
@@ -193,6 +195,9 @@ export const TacticalWorkspaceShell = ({
     sweepHoverSide,
     targetingState,
     timelineTokens,
+    TimelineComponent,
+    SidebarComponent,
+    timelineMode,
     toastMessage,
     toastSubMessage,
     toastType,
@@ -212,6 +217,8 @@ export const TacticalWorkspaceShell = ({
     wallDrawingStart,
     zoom,
 }) => {
+    const Timeline = TimelineComponent || SpeedTimeline;
+    const Sidebar = SidebarComponent || CanvasSidebar;
     const lastSidebarOpenTimeRef = React.useRef(0);
     React.useEffect(() => {
         if (showSettings) {
@@ -404,19 +411,21 @@ export const TacticalWorkspaceShell = ({
                         </div>
 
                         {/* --- SPEED TIMELINE --- */}
-                        <SpeedTimeline
+                        <Timeline
                             tokens={timelineTokens}
                             selectedId={selectedTokenIds[0]}
                             onSelect={(id) => setSelectedTokenIds([id])}
                             isPlayerView={isPlayerView}
                             onReset={resetAllSpeed}
-                            mode={isBoardMode ? 'initiative' : 'speed'}
+                            mode={timelineMode || (isBoardMode ? 'initiative' : 'speed')}
                         />
 
                         {/* --- Botón Flotante Dados (Toggle Sidebar) --- */}
                         <button
                             onClick={() => {
-                                if (selectedTokenIds.length === 0) {
+                                if (CombatPanelComponent) {
+                                    setActiveTab('ROUND');
+                                } else if (selectedTokenIds.length === 0) {
                                     setActiveTab(isPlayerView ? 'TOKENS' : 'CONFIG');
                                 }
                                 setShowSettings(true);
@@ -440,7 +449,7 @@ export const TacticalWorkspaceShell = ({
                         )}
 
                         {/* Panel Sidebar */}
-                        <CanvasSidebar
+                        <Sidebar
                     BOARD_DICE_ROLL_SIDES={BOARD_DICE_ROLL_SIDES}
                     BOARD_DIE_SIDES={BOARD_DIE_SIDES}
                     BoardDieVisual={BoardDieVisual}
@@ -470,6 +479,8 @@ export const TacticalWorkspaceShell = ({
                     clearBackgroundImage={clearBackgroundImage}
                     clearBoardDicePool={clearBoardDicePool}
                     combatLog={combatLog}
+                    combatRuntime={combatRuntime}
+                    CombatPanelComponent={CombatPanelComponent}
                     commitGridDraft={commitGridDraft}
                     currentBackgroundGridPresetIndex={currentBackgroundGridPresetIndex}
                     deleteCard={deleteCard}

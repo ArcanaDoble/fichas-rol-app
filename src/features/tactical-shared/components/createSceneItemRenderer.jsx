@@ -96,6 +96,7 @@ export const createSceneItemRenderer = ({
     dragDirection,
     dragVisualOrigin,
     draggedTokenId,
+    glossary = [],
     gridConfig,
     handleResizeMouseDown,
     handleRotationMouseDown,
@@ -111,6 +112,7 @@ export const createSceneItemRenderer = ({
     lastSelectedIdRef,
     pendingTurnState,
     playerName,
+    rarityColorMap = {},
     removeCardFromContainer,
     resizingTokenId,
     rotateItem,
@@ -922,6 +924,8 @@ const renderItemJSX = (item) => {
                                 isDragging={draggedTokenId === item.id}
                                 selectedLootItems={selectedLootItems}
                                 isPrimarySelectedLoot={isPrimarySelectedLoot}
+                                glossary={glossary}
+                                rarityColorMap={rarityColorMap}
                             />
                         ) : isLight ? (
                             <div className="w-full h-full flex items-center justify-center">

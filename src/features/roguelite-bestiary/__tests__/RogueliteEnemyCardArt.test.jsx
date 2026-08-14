@@ -5,6 +5,7 @@ import { createEmptyRogueliteEnemy } from '../enemyModel';
 
 jest.mock('../../../hooks/useCustomEquipmentImages', () => ({
   useCustomEquipmentImages: () => new Map(),
+  getCustomImage: () => null,
 }));
 
 const renderCard = (enemy) => render(

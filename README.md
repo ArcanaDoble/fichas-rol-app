@@ -6,6 +6,16 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ## ✨ Características principales
 
+### 🎲 Rondas, dados de acción e iniciativa Roguelite en Canvas
+
+- El Canvas dispone de un panel propio `Ronda` y deja intacta la iniciativa de BoardCards.
+- Cada token de clase hereda el perfil definido en su ficha (`actionDice`), por ejemplo `d8 · d6 · d4` para el Bárbaro.
+- La tirada inicial se reutiliza: el resultado mayor se suma a la iniciativa base y los tres resultados permanecen disponibles como dados de acción de la primera ronda.
+- Las tiradas pueden hacerse digitalmente o anotarse desde dados físicos mediante controles válidos para cada tipo de dado.
+- El orden se presenta por bloques: aliados consecutivos pueden actuar en orden flexible, los jugadores ganan empates frente a enemigos y los enemigos del mismo perfil comparten bloque.
+- Cada dado puede marcarse como disponible, comprometido o gastado; las rondas posteriores solicitan una nueva tirada sin recalcular la iniciativa.
+- El estado de combate se sincroniza en el documento del encuentro `canvas_scenarios` mediante transacciones para conservar tiradas simultáneas de distintos jugadores.
+
 ### 📦 Sistema de Botín en el Canvas, Multiselección Táctica e Interacción de Mesa
 
 - **Formaciones y Distribución de Objetos en Casilla**: Los objetos en el suelo cuentan con una escala equilibrada (`0.32`) y se organizan de forma simétrica en formaciones automáticas sin solaparse (para 1, 2, 3, 4 y 5+ objetos por celda).
@@ -16,6 +26,10 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
   - Al arrastrar un objeto sobre fichas que comparten casilla en duelo o formación, el sistema calcula de forma diferenciada la proximidad a la ficha izquierda o derecha.
   - Se implementó un feedback físico elegante: la ficha objetivo se alza con una transición elástica (`y: -8px, scale: 1.06`) con sombra ceñida a su geometría sin sobrecargar la pantalla con interfaces de IA.
   - El objeto arrastrado se promueve a la capa superior (`zIndex: 1000`) con semitransparencia táctil (`opacity: 0.72`) para visualizar con nitidez la ficha que se encuentra debajo.
+- **Sincronización Instantánea Ficha-Token al Equipar**: Al equipar o desequipar un objeto (o preparar habilidades) desde la ficha de clase, el token del canvas y su inspector actualizan al instante las etiquetas de estado (`· Equipado` / `· Preparada`) y sus ranuras correspondientes en tiempo real sin requerir guardar manualmente ni reiniciar la sesión.
+- **Fidelidad Visual Completa en Tarjetas de Objetos del Suelo y Prioridad de Imágenes Personalizadas**: Las tarjetas flotantes y vistas previas de objetos en el suelo aplican los colores semánticos de rareza (`rarityColorMap`), iluminan los rasgos según el Glosario de términos, filtran guiones vacíos (`♦ -`) y cargan las ilustraciones personalizadas del catálogo de equipamiento con prioridad absoluta sobre cualquier fallback estático local. Al asociar una imagen en el Gestor de Equipamiento, el sistema purga el fallback local para evitar inconsistencias visuales.
+- **Agarre Integrado y Fluido de Inventario en el Inspector**: Se sustituyó el tirador rectangular exterior por un botón sutil (`⠿`) integrado en la cabecera superior derecha de la tarjeta junto al botón de eliminar, manteniendo la silueta limpia del panel y permitiendo el arrastre directo tanto desde el icono como desde toda la cabecera del objeto.
+- **Feedback Visual de Reordenación Homogéneo con Bestiario**: Al arrastrar un objeto dentro del inspector, la tarjeta de origen entra en estado `.is-dragging` (`opacity: 0.48, scale: 0.992`) y la tarjeta sobre la que se planea soltar activa el estado `.is-drop-target` (`border-color` e `inset shadow` sutil de acento con su color de rareza), ofreciendo una respuesta visual limpia y completamente unificada con las tarjetas del Bestiario Roguelite sin etiquetas artificiales de posición.
 
 ### Pool Inicial de Equipamiento y Sección de Habilidades Equipadas
 

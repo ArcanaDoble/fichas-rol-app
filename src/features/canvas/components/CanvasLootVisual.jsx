@@ -4,16 +4,56 @@ import PropTypes from 'prop-types';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Gem, Package, Shield, Sword, Zap } from 'lucide-react';
 import RogueliteInventoryCard from '../../../components/RogueliteInventoryCard';
+import { useCustomEquipmentImages } from '../../../hooks/useCustomEquipmentImages';
 import { resolveEquipmentHandsRequired } from '../../roguelite/equipmentPool';
+import { getObjectImage } from '../../tactical-shared/components/TacticalAssetImage';
 
-const RARITY_COLORS = {
+const FALLBACK_RARITY_COLORS = {
     común: '#8d9aab',
     comun: '#8d9aab',
+    common: '#8d9aab',
     'poco común': '#75a986',
+    'poco comun': '#75a986',
+    uncommon: '#75a986',
     rara: '#6f9fc7',
+    raro: '#6f9fc7',
+    rare: '#6f9fc7',
     épica: '#b47bd0',
     epica: '#b47bd0',
+    épico: '#b47bd0',
+    epico: '#b47bd0',
+    epic: '#b47bd0',
     legendaria: '#c89f62',
+    legendario: '#c89f62',
+    legendary: '#c89f62',
+    mítica: '#d97706',
+    mitica: '#d97706',
+    mítico: '#d97706',
+    mitico: '#d97706',
+    mythic: '#d97706',
+};
+
+const resolveRarityAccent = (item = {}, rarityColorMap = {}) => {
+    const rawRarity = String(item.rareza || item.rarity || 'común').trim();
+    const normalized = rawRarity.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    if (rarityColorMap && typeof rarityColorMap === 'object') {
+        if (rarityColorMap[item.rareza]) return rarityColorMap[item.rareza];
+        if (rarityColorMap[item.rarity]) return rarityColorMap[item.rarity];
+        if (rarityColorMap[rawRarity.toLowerCase()]) return rarityColorMap[rawRarity.toLowerCase()];
+        if (rarityColorMap[normalized]) return rarityColorMap[normalized];
+    }
+
+    if (FALLBACK_RARITY_COLORS[rawRarity.toLowerCase()]) return FALLBACK_RARITY_COLORS[rawRarity.toLowerCase()];
+    if (FALLBACK_RARITY_COLORS[normalized]) return FALLBACK_RARITY_COLORS[normalized];
+
+    if (normalized.includes('poco') || normalized.includes('uncom')) return FALLBACK_RARITY_COLORS['poco común'];
+    if (normalized.includes('rar')) return FALLBACK_RARITY_COLORS.rara;
+    if (normalized.includes('epic')) return FALLBACK_RARITY_COLORS.épica;
+    if (normalized.includes('legen')) return FALLBACK_RARITY_COLORS.legendaria;
+    if (normalized.includes('mitic') || normalized.includes('myth')) return '#d97706';
+
+    return FALLBACK_RARITY_COLORS.común;
 };
 
 const hexToRgba = (hex, alpha) => {
@@ -47,7 +87,7 @@ const resolveTraits = (item, handsRequired) => {
     const raw = item?.traits || item?.rasgos || item?.trait || '';
     const traits = (Array.isArray(raw) ? raw : String(raw).split(','))
         .map((trait) => String(trait).trim())
-        .filter(Boolean);
+        .filter((trait) => Boolean(trait) && trait !== '-' && trait !== '—');
     return handsRequired === 2
         ? traits.filter((trait) => !/(^|\W)(dos manos|2 manos|a dos manos|two handed|two-handed)(\W|$)/i.test(trait))
         : traits;
@@ -89,6 +129,8 @@ const CanvasLootVisual = ({
     isDragging = false,
     selectedLootItems = [],
     isPrimarySelectedLoot = false,
+    glossary = [],
+    rarityColorMap = {},
 }) => {
     const rootRef = useRef(null);
     const lastTouchTimeRef = useRef(0);
@@ -97,6 +139,8 @@ const CanvasLootVisual = ({
     const [tooltipPosition, setTooltipPosition] = useState(null);
     const [activeMultiIndex, setActiveMultiIndex] = useState(0);
 
+    const customEquipmentImages = useCustomEquipmentImages();
+
     const isMultiSelection = selectedLootItems.length > 1;
     const currentMultiItem = (isMultiSelection && selectedLootItems[activeMultiIndex])
         ? selectedLootItems[activeMultiIndex]
@@ -104,10 +148,10 @@ const CanvasLootVisual = ({
 
     const displayItem = isMultiSelection && isSelected ? currentMultiItem : item;
     const lootItem = { ...(displayItem.lootItem || {}), name: displayItem.lootItem?.name || displayItem.lootItem?.nombre || displayItem.name };
-    const rarity = String(lootItem.rareza || lootItem.rarity || 'común').toLowerCase();
-    const accent = RARITY_COLORS[rarity] || RARITY_COLORS.común;
+    const accent = resolveRarityAccent(lootItem, rarityColorMap);
     const { label, Icon, hands } = resolvePresentation(lootItem);
     const supportsCost = label === 'Arma' || label === 'Habilidad';
+    const itemImage = getObjectImage(lootItem, customEquipmentImages) || displayItem.img;
 
     // Reset multi index and mobile dismissal whenever selection changes
     useEffect(() => {
@@ -161,8 +205,7 @@ const CanvasLootVisual = ({
         setTooltipPosition(null);
     };
 
-    const currentItemRarity = String(item.lootItem?.rareza || item.lootItem?.rarity || 'común').toLowerCase();
-    const currentItemAccent = RARITY_COLORS[currentItemRarity] || RARITY_COLORS.común;
+    const currentItemAccent = resolveRarityAccent(item.lootItem || item, rarityColorMap);
     const { Icon: CurrentItemIcon } = resolvePresentation(item.lootItem || {});
 
     return (
@@ -295,8 +338,7 @@ const CanvasLootVisual = ({
                                         <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto pr-0.5">
                                             {selectedLootItems.map((selItem, idx) => {
                                                 const selLoot = selItem.lootItem || {};
-                                                const selRarity = String(selLoot.rareza || selLoot.rarity || 'común').toLowerCase();
-                                                const selAccent = RARITY_COLORS[selRarity] || RARITY_COLORS.común;
+                                                const selAccent = resolveRarityAccent(selLoot, rarityColorMap);
                                                 const isCurrent = idx === activeMultiIndex;
 
                                                 return (
@@ -330,7 +372,7 @@ const CanvasLootVisual = ({
 
                                 <RogueliteInventoryCard
                                     item={lootItem}
-                                    image={displayItem.img}
+                                    image={itemImage}
                                     fallbackIcon={<Icon />}
                                     categoryLabel={label}
                                     rarityAccent={accent}
@@ -341,7 +383,7 @@ const CanvasLootVisual = ({
                                         : null}
                                     handsRequired={hands}
                                     visibleTraits={resolveTraits(lootItem, hands)}
-                                    glossary={[]}
+                                    glossary={glossary}
                                 />
                                 <div className="mt-1.5 border-l border-[#c8aa6e]/60 bg-[#050810]/95 px-3 py-2 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-400 shadow-xl">
                                     {tooltipPosition.isMobile
@@ -364,6 +406,8 @@ CanvasLootVisual.propTypes = {
     isDragging: PropTypes.bool,
     selectedLootItems: PropTypes.array,
     isPrimarySelectedLoot: PropTypes.bool,
+    glossary: PropTypes.array,
+    rarityColorMap: PropTypes.object,
 };
 
 CanvasLootVisual.defaultProps = {
@@ -371,6 +415,8 @@ CanvasLootVisual.defaultProps = {
     isDragging: false,
     selectedLootItems: [],
     isPrimarySelectedLoot: false,
+    glossary: [],
+    rarityColorMap: {},
 };
 
 export default CanvasLootVisual;

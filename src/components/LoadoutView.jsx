@@ -198,7 +198,6 @@ const getObjectImage = (item, customImages) => {
     if (name.includes('gancho de alcantarilla')) return '/armas/gancho_de_alcantarilla.webp';
     if (target.includes('antorcha')) return '/armas/antorcha.webp';
     if (name.includes('porra de jade')) return '/armas/Porra de jade.webp';
-    if (name.includes('sanguinaria')) return '/armas/la_sanguinaria.webp';
     if (name.includes('mazo glacial')) return '/armas/mazo_glacial.webp';
     if (name.includes('cuchillo')) return '/armas/cuchillo.webp';
     if (name.includes('tuberia') || name.includes('tubería')) return '/armas/tuberia.webp';

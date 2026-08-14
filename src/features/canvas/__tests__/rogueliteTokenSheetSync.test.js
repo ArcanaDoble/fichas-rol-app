@@ -8,6 +8,7 @@ import {
   createRogueliteActiveRun,
   updateRogueliteActiveRunFromProfile,
 } from '../../roguelite/activeRun';
+import { equipItemInSlot } from '../../roguelite/equipmentPool';
 
 const createClassSheet = (overrides = {}) => ({
   id: 'barbarian',
@@ -147,5 +148,34 @@ describe('Canvas Roguelite class adapter', () => {
 
     expect(token.stats.vida).toEqual(expect.objectContaining({ current: 5, max: 12 }));
     expect(token.stats.recurso).toEqual(expect.objectContaining({ current: 3, max: 6 }));
+  });
+
+  it('updates isEquipped flags and loadout on existing inventory items when equipped in class sheet', () => {
+    const sheet = createClassSheet();
+    const token = {
+      id: 'token-1',
+      profileType: 'rogueliteClass',
+      linkedClassId: 'barbarian',
+      inventory: [
+        { id: 'loot-sword-1', name: 'Espada de Acero', type: 'weapon', isEquipped: false },
+        { id: 'potion-1', name: 'Poción', type: 'object', isEquipped: false },
+      ],
+      equippedItems: [],
+    };
+
+    const sheetWithEquippedSword = {
+      ...sheet,
+      equippedItems: equipItemInSlot(sheet.equippedItems, 'mainHand', {
+        id: 'loot-sword-1',
+        name: 'Espada de Acero',
+        type: 'weapon',
+      }),
+    };
+
+    const synced = syncCanvasTokenWithSheet(token, sheetWithEquippedSword);
+    const sword = synced.inventory.find((item) => item.name === 'Espada de Acero');
+    expect(sword.isEquipped).toBe(true);
+    expect(sword.equippedSlots).toContain('mainHand');
+    expect(synced.equippedItems.some((item) => item.name === 'Espada de Acero')).toBe(true);
   });
 });

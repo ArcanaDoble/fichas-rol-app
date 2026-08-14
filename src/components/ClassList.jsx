@@ -1915,12 +1915,21 @@ const ClassList = ({
     detailPersistence?.collectionLabel || collectionPath
   );
 
-  const updateEditingClass = (mutator) => {
+  const updateEditingClass = (mutator, options = {}) => {
     hasLocalClassDraftRef.current = true;
     setEditingClass((prev) => {
       if (!prev) return prev;
       const draft = deepClone(prev);
       mutator(draft);
+      if (options.notify && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('playerSheetSaved', {
+          detail: {
+            name: draft.name,
+            sheet: draft,
+            collection: getDetailCollectionLabel()
+          }
+        }));
+      }
       return draft;
     });
   };
@@ -2102,7 +2111,7 @@ const ClassList = ({
         ...(draft.talents || {}),
         slots: [...equippedTalentIds],
       };
-    });
+    }, { notify: true });
   };
 
   const handleUpdateEquippedSkillIds = (equippedSkillIds) => {
@@ -2112,7 +2121,7 @@ const ClassList = ({
         ...(draft.skills || {}),
         slots: [...equippedSkillIds],
       };
-    });
+    }, { notify: true });
   };
 
   const handleEquipmentSearchChange = (category, value) => {
@@ -2203,10 +2212,7 @@ const ClassList = ({
 
       if (slot === 'activeWeaponSet') {
         draft.equippedItems = activateWeaponSet(equippedItems, item);
-        return;
-      }
-
-      if (
+      } else if (
         (slot === 'mainHand' || slot === 'offHand')
         && Number.isInteger(options.weaponSetIndex)
       ) {

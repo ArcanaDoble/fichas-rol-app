@@ -1310,7 +1310,6 @@ const WeaponCard = ({ weapon, isSelected, onSelect, customEquipmentImages, disab
         if (name.includes('gancho de alcantarilla')) return '/armas/gancho_de_alcantarilla.webp';
         if (name.includes('antorcha')) return '/armas/antorcha.webp';
         if (name.includes('porra de jade')) return '/armas/Porra de jade.webp';
-        if (name.includes('sanguinaria')) return '/armas/la_sanguinaria.webp';
         if (name.includes('mazo glacial')) return '/armas/mazo_glacial.webp';
         if (name.includes('mordisco') || name.includes('fauces')) return '/armas/fauces.webp';
         if (name.includes('garras')) return '/armas/garras.webp';

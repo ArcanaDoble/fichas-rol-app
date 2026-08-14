@@ -60,7 +60,6 @@ const getHardcodedImage = (item) => {
     if (name.includes('gancho de alcantarilla')) return '/armas/gancho_de_alcantarilla.webp';
     if (target.includes('antorcha')) return '/armas/antorcha.webp';
     if (name.includes('porra de jade')) return '/armas/Porra de jade.webp';
-    if (name.includes('sanguinaria')) return '/armas/la_sanguinaria.webp';
     if (name.includes('mazo glacial')) return '/armas/mazo_glacial.webp';
     if (name.includes('cuchillo')) return '/armas/cuchillo.webp';
     if (name.includes('tuberia') || name.includes('tubería')) return '/armas/tuberia.webp';
@@ -298,6 +297,8 @@ const EquipmentImageManager = ({ armas = [], armaduras = [], habilidades = [], a
             });
             const downloadUrl = await getDownloadURL(storageRef);
 
+            const hardcodedFallback = getHardcodedImage(item);
+
             // Save URL to Firestore
             await setDoc(doc(db, 'equipment_images', key), {
                 imageUrl: downloadUrl,
@@ -308,6 +309,8 @@ const EquipmentImageManager = ({ armas = [], armaduras = [], habilidades = [], a
                 originalSize: originalSize || file.size || null,
                 storedSize: uploadableFile.size || null,
                 optimized,
+                hadLocalFallback: Boolean(hardcodedFallback),
+                replacedLocalImage: hardcodedFallback || null,
                 updatedAt: Date.now(),
             });
 

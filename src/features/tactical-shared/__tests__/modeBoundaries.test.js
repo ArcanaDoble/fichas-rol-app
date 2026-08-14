@@ -65,17 +65,31 @@ test('canvas and board expose independent mode contracts', () => {
     expect(BOARD_MODE_DEFINITION.sceneItemVisuals?.ScenePickupVisual).toBeUndefined();
 });
 
-test('canvas initiative is based on token speed and control side', () => {
+test('canvas initiative is projected from the Canvas combat state instead of legacy speed', () => {
     const tokens = buildCanvasTimelineTokens([
-        { id: 'master', type: 'token', isCircular: true, velocidad: 2, controlledBy: [] },
-        { id: 'player', type: 'token', isCircular: true, velocidad: 5, controlledBy: ['Ada'] },
+        { id: 'enemy', profileType: 'rogueliteEnemy', velocidad: 2 },
+        { id: 'player', profileType: 'rogueliteClass', velocidad: 5 },
         { id: 'decoration', type: 'geometry' },
         { id: 'loot', type: 'scenePickup', stats: { vida: { current: 1, max: 1 } } },
-    ]);
+    ], {
+        combatState: {
+            status: 'active',
+            roundPhase: 'turns',
+            activeBlockIndex: 0,
+            participants: {
+                enemy: { tokenId: 'enemy', side: 'enemies', initiative: 8 },
+                player: { tokenId: 'player', side: 'players', initiative: 10 },
+            },
+            blocks: [
+                { id: 'players', memberIds: ['player'], actedIds: [] },
+                { id: 'enemies', memberIds: ['enemy'], actedIds: [] },
+            ],
+        },
+    });
 
-    expect(tokens.map(({ id, timelineSide }) => ({ id, timelineSide }))).toEqual([
-        { id: 'master', timelineSide: 'master' },
-        { id: 'player', timelineSide: 'players' },
+    expect(tokens.map(({ id, initiative, timelineSide }) => ({ id, initiative, timelineSide }))).toEqual([
+        { id: 'enemy', initiative: 8, timelineSide: 'master' },
+        { id: 'player', initiative: 10, timelineSide: 'players' },
     ]);
 });
 

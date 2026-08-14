@@ -169,6 +169,15 @@ export const activateWeaponSet = (equippedItems = {}, weaponSetIndex = 0) => {
 };
 
 export const equipItemInSlot = (equippedItems = {}, slot, item) => {
+  if (Array.isArray(equippedItems?.weaponSets) && HAND_SLOTS.includes(slot)) {
+    return equipItemInWeaponSet(
+      equippedItems,
+      equippedItems.activeWeaponSet,
+      slot,
+      item,
+    );
+  }
+
   const normalized = normalizeEquippedHandSlots(equippedItems);
 
   if (!HAND_SLOTS.includes(slot)) {

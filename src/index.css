@@ -1808,6 +1808,16 @@ body.noma-canvas-inventory-dragging [data-tactical-sidebar-backdrop="true"] {
   box-shadow: 0 13px 28px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--noma-item-accent-faint);
 }
 
+.noma-inventory-card.is-dragging {
+  opacity: 0.48;
+  transform: scale(0.992);
+}
+
+.noma-inventory-card.is-drop-target {
+  border-color: var(--noma-item-accent, #c8aa6e);
+  box-shadow: inset 0 0 0 1px var(--noma-item-accent-soft, rgba(200, 170, 110, 0.34));
+}
+
 .noma-inventory-card__hero {
   position: relative;
   min-height: 126px;
@@ -1903,14 +1913,57 @@ body.noma-canvas-inventory-dragging [data-tactical-sidebar-backdrop="true"] {
   line-height: 1.25;
 }
 
-.noma-inventory-card__remove {
+.noma-inventory-card__hero--draggable {
+  cursor: grab;
+  user-select: none;
+}
+
+.noma-inventory-card__hero--draggable:active {
+  cursor: grabbing;
+}
+
+.noma-inventory-card__actions {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 8px;
+  right: 8px;
   z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.noma-inventory-card__drag-handle {
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid rgba(202, 184, 145, 0.22);
+  border-radius: 2px;
+  background: rgba(8, 12, 18, 0.75);
+  color: rgba(200, 170, 110, 0.72);
+  opacity: 0.78;
+  touch-action: none;
+  cursor: grab;
+  transition: opacity 140ms ease, color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.noma-inventory-card__drag-handle:active {
+  cursor: grabbing;
+}
+
+.noma-inventory-card__drag-handle:hover,
+.noma-inventory-card__drag-handle:focus-visible {
+  border-color: #c8aa6e;
+  background: rgba(200, 170, 110, 0.15);
+  color: #f0e6d2;
+  opacity: 1;
+  outline: none;
+}
+
+.noma-inventory-card__remove {
+  display: grid;
+  width: 26px;
+  height: 26px;
   place-items: center;
   border: 1px solid rgba(194, 126, 126, 0.2);
   border-radius: 2px;
@@ -2103,8 +2156,8 @@ body.noma-canvas-inventory-dragging [data-tactical-sidebar-backdrop="true"] {
 }
 
 .noma-inventory-card--inspector .noma-inventory-card__identity {
-  max-width: 84%;
-  padding: 13px 38px 12px 14px;
+  max-width: 80%;
+  padding: 13px 68px 12px 14px;
 }
 
 .noma-inventory-card--inspector .noma-inventory-card__art {

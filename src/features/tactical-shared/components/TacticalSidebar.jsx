@@ -1,5 +1,5 @@
 import React from 'react';
-import { Edit2, RotateCw, Settings, ShieldCheck, Sparkles, Swords } from 'lucide-react';
+import { Dices, Edit2, RotateCw, Settings, ShieldCheck, Sparkles, Swords } from 'lucide-react';
 
 import { FiX } from 'react-icons/fi';
 
@@ -23,6 +23,7 @@ import { TokenInspectorPanel } from './sidebar/TokenInspectorPanel';
 /** Tool library, inspector and configuration panel for the canvas workspace. */
 // Legacy tactical sidebar shared by the current hosts. Canvas-specific UI should wrap or replace it.
 export const CanvasSidebar = ({
+    CombatPanelComponent,
     BOARD_DICE_ROLL_SIDES,
     BOARD_DIE_SIDES,
     BoardDieVisual,
@@ -52,6 +53,7 @@ export const CanvasSidebar = ({
     clearBackgroundImage,
     clearBoardDicePool,
     combatLog,
+    combatRuntime,
     commitGridDraft,
     currentBackgroundGridPresetIndex,
     deleteCard,
@@ -197,6 +199,15 @@ export const CanvasSidebar = ({
                                         <span className="text-[8px] font-bold uppercase">Inspector</span>
                                     </button>
                                 )}
+                                {CombatPanelComponent && (
+                                    <button
+                                        onClick={() => setActiveTab('ROUND')}
+                                        className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all ${activeTab === 'ROUND' ? 'bg-[#c8aa6e]/10 text-[#c8aa6e] border-b-2 border-[#c8aa6e]' : 'text-slate-500 hover:text-slate-300'}`}
+                                    >
+                                        <Dices className="w-4 h-4" />
+                                        <span className="text-[8px] font-bold uppercase">Ronda</span>
+                                    </button>
+                                )}
                                 <button
                                     onClick={() => setActiveTab('COMBAT_LOG')}
                                     className={`flex-1 py-4 flex flex-col items-center gap-1 transition-all ${activeTab === 'COMBAT_LOG' ? 'bg-[#c8aa6e]/10 text-[#c8aa6e] border-b-2 border-[#c8aa6e]' : 'text-slate-500 hover:text-slate-300'}`}
@@ -208,6 +219,11 @@ export const CanvasSidebar = ({
 
                             {/* Sidebar Content Wrapper */}
                             <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8 pb-32">
+                                {CombatPanelComponent && (
+                                    <CombatPanelComponent {...{
+                                        activeScenario, activeTab, combatRuntime, isPlayerView, playerName,
+                                    }} />
+                                )}
                                 {/* --- TAB: COMBAT LOG (EVERYONE) --- */}
                                 <CombatLogPanel {...{
                         BOARD_DICE_ROLL_SIDES, activeTab, adjustBoardDiceCount, boardDiceExplosive, boardDicePool, boardDiceRollLog,

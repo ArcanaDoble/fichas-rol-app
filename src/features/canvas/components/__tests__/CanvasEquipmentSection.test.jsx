@@ -163,4 +163,44 @@ describe('CanvasEquipmentSection', () => {
     expect(screen.getByText('Habilidad')).toBeInTheDocument();
     expect(screen.queryByText('Habilidad · Preparada')).not.toBeInTheDocument();
   });
+
+  test('displays visual drop indicator and updates feedback when dragging an item over another slot', () => {
+    const onUpdateToken = jest.fn();
+    render(
+      <CanvasEquipmentSection
+        token={{
+          id: 'hero',
+          profileType: 'rogueliteClass',
+          inventory: [
+            { name: 'Espada', templateId: 'weapon:sword', type: 'weapon' },
+            { name: 'Poción', templateId: 'object:potion', type: 'object' },
+          ],
+        }}
+        onUpdateToken={onUpdateToken}
+      />,
+    );
+
+    const moveButton = screen.getByRole('button', { name: 'Mover Espada' });
+    fireEvent.pointerDown(moveButton, { clientX: 10, clientY: 10, button: 0, pointerId: 1 });
+
+    document.elementFromPoint = jest.fn(() => document.querySelectorAll('[data-canvas-inventory-index]')[1]);
+
+    fireEvent.pointerMove(window, { clientX: 10, clientY: 80 });
+
+    expect(document.elementFromPoint).toHaveBeenCalled();
+    expect(screen.getByTestId('canvas-inventory-drag-preview')).toBeInTheDocument();
+
+    const cards = screen.getAllByTestId('inventory-item-card');
+    expect(cards[0]).toHaveClass('is-dragging');
+    expect(cards[1]).toHaveClass('is-drop-target');
+
+    fireEvent.pointerUp(window, { clientX: 10, clientY: 80 });
+
+    expect(onUpdateToken).toHaveBeenCalledWith({
+      inventory: [
+        expect.objectContaining({ name: 'Poción' }),
+        expect.objectContaining({ name: 'Espada' }),
+      ],
+    });
+  });
 });
