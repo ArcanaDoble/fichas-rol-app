@@ -211,8 +211,16 @@ export const TacticalWorkspaceShell = ({
     wallDrawingCurrent,
     wallDrawingStart,
     zoom,
-}) => (
-<div className={`h-screen w-screen overflow-hidden bg-[#09090b] relative font-['Lato'] select-none ${targetingState ? 'cursor-crosshair' : ''}`}>
+}) => {
+    const lastSidebarOpenTimeRef = React.useRef(0);
+    React.useEffect(() => {
+        if (showSettings) {
+            lastSidebarOpenTimeRef.current = Date.now();
+        }
+    }, [showSettings]);
+
+    return (
+        <div className={`h-screen w-screen overflow-hidden bg-[#09090b] relative font-['Lato'] select-none ${targetingState ? 'cursor-crosshair' : ''}`}>
             {/* --- BIBLIOTECA DE ENCUENTROS --- */}
             {viewMode === 'LIBRARY' && !activeScenario && (
                 <motion.div
@@ -424,7 +432,10 @@ export const TacticalWorkspaceShell = ({
                             <div
                                 data-tactical-sidebar-backdrop="true"
                                 className="absolute inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity"
-                                onClick={() => setShowSettings(false)}
+                                onClick={() => {
+                                    if (Date.now() - lastSidebarOpenTimeRef.current < 400) return;
+                                    setShowSettings(false);
+                                }}
                             />
                         )}
 
@@ -1236,4 +1247,5 @@ export const TacticalWorkspaceShell = ({
                 subMessage={toastSubMessage}
             />
         </div >
-);
+    );
+};

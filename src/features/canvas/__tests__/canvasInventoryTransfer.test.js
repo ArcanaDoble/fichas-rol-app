@@ -3,7 +3,9 @@ import {
     createCanvasLootSceneItem,
     detachCanvasInventoryItem,
     findCanvasLootPosition,
+    getCanvasLootRenderPlacement,
     isCanvasLootItem,
+    pickUpCanvasLootForToken,
     reorderCanvasInventory,
     resolveCanvasLootRecipient,
 } from '../canvasInventoryTransfer';
@@ -35,7 +37,7 @@ describe('canvas inventory transfer', () => {
     });
 
     test('places loot in the nearest unoccupied grid cell', () => {
-        const gridConfig = { cellWidth: 50, cellHeight: 50 };
+        const gridConfig = { isInfinite: true, cellWidth: 50, cellHeight: 50 };
         const sourceToken = { id: 'hero', layer: 'TOKEN', x: 100, y: 100, width: 50, height: 50 };
         const position = findCanvasLootPosition({
             worldPoint: { x: 125, y: 125 },
@@ -44,10 +46,37 @@ describe('canvas inventory transfer', () => {
             gridConfig,
         });
 
-        expect(position.gridCell).not.toEqual({ x: 2, y: 2 });
-        expect(position.width).toBeCloseTo(25);
-        expect(position.height).toBeCloseTo(25);
+        expect(position.gridCell).toEqual({ x: 2, y: 2 });
+        expect(position.width).toBeCloseTo(16);
+        expect(position.height).toBeCloseTo(16);
         expect(position.cellRect).toEqual(expect.objectContaining({ width: 50, height: 50 }));
+    });
+
+    test('aligns loot position and preview with finite map grid offset', () => {
+        const gridConfig = {
+            isInfinite: false,
+            columns: 12,
+            rows: 8,
+            cellWidth: 256,
+            cellHeight: 256,
+        };
+        // Finite grid origin in 12000x12000 world is (12000 - 12*256)/2 = 4464, (12000 - 8*256)/2 = 4976
+        const worldPoint = { x: 4464 + 100, y: 4976 + 100 }; // Inside cell (0, 0)
+        const position = findCanvasLootPosition({
+            worldPoint,
+            items: [],
+            gridConfig,
+        });
+
+        expect(position.gridCell).toEqual({ x: 0, y: 0 });
+        expect(position.cellRect).toEqual({
+            x: 4464,
+            y: 4976,
+            width: 256,
+            height: 256,
+        });
+        expect(position.x).toBeCloseTo(4464 + (256 - 81.92) / 2);
+        expect(position.y).toBeCloseTo(4976 + (256 - 81.92) / 2);
     });
 
     test('creates a Canvas-only pickup and adds it back without equipping it', () => {
@@ -137,5 +166,155 @@ describe('canvas inventory transfer', () => {
             isPlayerView: true,
             playerName: 'Ada',
         })).toEqual({ recipient: null, blockedRecipient: enemy });
+    });
+
+    test('correctly targets the specific token when two tokens share a cell in combat formation/duel', () => {
+        const gridConfig = { isInfinite: true, cellWidth: 100, cellHeight: 100, isCombatActive: true };
+        const heroA = {
+            id: 'hero-a',
+            profileType: 'rogueliteClass',
+            layer: 'TOKEN',
+            isToken: true,
+            x: 0,
+            y: 0,
+            width: 50,
+            height: 50,
+            controlledBy: ['Ada'],
+        };
+        const heroB = {
+            id: 'hero-b',
+            profileType: 'rogueliteClass',
+            layer: 'TOKEN',
+            isToken: true,
+            x: 0,
+            y: 0,
+            width: 50,
+            height: 50,
+            controlledBy: ['Ada'],
+        };
+        const items = [heroA, heroB];
+
+        // Dragging loot positioned over the left side of the cell
+        const leftLoot = { id: 'loot-left', sceneItemKind: 'canvasLoot', x: 5, y: 25, width: 25, height: 25 };
+        const leftTarget = resolveCanvasLootRecipient({ loot: leftLoot, items: [leftLoot, ...items], gridConfig, isPlayerView: true, playerName: 'Ada' });
+
+        // Dragging loot positioned over the right side of the cell
+        const rightLoot = { id: 'loot-right', sceneItemKind: 'canvasLoot', x: 65, y: 25, width: 25, height: 25 };
+        const rightTarget = resolveCanvasLootRecipient({ loot: rightLoot, items: [rightLoot, ...items], gridConfig, isPlayerView: true, playerName: 'Ada' });
+
+        expect(leftTarget.recipient).toBeDefined();
+        expect(rightTarget.recipient).toBeDefined();
+        expect(leftTarget.recipient.id).not.toEqual(rightTarget.recipient.id);
+    });
+
+    test('picks up ground loot when a controlled token moves to its grid cell', () => {
+        const gridConfig = { isInfinite: true, cellWidth: 50, cellHeight: 50 };
+        const potionLoot = {
+            id: 'loot-potion',
+            name: 'Poción de Vida',
+            sceneItemKind: 'canvasLoot',
+            lootItem: { name: 'Poción de Vida', type: 'consumable' },
+            x: 112,
+            y: 112,
+            width: 25,
+            height: 25,
+        };
+        const heroToken = {
+            id: 'hero',
+            name: 'Bárbaro',
+            profileType: 'rogueliteClass',
+            layer: 'TOKEN',
+            x: 100,
+            y: 100,
+            width: 50,
+            height: 50,
+            controlledBy: ['Ada'],
+            inventory: [],
+        };
+
+        const result = pickUpCanvasLootForToken({
+            token: heroToken,
+            items: [heroToken, potionLoot],
+            gridConfig,
+            isPlayerView: true,
+            playerName: 'Ada',
+        });
+
+        expect(result.pickedLoots).toHaveLength(1);
+        expect(result.pickedLoots[0].id).toBe('loot-potion');
+        expect(result.nextToken.inventory).toHaveLength(1);
+        expect(result.nextToken.inventory[0].name).toBe('Poción de Vida');
+        expect(result.nextItems.find((item) => item.id === 'loot-potion')).toBeUndefined();
+    });
+
+    test('ignores ground loot when the token is not in the same cell', () => {
+        const gridConfig = { isInfinite: true, cellWidth: 50, cellHeight: 50 };
+        const potionLoot = {
+            id: 'loot-potion',
+            name: 'Poción de Vida',
+            sceneItemKind: 'canvasLoot',
+            lootItem: { name: 'Poción de Vida', type: 'consumable' },
+            x: 312,
+            y: 312,
+            width: 25,
+            height: 25,
+        };
+        const heroToken = {
+            id: 'hero',
+            name: 'Bárbaro',
+            profileType: 'rogueliteClass',
+            layer: 'TOKEN',
+            x: 100,
+            y: 100,
+            width: 50,
+            height: 50,
+            controlledBy: ['Ada'],
+            inventory: [],
+        };
+
+        const result = pickUpCanvasLootForToken({
+            token: heroToken,
+            items: [heroToken, potionLoot],
+            gridConfig,
+            isPlayerView: true,
+            playerName: 'Ada',
+        });
+
+        expect(result.pickedLoots).toHaveLength(0);
+        expect(result.nextToken.inventory).toHaveLength(0);
+        expect(result.nextItems).toHaveLength(2);
+    });
+
+    test('distributes multiple loot items in the same grid cell without overlapping', () => {
+        const gridConfig = { isInfinite: true, cellWidth: 100, cellHeight: 100 };
+        const loot1 = {
+            id: 'loot-1',
+            sceneItemKind: 'canvasLoot',
+            x: 0,
+            y: 0,
+            width: 32,
+            height: 32,
+            droppedAt: 100,
+        };
+        const loot2 = {
+            id: 'loot-2',
+            sceneItemKind: 'canvasLoot',
+            x: 0,
+            y: 0,
+            width: 32,
+            height: 32,
+            droppedAt: 200,
+        };
+
+        const pos1Single = getCanvasLootRenderPlacement(loot1, [loot1], gridConfig);
+        expect(pos1Single.x).toBeCloseTo(34);
+        expect(pos1Single.y).toBeCloseTo(34);
+
+        const pos1Pair = getCanvasLootRenderPlacement(loot1, [loot1, loot2], gridConfig);
+        const pos2Pair = getCanvasLootRenderPlacement(loot2, [loot1, loot2], gridConfig);
+
+        expect(pos1Pair.x).toBeCloseTo(10);
+        expect(pos2Pair.x).toBeCloseTo(58);
+        expect(Math.abs(pos2Pair.x - pos1Pair.x)).toBeGreaterThanOrEqual(32);
     });
 });

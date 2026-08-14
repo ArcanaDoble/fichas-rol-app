@@ -9,6 +9,7 @@ import {
     detachCanvasInventoryItem,
     findCanvasLootPosition,
     isCanvasLootItem,
+    pickUpCanvasLootForToken,
     resolveCanvasLootRecipient,
     resolveCanvasInventoryItemIdentity,
 } from './canvasInventoryTransfer';
@@ -42,37 +43,58 @@ export const useCanvasFeatureController = ({
         scenarioId,
     }) => {
         const movedLoot = finalItems.find((item) => item.id === draggedItemId && isCanvasLootItem(item));
-        if (!movedLoot) return false;
+        if (movedLoot) {
+            const { recipient, blockedRecipient } = resolveCanvasLootRecipient({
+                loot: movedLoot,
+                items: finalItems,
+                isPlayerView,
+                playerName,
+                gridConfig,
+            });
 
-        const { recipient, blockedRecipient } = resolveCanvasLootRecipient({
-            loot: movedLoot,
-            items: finalItems,
-            isPlayerView,
-            playerName,
-        });
+            if (blockedRecipient) {
+                setActiveScenario((current) => (
+                    current?.id === scenarioId ? { ...current, items: interactionOriginalItems } : current
+                ));
+                setSelectedTokenIds([movedLoot.id]);
+                triggerToast(
+                    'No puedes entregar el objeto',
+                    `${blockedRecipient.name || 'Esa ficha'} no está bajo tu control`,
+                    'warning',
+                );
+                return true;
+            }
 
-        if (blockedRecipient) {
-            setActiveScenario((current) => (
-                current?.id === scenarioId ? { ...current, items: interactionOriginalItems } : current
-            ));
-            setSelectedTokenIds([movedLoot.id]);
-            triggerToast(
-                'No puedes entregar el objeto',
-                `${blockedRecipient.name || 'Esa ficha'} no está bajo tu control`,
-                'warning',
-            );
-            return true;
-        }
+            if (recipient) {
+                const nextRecipient = {
+                    ...addCanvasLootToInventory(recipient, movedLoot.lootItem),
+                    runtimeDirty: false,
+                };
+                const nextItems = finalItems
+                    .filter((item) => item.id !== movedLoot.id)
+                    .map((item) => (item.id === recipient.id ? nextRecipient : item));
 
-        if (recipient) {
-            const nextRecipient = {
-                ...addCanvasLootToInventory(recipient, movedLoot.lootItem),
-                runtimeDirty: false,
-            };
-            const nextItems = finalItems
-                .filter((item) => item.id !== movedLoot.id)
-                .map((item) => (item.id === recipient.id ? nextRecipient : item));
+                setActiveScenario((current) => (
+                    current?.id === scenarioId ? { ...current, items: nextItems } : current
+                ));
+                safePersistItems(
+                    scenarioId,
+                    nextItems,
+                    interactionOriginalItems,
+                    [recipient.id, movedLoot.id],
+                    { persistRuntime: true },
+                );
+                setSelectedTokenIds([recipient.id]);
+                triggerToast(
+                    'Objeto recogido',
+                    `${movedLoot.name} se ha añadido al inventario de ${recipient.name || 'la ficha'}`,
+                    'success',
+                );
+                return true;
+            }
 
+            const centeredLoot = centerCanvasLootInGridCell(movedLoot, gridConfig);
+            const nextItems = finalItems.map((item) => (item.id === movedLoot.id ? centeredLoot : item));
             setActiveScenario((current) => (
                 current?.id === scenarioId ? { ...current, items: nextItems } : current
             ));
@@ -80,32 +102,47 @@ export const useCanvasFeatureController = ({
                 scenarioId,
                 nextItems,
                 interactionOriginalItems,
-                [recipient.id, movedLoot.id],
-                { persistRuntime: true },
+                [movedLoot.id],
+                { persistRuntime: false },
             );
-            setSelectedTokenIds([recipient.id]);
-            triggerToast(
-                'Objeto recogido',
-                `${movedLoot.name} se ha añadido al inventario de ${recipient.name || 'la ficha'}`,
-                'success',
-            );
+            setSelectedTokenIds([movedLoot.id]);
             return true;
         }
 
-        const centeredLoot = centerCanvasLootInGridCell(movedLoot, gridConfig);
-        const nextItems = finalItems.map((item) => (item.id === movedLoot.id ? centeredLoot : item));
-        setActiveScenario((current) => (
-            current?.id === scenarioId ? { ...current, items: nextItems } : current
-        ));
-        safePersistItems(
-            scenarioId,
-            nextItems,
-            interactionOriginalItems,
-            [movedLoot.id],
-            { persistRuntime: false },
-        );
-        setSelectedTokenIds([movedLoot.id]);
-        return true;
+        // Caso 2: Se ha movido un token y ha quedado en la misma casilla que un objeto en el suelo
+        const movedToken = finalItems.find((item) => item.id === draggedItemId && !isCanvasLootItem(item));
+        if (movedToken) {
+            const { nextToken, nextItems, pickedLoots } = pickUpCanvasLootForToken({
+                token: movedToken,
+                items: finalItems,
+                gridConfig,
+                isPlayerView,
+                playerName,
+            });
+
+            if (pickedLoots.length > 0) {
+                setActiveScenario((current) => (
+                    current?.id === scenarioId ? { ...current, items: nextItems } : current
+                ));
+                safePersistItems(
+                    scenarioId,
+                    nextItems,
+                    interactionOriginalItems,
+                    [nextToken.id, ...pickedLoots.map((loot) => loot.id)],
+                    { persistRuntime: true },
+                );
+                setSelectedTokenIds([nextToken.id]);
+                const lootNames = pickedLoots.map((loot) => loot.name).join(', ');
+                triggerToast(
+                    'Objeto recogido',
+                    `${lootNames} se ha añadido al inventario de ${nextToken.name || 'la ficha'}`,
+                    'success',
+                );
+                return true;
+            }
+        }
+
+        return false;
     }, [
         gridConfig,
         isPlayerView,
@@ -169,8 +206,57 @@ export const useCanvasFeatureController = ({
             const detached = detachCanvasInventoryItem(sourceToken, itemIndex);
             if (!detached) return;
 
+            const worldPoint = divToWorld(detail.clientX, detail.clientY);
+            const { recipient, blockedRecipient } = resolveCanvasLootRecipient({
+                worldPoint,
+                items: scenario.items,
+                isPlayerView,
+                playerName,
+                gridConfig,
+            });
+
+            if (blockedRecipient) {
+                triggerToast(
+                    'No puedes entregar el objeto',
+                    `${blockedRecipient.name || 'Esa ficha'} no está bajo tu control`,
+                    'warning',
+                );
+                return;
+            }
+
+            if (recipient && recipient.id !== sourceToken.id) {
+                const nextRecipient = {
+                    ...addCanvasLootToInventory(recipient, detached.item),
+                    runtimeDirty: false,
+                };
+                const nextSourceToken = { ...sourceToken, ...detached.updates, runtimeDirty: false };
+                const nextItems = scenario.items.map((item) => {
+                    if (item.id === sourceToken.id) return nextSourceToken;
+                    if (item.id === recipient.id) return nextRecipient;
+                    return item;
+                });
+
+                setActiveScenario((current) => (
+                    current?.id === scenario.id ? { ...current, items: nextItems } : current
+                ));
+                safePersistItems(
+                    scenario.id,
+                    nextItems,
+                    scenario.items,
+                    [sourceToken.id, recipient.id],
+                    { persistRuntime: true },
+                );
+                setSelectedTokenIds([recipient.id]);
+                triggerToast(
+                    'Objeto entregado',
+                    `${detached.item.name || detached.item.nombre || 'El objeto'} se ha añadido al inventario de ${recipient.name || 'la ficha'}`,
+                    'success',
+                );
+                return;
+            }
+
             const position = findCanvasLootPosition({
-                worldPoint: divToWorld(detail.clientX, detail.clientY),
+                worldPoint,
                 sourceToken,
                 items: scenario.items,
                 gridConfig,

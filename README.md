@@ -6,7 +6,20 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ## ✨ Características principales
 
+### 📦 Sistema de Botín en el Canvas, Multiselección Táctica e Interacción de Mesa
+
+- **Formaciones y Distribución de Objetos en Casilla**: Los objetos en el suelo cuentan con una escala equilibrada (`0.32`) y se organizan de forma simétrica en formaciones automáticas sin solaparse (para 1, 2, 3, 4 y 5+ objetos por celda).
+- **Auto-recogida de Objetos**: Cuando un token se mueve sobre la casilla de un objeto en el suelo (tanto en PC como en dispositivos móviles), el personaje lo recoge automáticamente incorporándolo a su inventario.
+- **Inspector Unificado de Multiselección**: Al seleccionar múltiples objetos a la vez, se sustituye el apilamiento de tarjetas superpuestas por un único panel limpio con contador de objetos (`📦 N Objetos`), controles de navegación (`‹ 1 / N ›`), pastillas de acceso rápido codificadas por rareza y aislamiento completo de eventos para alternar objetos sin perder la selección.
+- **Selección Precisa por Recuadro y Modificadores (Ctrl / Shift)**: El recuadro de selección evalúa los slots visuales renderizados de objetos y formaciones, y se unificó el soporte completo de `Ctrl + Clic` / `Shift + Clic` para añadir o deseleccionar elementos individuales de forma precisa.
+- **Resolución de Destinatario en Duelo / Formación y Elevación Física**:
+  - Al arrastrar un objeto sobre fichas que comparten casilla en duelo o formación, el sistema calcula de forma diferenciada la proximidad a la ficha izquierda o derecha.
+  - Se implementó un feedback físico elegante: la ficha objetivo se alza con una transición elástica (`y: -8px, scale: 1.06`) con sombra ceñida a su geometría sin sobrecargar la pantalla con interfaces de IA.
+  - El objeto arrastrado se promueve a la capa superior (`zIndex: 1000`) con semitransparencia táctil (`opacity: 0.72`) para visualizar con nitidez la ficha que se encuentra debajo.
+
 ### Pool Inicial de Equipamiento y Sección de Habilidades Equipadas
+
+- **Alineación exacta de arrastre de inventario al Canvas**: El soltado de objetos y el recuadro de previsualización dorada calculan la celda y las coordenadas absolutas respetando el origen y desfase del mapa (`getGridWorldRect`), garantizando que se resalte e inserte en la casilla cuadrada exacta de la cuadrícula en lugar del cruce de 2×2 casillas.
 
 - **Gestión Dinámica de la Pool Inicial**:
   - **Antes de Iniciar Aventura**: Muestra en la mochila/inventario todos los objetos y equipamiento iniciales definidos por el Máster (armas, armaduras, habilidades, objetos y accesorios) para que el jugador pueda equiparse antes de la partida.

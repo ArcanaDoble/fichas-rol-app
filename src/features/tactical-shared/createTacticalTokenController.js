@@ -30,6 +30,7 @@ export const createCanvasTokenController = ({
     getItemInteractionSnapshot,
     gridConfig,
     habilidades,
+    handleModeItemDrop,
     isBoardMode,
     isScenePickupItem,
     isMobile,
@@ -241,6 +242,22 @@ const addTokenToCanvas = (tokenUrl) => {
             item.id === tokenId ? movedToken : item
         ));
 
+        if (handleModeItemDrop?.({
+            draggedItemId: tokenId,
+            finalItems: nextItems,
+            interactionOriginalItems: scenario.items,
+            scenarioId: scenario.id,
+        })) {
+            setSelectedTokenIds([tokenId]);
+            lastSelectedIdRef.current = tokenId;
+            setPendingTurnState(null);
+            setMobileMoveHoverCellKey(null);
+            if (sangradoAnimation) {
+                queueSangradoSpeedAnimation(sangradoAnimation.token, sangradoAnimation.lostVida, { shared: true });
+            }
+            return;
+        }
+
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
         setSelectedTokenIds([tokenId]);
         lastSelectedIdRef.current = tokenId;
@@ -400,7 +417,8 @@ const addTokenToCanvas = (tokenUrl) => {
                 (isBoardDieItem(token) && isBoardMode) ||
                 (isCardContainerItem(token) && isBoardMode) ||
                 isScenePickup ||
-                (token.controlledBy && Array.isArray(token.controlledBy) && token.controlledBy.includes(playerName));
+                (Array.isArray(token.controlledBy) ? token.controlledBy.includes(playerName) : token.controlledBy === playerName) ||
+                token.ownerName === playerName;
             if (!isOwner) return;
 
             if (isBoardMode && isCombatTokenItem(token)) {
@@ -440,23 +458,20 @@ const addTokenToCanvas = (tokenUrl) => {
             if (resizingTokenId) return;
 
             const currentScenario = activeScenarioRef.current || activeScenario;
-            let newSelection = isScenePickup ? [token.id] : [...selectedTokenIds];
+            const isMultiSelectModifier = Boolean(e.shiftKey || e.ctrlKey || e.metaKey);
+            let newSelection = [...selectedTokenIds];
 
-            if (isScenePickup && (selectedTokenIds.length !== 1 || selectedTokenIds[0] !== token.id)) {
-                setSelectedTokenIds(newSelection);
-            }
-
-            // Si el token NO está ya seleccionado, lo añadimos o reemplazamos
-            if (!isScenePickup && !selectedTokenIds.includes(token.id)) {
-                if (e.shiftKey) {
+            // Si el token NO está ya seleccionado, lo añadimos (si Shift/Ctrl) o lo seleccionamos en exclusiva
+            if (!selectedTokenIds.includes(token.id)) {
+                if (isMultiSelectModifier) {
                     newSelection.push(token.id);
                 } else {
                     newSelection = [token.id];
                 }
                 setSelectedTokenIds(newSelection);
             }
-            // Si YA está seleccionado, si pulsamos Shift podríamos deseleccionarlo?
-            else if (!isScenePickup && e.shiftKey) {
+            // Si YA está seleccionado y pulsamos modificador (Shift/Ctrl/Cmd), lo deseleccionamos
+            else if (isMultiSelectModifier) {
                 newSelection = newSelection.filter(id => id !== token.id);
                 setSelectedTokenIds(newSelection);
                 return; // No iniciamos drag si estamos deseleccionando

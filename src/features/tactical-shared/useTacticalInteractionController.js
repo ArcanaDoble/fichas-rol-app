@@ -7,7 +7,7 @@ import {
 } from '../../utils/cardBoard';
 import {
     areCombatOccupancyFeedbacksEqual, canOccupyCombatCell, getCardCenter,
-    getCombatOccupancyFeedbackForMove, getItemOverlapRatio, isBoardDieItem,
+    getCombatOccupancyFeedbackForMove, getCombatRenderPlacement, getItemOverlapRatio, isBoardDieItem,
     isBoardMarkerItem, isCombatTokenItem, isPointInsideExpandedItem,
     isValidSelectionBox,
 } from './legacyCombatRules';
@@ -33,6 +33,7 @@ export const useCanvasInteractionController = ({
     findCardStackDropTarget,
     getBoardDieRollBounds,
     getEventCoords,
+    getScenePickupRenderPlacement,
     gridConfig,
     handleModeItemDrop,
     isBoardMode,
@@ -40,6 +41,7 @@ export const useCanvasInteractionController = ({
     isDrawingWall,
     isPlayerView,
     isPointInsideBoardHand,
+    isScenePickupItem,
     lastSelectedIdRef,
     moveBoardCardToHand,
     offset,
@@ -682,30 +684,42 @@ const handleMouseMove = (e) => {
                     const isLight = item.type === 'light';
                     const isWall = item.type === 'wall';
                     const isGeometry = item.type === 'geometry';
+                    const isScenePickup = Boolean(isScenePickupItem?.(item));
                     const isCorrectLayer = activeLayer === 'LIGHTING' ? (isLight || isWall) : activeLayer === 'MAP' ? isGeometry : (!isLight && !isWall && !isGeometry);
 
                     if (!isCorrectLayer) return false;
 
                     // Restricción de Jugador: No permitir seleccionar tokens ajenos
                     if (isPlayerView && !isLight && !isWall && !isGeometry) {
-                        const isSandboxItem = item.type === 'card' || item.type === 'card_container' || item.type === 'board_marker' || item.type === 'board_die';
+                        const isSandboxItem = item.type === 'card' || item.type === 'card_container' || item.type === 'board_marker' || item.type === 'board_die' || isScenePickup;
                         const hasPermission = isSandboxItem || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName));
                         if (!hasPermission) return false;
                     } else if (isPlayerView && (isLight || isWall || isGeometry)) {
                         return false;
                     }
 
-                    // Simple AABB intersection
+                    // Precise visual placement AABB intersection (matches exact screen slot for loot / duel tokens)
+                    const placement = isScenePickup
+                        ? (getScenePickupRenderPlacement?.(item, activeScenario.items, gridConfig) || { x: item.x, y: item.y })
+                        : (isCombatTokenItem(item) && gridConfig?.isCombatActive
+                            ? getCombatRenderPlacement(item, activeScenario.items, gridConfig)
+                            : { x: item.x, y: item.y });
+
+                    const itemW = Number(item.width) || gridConfig?.cellWidth || 50;
+                    const itemH = Number(item.height) || gridConfig?.cellHeight || 50;
+                    const itemX = Number(placement.x ?? item.x ?? 0);
+                    const itemY = Number(placement.y ?? item.y ?? 0);
+
                     return (
-                        item.x < selX + selW &&
-                        item.x + item.width > selX &&
-                        item.y < selY + selH &&
-                        item.y + item.height > selY
+                        itemX < selX + selW &&
+                        itemX + itemW > selX &&
+                        itemY < selY + selH &&
+                        itemY + itemH > selY
                     );
                 }).map(i => i.id);
 
-                // Add to existing if Shift used? For now simpler: Replace selection or Add if Shift
-                if (e && e.shiftKey) {
+                const isMultiSelectModifier = Boolean(e && (e.shiftKey || e.ctrlKey || e.metaKey));
+                if (isMultiSelectModifier) {
                     setSelectedTokenIds(prev => [...new Set([...prev, ...newSelected])]);
                 } else {
                     setSelectedTokenIds(newSelected);

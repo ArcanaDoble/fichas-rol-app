@@ -210,6 +210,8 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         TokenResourcesComponent,
         EquipmentSectionComponent,
         isScenePickupItem,
+        getScenePickupRenderPlacement,
+        resolveScenePickupRecipient,
     } = modeDefinition;
     const {
         BoardDieVisual = EmptySceneItemVisual,
@@ -234,6 +236,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
     const localUnsavedScenarioEditsRef = useRef({}); // { name, allowedPlayers, ... }
     const recentLocalWritesRef = useRef({}); // { [itemId]: { fields: { [key]: value }, time } }
     const lastFlipTimesRef = useRef({}); // { [cardId]: timestamp }
+    const lastTokenTapTimesRef = useRef({}); // { [tokenId]: timestamp }
     const persistQueueRef = useRef(null);
     if (!persistQueueRef.current) {
         persistQueueRef.current = createSerialPersistQueue();
@@ -2246,6 +2249,8 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         isDragging,
         isDrawingWall,
         isPlayerView,
+        isScenePickupItem,
+        getScenePickupRenderPlacement,
         isPointInsideBoardHand,
         lastSelectedIdRef,
         moveBoardCardToHand,
@@ -2329,6 +2334,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         getItemInteractionSnapshot,
         gridConfig,
         habilidades,
+        handleModeItemDrop,
         isBoardMode,
         isScenePickupItem,
         isMobile,
@@ -2416,14 +2422,15 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                 return;
             }
 
-            if (!e.shiftKey) {
-                setSelectedTokenIds([]); // Limpiar selección si no es Shift
+            const isMultiSelectModifier = Boolean(e.shiftKey || e.ctrlKey || e.metaKey);
+            if (!isMultiSelectModifier) {
+                setSelectedTokenIds([]); // Limpiar selección si no es Shift/Ctrl
                 if (isBoardMode) setActiveBoardHandTokenId(null);
             }
 
             // Verificación de dispositivo móvil (Touch o pantalla pequeña)
-            const isMobile = isTouch || window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 1024;
-            if (isMobile) return;
+            const isTouchMobile = isTouch || window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 1024;
+            if (isTouchMobile) return;
 
             // Iniciar Selection Box
             setSelectionBox({
@@ -2434,7 +2441,6 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
             handleMouseDown(e); // Mantener lógica de pan (Alt+Click o Middle Click)
         }
     };
-
 
     // Calcular dimensiones totales si es finito
     const {
@@ -2499,8 +2505,11 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         isBoardMode,
         isPlayerView,
         isScenePickupItem,
+        getScenePickupRenderPlacement,
+        resolveScenePickupRecipient,
         isUsablePendingTurnState,
         lastFlipTimesRef,
+        lastTokenTapTimesRef,
         lastSelectedIdRef,
         pendingTurnState,
         playerName,

@@ -187,7 +187,7 @@ export const CanvasViewport = ({
                                             animate={{ opacity: 1, scale: 1 }}
                                             exit={{ opacity: 0, scale: 0.9 }}
                                             transition={{ duration: 0.12 }}
-                                            className="pointer-events-none absolute z-[35]"
+                                            className="pointer-events-none absolute z-[60]"
                                             style={{
                                                 left: sceneDropPreview.x,
                                                 top: sceneDropPreview.y,

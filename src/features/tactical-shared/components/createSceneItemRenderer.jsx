@@ -104,6 +104,8 @@ export const createSceneItemRenderer = ({
     isBoardMode,
     isPlayerView,
     isScenePickupItem,
+    getScenePickupRenderPlacement,
+    resolveScenePickupRecipient,
     isUsablePendingTurnState,
     lastFlipTimesRef,
     lastSelectedIdRef,
@@ -148,6 +150,23 @@ const renderItemJSX = (item) => {
         const isBoardMarker = isBoardMarkerItem(item);
         const isBoardDie = isBoardDieItem(item);
         const isScenePickup = Boolean(isScenePickupItem?.(item));
+        const selectedLootItems = isScenePickup && selectedTokenIds.length > 1
+            ? (activeScenario?.items || []).filter(candidate => isScenePickupItem?.(candidate) && selectedTokenIds.includes(candidate.id))
+            : (isSelected && isScenePickup ? [item] : []);
+        const isToken = !isLight && !isWall && !isGeometry && !isCard && !isCardContainer && !isBoardMarker && !isBoardDie && !isScenePickup;
+        const draggedLootItem = (draggedTokenId && isScenePickupItem?.(activeScenario?.items?.find((i) => i.id === draggedTokenId)))
+            ? activeScenario?.items?.find((i) => i.id === draggedTokenId)
+            : null;
+        const targetedRecipient = draggedLootItem && resolveScenePickupRecipient
+            ? resolveScenePickupRecipient({
+                loot: draggedLootItem,
+                items: activeScenario?.items || [],
+                isPlayerView,
+                playerName,
+                gridConfig,
+            })?.recipient
+            : null;
+        const isPrimarySelectedLoot = selectedLootItems.length > 0 && selectedLootItems[0].id === item.id;
         const itemOrderIndex = Math.max(0, (activeScenario?.items || []).findIndex(candidate => candidate.id === item.id));
         const boardMarkerStackIndex = isBoardMarker
             ? (activeScenario?.items || [])
@@ -207,7 +226,7 @@ const renderItemJSX = (item) => {
                 .map(cardId => (activeScenario?.items || []).find(stackItem => stackItem.id === cardId))
                 .filter(Boolean)
             : [];
-        const isToken = !isLight && !isWall && !isGeometry && !isCard && !isCardContainer && !isBoardMarker && !isBoardDie && !isScenePickup;
+        const isLootDropTarget = isToken && targetedRecipient?.id === item.id;
         const isLocallyInteracting =
             !!(draggedTokenId || rotatingTokenId || resizingTokenId) &&
             selectedTokenIds.includes(item.id);
@@ -231,7 +250,9 @@ const renderItemJSX = (item) => {
             : item;
         const renderPlacement = isToken && gridConfig.isCombatActive
             ? getCombatRenderPlacement(renderPlacementToken, combatPlacementItems, gridConfig)
-            : { x: item.x, y: item.y };
+            : isScenePickup
+                ? (getScenePickupRenderPlacement?.(item, activeScenario?.items || [], gridConfig) || { x: item.x, y: item.y })
+                : { x: item.x, y: item.y };
 
         // Lógica de visibilidad y bloqueo por capas
         const isLightingLayer = activeLayer === 'LIGHTING';
@@ -250,7 +271,7 @@ const renderItemJSX = (item) => {
         } else if (isPlayerView && isScenePickup) {
             canInteract = true;
         } else if (isPlayerView && isToken) {
-            const hasPermission = item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName);
+            const hasPermission = (Array.isArray(item.controlledBy) ? item.controlledBy.includes(playerName) : item.controlledBy === playerName) || item.ownerName === playerName;
             if (!hasPermission) {
                 canInteract = false;
             }
@@ -282,7 +303,8 @@ const renderItemJSX = (item) => {
             }
             else opacity = 1;
         }
-        const motionOpacity = occupancyFeedbackForItem && draggedTokenId === item.id ? 0 : opacity;
+        const isBeingDragged = draggedTokenId === item.id;
+        const motionOpacity = occupancyFeedbackForItem && isBeingDragged ? 0 : (isBeingDragged ? 0.72 : opacity);
 
         // --- RENDERIZADO DE MURO ---
         if (isWall) {
@@ -707,6 +729,27 @@ const renderItemJSX = (item) => {
                     onTouchStart={(e) => {
                         if (!canInteract) return;
                         if (isScenePickup) setShowSettings(false);
+
+                        const now = Date.now();
+                        const lastTap = lastTokenTapTimesRef?.current?.[item.id] || 0;
+                        if (lastTokenTapTimesRef?.current) {
+                            lastTokenTapTimesRef.current[item.id] = now;
+                        }
+
+                        if (now - lastTap < 350 && !isScenePickup) {
+                            const hasPermission = !isPlayerView || isCard || isCardContainer || isBoardMarker || isBoardDie ||
+                                (Array.isArray(item.controlledBy) ? item.controlledBy.includes(playerName) : item.controlledBy === playerName) ||
+                                item.ownerName === playerName;
+                            if (hasPermission) {
+                                e.stopPropagation();
+                                setSelectedTokenIds([item.id]);
+                                lastSelectedIdRef.current = item.id;
+                                setActiveTab('INSPECTOR');
+                                setShowSettings(true);
+                                return;
+                            }
+                        }
+
                         handleTokenMouseDown(e, item);
                     }}
                     onContextMenu={(e) => {
@@ -725,7 +768,9 @@ const renderItemJSX = (item) => {
                         if (isScenePickup) return;
 
                         // RESTRICCIÓN: Solo abrir inspector si el jugador es dueño del token (o es Master)
-                        const hasPermission = !isPlayerView || isScenePickup || isCard || isCardContainer || isBoardMarker || isBoardDie || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName));
+                        const hasPermission = !isPlayerView || isScenePickup || isCard || isCardContainer || isBoardMarker || isBoardDie ||
+                            (Array.isArray(item.controlledBy) ? item.controlledBy.includes(playerName) : item.controlledBy === playerName) ||
+                            item.ownerName === playerName;
                         if (!hasPermission) return;
 
                         e.stopPropagation();
@@ -737,11 +782,12 @@ const renderItemJSX = (item) => {
                     initial={false}
                     animate={{
                         x: renderPlacement.x,
-                        y: renderPlacement.y,
+                        y: isLootDropTarget ? (renderPlacement.y - 8) : renderPlacement.y,
+                        scale: isLootDropTarget ? 1.06 : (isBeingDragged ? 1.15 : 1),
                         rotate: item.rotation || 0,
                         opacity: motionOpacity,
                     }}
-                    transition={itemMotionTransition}
+                    transition={isLootDropTarget ? { type: 'spring', stiffness: 480, damping: 24 } : itemMotionTransition}
                     style={{
                         width: `${item.width}px`,
                         height: `${item.height}px`,
@@ -751,28 +797,32 @@ const renderItemJSX = (item) => {
                         pointerEvents: canInteract ? 'auto' : 'none',
                         cursor: (targetingState && isToken) ? 'crosshair' : (canInteract ? 'grab' : 'default'),
                         touchAction: (isBoardMode && isCard) || isScenePickup ? 'none' : undefined,
-                        zIndex: isBoardDie
-                            ? 80
-                            : isBoardMarker
-                                ? (draggedTokenId === item.id ? 999 : 30 + itemOrderIndex)
-                                : isScenePickup
-                                    ? 34
-                                : isLight
-                                    ? 10
-                                    : isGeometry
-                                        ? 15
-                                        : isCardContainer
-                                            ? 17
-                                            : isCard
-                                                ? 18
-                                                : 20,
+                        zIndex: isBeingDragged
+                            ? 1000
+                            : isLootDropTarget
+                                ? 50
+                                : isBoardDie
+                                    ? 80
+                                    : isBoardMarker
+                                        ? 30 + itemOrderIndex
+                                        : isScenePickup
+                                            ? 34
+                                        : isLight
+                                            ? 10
+                                            : isGeometry
+                                                ? 15
+                                                : isCardContainer
+                                                    ? 17
+                                                    : isCard
+                                                        ? 18
+                                                        : 20,
                         transformOrigin: 'center center',
-                        willChange: shouldPromoteItemLayer ? 'transform, opacity' : 'auto'
+                        willChange: shouldPromoteItemLayer || isLootDropTarget || isBeingDragged ? 'transform, opacity' : 'auto'
                     }}
                     className="group"
                 >
-                    <div id={`token-inner-wrapper-${item.id}`} className={`w-full h-full relative ${draggedTokenId === item.id ? (isBoardDie ? 'scale-105' : 'scale-105 shadow-2xl') : ''} ${isBoardDie ? '' : 'transition-transform'}`}>
-                        <div className={`absolute -inset-1 z-50 ${isBoardDie || isScenePickup ? 'opacity-0' : 'border-2 border-[#c8aa6e]'} ${item.isCircular ? 'rounded-full' : 'rounded-sm'} transition-opacity ${isScenePickup ? '' : (isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-50')}`}>
+                    <div id={`token-inner-wrapper-${item.id}`} className={`w-full h-full relative ${item.isCircular ? 'rounded-full' : 'rounded-sm'} ${isLootDropTarget ? 'ring-2 ring-[#c8aa6e]/80 shadow-[0_12px_24px_rgba(0,0,0,0.85)]' : ''} ${draggedTokenId === item.id ? (isBoardDie ? 'scale-105' : 'scale-105 shadow-2xl') : ''} ${isBoardDie ? '' : 'transition-transform'}`}>
+                        <div className={`absolute -inset-1 z-50 pointer-events-none ${isBoardDie || isScenePickup ? 'opacity-0' : 'border-2 border-[#c8aa6e]'} ${item.isCircular ? 'rounded-full' : 'rounded-sm'} transition-opacity ${isScenePickup ? '' : (isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-50')}`}>
                             {/* Indicador de Compartido (Izquierda) */}
                             {isToken && item.controlledBy?.length > 0 && (
                                 <div className="absolute -top-[1px] -left-[1px] -translate-x-1/2 -translate-y-1/2 bg-[#c8aa6e] shadow-[0_0_10px_rgba(200,170,110,0.4)] text-[#0b1120] rounded-full p-0.5 border border-white/20 flex items-center justify-center z-40 pointer-events-none">
@@ -866,7 +916,13 @@ const renderItemJSX = (item) => {
                         )}
 
                         {isScenePickup ? (
-                            <ScenePickupVisual item={item} isSelected={isSelected} isDragging={draggedTokenId === item.id} />
+                            <ScenePickupVisual
+                                item={item}
+                                isSelected={isSelected}
+                                isDragging={draggedTokenId === item.id}
+                                selectedLootItems={selectedLootItems}
+                                isPrimarySelectedLoot={isPrimarySelectedLoot}
+                            />
                         ) : isLight ? (
                             <div className="w-full h-full flex items-center justify-center">
                                 <div className="w-8 h-8 rounded-full bg-yellow-400 flex items-center justify-center shadow-[0_0_20px_#facc15] border-2 border-white/50">
