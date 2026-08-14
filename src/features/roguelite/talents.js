@@ -82,6 +82,27 @@ export const resolveEquippedTalentIds = (
   });
 };
 
+export const ROGUELITE_SKILL_SLOT_COUNT = 3;
+
+export const resolveEquippedSkillIds = (
+  storedConfiguration = {},
+  abilityCatalog = []
+) => {
+  const storedSlots = Array.isArray(storedConfiguration.equippedSkillIds)
+    ? storedConfiguration.equippedSkillIds
+    : storedConfiguration.skills?.slots;
+
+  return Array.from({ length: ROGUELITE_SKILL_SLOT_COUNT }, (_, index) => {
+    const stored = Array.isArray(storedSlots) ? storedSlots[index] : null;
+    const candidateId =
+      typeof stored === 'string'
+        ? stored
+        : stored?.templateId || stored?.id || stored?.name || null;
+    if (!candidateId) return null;
+    return String(candidateId).trim();
+  });
+};
+
 export const createEmptyRogueliteTalent = (existingCatalog = []) => {
   const baseId = `talento-${Date.now()}`;
   let id = baseId;

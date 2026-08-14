@@ -39,6 +39,11 @@ export const isRogueliteClassSheet = (sheetData) => (
   || sheetData?.launchSource === 'rogueliteClass'
 );
 
+export const isRogueliteEnemySheet = (sheetData) => (
+  sheetData?.profileType === 'rogueliteEnemy'
+  || sheetData?.launchSource === 'rogueliteEnemy'
+);
+
 export const resolveRogueliteEquippedItems = (equippedItems = {}) => {
   const normalized = normalizeEquippedWeaponSets(equippedItems);
   const activeSet = resolveEquippedWeaponSet(normalized, normalized.activeWeaponSet);
@@ -70,6 +75,27 @@ const resolveStatusIds = (sheetData) => (
 );
 
 export const syncCanvasTokenWithSheet = (token, sheetData, catalogs = {}, options = {}) => {
+  if (isRogueliteEnemySheet(sheetData)) {
+    const portrait = sheetData.image || sheetData.imageSource || sheetData.portrait || sheetData.img || token.portrait || token.img;
+    return {
+      ...token,
+      ...sheetData,
+      profileType: 'rogueliteEnemy',
+      canvasRuntime: 'roguelite',
+      img: portrait,
+      portrait,
+      controlledBy: ['master'],
+      teamId: sheetData.teamId || 'enemies',
+      linkedEnemyId: sheetData.id || sheetData.linkedEnemyId || token.linkedEnemyId || null,
+      stats: sheetData.stats || token.stats || {},
+      inventory: sheetData.inventory || token.inventory || [],
+      equippedItems: sheetData.equippedItems || token.equippedItems || [],
+      enemyAbilities: sheetData.enemyAbilities || token.enemyAbilities || [],
+      velocidad: Number(sheetData.stats?.iniciativa?.current ?? sheetData.velocidad ?? token.velocidad) || 0,
+      fixedInitiative: Number(sheetData.stats?.iniciativa?.current ?? sheetData.fixedInitiative ?? token.fixedInitiative) || 0,
+      offenseBase: Number(sheetData.stats?.ofensiva?.current ?? sheetData.offenseBase ?? token.offenseBase) || 0,
+    };
+  }
   if (!isRogueliteClassSheet(sheetData)) {
     return syncLegacyTokenWithSheet(token, sheetData, catalogs, options);
   }
@@ -99,12 +125,15 @@ export const syncCanvasTokenWithSheet = (token, sheetData, catalogs = {}, option
     slotsByTemplate.set(key, [...(slotsByTemplate.get(key) || []), item.canvasSlot]);
     return slotsByTemplate;
   }, new Map());
+  const preparedSkillIds = new Set(activeRun.equippedSkillIds || sheetData.equippedSkillIds || []);
   const runInventory = flattenRogueliteRunInventory(activeRun.inventory).map((item) => {
     const key = item.templateId || item.id || item.runItemId || item.name || item.nombre;
     const equippedSlots = key ? (equippedSlotsByTemplate.get(key) || []) : [];
+    const isPrepared = Boolean(key && preparedSkillIds.has(key));
     return {
       ...item,
       isEquipped: equippedSlots.length > 0,
+      isPrepared,
       equippedSlots,
     };
   });
@@ -134,6 +163,9 @@ export const syncCanvasTokenWithSheet = (token, sheetData, catalogs = {}, option
     equippedItems: preserveRuntimeState && token.equippedItems
       ? token.equippedItems
       : equipped.items,
+    equippedSkillIds: preserveRuntimeState && token.equippedSkillIds
+      ? token.equippedSkillIds
+      : (activeRun.equippedSkillIds || sheetData.equippedSkillIds || []),
     equipmentLoadout: preserveRuntimeState && token.equipmentLoadout
       ? token.equipmentLoadout
       : equipped.loadout,

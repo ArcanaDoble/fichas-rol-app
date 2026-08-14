@@ -74,6 +74,7 @@ import CardBuilder from './components/CardBuilder';
 import DeckBuilderView from './components/DeckBuilderView';
 import EnemyViewModal from './components/EnemyViewModal';
 import BestiaryView from './components/BestiaryView';
+import EnemyBestiaryGateway from './features/roguelite-bestiary/EnemyBestiaryGateway';
 import StatusEffectsManager from './components/StatusEffectsManager';
 import EquipmentImageManager from './components/EquipmentImageManager';
 import ChatPanel from './components/ChatPanel';
@@ -5529,7 +5530,13 @@ function App() {
   if (userType === 'master' && authenticated && chosenView === 'enemies') {
     return (
       <React.Suspense fallback={<div className="text-white p-8">Cargando Bestiario...</div>}>
-        <BestiaryView onBack={() => setChosenView(null)} />
+        <EnemyBestiaryGateway
+          onBack={() => setChosenView(null)}
+          armas={armas}
+          armaduras={armaduras}
+          habilidades={habilidades}
+          accesorios={accesorios}
+        />
       </React.Suspense>
     );
   }
@@ -7125,7 +7132,13 @@ function App() {
   }
   if (userType === 'master' && authenticated && chosenView === 'enemies') {
     return withTooltips(
-      <BestiaryView onBack={() => setChosenView(null)} highlightText={highlightText} />
+      <EnemyBestiaryGateway
+        onBack={() => setChosenView(null)}
+        armas={armas}
+        armaduras={armaduras}
+        habilidades={habilidades}
+        accesorios={accesorios}
+      />
     );
   }
   if (userType === 'master' && authenticated && chosenView === 'status_effects') {

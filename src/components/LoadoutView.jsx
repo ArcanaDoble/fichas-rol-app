@@ -312,6 +312,7 @@ const LoadoutView = ({
     onUpdateResource,
     onUpdateTalentCatalog,
     onUpdateEquippedTalentIds,
+    onUpdateEquippedSkillIds,
 }) => {
     const customEquipmentImages = useCustomEquipmentImages();
     const [searchTerm, setSearchTerm] = useState('');
@@ -558,7 +559,7 @@ const LoadoutView = ({
     const proficiencies = summary.proficiencies || { weapons: {}, armor: {} };
 
     const rawEquipment = dndClass.equipment || {};
-    const equipment = useMemo(() => {
+    const fullEquipment = useMemo(() => {
         if (Array.isArray(rawEquipment)) return rawEquipment;
 
         const list = [];
@@ -569,6 +570,47 @@ const LoadoutView = ({
         if (rawEquipment.accessories) list.push(...rawEquipment.accessories.map((item, idx) => ({ ...item, _category: 'accessories', _index: idx })));
         return list;
     }, [rawEquipment]);
+
+    const abilityCatalog = useMemo(() => {
+        const classAbilityPool = dndClass.classEquipmentPool?.abilities;
+        const source = [
+            ...(Array.isArray(classAbilityPool)
+                ? classAbilityPool.map((item, index) => ({ ...item, _category: 'abilities', _index: index }))
+                : []),
+            ...fullEquipment,
+        ].filter((item) => (
+            item._category === 'abilities' ||
+            item.itemType === 'ability' ||
+            item.type === 'habilidad' ||
+            item.category === 'abilities'
+        ));
+
+        const seen = new Set();
+        return source.filter((item) => {
+            const key = String(
+                item.templateId || item.catalogId || item.id || item.runItemId
+                || item.name || item.nombre || ''
+            ).trim().toLowerCase();
+            if (!key || seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        }).map((item) => ({
+            ...item,
+            // El selector comparte exactamente el arte asociado que ya utiliza
+            // la tarjeta del inventario, incluida la colección equipment_images.
+            image: getObjectImage(item, customEquipmentImages)
+                || item.image
+                || item.imagen
+                || item.imageUrl
+                || item.avatar
+                || '',
+        }));
+    }, [dndClass.classEquipmentPool?.abilities, fullEquipment, customEquipmentImages]);
+
+    // `equipment` is already the authoritative source for the current phase:
+    // the complete class pool during preparation and the persisted run inventory
+    // once an adventure is active. Do not reconstruct ownership from display names.
+    const equipment = fullEquipment;
 
     // Get available weapons and armor from inventory
     const inventoryWeapons = useMemo(() => {
@@ -1957,10 +1999,13 @@ const LoadoutView = ({
                                     resource={dndClass.resource || {}}
                                     talentCatalog={dndClass.talentCatalog || []}
                                     equippedTalentIds={dndClass.equippedTalentIds || []}
+                                    equippedSkillIds={dndClass.equippedSkillIds || []}
+                                    abilityCatalog={abilityCatalog}
                                     rarity={dndClass.talents?.rarity || 'rara'}
                                     onResourceChange={onUpdateResource}
                                     onCatalogChange={onUpdateTalentCatalog}
                                     onEquippedTalentIdsChange={onUpdateEquippedTalentIds}
+                                    onEquippedSkillIdsChange={onUpdateEquippedSkillIds}
                                     onRarityChange={(value) => onUpdateTalent && onUpdateTalent('rarity', value)}
                                 />
                             ) : (
@@ -2341,6 +2386,7 @@ LoadoutView.propTypes = {
     onUpdateResource: PropTypes.func,
     onUpdateTalentCatalog: PropTypes.func,
     onUpdateEquippedTalentIds: PropTypes.func,
+    onUpdateEquippedSkillIds: PropTypes.func,
 };
 
 export default LoadoutView;

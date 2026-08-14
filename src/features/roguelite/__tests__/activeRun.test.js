@@ -2,6 +2,7 @@ import {
   applyRogueliteActiveRunToProfile,
   canRogueliteTokenClaimRun,
   createRogueliteActiveRun,
+  createPreparedRogueliteRunInventory,
   createRogueliteActiveRunFromToken,
   flattenRogueliteRunInventory,
   reconcileRogueliteRunInventory,
@@ -36,6 +37,155 @@ const makeSheet = () => ({
 });
 
 describe('Roguelite active run', () => {
+  test('materializes only prepared equipment and skills when the run starts', () => {
+    const sheet = {
+      ...makeSheet(),
+      equipment: {
+        weapons: [
+          { name: 'Mandoble', templateId: 'weapon:mandoble' },
+          { name: 'Daga', templateId: 'weapon:daga' },
+        ],
+        armor: [{ name: 'Mallas', templateId: 'armor:mallas' }],
+        abilities: [
+          { name: 'Bola de fuego', templateId: 'ability:fireball' },
+          { name: 'Barrera', templateId: 'ability:barrier' },
+        ],
+        objects: [{ name: 'Poción', templateId: 'object:potion' }],
+      },
+      equippedItems: {
+        weaponSets: [
+          { mainHand: { name: 'Mandoble', templateId: 'weapon:mandoble' }, offHand: null },
+          { mainHand: null, offHand: null },
+        ],
+        body: { name: 'Mallas', templateId: 'armor:mallas' },
+      },
+      equippedSkillIds: ['ability:fireball', 'ability:fireball', null],
+    };
+
+    expect(flattenRogueliteRunInventory(createPreparedRogueliteRunInventory(sheet)).map((item) => item.name))
+      .toEqual(['Mandoble', 'Mallas', 'Bola de fuego']);
+    expect(flattenRogueliteRunInventory(createRogueliteActiveRun(sheet, { now: 100 }).inventory).map((item) => item.name))
+      .toEqual(['Mandoble', 'Mallas', 'Bola de fuego']);
+  });
+
+  test('keeps a prepared legacy ability whose catalog identity is nested in payload', () => {
+    const run = createRogueliteActiveRun({
+      ...makeSheet(),
+      classEquipmentPool: {
+        abilities: [{
+          name: 'Bola de fuego',
+          itemType: 'ability',
+          payload: { id: 'firebase-ability-id' },
+        }],
+      },
+      equipment: { abilities: [] },
+      equippedItems: {},
+      equippedSkillIds: ['firebase-ability-id', null, null],
+    }, { now: 100 });
+
+    expect(flattenRogueliteRunInventory(run.inventory)).toEqual([
+      expect.objectContaining({ name: 'Bola de fuego', itemType: 'ability' }),
+    ]);
+  });
+
+  test('keeps equipped abilities when a stale class pool does not contain them', () => {
+    const run = createRogueliteActiveRun({
+      ...makeSheet(),
+      classEquipmentPool: {
+        weapons: [{ name: 'Mandoble', templateId: 'weapon:mandoble' }],
+        abilities: [],
+      },
+      equipment: {
+        abilities: [
+          { name: 'Proyectil arcano', templateId: 'z4uoPSftKvQoRGLGneZY8', itemType: 'ability' },
+          { name: 'Onda de fuerza', templateId: 'pJ2400KBtdSH7IqfZ5fE0', itemType: 'ability' },
+          { name: 'Barrera arcana', templateId: 'PArxBqScw6OZDAqRRoR5H', itemType: 'ability' },
+        ],
+      },
+      equippedItems: {},
+      equippedSkillIds: [
+        'z4uoPSftKvQoRGLGneZY8',
+        'pJ2400KBtdSH7IqfZ5fE0',
+        'PArxBqScw6OZDAqRRoR5H',
+      ],
+    }, { now: 100 });
+
+    expect(flattenRogueliteRunInventory(run.inventory).map((item) => item.name)).toEqual([
+      'Proyectil arcano',
+      'Onda de fuerza',
+      'Barrera arcana',
+    ]);
+  });
+
+  test('refreshes the equipped skill slots when an existing run is launched again', () => {
+    const sheet = {
+      ...makeSheet(),
+      classEquipmentPool: {
+        abilities: [{
+          name: 'Barrera arcana',
+          templateId: 'PArxBqScw6OZDAqRRoR5H',
+          itemType: 'ability',
+        }],
+      },
+      equipment: { abilities: [] },
+      equippedItems: {},
+      equippedSkillIds: ['PArxBqScw6OZDAqRRoR5H', null, null],
+      activeRun: {
+        id: 'run-existing',
+        status: 'active',
+        classId: 'barbarian',
+        owner: 'Ada',
+        inventory: { abilities: [] },
+        baseInventoryTemplateIds: ['PArxBqScw6OZDAqRRoR5H'],
+        equippedSkillIds: [null, null, null],
+      },
+    };
+
+    const run = createRogueliteActiveRun(sheet, { now: 100 });
+
+    expect(run.equippedSkillIds).toEqual(['PArxBqScw6OZDAqRRoR5H', null, null]);
+    expect(flattenRogueliteRunInventory(run.inventory)).toEqual([
+      expect.objectContaining({ name: 'Barrera arcana', itemType: 'ability' }),
+    ]);
+  });
+
+  test('repairs a run created with the full pool without deleting runtime loot', () => {
+    const sheet = {
+      ...makeSheet(),
+      equipment: {
+        weapons: [
+          { name: 'Mandoble', templateId: 'weapon:mandoble' },
+          { name: 'Daga', templateId: 'weapon:daga' },
+        ],
+        objects: [{ name: 'Botín', templateId: 'object:loot' }],
+      },
+      classEquipmentPool: {
+        weapons: [
+          { name: 'Mandoble', templateId: 'weapon:mandoble' },
+          { name: 'Daga', templateId: 'weapon:daga' },
+        ],
+      },
+      activeRun: {
+        id: 'run-broken',
+        status: 'active',
+        classId: 'barbarian',
+        owner: 'Ada',
+        inventory: {
+          weapons: [
+            { name: 'Mandoble', templateId: 'weapon:mandoble' },
+            { name: 'Daga', templateId: 'weapon:daga' },
+          ],
+          objects: [{ name: 'Botín', templateId: 'object:loot' }],
+        },
+        baseInventoryTemplateIds: ['weapon:mandoble', 'weapon:daga'],
+      },
+    };
+
+    const repaired = createRogueliteActiveRun(sheet, { now: 200 });
+    expect(flattenRogueliteRunInventory(repaired.inventory).map((item) => item.name))
+      .toEqual(['Mandoble', 'Botín']);
+  });
+
   test('starts from the personal class without mutating the master definition', () => {
     const sheet = makeSheet();
     const run = createRogueliteActiveRun(sheet, {
@@ -55,7 +205,7 @@ describe('Roguelite active run', () => {
     }));
     expect(run.stats.vida).toEqual(expect.objectContaining({ current: 8, max: 10 }));
     expect(flattenRogueliteRunInventory(run.inventory).map((item) => item.name))
-      .toEqual(['Mandoble', 'Mallas']);
+      .toEqual(['Mandoble']);
     expect(sheet).not.toHaveProperty('activeRun');
   });
 
@@ -237,6 +387,6 @@ describe('Roguelite active run', () => {
     expect(rebased.stats.vida).toEqual(expect.objectContaining({ current: 3, max: 12 }));
     expect(rebased.statusEffects).toEqual(['sangrado']);
     expect(flattenRogueliteRunInventory(rebased.inventory).map((item) => item.name))
-      .toEqual(['Hacha', 'Botín']);
+      .toEqual(['Botín']);
   });
 });

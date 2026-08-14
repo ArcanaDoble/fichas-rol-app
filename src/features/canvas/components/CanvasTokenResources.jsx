@@ -18,7 +18,7 @@ const normalizeValue = (value) => {
 };
 
 const CanvasTokenResources = ({ token, onUpdate }) => {
-  if (token?.profileType !== 'rogueliteClass') {
+  if (token?.profileType !== 'rogueliteClass' && token?.profileType !== 'rogueliteEnemy') {
     return <LegacyTokenResources token={token} onUpdate={onUpdate} />;
   }
 
@@ -39,11 +39,18 @@ const CanvasTokenResources = ({ token, onUpdate }) => {
       nextStat.current = nextStat.max;
     }
 
+    const runtimeMirror = token.profileType === 'rogueliteEnemy'
+      ? {
+        ...(resourceId === 'iniciativa' ? { velocidad: nextStat.current, fixedInitiative: nextStat.current } : {}),
+        ...(resourceId === 'ofensiva' ? { offenseBase: nextStat.current } : {}),
+      }
+      : {};
     onUpdate({
       stats: {
         ...stats,
         [resourceId]: nextStat,
       },
+      ...runtimeMirror,
     });
   };
 
@@ -51,15 +58,23 @@ const CanvasTokenResources = ({ token, onUpdate }) => {
     const stats = token.stats || {};
     const currentStat = stats[resourceId] || { current: 0, max: 0 };
     const maximum = normalizeValue(currentStat.max);
+    const nextCurrent = Math.min(normalizeValue(value), maximum);
+    const runtimeMirror = token.profileType === 'rogueliteEnemy'
+      ? {
+        ...(resourceId === 'iniciativa' ? { velocidad: nextCurrent, fixedInitiative: nextCurrent } : {}),
+        ...(resourceId === 'ofensiva' ? { offenseBase: nextCurrent } : {}),
+      }
+      : {};
     onUpdate({
       stats: {
         ...stats,
         [resourceId]: {
           ...currentStat,
-          current: Math.min(normalizeValue(value), maximum),
+          current: nextCurrent,
           max: maximum,
         },
       },
+      ...runtimeMirror,
     });
   };
 
@@ -73,7 +88,13 @@ const CanvasTokenResources = ({ token, onUpdate }) => {
       </div>
 
       <div className="divide-y divide-slate-800/55 border-y border-slate-800/55 bg-[#0b1120]/45">
-        {RESOURCE_DEFINITIONS.map(({ id, fallbackLabel, fallbackColor, Icon }) => {
+        {(token.profileType === 'rogueliteEnemy'
+          ? [
+            ...RESOURCE_DEFINITIONS.slice(0, 4),
+            { id: 'ofensiva', fallbackLabel: 'Base ofensiva', fallbackColor: '#d68469', Icon: Gauge },
+          ]
+          : RESOURCE_DEFINITIONS
+        ).map(({ id, fallbackLabel, fallbackColor, Icon }) => {
           const stat = token.stats?.[id] || { current: 0, max: 0 };
           const current = normalizeValue(stat.current);
           const maximum = normalizeValue(stat.max);

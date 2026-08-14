@@ -209,10 +209,12 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         persistRuntimeItems,
         TokenResourcesComponent,
         EquipmentSectionComponent,
+        isScenePickupItem,
     } = modeDefinition;
     const {
         BoardDieVisual = EmptySceneItemVisual,
         BoardMarkerVisual = EmptySceneItemVisual,
+        ScenePickupVisual = EmptySceneItemVisual,
     } = sceneItemVisuals;
     // Estado de la cámara (separado en zoom y offset como en MinimapV2)
     const [zoom, setZoom] = useState(1);
@@ -2049,6 +2051,8 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         toggleHandCardFace,
         consumeCardStackQuickActionEvent,
         unstackSpecificCard,
+        handleModeItemDrop,
+        sceneDropPreview,
     } = useFeatureController({
         activeBoardHandTokenId,
         activeScenario,
@@ -2237,6 +2241,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         getBoardDieRollBounds,
         getEventCoords,
         gridConfig,
+        handleModeItemDrop,
         isBoardMode,
         isDragging,
         isDrawingWall,
@@ -2325,6 +2330,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         gridConfig,
         habilidades,
         isBoardMode,
+        isScenePickupItem,
         isMobile,
         isPlayerView,
         isUsablePendingTurnState,
@@ -2473,6 +2479,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
     const renderItemJSX = createSceneItemRenderer({
         BoardDieVisual,
         BoardMarkerVisual,
+        ScenePickupVisual,
         activeLayer,
         activeScenario,
         boardCardHandTransferRef,
@@ -2491,6 +2498,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         instantBoardDieMoveIdsRef,
         isBoardMode,
         isPlayerView,
+        isScenePickupItem,
         isUsablePendingTurnState,
         lastFlipTimesRef,
         lastSelectedIdRef,
@@ -2614,6 +2622,8 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
             tokenOriginalPos, tokens, triggerToast, unlinkCharacter, unstackSpecificCard, updateItem,
             uploadingCard, uploadingToken, viewMode, wallDrawingCurrent, wallDrawingStart, zoom,
             TokenResourcesComponent, EquipmentSectionComponent,
+            isScenePickupItem,
+            sceneDropPreview,
         }} />
     );
 };
@@ -2633,9 +2643,11 @@ TacticalSectionCore.propTypes = {
         persistRuntimeItems: PropTypes.func,
         TokenResourcesComponent: PropTypes.elementType,
         EquipmentSectionComponent: PropTypes.elementType,
+        isScenePickupItem: PropTypes.func,
         sceneItemVisuals: PropTypes.shape({
             BoardDieVisual: PropTypes.elementType,
             BoardMarkerVisual: PropTypes.elementType,
+            ScenePickupVisual: PropTypes.elementType,
         }),
     }).isRequired,
     onBack: PropTypes.func.isRequired,

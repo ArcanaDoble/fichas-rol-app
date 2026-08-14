@@ -6,7 +6,9 @@ import {
   resolveClassAuthorTags,
 } from '../../utils/tags';
 import {
+  ROGUELITE_SKILL_SLOT_COUNT,
   ROGUELITE_TALENT_SLOT_COUNT,
+  resolveEquippedSkillIds,
   resolveEquippedTalentIds,
   resolveRogueliteTalentCatalog,
 } from './talents';
@@ -91,6 +93,7 @@ export const createRogueliteProfileClass = (
   const personalStatusTags = resolveStoredPersonalStatuses(storedConfiguration, inheritedTags);
   const talentCatalog = resolveRogueliteTalentCatalog(definition);
   const equippedTalentIds = resolveEquippedTalentIds(storedConfiguration, talentCatalog);
+  const equippedSkillIds = resolveEquippedSkillIds(storedConfiguration, definition.equipment?.abilities || []);
   const equipmentPool = resolveRogueliteEquipmentPool(definition);
   const cleanConfiguration = {
     ...definition,
@@ -111,6 +114,7 @@ export const createRogueliteProfileClass = (
     },
     talentCatalog: clone(talentCatalog),
     equippedTalentIds: Array(ROGUELITE_TALENT_SLOT_COUNT).fill(null),
+    equippedSkillIds: Array(ROGUELITE_SKILL_SLOT_COUNT).fill(null),
     storeItems: [],
     money: 0,
     tags: clone(inheritedTags),
@@ -155,6 +159,7 @@ export const createRogueliteProfileClass = (
     ),
     talentCatalog: clone(talentCatalog),
     equippedTalentIds: clone(equippedTalentIds),
+    equippedSkillIds: clone(equippedSkillIds),
     talents: {
       ...(profileClass.talents || {}),
       ...(definition.talents || {}),

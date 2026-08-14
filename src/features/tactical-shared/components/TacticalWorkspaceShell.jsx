@@ -128,6 +128,7 @@ export const TacticalWorkspaceShell = ({
     isDrawingWall,
     isMaster,
     isPlayerView,
+    isScenePickupItem,
     isRollingBoardDice,
     isSaving,
     isUsablePendingTurnState,
@@ -164,6 +165,7 @@ export const TacticalWorkspaceShell = ({
     rollBoardDie,
     rotatingTokenId,
     saveCurrentScenario,
+    sceneDropPreview,
     scenarios,
     sectionTitle,
     selectedTokenIds,
@@ -420,6 +422,7 @@ export const TacticalWorkspaceShell = ({
                         {/* Overlay para cerrar al hacer click fuera */}
                         {showSettings && (
                             <div
+                                data-tactical-sidebar-backdrop="true"
                                 className="absolute inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity"
                                 onClick={() => setShowSettings(false)}
                             />
@@ -485,6 +488,7 @@ export const TacticalWorkspaceShell = ({
                     isBoardMode={isBoardMode}
                     isMaster={isMaster}
                     isPlayerView={isPlayerView}
+                    isScenePickupItem={isScenePickupItem}
                     isRollingBoardDice={isRollingBoardDice}
                     isSaving={isSaving}
                     lastFlipTimesRef={lastFlipTimesRef}
@@ -819,6 +823,7 @@ export const TacticalWorkspaceShell = ({
                     pendingTurnState={pendingTurnState}
                     playerName={playerName}
                     renderItemJSX={renderItemJSX}
+                    sceneDropPreview={sceneDropPreview}
                     resizingTokenId={resizingTokenId}
                     rotatingTokenId={rotatingTokenId}
                     selectedTokenIds={selectedTokenIds}

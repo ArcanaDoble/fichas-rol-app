@@ -83,6 +83,7 @@ import {
 import { resolveRogueliteClassLevels } from '../features/roguelite/progression';
 import { resolveRogueliteTalentCatalog } from '../features/roguelite/talents';
 import {
+  createRogueliteActiveRun,
   rebaseRogueliteActiveRun,
   resolveRogueliteTemplateRevision,
   updateRogueliteActiveRunFromProfile,
@@ -2104,6 +2105,16 @@ const ClassList = ({
     });
   };
 
+  const handleUpdateEquippedSkillIds = (equippedSkillIds) => {
+    updateEditingClass((draft) => {
+      draft.equippedSkillIds = equippedSkillIds;
+      draft.skills = {
+        ...(draft.skills || {}),
+        slots: [...equippedSkillIds],
+      };
+    });
+  };
+
   const handleEquipmentSearchChange = (category, value) => {
     setEquipmentSearchTerms((prev) => ({ ...prev, [category]: value }));
   };
@@ -3893,10 +3904,15 @@ const ClassList = ({
       })) : []),
       actionData: editingClass.actionData,
       equipment: editingClass.equipment || [],
+      classEquipmentPool: editingClass.classEquipmentPool || null,
       talents: editingClass.talents || {},
       resource: editingClass.resource || editingClass.roguelite?.resource || {},
       talentCatalog: resolveRogueliteTalentCatalog(editingClass),
       equippedTalentIds: editingClass.equippedTalentIds || [],
+      equippedSkillIds: editingClass.equippedSkillIds || [],
+      activeRun: editingClass.activeRun || null,
+      hasActiveRun: Boolean(editingClass.hasActiveRun || (editingClass.activeRun && editingClass.activeRun.status === 'active')),
+      owner: editingClass.owner || currentUserId || '',
       summary: editingClass.summary || {},
       equippedItems: editingClass.equippedItems || { mainHand: null, offHand: null, body: null },
       storeItems: editingClass.storeItems || [],
@@ -4710,21 +4726,56 @@ const ClassList = ({
                       {/* Actions */}
                       <div className={`${isRogueliteClassSummary ? '' : 'mt-auto'} space-y-4`}>
                         <button
-                          onClick={() => {
+                          onClick={async () => {
+                            let nextClass = editingClass;
+                            try {
+                              if (isRoguelitePlayerClass || detailPersistence?.mode === 'roguelite') {
+                                const targetOwner = editingClass.owner || currentUserId || '';
+                                const targetId = editingClass.id;
+                                const activeRun = createRogueliteActiveRun(editingClass, {
+                                  owner: targetOwner,
+                                  classId: targetId,
+                                });
+                                nextClass = {
+                                  ...editingClass,
+                                  activeRun,
+                                  hasActiveRun: true,
+                                  equipment: activeRun.inventory,
+                                };
+                                updateEditingClass((draft) => {
+                                  draft.activeRun = activeRun;
+                                  draft.hasActiveRun = true;
+                                  draft.equipment = deepClone(activeRun.inventory);
+                                });
+
+                                if (targetOwner && targetId) {
+                                  await setDoc(doc(db, 'players', targetOwner, 'rogueliteClasses', targetId), {
+                                    activeRun,
+                                  }, { merge: true });
+                                }
+                              }
+                            } catch (err) {
+                              console.error('Error al preparar activeRun en Jugar Aventura:', err);
+                              alert('No se pudo iniciar la aventura ni guardar su estado. Inténtalo de nuevo.');
+                              return;
+                            }
+
                             if (onLaunchCanvas) {
                               onLaunchCanvas(editingClass.name, isRoguelitePlayerClass ? {
-                                ...editingClass,
+                                ...nextClass,
                                 profileType: 'rogueliteClass',
                                 launchSource: 'rogueliteClass',
                               } : {
-                                name: editingClass.name,
-                                avatar: editingClass.avatar || editingClass.portraitSource || editingClass.image || '',
-                                attributes: editingClass.attributes || {},
-                                stats: editingClass.stats || {},
-                                tags: editingClass.tags || [],
-                                equipment: editingClass.equipment || [],
-                                equippedItems: editingClass.equippedItems || {},
-                                id: editingClass.id,
+                                name: nextClass.name,
+                                avatar: nextClass.avatar || nextClass.portraitSource || nextClass.image || '',
+                                attributes: nextClass.attributes || {},
+                                stats: nextClass.stats || {},
+                                tags: nextClass.tags || [],
+                                equipment: nextClass.equipment || [],
+                                equippedItems: nextClass.equippedItems || {},
+                                id: nextClass.id,
+                                activeRun: nextClass.activeRun,
+                                hasActiveRun: nextClass.hasActiveRun,
                               });
                             }
                           }}
@@ -5281,6 +5332,7 @@ const ClassList = ({
               onUpdateResource={updateMasterRogueliteResource}
               onUpdateTalentCatalog={handleUpdateTalentCatalog}
               onUpdateEquippedTalentIds={handleUpdateEquippedTalentIds}
+              onUpdateEquippedSkillIds={handleUpdateEquippedSkillIds}
               onUpdateProficiency={handleProficiencyChange}
               onUpdateEquipped={handleUpdateEquipped}
             />

@@ -21,7 +21,15 @@ const joinTraits = (value) => splitTraits(value).join(', ');
 
 export const ACTION_DICE_COSTS = Object.freeze([0, 1, 2, 3]);
 export const EQUIPMENT_RANGES = Object.freeze([
-  'Propio',
+  'Toque',
+  'Cercano',
+  'Intermedio',
+  'Lejano',
+  'Extremo',
+]);
+export const ABILITY_RANGES = Object.freeze([
+  'Arma',
+  'Catalizador',
   'Toque',
   'Cercano',
   'Intermedio',
@@ -109,7 +117,7 @@ export const createEmptyAccessoryCatalogItem = () => ({
 export const createEmptyAbilityCatalogItem = () => ({
   id: '',
   nombre: '',
-  alcance: 'Propio',
+  alcance: 'Arma',
   actionCost: 1,
   poder: '',
   rasgos: '',

@@ -6,12 +6,29 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ## ✨ Características principales
 
+### Pool Inicial de Equipamiento y Sección de Habilidades Equipadas
+
+- **Gestión Dinámica de la Pool Inicial**:
+  - **Antes de Iniciar Aventura**: Muestra en la mochila/inventario todos los objetos y equipamiento iniciales definidos por el Máster (armas, armaduras, habilidades, objetos y accesorios) para que el jugador pueda equiparse antes de la partida.
+  - **Aventura Activa (`hasActiveRun`)**: Al pulsar "Jugar Aventura", el inventario/mochila del jugador filtra automáticamente la pool y conserva únicamente los objetos equipados (en slots de manos, armadura, accesorios, cinturón) y las habilidades seleccionadas. Los elementos no equipados de la pool se ocultan.
+  - **Finalizar Aventura**: Al hacer clic en "Finalizar Aventura" en la gestión del máster, la ficha del jugador/clase se restablece a su estado base, vaciando los slots equipados y volviendo a mostrar la pool completa de objetos iniciales.
+- **Nueva Sección "Habilidades Equipadas" (3 Slots)**:
+  - Añadida una nueva sección en el sidebar (`RogueliteTalentsPanel` / `LoadoutView`) con 3 ranuras (`01`, `02`, `03`) idénticas en estilo y comportamiento a "Talentos equipados".
+  - Permite equipar conjuros/habilidades desde la pool de la clase, admitiendo equipar hasta 3 copias de un mismo conjuro o distintas habilidades.
+  - Al iniciar aventura, solo las habilidades escogidas permanecen en el inventario. Se vacían automáticamente cuando el máster finaliza la aventura.
+  - El selector de habilidades disponibles y sus ranuras reutilizan la imagen asociada a la misma habilidad en el inventario, incluyendo el arte personalizado del gestor de equipamiento; el icono de rayo queda únicamente como respaldo.
+
 ### Talentos Roguelite integrados con el inventario
+
+- Al iniciar una aventura, el inventario runtime se materializa únicamente con el equipo y las habilidades preparadas por ese jugador. La pool maestra permanece separada, el botín posterior se conserva y las runs creadas con la pool completa se corrigen sin depender de coincidencias visuales por nombre.
+- La Gestión de clases escucha en tiempo real el estado personal de cada jugador, por lo que `Finalizar aventura` aparece al persistirse la run. Las habilidades preparadas se rehidratan desde la pool maestra y resuelven identificadores antiguos sin mostrar claves internas en el sidebar.
+- Los conjuros y habilidades de los tres slots preparados se materializan dentro del inventario de la run aunque no ocupen una ranura física de `Equipables`. El inspector los presenta como `Habilidad · Preparada`, con icono y tratamiento de habilidad en lugar de objeto genérico.
 
 - El panel completo de Talentos adopta un marco continuo de ficha RPG; catálogo, ranuras y competencias se apoyan directamente sobre el fondo principal, sin cajas interiores ni grandes áreas de padding.
 - La ficha del jugador conserva la misma composición visual, espaciado y separadores del panel del máster, pero sustituye el catálogo editable por sus tres talentos equipados y mantiene todos los controles en modo lectura.
 - La imagen del recurso de clase se libera de la miniatura: ocupa la esquina superior derecha de la cabecera y se funde con el fondo mediante máscaras y degradados que mantienen legibles el nombre y la descripción superpuestos.
 - El catálogo del máster y las ranuras del jugador utilizan franjas abiertas separadas por líneas sutiles, conservando los flujos existentes de edición y selección sin convertir cada talento en una tarjeta independiente.
+- **Simplificación de Alcances en Catálogo del Máster**: Eliminada la opción redundante `Propio` e incorporadas las opciones `Arma` y `Catalizador` en la selección de alcances de Habilidades en la gestión de contenido (`catalogItem.js`), ofreciendo un selector limpio centrado en rangos tácticos de mesa (`Arma`, `Catalizador`, `Toque`, `Cercano`, `Intermedio`, `Lejano`, `Extremo`).
 
 ### Dos conjuntos de armas Roguelite
 
@@ -2930,7 +2947,8 @@ Guía rápida: ver `docs/Minimapa.md`.
 
 ## Novedades: estado persistente de run Roguelite
 
-- Cada clase personal puede mantener una `activeRun` independiente con estadísticas actuales y máximas, estados, inventario completo, equipamiento, conjunto de armas activo, dinero, encuentro vigente y revisión.
+- Cada clase personal puede mantener una `activeRun` independiente con estadísticas actuales y máximas, estados, inventario de la run, equipamiento, conjunto de armas activo, dinero, encuentro vigente y revisión.
+- Al iniciar una run, el inventario materializa únicamente el equipamiento y las habilidades preparadas. Los identificadores mixtos de Firebase se comparan sin distinguir mayúsculas y minúsculas, por lo que conjuros como `PArx...` permanecen vinculados a su objeto y a su nombre en la ficha y el inspector.
 - La definición de clase del máster continúa siendo la referencia de reglas y contenido. Los cambios realizados desde el Canvas se escriben exclusivamente en `players/{jugador}/rogueliteClasses/{clase}` y nunca modifican el catálogo maestro.
 - `Confirmar cambios` conserva el flujo único del inspector: guarda la sala y, cuando existe el aviso `Hay cambios pendientes` bajo la vinculación, sincroniza también Vida, CD, Movimiento, Iniciativa, recurso, estados, inventario, equipo y dinero con la ficha personal.
 - Al cambiar de encuentro, el Canvas crea el nuevo token desde la última revisión de la run sin exigir que el jugador vuelva a la ficha. Los tokens de salas anteriores quedan como instantáneas históricas y no pueden sobrescribir una revisión más reciente.
@@ -2940,5 +2958,34 @@ Guía rápida: ver `docs/Minimapa.md`.
 - La gestión de usuarios muestra por jugador y clase si la ficha está preparada o mantiene una aventura activa. `Finalizar aventura` elimina el estado temporal y devuelve esa ficha a la base vigente conservando su nivel y sus talentos personales.
 - El listado del jugador muestra el estado de cada clase. En el Canvas, cualquier cambio relevante en el inspector activa `Hay cambios pendientes` dentro del bloque de vinculación; mover el token por el mapa no lo activa.
 - Las fichas personales que ya están abiertas permanecen suscritas a su definición y configuración Roguelite: `Confirmar cambios`, los guardados del máster y `Finalizar aventura` actualizan estadísticas, estados e inventario sin recargar la página. Un borrador local sin guardar se conserva y recibe la última versión remota al confirmarlo o descartarlo.
+
+## Novedades: inventario interactivo en Canvas
+
+- El inventario Roguelite del inspector admite reordenación directa mediante un tirador lateral, manteniendo intactas las tarjetas y la configuración de equipamiento.
+- Una tarjeta de clase o enemigo puede arrastrarse fuera del inspector y soltarse sobre el Canvas. El objeto abandona el inventario, libera cualquier ranura que ocupase y aparece centrado como una pieza de media casilla en la celda libre señalada por una previsualización dorada.
+- Los objetos depositados son entidades exclusivas del Canvas: no participan en iniciativa, colisiones ni reglas de combate y no existen en BoardCards.
+- Las piezas del suelo se mueven directamente. Al soltarlas encima de una ficha controlada, esa ficha concreta las recoge sin equiparlas automáticamente; un jugador no puede entregar objetos a fichas ajenas y el máster puede usar el mismo gesto con enemigos y aliados.
+- Señalar una pieza del suelo abre sobre el mapa la tarjeta completa del inventario con su arte, rareza y reglas. No abre ni sustituye el inspector táctico.
+- Soltar y recoger se persisten inmediatamente en el encuentro y en la run personal para que todos los jugadores vean la transferencia y no reaparezcan copias al cambiar de sala.
+- El arrastre incorpora una previsualización flotante y, en móvil, aparta temporalmente el inspector para dejar visible el mapa durante la caída.
+
+## Novedades: bestiario Roguelite independiente
+
+- `Fichas de enemigos` abre ahora un selector explícito entre `Rol tradicional` y `Roguelite`; el bestiario anterior y su colección `enemies` permanecen intactos.
+- El selector adopta la misma estructura de biblioteca del Canvas y el registro Roguelite usa una cabecera compacta coherente con el bestiario tradicional, conservando sus acentos dorados.
+- Las nuevas tarjetas se guardan en `rogueliteEnemies` y reproducen el dossier visual de Talentos: arte recortable en WebP, rareza semántica, nombre, descripción y cabecera integrada.
+- El nombre y la descripción permanecen en modo lectura limpio hasta que el máster pulsa sobre ellos; clicar fuera o guardar cierra la edición.
+- Cada enemigo define Vida, CD, Movimiento, Iniciativa fija, Base ofensiva y un dado de amenaza opcional entre D4 y D20.
+- Las cinco estadísticas enemigas muestran valor actual y base mediante bloques individuales de color. Los campos numéricos permiten vaciar y sustituir el contenido, normalizan ceros iniciales y restauran `0` al salir si quedan vacíos.
+- Las ranuras de equipo resumen daño, alcance y CD, muestran el coste mediante iconos de dados y separan los rasgos del objeto para poder consultarlos sin abrir el catálogo.
+- Las habilidades enemigas reutilizables admiten daño, alcance y rasgos además de nombre, descripción e imagen; estos datos viajan también al inventario del token.
+- El inspector denomina la sección simplemente `Inventario`, y las habilidades de enemigos se identifican como `Habilidad` sin el calificador de preparación propio de las clases.
+- El primer guardado de una tarjeta nueva reconcilia el borrador local con su snapshot de Firebase por identificador, evitando que aparezca duplicada temporalmente.
+- El editor de arte separa el retrato cuadrado del token y la cabecera panorámica de la tarjeta. Un análisis de saliencia local propone un encuadre adaptado a la zona visible y `Marcar foco` permite señalar con un toque el rostro o elemento principal; recorte y foco quedan persistidos para mantener la composición responsive.
+- La cabecera utiliza un único recorte panorámico continuo. Se descartó la composición experimental por capas para evitar que las ilustraciones cuadradas revelen sus límites dentro del degradado informativo.
+- Las estadísticas de las tarjetas de enemigo admiten entre 0 y 20 bloques. Las tarjetas pueden reordenarse mediante arrastre o controles anterior/siguiente y guardan su posición en Firebase; los resúmenes de equipo reutilizan el icono neutro de dos dados y muestran los rasgos sin un rótulo redundante.
+- Equipamiento y habilidades disponen de una a cuatro ranuras. El equipo se busca en el catálogo general; las habilidades pueden escribirse para una criatura o guardarse en `rogueliteEnemyAbilities` para reutilizarlas.
+- `Añadir al encuentro` escribe un token `rogueliteEnemy` exclusivamente en el encuentro emitido por `gameSettings/canvasVisibility` dentro de `canvas_scenarios`. No utiliza ni modifica `BoardSection`.
+- El inspector del Canvas reconoce el nuevo perfil, presenta sus cinco estadísticas con barras editables y conserva equipo y habilidades mediante las tarjetas compactas del inventario Roguelite.
 
 

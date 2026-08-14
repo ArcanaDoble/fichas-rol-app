@@ -34,6 +34,7 @@ export const TokenInspectorPanel = ({
     isBoardMode,
     isMaster,
     isPlayerView,
+    isScenePickupItem,
     lastFlipTimesRef,
     linkCharacter,
     playerName,
@@ -47,6 +48,7 @@ export const TokenInspectorPanel = ({
     activeTab === 'INSPECTOR' && selectedTokenIds.length === 1 && (() => {
                                     const token = activeScenario.items.find(i => i.id === selectedTokenIds[0]);
                                     if (!token) return null;
+                                    if (isScenePickupItem?.(token)) return null;
                                     const tokenStackItems = isCardItem(token)
                                         ? getCardStackIds(token)
                                             .map(cardId => (activeScenario.items || []).find(stackItem => stackItem.id === cardId))

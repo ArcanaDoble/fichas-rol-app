@@ -9,6 +9,7 @@ jest.mock('firebase/firestore', () => ({
   deleteDoc: jest.fn(),
   doc: jest.fn(),
   getDocs: jest.fn(),
+  onSnapshot: jest.fn(),
   setDoc: jest.fn(),
   updateDoc: jest.fn(),
 }));
@@ -72,6 +73,10 @@ beforeEach(() => {
       }]);
     }
     return snapshot();
+  });
+  firestore.onSnapshot.mockImplementation((ref, onNext) => {
+    firestore.getDocs(ref).then(onNext);
+    return jest.fn();
   });
 });
 

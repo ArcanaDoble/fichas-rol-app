@@ -35,4 +35,25 @@ describe('CanvasTokenResources', () => {
       }),
     });
   });
+
+  it('mirrors the current enemy initiative and offense into their runtime fields', () => {
+    const onUpdate = jest.fn();
+    const token = {
+      profileType: 'rogueliteEnemy',
+      stats: {
+        vida: { current: 6, max: 6 },
+        cd: { current: 2, max: 2 },
+        movimiento: { current: 2, max: 2 },
+        iniciativa: { current: 3, max: 3 },
+        ofensiva: { current: 4, max: 4 },
+      },
+    };
+    render(<CanvasTokenResources token={token} onUpdate={onUpdate} />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Fijar Iniciativa en 2' })[0]);
+    expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ velocidad: 2, fixedInitiative: 2 }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fijar Base ofensiva en 2' }));
+    expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ offenseBase: 2 }));
+  });
 });

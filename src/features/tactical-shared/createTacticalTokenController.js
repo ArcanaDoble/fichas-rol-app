@@ -31,6 +31,7 @@ export const createCanvasTokenController = ({
     gridConfig,
     habilidades,
     isBoardMode,
+    isScenePickupItem,
     isMobile,
     isPlayerView,
     isUsablePendingTurnState,
@@ -336,6 +337,7 @@ const addTokenToCanvas = (tokenUrl) => {
         }
 
         e.stopPropagation(); // Evitar que el canvas inicie pan
+        const isScenePickup = Boolean(isScenePickupItem?.(token));
 
         if (isBoardDieItem(token) && ACTIVE_BOARD_DIE_ROLL_IDS.has(token.id)) {
             return;
@@ -397,6 +399,7 @@ const addTokenToCanvas = (tokenUrl) => {
                 (isBoardMarkerItem(token) && isBoardMode) ||
                 (isBoardDieItem(token) && isBoardMode) ||
                 (isCardContainerItem(token) && isBoardMode) ||
+                isScenePickup ||
                 (token.controlledBy && Array.isArray(token.controlledBy) && token.controlledBy.includes(playerName));
             if (!isOwner) return;
 
@@ -408,7 +411,7 @@ const addTokenToCanvas = (tokenUrl) => {
             }
 
             // Restricción de Turno: Si tienes un turno pendiente con otro token, debes terminarlo primero
-            if (!isBoardMode && isPlayerView && gridConfig.isCombatActive && pendingTurnState && pendingTurnState.tokenId !== token.id) {
+            if (!isScenePickup && !isBoardMode && isPlayerView && gridConfig.isCombatActive && pendingTurnState && pendingTurnState.tokenId !== token.id) {
                 const totalPendingCost = (pendingTurnState.moveCost || 0) + (pendingTurnState.actionCost || 0);
                 if (totalPendingCost > 0) {
                     triggerToast("Turno en progreso", "Termina las acciones de tu otro token antes de cambiar", 'warning');
@@ -437,10 +440,14 @@ const addTokenToCanvas = (tokenUrl) => {
             if (resizingTokenId) return;
 
             const currentScenario = activeScenarioRef.current || activeScenario;
-            let newSelection = [...selectedTokenIds];
+            let newSelection = isScenePickup ? [token.id] : [...selectedTokenIds];
+
+            if (isScenePickup && (selectedTokenIds.length !== 1 || selectedTokenIds[0] !== token.id)) {
+                setSelectedTokenIds(newSelection);
+            }
 
             // Si el token NO está ya seleccionado, lo añadimos o reemplazamos
-            if (!selectedTokenIds.includes(token.id)) {
+            if (!isScenePickup && !selectedTokenIds.includes(token.id)) {
                 if (e.shiftKey) {
                     newSelection.push(token.id);
                 } else {
@@ -449,7 +456,7 @@ const addTokenToCanvas = (tokenUrl) => {
                 setSelectedTokenIds(newSelection);
             }
             // Si YA está seleccionado, si pulsamos Shift podríamos deseleccionarlo?
-            else if (e.shiftKey) {
+            else if (!isScenePickup && e.shiftKey) {
                 newSelection = newSelection.filter(id => id !== token.id);
                 setSelectedTokenIds(newSelection);
                 return; // No iniciamos drag si estamos deseleccionando

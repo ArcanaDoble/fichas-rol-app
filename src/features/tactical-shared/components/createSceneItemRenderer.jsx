@@ -84,6 +84,7 @@ export const renderGeometryVisual = (item = {}) => {
 export const createSceneItemRenderer = ({
     BoardDieVisual,
     BoardMarkerVisual,
+    ScenePickupVisual,
     activeLayer,
     activeScenario,
     boardCardHandTransferRef,
@@ -102,6 +103,7 @@ export const createSceneItemRenderer = ({
     instantBoardDieMoveIdsRef,
     isBoardMode,
     isPlayerView,
+    isScenePickupItem,
     isUsablePendingTurnState,
     lastFlipTimesRef,
     lastSelectedIdRef,
@@ -145,6 +147,7 @@ const renderItemJSX = (item) => {
         const isCardContainer = isCardContainerItem(item);
         const isBoardMarker = isBoardMarkerItem(item);
         const isBoardDie = isBoardDieItem(item);
+        const isScenePickup = Boolean(isScenePickupItem?.(item));
         const itemOrderIndex = Math.max(0, (activeScenario?.items || []).findIndex(candidate => candidate.id === item.id));
         const boardMarkerStackIndex = isBoardMarker
             ? (activeScenario?.items || [])
@@ -204,16 +207,16 @@ const renderItemJSX = (item) => {
                 .map(cardId => (activeScenario?.items || []).find(stackItem => stackItem.id === cardId))
                 .filter(Boolean)
             : [];
-        const isToken = !isLight && !isWall && !isGeometry && !isCard && !isCardContainer && !isBoardMarker && !isBoardDie;
+        const isToken = !isLight && !isWall && !isGeometry && !isCard && !isCardContainer && !isBoardMarker && !isBoardDie && !isScenePickup;
         const isLocallyInteracting =
             !!(draggedTokenId || rotatingTokenId || resizingTokenId) &&
             selectedTokenIds.includes(item.id);
         const shouldPromoteItemLayer = isLocallyInteracting || draggedTokenId === item.id;
         const isInstantBoardDieMove = isBoardDie && instantBoardDieMoveIdsRef.current.has(item.id);
-        const canShowResizeHandle = isSelected && !rotatingTokenId && !isBoardDie && !isCard;
+        const canShowResizeHandle = isSelected && !rotatingTokenId && !isBoardDie && !isCard && !isScenePickup;
         const itemMotionTransition = isBoardMarker || isBoardDie
             ? (isLocallyInteracting || isInstantBoardDieMove ? { duration: 0 } : { type: 'spring', stiffness: 520, damping: 28, mass: 0.55 })
-            : (isToken || isCard || isCardContainer) && !isLocallyInteracting
+            : (isToken || isCard || isCardContainer || isScenePickup) && !isLocallyInteracting
                 ? { type: 'tween', duration: 0.42, ease: [0.22, 1, 0.36, 1] }
                 : { duration: 0 };
         const combatPlacementItems = combatOccupancyFeedback?.tokenId && tokenOriginalPos[combatOccupancyFeedback.tokenId]
@@ -237,12 +240,14 @@ const renderItemJSX = (item) => {
         let canInteract = false;
         if (isLightingLayer) canInteract = (isLight || isWall);
         else if (isMapLayer) canInteract = isGeometry;
-        else canInteract = (isToken || isCard || isCardContainer || isBoardMarker || isBoardDie);
+        else canInteract = (isToken || isCard || isCardContainer || isBoardMarker || isBoardDie || isScenePickup);
 
         // Si estamos en targeting (apuntando o eligiendo arma), TODOS los tokens son interactuables como objetivos.
         // Importante: Esto previene que el click en un enemigo "atraviese" la ficha hacia el fondo y cancele la acción en móvil.
         const isTargetingActive = targetingState && (targetingState.phase === 'targeting' || targetingState.phase === 'weapon_selection');
         if (isTargetingActive && isToken) {
+            canInteract = true;
+        } else if (isPlayerView && isScenePickup) {
             canInteract = true;
         } else if (isPlayerView && isToken) {
             const hasPermission = item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName);
@@ -696,9 +701,14 @@ const renderItemJSX = (item) => {
                     data-board-item-id={item.id}
                     onMouseDown={(e) => {
                         if (e.button === 2) return; // Ignorar clic derecho para evitar conflictos de arrastre
+                        if (isScenePickup) setShowSettings(false);
                         if (canInteract) handleTokenMouseDown(e, item);
                     }}
-                    onTouchStart={(e) => canInteract && handleTokenMouseDown(e, item)}
+                    onTouchStart={(e) => {
+                        if (!canInteract) return;
+                        if (isScenePickup) setShowSettings(false);
+                        handleTokenMouseDown(e, item);
+                    }}
                     onContextMenu={(e) => {
                         if (isCard && canInteract) {
                             e.preventDefault();
@@ -712,9 +722,10 @@ const renderItemJSX = (item) => {
                     }}
                     onDoubleClick={(e) => {
                         if (!canInteract) return;
+                        if (isScenePickup) return;
 
                         // RESTRICCIÓN: Solo abrir inspector si el jugador es dueño del token (o es Master)
-                        const hasPermission = !isPlayerView || isCard || isCardContainer || isBoardMarker || isBoardDie || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName));
+                        const hasPermission = !isPlayerView || isScenePickup || isCard || isCardContainer || isBoardMarker || isBoardDie || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName));
                         if (!hasPermission) return;
 
                         e.stopPropagation();
@@ -739,11 +750,13 @@ const renderItemJSX = (item) => {
                         top: 0,
                         pointerEvents: canInteract ? 'auto' : 'none',
                         cursor: (targetingState && isToken) ? 'crosshair' : (canInteract ? 'grab' : 'default'),
-                        touchAction: isBoardMode && isCard ? 'none' : undefined,
+                        touchAction: (isBoardMode && isCard) || isScenePickup ? 'none' : undefined,
                         zIndex: isBoardDie
                             ? 80
                             : isBoardMarker
                                 ? (draggedTokenId === item.id ? 999 : 30 + itemOrderIndex)
+                                : isScenePickup
+                                    ? 34
                                 : isLight
                                     ? 10
                                     : isGeometry
@@ -759,7 +772,7 @@ const renderItemJSX = (item) => {
                     className="group"
                 >
                     <div id={`token-inner-wrapper-${item.id}`} className={`w-full h-full relative ${draggedTokenId === item.id ? (isBoardDie ? 'scale-105' : 'scale-105 shadow-2xl') : ''} ${isBoardDie ? '' : 'transition-transform'}`}>
-                        <div className={`absolute -inset-1 z-50 ${isBoardDie ? 'opacity-0' : 'border-2 border-[#c8aa6e]'} ${item.isCircular ? 'rounded-full' : 'rounded-sm'} transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}>
+                        <div className={`absolute -inset-1 z-50 ${isBoardDie || isScenePickup ? 'opacity-0' : 'border-2 border-[#c8aa6e]'} ${item.isCircular ? 'rounded-full' : 'rounded-sm'} transition-opacity ${isScenePickup ? '' : (isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-50')}`}>
                             {/* Indicador de Compartido (Izquierda) */}
                             {isToken && item.controlledBy?.length > 0 && (
                                 <div className="absolute -top-[1px] -left-[1px] -translate-x-1/2 -translate-y-1/2 bg-[#c8aa6e] shadow-[0_0_10px_rgba(200,170,110,0.4)] text-[#0b1120] rounded-full p-0.5 border border-white/20 flex items-center justify-center z-40 pointer-events-none">
@@ -852,7 +865,9 @@ const renderItemJSX = (item) => {
                             />
                         )}
 
-                        {isLight ? (
+                        {isScenePickup ? (
+                            <ScenePickupVisual item={item} isSelected={isSelected} isDragging={draggedTokenId === item.id} />
+                        ) : isLight ? (
                             <div className="w-full h-full flex items-center justify-center">
                                 <div className="w-8 h-8 rounded-full bg-yellow-400 flex items-center justify-center shadow-[0_0_20px_#facc15] border-2 border-white/50">
                                     <Sparkles className="w-4 h-4 text-yellow-900" />
@@ -1074,7 +1089,7 @@ const renderItemJSX = (item) => {
                                     })}
                                 </div>
                             </div>
-                        ) : !isCard && !isCardContainer && !isBoardMarker && !isBoardDie ? (
+                        ) : !isCard && !isCardContainer && !isBoardMarker && !isBoardDie && !isScenePickup ? (
                             <div className={`absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap z-50 transition-opacity ${isSelected || 'group-hover:opacity-100 opacity-0'}`}>
                                 <span className="bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full border border-slate-600 block shadow-sm backdrop-blur-sm">
                                     {item.name}
@@ -1120,7 +1135,7 @@ const renderItemJSX = (item) => {
                         {/* Controles de Acción */}
                         {(!isPlayerView || ((isCard || isCardContainer || isBoardMarker || isBoardDie) && canInteract) || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName))) && (
                             <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${isSelected ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none md:group-hover:opacity-100 md:group-hover:pointer-events-auto'}`}>
-                                <button
+                                {!isScenePickup && <button
                                     onMouseDown={(e) => {
                                         e.stopPropagation();
                                         if (isBoardDie) {
@@ -1154,8 +1169,8 @@ const renderItemJSX = (item) => {
                                     title={isBoardDie ? (item.dieLaunchMode ? 'Modo lanzamiento activo' : 'Modo mover dado') : isCard ? 'Voltear carta' : 'Rotar 45°'}
                                 >
                                     {isBoardDie ? (item.dieLaunchMode ? <HandGrab size={12} fill="currentColor" strokeWidth={2.2} /> : <Hand size={12} />) : <RotateCw size={12} />}
-                                </button>
-                                <div className="w-3 h-3 bg-[#c8aa6e] rounded-full mx-1 cursor-grab active:cursor-grabbing hover:scale-125 transition-transform border border-[#0b1120]" onMouseDown={(e) => handleRotationMouseDown(e, item)} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); handleRotationMouseDown(e, item); }} />
+                                </button>}
+                                {!isScenePickup && <div className="w-3 h-3 bg-[#c8aa6e] rounded-full mx-1 cursor-grab active:cursor-grabbing hover:scale-125 transition-transform border border-[#0b1120]" onMouseDown={(e) => handleRotationMouseDown(e, item)} onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); handleRotationMouseDown(e, item); }} />}
                                 <button
                                     onMouseDown={(e) => e.stopPropagation()}
                                     onTouchStart={(e) => e.stopPropagation()}

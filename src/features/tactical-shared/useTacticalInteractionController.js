@@ -34,6 +34,7 @@ export const useCanvasInteractionController = ({
     getBoardDieRollBounds,
     getEventCoords,
     gridConfig,
+    handleModeItemDrop,
     isBoardMode,
     isDragging,
     isDrawingWall,
@@ -856,6 +857,22 @@ const handleMouseMove = (e) => {
 
                     return { ...item, x: newX, y: newY };
                 });
+
+                if (handleModeItemDrop?.({
+                    draggedItemId: draggedTokenId,
+                    finalItems,
+                    interactionOriginalItems,
+                    scenarioId: currentScenario.id,
+                })) {
+                    setDraggedTokenId(null);
+                    setRotatingTokenId(null);
+                    setResizingTokenId(null);
+                    setTokenOriginalPos({});
+                    setDragVisualOrigin({});
+                    setCombatOccupancyFeedback(null);
+                    document.body.style.cursor = 'default';
+                    return;
+                }
 
                 if (isBoardMode && isCardItem(draggedItem) && activeLayer === 'TABLETOP') {
                     const movedCard = finalItems.find(item => item.id === draggedTokenId);

@@ -58,6 +58,7 @@ export const CanvasViewport = ({
     pendingTurnState,
     playerName,
     renderItemJSX,
+    sceneDropPreview,
     resizingTokenId,
     rotatingTokenId,
     selectedTokenIds,
@@ -74,6 +75,7 @@ export const CanvasViewport = ({
 }) => (
 <div
                             ref={containerRef}
+                            data-tactical-viewport="true"
                             className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing touch-none"
                             onMouseDown={handleCanvasBackgroundMouseDown}
                             onMouseMove={handleMouseMove}
@@ -176,6 +178,36 @@ export const CanvasViewport = ({
                                     {canvasRenderItemGroups.lights.map(item => renderItemJSX(item))}
                                     {canvasRenderItemGroups.others.map(item => renderItemJSX(item))}
                                 </div>
+
+                                <AnimatePresence>
+                                    {sceneDropPreview && (
+                                        <motion.div
+                                            key={sceneDropPreview.cellKey}
+                                            initial={{ opacity: 0, scale: 0.86 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0.9 }}
+                                            transition={{ duration: 0.12 }}
+                                            className="pointer-events-none absolute z-[35]"
+                                            style={{
+                                                left: sceneDropPreview.x,
+                                                top: sceneDropPreview.y,
+                                                width: sceneDropPreview.width,
+                                                height: sceneDropPreview.height,
+                                            }}
+                                        >
+                                            <div className="absolute inset-[3px] border border-[#f0cf78] bg-[#c8aa6e]/16 shadow-[inset_0_0_18px_rgba(240,207,120,0.22),0_0_20px_rgba(200,170,110,0.42)]" />
+                                            <span className="absolute left-[3px] top-[3px] h-3 w-3 border-l-2 border-t-2 border-[#ffe39a]" />
+                                            <span className="absolute right-[3px] top-[3px] h-3 w-3 border-r-2 border-t-2 border-[#ffe39a]" />
+                                            <span className="absolute bottom-[3px] left-[3px] h-3 w-3 border-b-2 border-l-2 border-[#ffe39a]" />
+                                            <span className="absolute bottom-[3px] right-[3px] h-3 w-3 border-b-2 border-r-2 border-[#ffe39a]" />
+                                            <motion.span
+                                                className="absolute inset-[8px] border border-[#f7dfa1]/45"
+                                                animate={{ opacity: [0.35, 0.9, 0.35] }}
+                                                transition={{ duration: 1.05, repeat: Infinity, ease: 'easeInOut' }}
+                                            />
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
 
                                 {!targetingState && (() => {
                                     const items = activeScenario?.items || [];

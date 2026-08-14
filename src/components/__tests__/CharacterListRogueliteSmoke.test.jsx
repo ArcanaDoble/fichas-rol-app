@@ -68,6 +68,14 @@ beforeEach(() => {
                 armor: { light: false, medium: true, heavy: false },
               },
             },
+            equipment: {
+              abilities: [{
+                name: 'Barrera arcana',
+                templateId: 'PArxBqScw6OZDAqRRoR5H',
+                itemType: 'ability',
+                description: 'Protege al arcanista.',
+              }],
+            },
             roguelite: {
               actionDice: ['d8', 'd6', 'd4'],
               maxLife: 8,
@@ -135,21 +143,23 @@ test('mounts the roguelite card and opens it in the shared character sheet', asy
   expect(screen.queryByRole('button', { name: 'Editar etiqueta Vanguardia' })).not.toBeInTheDocument();
 
   fireEvent.click(screen.getByRole('button', { name: /Jugar Aventura/i }));
-  expect(onLaunchCanvas).toHaveBeenCalledWith(
-    'Bárbaro',
-    expect.objectContaining({
-      id: 'barbarian',
-      profileType: 'rogueliteClass',
-      launchSource: 'rogueliteClass',
-      actionDice: ['d8', 'd6', 'd4'],
-      maxLife: 8,
-      defenseClass: 7,
-      movement: 2,
-      initiativeBase: 2,
-      resource: expect.objectContaining({ name: 'Furia', maximum: 3 }),
-      equippedItems: expect.any(Object),
-    }),
-  );
+  await waitFor(() => {
+    expect(onLaunchCanvas).toHaveBeenCalledWith(
+      'Bárbaro',
+      expect.objectContaining({
+        id: 'barbarian',
+        profileType: 'rogueliteClass',
+        launchSource: 'rogueliteClass',
+        actionDice: ['d8', 'd6', 'd4'],
+        maxLife: 8,
+        defenseClass: 7,
+        movement: 2,
+        initiativeBase: 2,
+        resource: expect.objectContaining({ name: 'Furia', maximum: 3 }),
+        equippedItems: expect.any(Object),
+      }),
+    );
+  });
 
   fireEvent.click(screen.getByRole('button', { name: 'Gestionar estados' }));
   fireEvent.click(screen.getByRole('button', { name: 'Sangrado' }));
@@ -212,6 +222,46 @@ test('mounts the roguelite card and opens it in the shared character sheet', asy
     expect(savedProfile.equippedTalentIds).toEqual(['athletics', 'athletics', null]);
     expect(savedProfile.talentCatalog).toBeUndefined();
     expect(savedProfile.roguelite?.talentCatalog).toBeUndefined();
+  });
+});
+
+test('keeps a mixed-case Firebase ability in the run inventory after launching', async () => {
+  const onLaunchCanvas = jest.fn();
+  render(
+    <CharacterListView
+      playerName="Ada"
+      armas={[]}
+      armaduras={[]}
+      habilidades={[]}
+      glossary={[]}
+      rarityColorMap={{}}
+      onBack={jest.fn()}
+      onLaunchCanvas={onLaunchCanvas}
+    />,
+  );
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Abrir clase Bárbaro' }));
+  fireEvent.click((await screen.findByText('MAZO INICIAL')).closest('button'));
+  fireEvent.click(await screen.findByRole('button', { name: 'Seleccionar habilidad para ranura 1' }));
+  const skillDialog = screen.getByRole('dialog', { name: 'Elegir habilidad para la ranura 1' });
+  fireEvent.click(within(skillDialog).getByRole('button', { name: /Barrera arcana Protege al arcanista/i }));
+
+  fireEvent.click(screen.getByText('RESUMEN').closest('button'));
+  fireEvent.click(await screen.findByRole('button', { name: /Jugar Aventura/i }));
+
+  await waitFor(() => {
+    expect(onLaunchCanvas).toHaveBeenCalledWith(
+      'Bárbaro',
+      expect.objectContaining({
+        equippedSkillIds: ['PArxBqScw6OZDAqRRoR5H', null, null],
+        equipment: expect.objectContaining({
+          abilities: [expect.objectContaining({
+            name: 'Barrera arcana',
+            templateId: 'PArxBqScw6OZDAqRRoR5H',
+          })],
+        }),
+      }),
+    );
   });
 });
 

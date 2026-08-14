@@ -59,6 +59,10 @@ test('canvas and board expose independent mode contracts', () => {
         .not.toBe(BOARD_MODE_DEFINITION.useFeatureController);
     expect(CANVAS_MODE_DEFINITION.WorkspaceShell)
         .not.toBe(BOARD_MODE_DEFINITION.WorkspaceShell);
+    expect(CANVAS_MODE_DEFINITION.isScenePickupItem).toEqual(expect.any(Function));
+    expect(CANVAS_MODE_DEFINITION.sceneItemVisuals.ScenePickupVisual).toBeDefined();
+    expect(BOARD_MODE_DEFINITION.isScenePickupItem).toBeUndefined();
+    expect(BOARD_MODE_DEFINITION.sceneItemVisuals?.ScenePickupVisual).toBeUndefined();
 });
 
 test('canvas initiative is based on token speed and control side', () => {
@@ -66,6 +70,7 @@ test('canvas initiative is based on token speed and control side', () => {
         { id: 'master', type: 'token', isCircular: true, velocidad: 2, controlledBy: [] },
         { id: 'player', type: 'token', isCircular: true, velocidad: 5, controlledBy: ['Ada'] },
         { id: 'decoration', type: 'geometry' },
+        { id: 'loot', type: 'scenePickup', stats: { vida: { current: 1, max: 1 } } },
     ]);
 
     expect(tokens.map(({ id, timelineSide }) => ({ id, timelineSide }))).toEqual([

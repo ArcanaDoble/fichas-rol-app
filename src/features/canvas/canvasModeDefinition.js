@@ -5,6 +5,8 @@ import { buildCanvasTimelineTokens } from './canvasInitiative';
 import { syncCanvasTokenWithSheet } from './rogueliteTokenSheetSync';
 import CanvasTokenResources from './components/CanvasTokenResources';
 import CanvasEquipmentSection from './components/CanvasEquipmentSection';
+import CanvasLootVisual from './components/CanvasLootVisual';
+import { isCanvasLootItem } from './canvasInventoryTransfer';
 import {
     loadCanvasRogueliteRuntimeSheet,
     persistCanvasRogueliteRuns,
@@ -22,7 +24,11 @@ export const CANVAS_MODE_DEFINITION = Object.freeze({
     persistRuntimeItems: persistCanvasRogueliteRuns,
     TokenResourcesComponent: CanvasTokenResources,
     EquipmentSectionComponent: CanvasEquipmentSection,
+    isScenePickupItem: isCanvasLootItem,
     createCombatController: createCanvasCombatController,
     useFeatureController: useCanvasFeatureController,
     WorkspaceShell: CanvasWorkspaceShell,
+    sceneItemVisuals: {
+        ScenePickupVisual: CanvasLootVisual,
+    },
 });

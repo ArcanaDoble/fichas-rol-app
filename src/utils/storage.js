@@ -34,6 +34,7 @@ const IMAGE_UPLOAD_PRESETS = {
   'canvas-assets': { maxWidth: 1024, maxHeight: 1024, quality: 0.84 },
   custom_icons: { maxWidth: 512, maxHeight: 512, quality: 0.86 },
   'roguelite-class-assets': { maxWidth: 1600, maxHeight: 1600, quality: 0.86 },
+  'roguelite-enemy-assets': { maxWidth: 1600, maxHeight: 1600, quality: 0.86 },
   MinimapaIcons: { maxWidth: 512, maxHeight: 512, quality: 0.86 },
   RouteMapIcons: { maxWidth: 512, maxHeight: 512, quality: 0.86 },
 };

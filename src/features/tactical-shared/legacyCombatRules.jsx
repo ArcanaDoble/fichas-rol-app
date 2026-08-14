@@ -94,7 +94,7 @@ export const getCombatRangeData = (item) => {
 
 export const isBoardMarkerItem = (item) => item?.type === 'boardMarker';
 export const isBoardDieItem = (item) => item?.type === 'boardDie';
-export const isCombatTokenItem = (item) => !!item && item.type !== 'light' && item.type !== 'wall' && item.type !== 'geometry' && !isCardItem(item) && !isCardContainerItem(item) && !isBoardMarkerItem(item) && !isBoardDieItem(item);
+export const isCombatTokenItem = (item) => !!item && item.type !== 'light' && item.type !== 'wall' && item.type !== 'geometry' && item.type !== 'scenePickup' && !isCardItem(item) && !isCardContainerItem(item) && !isBoardMarkerItem(item) && !isBoardDieItem(item);
 export const isMobileTacticalMoveToken = (item) => (
     isCombatTokenItem(item) &&
     !!(

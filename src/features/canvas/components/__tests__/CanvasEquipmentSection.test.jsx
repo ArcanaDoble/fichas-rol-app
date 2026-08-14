@@ -34,8 +34,8 @@ describe('CanvasEquipmentSection', () => {
       />,
     );
 
-    expect(screen.getByText('Inventario de aventura')).toBeInTheDocument();
-    expect(screen.getByText('1 equipados · 2 objetos')).toBeInTheDocument();
+    expect(screen.getByText('Inventario')).toBeInTheDocument();
+    expect(screen.getByText('1 equipados · 2 elementos')).toBeInTheDocument();
     expect(screen.getByText('Arma · Equipado')).toBeInTheDocument();
     expect(screen.getByText('Objeto')).toBeInTheDocument();
     expect(screen.getAllByTestId('inventory-item-card')).toHaveLength(2);
@@ -73,5 +73,94 @@ describe('CanvasEquipmentSection', () => {
       equippedItems: [],
       equipmentLoadout: expect.objectContaining({ mainHand: null, offHand: null }),
     }));
+  });
+
+  test('presents prepared spells as abilities in the inspector', () => {
+    render(
+      <CanvasEquipmentSection
+        token={{
+          profileType: 'rogueliteClass',
+          equippedSkillIds: ['ability:fireball', null, null],
+          inventory: [{
+            name: 'Bola de fuego',
+            templateId: 'ability:fireball',
+            type: 'ability',
+            isEquipped: false,
+            isPrepared: true,
+          }],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Bola de fuego')).toBeInTheDocument();
+    expect(screen.getByText('Habilidad · Preparada')).toBeInTheDocument();
+    expect(screen.queryByText('Objeto')).not.toBeInTheDocument();
+  });
+
+  test('reorders inventory from the accessible drag handle', () => {
+    const onUpdateToken = jest.fn();
+    render(
+      <CanvasEquipmentSection
+        token={{
+          id: 'hero',
+          profileType: 'rogueliteClass',
+          inventory: [
+            { name: 'Espada', templateId: 'weapon:sword', type: 'weapon' },
+            { name: 'Poción', templateId: 'object:potion', type: 'object' },
+          ],
+        }}
+        onUpdateToken={onUpdateToken}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Mover Espada' }), { key: 'ArrowDown' });
+
+    expect(onUpdateToken).toHaveBeenCalledWith({
+      inventory: [
+        expect.objectContaining({ name: 'Poción' }),
+        expect.objectContaining({ name: 'Espada' }),
+      ],
+    });
+  });
+
+  test('removes enemy equipment without applying player loadout rules', () => {
+    const onUpdateToken = jest.fn();
+    const mandoble = { id: 'mandoble', name: 'Mandoble', type: 'weapon', isEquipped: true };
+    const carga = { id: 'carga', name: 'Carga', type: 'ability', isPrepared: true };
+
+    render(
+      <CanvasEquipmentSection
+        token={{
+          profileType: 'rogueliteEnemy',
+          inventory: [mandoble, carga],
+          equippedItems: [mandoble],
+          enemyAbilities: [carga],
+        }}
+        onUpdateToken={onUpdateToken}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Eliminar Mandoble' }));
+
+    expect(onUpdateToken).toHaveBeenCalledWith({
+      inventory: [carga],
+      equippedItems: [],
+      enemyAbilities: [carga],
+    });
+  });
+
+  test('presents enemy abilities without the prepared qualifier', () => {
+    render(
+      <CanvasEquipmentSection
+        token={{
+          profileType: 'rogueliteEnemy',
+          inventory: [{ id: 'carga', name: 'Carga', type: 'ability', isPrepared: true }],
+          enemyAbilities: [{ id: 'carga', name: 'Carga', type: 'ability', isPrepared: true }],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Habilidad')).toBeInTheDocument();
+    expect(screen.queryByText('Habilidad · Preparada')).not.toBeInTheDocument();
   });
 });

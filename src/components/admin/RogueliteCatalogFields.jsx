@@ -4,6 +4,7 @@ import TraitsInput from '../TraitsInput';
 import {
   ACTION_DICE_COSTS,
   ARMOR_COMPETENCES,
+  ABILITY_RANGES,
   EQUIPMENT_RANGES,
   WEAPON_COMPETENCES,
 } from '../../features/roguelite/catalogItem';
@@ -183,7 +184,7 @@ export const AbilityCatalogFields = ({ value, setValue, rarities, glossary }) =>
   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
     <TextField label="Nombre" value={value.nombre} onChange={update(setValue, 'nombre')} placeholder="Nombre de la habilidad" />
     <TextField label="Perfil de daño / efecto" value={value.poder} onChange={update(setValue, 'poder')} placeholder="d6 o descripción breve" />
-    <SelectField label="Alcance" value={value.alcance} onChange={update(setValue, 'alcance')} options={EQUIPMENT_RANGES} />
+    <SelectField label="Alcance" value={value.alcance} onChange={update(setValue, 'alcance')} options={ABILITY_RANGES} />
     <SegmentedField label="Dados de acción" value={value.actionCost} onChange={update(setValue, 'actionCost')} options={ACTION_DICE_COSTS} formatLabel={(cost) => (cost === 0 ? 'Sin coste' : `${cost}`)} />
     <TraitsField value={value.rasgos} onChange={update(setValue, 'rasgos')} glossary={glossary} />
     <RarityField value={value.rareza} onChange={update(setValue, 'rareza')} rarities={rarities} />

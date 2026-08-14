@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { motion } from 'framer-motion';
 import {
@@ -142,6 +142,44 @@ const UsersView = ({ onBack }) => {
         };
         fetchRogueliteClasses();
     }, []);
+
+    useEffect(() => {
+        if (players.length === 0) return undefined;
+
+        const unsubscribers = players.map((player) => onSnapshot(
+            collection(db, 'players', player.id, 'rogueliteClasses'),
+            (snapshot) => {
+                const prefix = `${player.id}::`;
+                const entries = snapshot.docs.map((profileDoc) => [
+                    getProfileClassKey(player.id, profileDoc.id),
+                    {
+                        ...(profileDoc.data() || {}),
+                        id: profileDoc.id,
+                        owner: player.id,
+                    },
+                ]);
+
+                setRogueliteProfiles((currentProfiles) => ({
+                    ...Object.fromEntries(
+                        Object.entries(currentProfiles).filter(([key]) => !key.startsWith(prefix)),
+                    ),
+                    ...Object.fromEntries(entries),
+                }));
+                setRogueliteProfileLevels((currentLevels) => ({
+                    ...Object.fromEntries(
+                        Object.entries(currentLevels).filter(([key]) => !key.startsWith(prefix)),
+                    ),
+                    ...Object.fromEntries(entries.map(([key, profile]) => [
+                        key,
+                        normalizeRogueliteProfileLevel(profile?.level),
+                    ])),
+                }));
+            },
+            (error) => console.error(`Error listening to roguelite profiles for ${player.id}:`, error),
+        ));
+
+        return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+    }, [players]);
 
     const handleCreateUser = async () => {
         if (!formData.name.trim()) return alert("El nombre es obligatorio");
@@ -405,6 +443,7 @@ const UsersView = ({ onBack }) => {
             personalStatusTags: [],
             money: 0,
             equippedItems: { mainHand: null, offHand: null, body: null, activeWeaponSet: 0 },
+            equippedSkillIds: [null, null, null],
         };
 
         setSavingProfileSync(profileKey);

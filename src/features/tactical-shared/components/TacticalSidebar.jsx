@@ -81,6 +81,7 @@ export const CanvasSidebar = ({
     isBoardMode,
     isMaster,
     isPlayerView,
+    isScenePickupItem,
     isRollingBoardDice,
     isSaving,
     lastFlipTimesRef,
@@ -111,7 +112,7 @@ export const CanvasSidebar = ({
     uploadingCard,
     uploadingToken,
 }) => (
-<div className={`
+<div data-tactical-sidebar="true" className={`
                     absolute top-0 right-0 h-full w-full sm:w-80 z-[100]
                     bg-[#0b1120] border-l border-[#c8aa6e]/30 shadow-2xl 
                     transform transition-transform duration-300 ease-out 
@@ -259,7 +260,7 @@ export const CanvasSidebar = ({
                         glossary, gridConfig, habilidades, handleBoardCardBackUpload, highlightText, isBoardMode,
                         isMaster, isPlayerView, lastFlipTimesRef, linkCharacter, playerName, rarityColorMap,
                         rollBoardDie, selectedTokenIds, unlinkCharacter, unstackSpecificCard, updateItem,
-                        EquipmentSectionComponent, TokenResourcesComponent,
+                        EquipmentSectionComponent, TokenResourcesComponent, isScenePickupItem,
                     }} />
                             </div>
 
