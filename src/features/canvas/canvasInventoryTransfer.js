@@ -495,7 +495,7 @@ export const resolveCanvasLootRecipient = ({
     const candidates = items
         .filter((item) => item.id !== loot?.id && isCanvasLootRecipient(item))
         .map((item) => {
-            const placement = (item.isToken !== false && gridConfig?.isCombatActive)
+            const placement = item.isToken !== false
                 ? getCombatRenderPlacement(item, items, gridConfig)
                 : { x: Number(item.x || 0), y: Number(item.y || 0) };
 

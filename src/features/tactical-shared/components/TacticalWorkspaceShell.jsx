@@ -103,6 +103,7 @@ export const TacticalWorkspaceShell = ({
     handleBoardMobileTacticalMoveCell,
     handleCancelAction,
     handleCancelMobileTacticalMove,
+    handleConfirmMobileTacticalMove,
     handleCanvasBackgroundMouseDown,
     handleCardUpload,
     handleCombatAction,
@@ -479,8 +480,8 @@ export const TacticalWorkspaceShell = ({
                     clearBackgroundImage={clearBackgroundImage}
                     clearBoardDicePool={clearBoardDicePool}
                     combatLog={combatLog}
-                    combatRuntime={combatRuntime}
                     CombatPanelComponent={CombatPanelComponent}
+                    combatRuntime={combatRuntime}
                     commitGridDraft={commitGridDraft}
                     currentBackgroundGridPresetIndex={currentBackgroundGridPresetIndex}
                     deleteCard={deleteCard}
@@ -994,11 +995,25 @@ export const TacticalWorkspaceShell = ({
                         })()
                         : false;
 
+                    const hasPendingMovement = isUsablePendingTurnState(pendingTurnState)
+                        && pendingTurnState.tokenId === hudToken.id
+                        && (Number(pendingTurnState.moveCost) || 0) > 0;
+
                     return (
                         <CombatHUD
                             token={hudToken}
                             onAction={(actionId, data) => handleCombatAction(hudToken.id, actionId, data)}
-                            onEndTurn={() => handleEndTurn(hudToken.id)}
+                            onEndTurn={async () => {
+                                if (activeScenario?.canvasCombat?.status === 'active' && combatRuntime?.completeActivation) {
+                                    if (hasPendingMovement) {
+                                        const confirmed = await handleConfirmMobileTacticalMove(null, hudToken.id);
+                                        if (!confirmed) return;
+                                    }
+                                    combatRuntime.completeActivation(hudToken.id);
+                                } else {
+                                    handleEndTurn(hudToken.id);
+                                }
+                            }}
                             onPortraitClick={handlePortraitClick}
                             canOpenSheet={canOpenSheet}
                             pendingCost={pendingTurnState?.tokenId === hudToken.id ? (pendingTurnState.moveCost + pendingTurnState.actionCost) : 0}
@@ -1020,8 +1035,9 @@ export const TacticalWorkspaceShell = ({
                             } : null}
                             suppressHandHover={isBoardHandHoverSuppressed}
                             isActive={(() => {
-                                if (!gridConfig.isCombatActive) return true;
-                                return canCombatTokenActNow(hudToken, activeScenario.items || []);
+                                const isCombatActive = gridConfig.isCombatActive || activeScenario?.canvasCombat?.status === 'active';
+                                if (!isCombatActive) return true;
+                                return canCombatTokenActNow(hudToken, activeScenario?.items || [], activeScenario);
                             })()}
                         />
                     );
@@ -1188,7 +1204,13 @@ export const TacticalWorkspaceShell = ({
                                         <CombatHUD
                                             token={hudToken}
                                             onAction={(actionId, data) => handleCombatAction(hudToken.id, actionId, data)}
-                                            onEndTurn={() => handleEndTurn(hudToken.id)}
+                                            onEndTurn={() => {
+                                                if (activeScenario?.canvasCombat?.status === 'active' && combatRuntime?.completeActivation) {
+                                                    combatRuntime.completeActivation(hudToken.id);
+                                                } else {
+                                                    handleEndTurn(hudToken.id);
+                                                }
+                                            }}
                                             onPortraitClick={handlePortraitClick}
                                             canOpenSheet={canOpenSheet}
                                             pendingCost={pendingTurnState && pendingTurnState.tokenId === hudToken.id ? (pendingTurnState.moveCost + pendingTurnState.actionCost) : 0}
@@ -1204,8 +1226,9 @@ export const TacticalWorkspaceShell = ({
                                             onHandCardDragStart={handleHandCardDragStart}
                                             onCardPreviewStart={handleHandCardDragStart}
                                             isActive={(() => {
-                                                if (!gridConfig.isCombatActive) return true;
-                                                return canCombatTokenActNow(hudToken, activeScenario.items || []);
+                                                const isCombatActive = gridConfig.isCombatActive || activeScenario?.canvasCombat?.status === 'active';
+                                                if (!isCombatActive) return true;
+                                                return canCombatTokenActNow(hudToken, activeScenario?.items || [], activeScenario);
                                             })()}
                                         />
                                     </motion.div>

@@ -70,10 +70,35 @@ const getParticipantSide = (token) => (
   token.profileType === 'rogueliteEnemy' ? 'enemies' : 'players'
 );
 
+export const defaultEnemyActions = () => [
+  { id: 'movement', label: 'Movimiento', type: 'movement', status: 'available' },
+  { id: 'attack', label: 'Ataque', type: 'attack', status: 'available' },
+];
+
+export const getMovementBase = (token) => Math.max(0, asInteger(
+  token?.stats?.movimiento?.current
+    ?? token?.stats?.movimiento?.max
+    ?? token?.stats?.movement
+    ?? token?.movimiento
+    ?? token?.movement
+    ?? 2,
+  2,
+));
+
+export const getAvailableMovement = (participant) => {
+  const runtime = participant?.movementRuntime;
+  if (!runtime) return 0;
+  const base = Number(runtime.base) || 0;
+  const modifier = Number(runtime.modifier) || 0;
+  const spent = Number(runtime.spent) || 0;
+  return Math.max(0, base + modifier - spent);
+};
+
 const createParticipant = (token, index) => {
   const side = getParticipantSide(token);
   const profile = side === 'players' ? normalizeActionDiceProfile(token.actionDice) : [];
   const initiativeBase = side === 'players' ? getInitiativeBase(token) : getEnemyInitiative(token);
+  const movementBase = getMovementBase(token);
   return {
     tokenId: token.id,
     name: token.name || (side === 'players' ? 'Aventurero' : 'Enemigo'),
@@ -85,6 +110,13 @@ const createParticipant = (token, index) => {
     initiative: side === 'enemies' ? initiativeBase : null,
     actionDiceProfile: profile,
     actionDice: [],
+    enemyActions: side === 'enemies' ? defaultEnemyActions() : [],
+    movementRuntime: {
+      base: movementBase,
+      modifier: 0,
+      spent: 0,
+      history: [],
+    },
     awaitingRoll: side === 'players' && profile.length > 0,
     threatDie: side === 'enemies' && token.threatDie ? `d${normalizeDieSides(token.threatDie)}` : null,
     threatValue: null,
@@ -92,15 +124,15 @@ const createParticipant = (token, index) => {
   };
 };
 
-const sortParticipants = (participants) => [...participants].sort((left, right) => {
+export const sortCombatParticipants = (participants) => [...participants].sort((left, right) => {
   const initiativeDelta = (right.initiative || 0) - (left.initiative || 0);
   if (initiativeDelta !== 0) return initiativeDelta;
-  if (left.side !== right.side) return left.side === 'players' ? -1 : 1;
+  if (left.side !== right.side) return left.side === 'enemies' ? -1 : 1;
   return left.orderIndex - right.orderIndex;
 });
 
 export const buildInitiativeBlocks = (participantsById = {}) => {
-  const sorted = sortParticipants(Object.values(participantsById).filter(
+  const sorted = sortCombatParticipants(Object.values(participantsById).filter(
     (participant) => participant.initiative !== null
       && participant.initiative !== undefined
       && Number.isFinite(Number(participant.initiative)),
@@ -173,10 +205,149 @@ export const createCanvasCombatState = (tokens = [], options = {}) => {
     participants,
     blocks: [],
     activeBlockIndex: 0,
+    pendingAttack: null,
     history: [],
   };
 
   return allPlayersReady(participants) ? openTurnPhase(initial, options.random) : initial;
+};
+
+export const queueCanvasAttack = (state, attack, options = {}) => {
+  if (!state || !attack?.id || state.pendingAttack) return state;
+  const attacker = state.participants?.[attack.attackerId];
+  const target = state.participants?.[attack.targetId];
+  if (!attacker || !target) return state;
+
+  const selectedIds = new Set(attack.actionDieIds || []);
+  if (attacker.side === 'players') {
+    const selectedDice = (attacker.actionDice || []).filter((die) => selectedIds.has(die.id));
+    if (selectedDice.length !== selectedIds.size || selectedDice.some((die) => die.status !== 'available')) {
+      return state;
+    }
+  }
+
+  const participants = {
+    ...state.participants,
+    [attack.attackerId]: attacker.side === 'players'
+      ? {
+        ...attacker,
+        actionDice: attacker.actionDice.map((die) => (
+          selectedIds.has(die.id) ? { ...die, status: 'spent' } : die
+        )),
+      }
+      : {
+        ...attacker,
+        threatValue: attack.usedThreat ? null : attacker.threatValue,
+        enemyActions: (attacker.enemyActions || defaultEnemyActions()).map((action) => (
+          action.id === 'attack' ? { ...action, status: 'spent' } : action
+        )),
+      },
+  };
+  const now = options.now || Date.now();
+
+  return {
+    ...state,
+    participants,
+    pendingAttack: {
+      ...attack,
+      status: 'awaiting-defense',
+      createdAt: attack.createdAt || now,
+    },
+    updatedAt: now,
+    history: [
+      ...(state.history || []).slice(-39),
+      {
+        id: `${attack.id}-queued`,
+        type: 'attack-queued',
+        attackerId: attack.attackerId,
+        targetId: attack.targetId,
+        attackId: attack.id,
+        round: state.round,
+      },
+    ],
+  };
+};
+
+export const cancelQueuedCanvasAttack = (state, options = {}) => {
+  if (!state?.pendingAttack) return state;
+  const pendingAttack = state.pendingAttack;
+  const attacker = state.participants?.[pendingAttack.attackerId];
+  const now = options.now || Date.now();
+
+  let nextParticipants = state.participants;
+  if (attacker && attacker.side === 'players' && Array.isArray(pendingAttack.actionDice)) {
+    const committedIds = new Set(pendingAttack.actionDice.map((d) => d.id));
+    nextParticipants = {
+      ...state.participants,
+      [pendingAttack.attackerId]: {
+        ...attacker,
+        actionDice: attacker.actionDice.map((die) => (
+          committedIds.has(die.id) && die.status === 'committed' ? { ...die, status: 'available' } : die
+        )),
+      },
+    };
+  }
+
+  return {
+    ...state,
+    participants: nextParticipants,
+    pendingAttack: null,
+    updatedAt: now,
+  };
+};
+
+export const resolveQueuedCanvasAttack = (state, resolution, options = {}) => {
+  const pendingAttack = state?.pendingAttack;
+  if (!pendingAttack || pendingAttack.id !== resolution?.attackId) return state;
+  const target = state.participants?.[pendingAttack.targetId];
+  const now = options.now || Date.now();
+
+  if (!target) {
+    return {
+      ...state,
+      pendingAttack: null,
+      updatedAt: now,
+    };
+  }
+
+  const selectedIds = new Set(resolution.defenseDieIds || []);
+  const selectedDice = (target.actionDice || []).filter((die) => selectedIds.has(die.id));
+  if (target.side === 'players' && (
+    selectedDice.length !== selectedIds.size
+    || selectedDice.some((die) => die.status === 'spent')
+  )) return state;
+
+  return {
+    ...state,
+    participants: {
+      ...state.participants,
+      [pendingAttack.targetId]: target.side === 'players'
+        ? {
+          ...target,
+          actionDice: target.actionDice.map((die) => (
+            selectedIds.has(die.id) ? { ...die, status: 'spent' } : die
+          )),
+        }
+        : target,
+    },
+    pendingAttack: null,
+    updatedAt: now,
+    history: [
+      ...(state.history || []).slice(-39),
+      {
+        id: `${pendingAttack.id}-resolved`,
+        type: 'attack-resolved',
+        attackId: pendingAttack.id,
+        attackerId: pendingAttack.attackerId,
+        targetId: pendingAttack.targetId,
+        defenseDieIds: [...selectedIds],
+        finalPressure: resolution.finalPressure,
+        lifeLost: resolution.lifeLost,
+        surplus: resolution.surplus,
+        round: state.round,
+      },
+    ],
+  };
 };
 
 export const submitActionDice = (state, tokenId, values, options = {}) => {
@@ -254,6 +425,25 @@ export const setActionDieStatus = (state, tokenId, dieId, status, options = {}) 
   };
 };
 
+export const setEnemyActionStatus = (state, tokenId, actionId, status, options = {}) => {
+  const participant = state?.participants?.[tokenId];
+  if (!participant) return state;
+  const currentActions = participant.enemyActions || defaultEnemyActions();
+  return {
+    ...state,
+    updatedAt: options.now || Date.now(),
+    participants: {
+      ...state.participants,
+      [tokenId]: {
+        ...participant,
+        enemyActions: currentActions.map((action) => (
+          action.id === actionId ? { ...action, status } : action
+        )),
+      },
+    },
+  };
+};
+
 export const markParticipantActed = (state, tokenId, options = {}) => {
   const block = state?.blocks?.[state.activeBlockIndex];
   if (!block || !block.memberIds.includes(tokenId) || block.actedIds.includes(tokenId)) return state;
@@ -283,13 +473,156 @@ export const undoLastActivation = (state, options = {}) => {
   return { ...state, blocks, activeBlockIndex: index, updatedAt: options.now || Date.now() };
 };
 
+export const setParticipantMovementModifier = (state, tokenId, modifier, options = {}) => {
+  const participant = state?.participants?.[tokenId];
+  if (!participant) return state;
+  const runtime = participant.movementRuntime || {
+    base: getMovementBase(participant),
+    modifier: 0,
+    spent: 0,
+    history: [],
+  };
+  const nextModifier = asInteger(modifier, 0);
+  return {
+    ...state,
+    participants: {
+      ...state.participants,
+      [tokenId]: {
+        ...participant,
+        movementRuntime: {
+          ...runtime,
+          modifier: nextModifier,
+        },
+      },
+    },
+    updatedAt: options.now || Date.now(),
+  };
+};
+
+export const recordParticipantMovement = (state, tokenId, { from, to, cost = 0, isExceptional = false, actor = null }, options = {}) => {
+  const participant = state?.participants?.[tokenId];
+  if (!participant) return state;
+  const runtime = participant.movementRuntime || {
+    base: getMovementBase(participant),
+    modifier: 0,
+    spent: 0,
+    history: [],
+  };
+  const numericCost = Math.max(0, asInteger(cost, 0));
+  const effectiveCost = isExceptional ? 0 : numericCost;
+  const entry = {
+    id: `move-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    from: { x: Number(from?.x) || 0, y: Number(from?.y) || 0 },
+    to: { x: Number(to?.x) || 0, y: Number(to?.y) || 0 },
+    cost: effectiveCost,
+    isExceptional: Boolean(isExceptional),
+    actor: actor || participant.name || 'Desconocido',
+    timestamp: options.now || Date.now(),
+  };
+
+  const nextHistory = [...(runtime.history || []), entry];
+  const nextSpent = Math.max(0, (Number(runtime.spent) || 0) + effectiveCost);
+
+  return {
+    ...state,
+    participants: {
+      ...state.participants,
+      [tokenId]: {
+        ...participant,
+        movementRuntime: {
+          ...runtime,
+          spent: nextSpent,
+          history: nextHistory,
+        },
+      },
+    },
+    history: [
+      ...(state.history || []).slice(-39),
+      {
+        id: entry.id,
+        type: 'movement-confirmed',
+        tokenId,
+        participantName: participant.name,
+        cost: effectiveCost,
+        isExceptional: entry.isExceptional,
+        actor: entry.actor,
+        timestamp: entry.timestamp,
+      },
+    ],
+    updatedAt: options.now || Date.now(),
+  };
+};
+
+export const undoParticipantMovement = (state, tokenId, options = {}) => {
+  const participant = state?.participants?.[tokenId];
+  if (!participant) return { state, undoneEntry: null };
+  const runtime = participant.movementRuntime;
+  if (!runtime || !Array.isArray(runtime.history) || runtime.history.length === 0) {
+    return { state, undoneEntry: null };
+  }
+
+  const lastEntry = runtime.history[runtime.history.length - 1];
+  const nextHistory = runtime.history.slice(0, -1);
+  const nextSpent = Math.max(0, (Number(runtime.spent) || 0) - (Number(lastEntry.cost) || 0));
+
+  const nextState = {
+    ...state,
+    participants: {
+      ...state.participants,
+      [tokenId]: {
+        ...participant,
+        movementRuntime: {
+          ...runtime,
+          spent: nextSpent,
+          history: nextHistory,
+        },
+      },
+    },
+    history: [
+      ...(state.history || []).slice(-39),
+      {
+        id: `undo-${Date.now()}`,
+        type: 'movement-undone',
+        tokenId,
+        participantName: participant.name,
+        restoredPosition: lastEntry.from,
+        refundedCost: lastEntry.cost,
+        timestamp: options.now || Date.now(),
+      },
+    ],
+    updatedAt: options.now || Date.now(),
+  };
+
+  return { state: nextState, undoneEntry: lastEntry };
+};
+
 export const startNextRound = (state, options = {}) => {
   const round = Math.max(1, asInteger(state?.round, 1)) + 1;
   const participants = Object.fromEntries(Object.entries(state?.participants || {}).map(([id, participant]) => [
     id,
     participant.side === 'players'
-      ? { ...participant, actionDice: [], awaitingRoll: participant.actionDiceProfile.length > 0 }
-      : { ...participant, threatValue: null },
+      ? {
+        ...participant,
+        actionDice: [],
+        awaitingRoll: participant.actionDiceProfile.length > 0,
+        movementRuntime: {
+          base: participant.movementRuntime?.base || getMovementBase(participant),
+          modifier: 0,
+          spent: 0,
+          history: [],
+        },
+      }
+      : {
+        ...participant,
+        threatValue: null,
+        enemyActions: defaultEnemyActions(),
+        movementRuntime: {
+          base: participant.movementRuntime?.base || getMovementBase(participant),
+          modifier: 0,
+          spent: 0,
+          history: [],
+        },
+      },
   ]));
   const next = {
     ...state,
@@ -299,6 +632,7 @@ export const startNextRound = (state, options = {}) => {
     participants,
     blocks: [],
     activeBlockIndex: 0,
+    pendingAttack: null,
     updatedAt: options.now || Date.now(),
   };
   return allPlayersReady(participants) ? openTurnPhase(next, options.random) : next;
@@ -309,5 +643,39 @@ export const finishCanvasCombat = (state, options = {}) => ({
   status: 'finished',
   roundPhase: 'finished',
   finishedAt: options.now || Date.now(),
+  pendingAttack: null,
   updatedAt: options.now || Date.now(),
 });
+
+export const pruneCombatState = (state, tokens = []) => {
+  if (!state || !state.participants) return state;
+  const tokenIds = new Set((tokens || []).filter(isCombatParticipant).map((t) => t.id));
+  const currentParticipants = state.participants;
+  const currentIds = Object.keys(currentParticipants);
+  const validIds = currentIds.filter((id) => tokenIds.has(id));
+
+  const hasOrphanedPendingAttack = Boolean(
+    state.pendingAttack
+    && (!tokenIds.has(state.pendingAttack.attackerId) || !tokenIds.has(state.pendingAttack.targetId)),
+  );
+
+  if (validIds.length === currentIds.length && !hasOrphanedPendingAttack) {
+    return state;
+  }
+
+  const nextParticipants = Object.fromEntries(
+    validIds.map((id) => [id, currentParticipants[id]]),
+  );
+
+  const nextBlocks = buildInitiativeBlocks(nextParticipants);
+  const activeBlockIndex = Math.min(state.activeBlockIndex || 0, Math.max(0, nextBlocks.length - 1));
+
+  return {
+    ...state,
+    participants: nextParticipants,
+    blocks: nextBlocks,
+    activeBlockIndex,
+    pendingAttack: hasOrphanedPendingAttack ? null : state.pendingAttack,
+    updatedAt: Date.now(),
+  };
+};

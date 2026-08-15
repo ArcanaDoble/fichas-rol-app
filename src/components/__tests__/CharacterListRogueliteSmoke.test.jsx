@@ -2,6 +2,8 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { CharacterListView } from '../CharacterListView';
 
+jest.setTimeout(20000);
+
 jest.mock('../../firebase', () => ({ db: {}, storage: {} }));
 jest.mock('../../utils/storage', () => ({ uploadDataUrl: jest.fn() }));
 

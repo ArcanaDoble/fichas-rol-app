@@ -40,8 +40,10 @@ export const useCanvasFeatureController = ({
     const combatRuntime = useCanvasCombatRuntime({
         activeScenario,
         activeScenarioRef,
+        gridConfig,
         isPlayerView,
         playerName,
+        safePersistItems,
         scenarioCollectionName,
         setActiveScenario,
         triggerToast,

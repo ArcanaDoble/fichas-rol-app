@@ -6,6 +6,7 @@ import { getBoardLightFlickerStyle, getBoardLightVisualProfile } from '../../../
 import {
     getCombatRenderPlacement, getGridCellWorldRect, getMobileTacticalMoveOptions,
     getSweepAreaCells, getSweepTargetsForCells, getTokenGridBounds,
+    isCombatTokenItem,
 } from '../legacyCombatRules';
 import { WORLD_SIZE, calculateShadowPoints } from '../spatial';
 
@@ -263,41 +264,40 @@ export const CanvasViewport = ({
                                                      />
                                                  );
                                              })}
-                                            {/* Se eliminó la insignia de movimiento con icono de huellas sobre el token */}
-
-                                            {isPlayerView && hasPendingMovement && (
+                                            {hasPendingMovement && (
                                                 <button
-                                                     type="button"
-                                                     onMouseDown={consumeMobileMoveTemplateEvent}
-                                                     onTouchStart={(event) => {
-                                                         const touch = event.touches[0];
-                                                         mobileMoveTouchStartRef.current = { x: touch.clientX, y: touch.clientY };
-                                                     }}
-                                                     onTouchEnd={(event) => {
-                                                         if (Date.now() - lastSelectionTimeRef.current < 350) return;
-                                                         if (mobileMoveTouchStartRef.current) {
-                                                             const touch = event.changedTouches?.[0] || event;
-                                                             const dragDist = Math.hypot(
-                                                                 touch.clientX - mobileMoveTouchStartRef.current.x,
-                                                                 touch.clientY - mobileMoveTouchStartRef.current.y
-                                                             );
-                                                             if (dragDist < 10) {
-                                                                 event.preventDefault();
-                                                                 event.stopPropagation();
-                                                                 handleCancelMobileTacticalMove(event, token.id);
-                                                             }
-                                                         }
-                                                     }}
-                                                     onClick={(event) => {
-                                                         if (Date.now() - lastSelectionTimeRef.current < 350) return;
-                                                         handleCancelMobileTacticalMove(event, token.id);
-                                                     }}
-                                                     className="absolute z-[18] pointer-events-auto touch-none flex h-8 w-8 -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] items-center justify-center rounded-full border border-slate-200/35 bg-black/90 text-slate-100 shadow-[0_0_16px_rgba(15,23,42,0.5)] transition-colors hover:border-red-200/70 hover:text-red-100 focus:outline-none"
-                                                     style={{ left: tokenCenterX, top: token.y }}
-                                                     title="Cancelar movimiento"
-                                                 >
-                                                     <X size={14} strokeWidth={2.5} />
-                                                 </button>
+                                                    type="button"
+                                                    onMouseDown={consumeMobileMoveTemplateEvent}
+                                                    onTouchStart={(event) => {
+                                                        const touch = event.touches[0];
+                                                        mobileMoveTouchStartRef.current = { x: touch.clientX, y: touch.clientY };
+                                                    }}
+                                                    onTouchEnd={(event) => {
+                                                        if (Date.now() - lastSelectionTimeRef.current < 350) return;
+                                                        if (mobileMoveTouchStartRef.current) {
+                                                            const touch = event.changedTouches?.[0] || event;
+                                                            const dragDist = Math.hypot(
+                                                                touch.clientX - mobileMoveTouchStartRef.current.x,
+                                                                touch.clientY - mobileMoveTouchStartRef.current.y
+                                                            );
+                                                            if (dragDist < 10) {
+                                                                event.preventDefault();
+                                                                event.stopPropagation();
+                                                                handleCancelMobileTacticalMove(event, token.id);
+                                                            }
+                                                        }
+                                                    }}
+                                                    onClick={(event) => {
+                                                        if (Date.now() - lastSelectionTimeRef.current < 350) return;
+                                                        handleCancelMobileTacticalMove(event, token.id);
+                                                    }}
+                                                    className="absolute z-[18] pointer-events-auto touch-none flex h-8 w-8 -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] items-center justify-center rounded-full border border-slate-200/35 bg-black/90 text-slate-100 shadow-[0_0_16px_rgba(15,23,42,0.5)] transition-colors hover:border-red-200/70 hover:text-red-100 focus:outline-none"
+                                                    style={{ left: tokenCenterX, top: token.y }}
+                                                    title="Cancelar movimiento"
+                                                    aria-label="Cancelar movimiento"
+                                                >
+                                                    <X size={14} strokeWidth={2.5} />
+                                                </button>
                                             )}
 
                                             {moveOptions.map((option) => {
@@ -1481,7 +1481,7 @@ export const CanvasViewport = ({
 
                                         if (!isFocused && !isPendingTarget) return null;
 
-                                        const itemPlacement = gridConfig.isCombatActive
+                                        const itemPlacement = isCombatTokenItem(item)
                                             ? getCombatRenderPlacement(item, activeScenario?.items || [], gridConfig)
                                             : { x: item.x, y: item.y };
 
@@ -1538,12 +1538,12 @@ export const CanvasViewport = ({
                                         const items = activeScenario?.items || [];
                                         const targetToken = items.find(i => i.id === effect.targetId);
                                         const attackerToken = items.find(i => i.id === effect.attackerId);
-                                        const targetPlacement = targetToken && gridConfig.isCombatActive
+                                        const targetPlacement = targetToken && isCombatTokenItem(targetToken)
                                             ? getCombatRenderPlacement(targetToken, items, gridConfig)
                                             : targetToken
                                                 ? { x: targetToken.x, y: targetToken.y }
                                                 : null;
-                                        const attackerPlacement = attackerToken && gridConfig.isCombatActive
+                                        const attackerPlacement = attackerToken && isCombatTokenItem(attackerToken)
                                             ? getCombatRenderPlacement(attackerToken, items, gridConfig)
                                             : attackerToken
                                                 ? { x: attackerToken.x, y: attackerToken.y }

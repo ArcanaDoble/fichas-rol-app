@@ -250,7 +250,7 @@ const renderItemJSX = (item) => {
         const renderPlacementToken = occupancyFeedbackForItem && original
             ? { ...item, x: original.x, y: original.y }
             : item;
-        const renderPlacement = isToken && gridConfig.isCombatActive
+        const renderPlacement = isToken
             ? getCombatRenderPlacement(renderPlacementToken, combatPlacementItems, gridConfig)
             : isScenePickup
                 ? (getScenePickupRenderPlacement?.(item, activeScenario?.items || [], gridConfig) || { x: item.x, y: item.y })
@@ -554,7 +554,7 @@ const renderItemJSX = (item) => {
                             const startPlacement = dragOrigin || (
                                 Number.isFinite(Number(logicalStartX)) && Number.isFinite(Number(logicalStartY))
                                     ? (
-                                        isToken && gridConfig.isCombatActive
+                                        isToken
                                             ? getCombatRenderPlacementAtPosition(
                                                 item,
                                                 { x: logicalStartX, y: logicalStartY },
@@ -569,7 +569,7 @@ const renderItemJSX = (item) => {
                                 ? { x: occupancyFeedbackForItem.targetX, y: occupancyFeedbackForItem.targetY }
                                 : pendingStateForItem && !isDraggingThisToken
                                     ? (
-                                        isToken && gridConfig.isCombatActive
+                                        isToken
                                             ? getCombatRenderPlacementAtPosition(
                                                 item,
                                                 { x: pendingStateForItem.x, y: pendingStateForItem.y },

@@ -244,7 +244,7 @@ const CombatHUD = ({
     onHandCardDragStart = null,
     onCardPreviewStart = null,
     handDragPreview = null,
-    suppressHandHover = false
+    suppressHandHover = false,
 }) => {
     const customEquipmentImages = useCustomEquipmentImages();
     const isBoardMode = mode === 'board';
@@ -372,7 +372,6 @@ const CombatHUD = ({
             if (digitMatch) {
                 return parseInt(digitMatch[0], 10) >= targetDistance;
             }
-
             // Fallback: si no se reconoce, una habilidad sigue disponible y un arma se trata como Toque.
             return item.type === 'ability'
                 ? true
@@ -419,7 +418,7 @@ const CombatHUD = ({
     const actions = [
         { id: 'attack', label: 'Atacar', icon: Sword },
         { id: 'stand_up', label: 'Levantarse', icon: ArrowUp },
-        { id: 'control_status', label: 'Controlar', icon: Shield },
+        { id: 'placeholder', label: 'Acción 3', icon: Sparkles, disabled: true },
     ];
 
     const panelVariants = {
@@ -1122,7 +1121,7 @@ const CombatHUD = ({
                             `}</style>
 
                             {activeCategory === 'ACCIONES' && actions.map(action => {
-                                const actionDisabled = !isActive ||
+                                const actionDisabled = Boolean(action.disabled) || !isActive ||
                                     (isProne ? action.id !== 'stand_up' : action.id === 'stand_up') ||
                                     (action.id === 'control_status' && !hasControllableStatus);
                                 const iconClass = actionDisabled
@@ -1215,28 +1214,33 @@ const CombatHUD = ({
                             })()}
 
                             {activeCategory === 'OBJETOS' && (() => {
-                                const objectItems = items.filter(i =>
-                                    (i.type === 'item' || i.type === 'consumable' || i.type === 'backpack' || i._category === 'consumables') &&
-                                    i.type !== 'weapon'
-                                );
+                                const consumableObjects = (token.inventory || []).filter(item => {
+                                    const tipo = (item.type || item.tipo || '').toLowerCase();
+                                    return tipo.includes('consumible') || tipo.includes('pocion') || tipo.includes('poción') || tipo.includes('objeto');
+                                });
 
-                                if (objectItems.length === 0) {
+                                if (consumableObjects.length === 0) {
                                     return (
-                                        <div className="w-full flex flex-col items-center justify-center text-slate-500 py-4">
-                                            <span className="text-[10px] uppercase tracking-widest italic">Mochila vacía</span>
+                                        <div className="flex-1 flex flex-col items-center justify-center text-slate-500 opacity-60">
+                                            <Backpack className="w-5 h-5 md:w-6 md:h-6 mb-1" />
+                                            <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-wider">Mochila Vac&iacute;a</span>
                                         </div>
                                     );
                                 }
 
                                 return (
-                                    <div className="flex gap-3 overflow-x-auto pb-2 px-2 scrollbar-hide w-full">
-                                        {objectItems.map((obj, idx) => (
+                                    <div className="flex items-center gap-2 overflow-x-auto w-full px-2 scrollbar-hide">
+                                        {consumableObjects.map((obj, idx) => (
                                             <button
                                                 key={idx}
-                                                onClick={() => onAction('use_item', obj)}
-                                                disabled={isProne}
-                                                className={`flex flex-col items-center justify-center min-w-[80px] md:min-w-[100px] h-16 md:h-20 bg-[#161f32] border rounded-lg transition-all shrink-0 group ${isProne ? 'border-slate-800 opacity-40 cursor-not-allowed' : 'border-blue-500/30 hover:bg-blue-900/20 active:scale-95'}`}
+                                                onClick={() => {
+                                                    onAction('use_item', obj);
+                                                }}
+                                                className="flex flex-col items-center justify-center min-w-[64px] md:min-w-[80px] h-16 md:h-20 bg-[#161f32] border border-slate-700/50 hover:border-[#c8aa6e] rounded-lg p-1 group transition-all"
                                             >
+                                                <div className="w-8 h-8 md:w-10 md:h-10 rounded bg-black/40 border border-slate-700/40 mb-1 overflow-hidden flex items-center justify-center">
+                                                    <ItemImage src={resolveCombatItemImage(obj, customEquipmentImages)} type={obj.type} name={obj.name || obj.nombre} />
+                                                </div>
                                                 <span className="text-[8px] md:text-[9px] font-bold text-slate-300 uppercase tracking-tighter truncate w-full px-2 text-center">
                                                     {obj.name || obj.nombre}
                                                 </span>
@@ -1255,6 +1259,7 @@ const CombatHUD = ({
                 <div className={`hidden md:flex flex-col items-center justify-end relative z-20 shrink-0 h-32 w-32 group transition-all duration-500 ${isActive ? 'opacity-100 scale-100' : 'opacity-20 scale-90 pointer-events-none'}`}>
                     <button
                         onClick={onEndTurn}
+                        title="Finalizar activación y confirmar el movimiento"
                         className="w-32 h-32 rounded-full bg-[#0b1120] border-4 border-[#c8aa6e] hover:border-[#f0e6d2] hover:scale-110 active:scale-95 shadow-[0_0_30px_rgba(200,170,110,0.2)] flex flex-col items-center justify-center transition-all duration-300 relative overflow-hidden group/btn"
                     >
                         <div className="absolute inset-0 bg-gradient-to-b from-[#1a1b26] to-[#0b1120] pointer-events-none"></div>

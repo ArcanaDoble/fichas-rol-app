@@ -87,6 +87,9 @@ export const useCanvasInteractionController = ({
 }) => {
 const lastPinchDist = useRef(null);
     const lastTouchPos = useRef({ x: 0, y: 0 });
+    const isCanvasCombatActive = !isBoardMode && (
+        gridConfig.isCombatActive || activeScenario?.canvasCombat?.status === 'active'
+    );
 
     const getTouchDistance = (touches) => {
         return Math.hypot(
@@ -384,7 +387,6 @@ const handleMouseMove = (e) => {
 
                     if (
                         activeLayer === 'TABLETOP' &&
-                        gridConfig.isCombatActive &&
                         isCombatTokenItem(item)
                     ) {
                         const occupancyFeedback = getCombatOccupancyFeedbackForMove({
@@ -432,7 +434,7 @@ const handleMouseMove = (e) => {
             ));
 
             // LOGIC ADDED: Update pending cost LIVE while dragging (ONLY for players)
-            if (!isBoardMode && gridConfig.isCombatActive && isPlayerView && draggedTokenId) {
+            if (isCanvasCombatActive && isPlayerView && draggedTokenId) {
                 const draggedItem = newItems.find(i => i.id === draggedTokenId);
                 const original = tokenOriginalPos[draggedTokenId];
                 const isBlockedCombatDestination = nextCombatOccupancyFeedback?.tokenId === draggedTokenId;
@@ -701,7 +703,7 @@ const handleMouseMove = (e) => {
                     // Precise visual placement AABB intersection (matches exact screen slot for loot / duel tokens)
                     const placement = isScenePickup
                         ? (getScenePickupRenderPlacement?.(item, activeScenario.items, gridConfig) || { x: item.x, y: item.y })
-                        : (isCombatTokenItem(item) && gridConfig?.isCombatActive
+                        : (isCombatTokenItem(item)
                             ? getCombatRenderPlacement(item, activeScenario.items, gridConfig)
                             : { x: item.x, y: item.y });
 
@@ -999,7 +1001,6 @@ const handleMouseMove = (e) => {
                         const original = tokenOriginalPos[item.id];
                         if (original) {
                             const occupancyBlocked = activeLayer === 'TABLETOP' &&
-                                gridConfig.isCombatActive &&
                                 isCombatTokenItem(item) &&
                                 !canOccupyCombatCell({
                                     movingToken: item,
@@ -1037,7 +1038,7 @@ const handleMouseMove = (e) => {
                 if (hasCollision) {
                     setActiveScenario(prev => ({ ...prev, items: finalItems }));
 
-                    if (!isBoardMode && gridConfig.isCombatActive && isPlayerView) {
+                    if (isCanvasCombatActive && isPlayerView) {
                         const original = tokenOriginalPos[draggedTokenId];
                         const token = finalItems.find(i => i.id === draggedTokenId);
                         if (original && token && token.x === original.x && token.y === original.y) {
@@ -1076,7 +1077,7 @@ const handleMouseMove = (e) => {
                 }
 
                 // --- GESTIÓN DE MOVIMIENTO EN MODO COMBATE (PENDIENTE) ---
-                if (!isBoardMode && gridConfig.isCombatActive && isPlayerView) {
+                if (isCanvasCombatActive && isPlayerView) {
                     const token = finalItems.find(i => i.id === draggedTokenId);
                     const original = tokenOriginalPos[draggedTokenId];
                     if (token && isCombatTokenItem(token) && original && (token.x !== original.x || token.y !== original.y)) {

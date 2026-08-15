@@ -539,9 +539,39 @@ Original prompt: Perfecto. Ahora necesito que vayas implementando cada cambio qu
 - Añadido un modelo de combate exclusivo de `features/canvas/combat` con fases de preparación, tiradas, turnos, fin de ronda y final de combate.
 - Las fichas de clase aportan directamente `actionDice`; la tirada inicial calcula `iniciativa base + resultado mayor` y se conserva como pool de acciones de la ronda 1.
 - Añadidas tiradas digitales y entrada de resultados físicos, con validación individual por dado (`d4`, `d6`, `d8`, etc.).
-- La iniciativa agrupa aliados consecutivos en bloques flexibles, prioriza jugadores en empates y agrupa enemigos del mismo perfil.
-- Creado el panel lateral Canvas `Ronda`, con estado visible de dados (disponible, comprometido y gastado), activaciones, siguiente ronda, deshacer y finalizar combate.
+- La iniciativa agrupa aliados consecutivos en bloques flexibles, prioriza enemigos en empates (`enemies` antes que `players`) y agrupa enemigos del mismo perfil.
+- Creado el panel lateral Canvas `Ronda`, con estado visible de dados (disponible, reservado y gastado) tanto para jugadores como para el máster, activaciones, siguiente ronda, deshacer y finalizar combate.
 - Creada una línea de iniciativa Canvas propia y compacta; BoardCards conserva su adaptador y su interfaz sin importar módulos del Canvas.
 - El estado se persiste en `canvas_scenarios.canvasCombat` y se fusiona por el listener en tiempo real. Las mutaciones de ronda usan transacciones para evitar que dos tiradas simultáneas se sobrescriban.
-- Añadidas pruebas unitarias del modelo y del panel. No se realizó comprobación en navegador porque el usuario indicó que hará la validación visual personalmente.
-- Validación final: 83 suites correctas, 353 tests superados y 1 omitido; `npm run build` compila y `git diff --check` queda limpio. Los avisos de consola pertenecen a pruebas legacy ya existentes.
+- Rediseñado el formato de los dados de acción en el panel Ronda: disposición vertical elegante que aprovecha el ancho completo para evitar que las etiquetas se corten en escritorio (`DISPONIBLE`, `RESERVADO`, `GASTADO`).
+- Incorporados los retratos de los personajes en la fase de ronda activa (`RoundParticipant`) con indicador visual al actuar.
+- Añadido soporte interactivo de acciones para enemigos (`Movimiento` y `Ataque`) para que el máster pueda desmarcar, reservar o agotar acciones antes de terminar el turno.
+- Optimizado el flujo de sincronización en tiempo real del combate (`useCanvasCombatRuntime` y `TacticalSectionCore`): estado optimista síncrono local (`localCombatRef`), cola de escritura secuencial (`writeQueueRef`) y protección contra sobrescritura por snapshots remotos desfasados (`updatedAt`). Los clics rápidos sobre dados de jugadores y acciones de enemigos transicionan de inmediato sin retraso ni reversiones involuntarias.
+- Implementado saneamiento automático de participantes eliminados (`pruneCombatState`) y persistencia directa con `updateDoc` en lugar de `merge: true` en mapas de Firestore, asegurando que cuando se borran tokens del canvas se purguen inmediatamente del estado de combate y no queden fichas fantasma en encuentros posteriores.
+- Especializada la «Mesa de Dados (Tirada Libre)» en el Canvas adaptando la identidad visual de `BoardCards`: soporte de dados críticos/explosivos independientes por tipo de dado (D4..D20) con rebotes automáticos ante valores máximos, estilización con brillos dorados/rojos, modificador fijo graduable (con botones `−5 / −1 / +1 / +5` e input directo) que se suma al cómputo final sin aplicar crítico, texto limpio en el botón de lanzamiento («Lanzar reserva») y posibilidad interactiva de anular/reactivar dados individuales desde el historial de tiradas recalculando el total efectivo en tiempo real.
+- Integrado el nuevo sistema de iniciativa por bloques (`canvasCombat`) en las restricciones de turno de fichas y en la activación del HUD de combate: corregida la resolución de participantes del bloque activo en `canCombatTokenActNow` usando `memberIds` y `actedIds`, permitiendo a los jugadores seleccionar e interactuar fluidamente con su personaje cuando les corresponde según el orden de iniciativa de la barra superior sin bloqueos ni falsos avisos de turnos por velocidad.
+- Preservadas las formaciones y duelos de fichas compartiendo casilla de forma permanente aunque se desactive el modo combate en configuración: los tokens mantienen su colocación lado a lado en la casilla sin encimarse ni juntarse en un único punto.
+- Validación final: 86 suites correctas, 381 tests superados y 1 omitido; `npm run build` compila y `git diff --check` queda limpio.
+
+## 2026-08-15 — Movimiento directo y confirmación integrada en Canvas
+
+- Eliminado el selector `Mover` y la tarjeta flotante de desplazamiento, que ocupaban demasiado espacio sobre el tablero.
+- Recuperado el gesto directo: arrastrar el token en escritorio o tocar una casilla alcanzable en móvil.
+- El desplazamiento del jugador se mantiene provisional sin mostrar una interfaz adicional y se confirma automáticamente al pulsar `Fin Turno`.
+- En móvil se conserva únicamente un pequeño control circular para cancelar y volver al origen; el escritorio permite cancelar arrastrando de vuelta a la casilla inicial.
+- Los modificadores manuales de Movimiento continúan disponibles en `Ronda`, por lo que bonificaciones, penalizaciones y juego híbrido siguen sin exigir automatizar cada regla.
+- La lógica se activa únicamente en el combate `canvasCombat`; BoardCards mantiene intacto su flujo de movimiento y turno.
+- Validación: 88 suites correctas, 386 tests superados y 1 omitido; `npm run build` compila correctamente. La comprobación visual automatizada alcanza el selector de rol, pero el Canvas autenticado queda para la prueba manual del usuario.
+
+## 2026-08-15 — Ataques y defensa activa Roguelite en Canvas
+
+- Adaptado el HUD existente al Canvas sin alterar la variante de BoardCards: detecta exclusivamente armas equipadas y explica cuándo su coste no puede pagarse con los dados de acción disponibles.
+- Añadido un resolutor propio de reglas del Canvas para perfiles completos de arma, costes Pesados, críticos, Perforante, Arrojadiza, alcance, Duelo y ataques de Toque a una casilla.
+- Sustituido el panel táctico paralelo por un modal central coherente con el flujo de reacción existente: arma y objetivo llegan ya seleccionados, el atacante solo compromete sus dados de acción y confirma.
+- El perfil completo del arma y cualquier dado de crítico se tiran automáticamente al confirmar el ataque; se eliminan los controles manuales de tirada del arma.
+- Añadida defensa sincronizada usando cualquier dado no gastado, cálculo por múltiplos completos de CD, pérdida de bloques de Vida y aviso de excedente defensivo pendiente de movimiento o contraataque.
+- El defensor recibe el ataque en ese mismo lenguaje de modal, puede comprometer dados o recibirlo directamente; el dado de Amenaza enemigo queda reservado salvo que el máster decida gastarlo de forma explícita.
+- Los dados ofensivos y defensivos quedan gastados en la ronda, los enemigos consumen su acción de Ataque y el daño se persiste también en la run vinculada de una ficha de clase.
+- Los resultados se publican en `combat_log` para reutilizar el historial y las animaciones ya existentes.
+- Cobertura añadida para costes, perfiles, alcance, Duelo, críticos, CD, excedente y transición sincronizada ataque-defensa.
+- Validación final: 87 suites correctas, 385 tests superados y 1 omitido; `npm run build` compila y `git diff --check` queda limpio.

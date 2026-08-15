@@ -1065,8 +1065,11 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                     const combatStateChanged = mode === 'canvas' && (
                         JSON.stringify(remoteData.canvasCombat || null) !== JSON.stringify(current.canvasCombat || null)
                     );
+                    const rollsChanged = mode === 'canvas' && (
+                        JSON.stringify(remoteData.canvasRolls || []) !== JSON.stringify(current.canvasRolls || [])
+                    );
 
-                    if (itemsChanged || lastModifiedChanged || configChanged || scenarioFieldsChanged || combatStateChanged) {
+                    if (itemsChanged || lastModifiedChanged || configChanged || scenarioFieldsChanged || combatStateChanged || rollsChanged) {
                         console.log("Sincronizando tablero con datos remotos (Merging local locks)...");
                         return {
                             ...current,
@@ -1074,7 +1077,10 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                             lastModified: remoteData.lastModified,
                             name: nextName,
                             allowedPlayers: nextAllowedPlayers,
-                            ...(mode === 'canvas' ? { canvasCombat: remoteData.canvasCombat || null } : {}),
+                            ...(mode === 'canvas' ? {
+                                canvasCombat: remoteData.canvasCombat || null,
+                                canvasRolls: remoteData.canvasRolls || current.canvasRolls || [],
+                            } : {}),
                             ...(synchronizedConfig ? { config: synchronizedConfig } : {}),
                         };
                     }
@@ -2310,6 +2316,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         handleMobileTacticalMoveCell,
         handleBoardMobileTacticalMoveCell,
         handleCancelMobileTacticalMove,
+        handleConfirmMobileTacticalMove,
         handleTokenMouseDown,
         handleRotationMouseDown,
         linkCharacter,
@@ -2332,6 +2339,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         boardCardHandTransferRef,
         cardStackQuickActionBlockUntilRef,
         clearBoardHandHoverSuppression,
+        combatRuntime,
         containerRef,
         currentUserId,
         focusedTargetId,
@@ -2619,6 +2627,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
             fileInputRef, finiteGridHeight, finiteGridWidth, finiteMapHeight, finiteMapWidth, focusedTargetId,
             getBoardMobileTacticalMoveOptions, getHandCardsForToken, globalActiveId, glossary, gridConfig, gridInputDrafts,
             habilidades, handDragGhostRef, handleBoardCardBackUpload, handleBoardMobileTacticalMoveCell, handleCancelAction, handleCancelMobileTacticalMove,
+            handleConfirmMobileTacticalMove,
             handleCanvasBackgroundMouseDown, handleCardUpload, handleCombatAction, handleConfigChange, handleEndTurn, handleGridDraftChange,
             handleGridDraftKeyDown, handleHandCardDragStart, handleImageUpload, handleMobileTacticalMoveCell, handleMouseMove, handleMouseUp,
             handleReaction, handleReorderLibraryItem, handleSelectCombatQueueIndex, handleSweepTemplateCancel, handleSweepTemplateClick, handleTokenUpload,

@@ -12,9 +12,31 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - Cada token de clase hereda el perfil definido en su ficha (`actionDice`), por ejemplo `d8 · d6 · d4` para el Bárbaro.
 - La tirada inicial se reutiliza: el resultado mayor se suma a la iniciativa base y los tres resultados permanecen disponibles como dados de acción de la primera ronda.
 - Las tiradas pueden hacerse digitalmente o anotarse desde dados físicos mediante controles válidos para cada tipo de dado.
-- El orden se presenta por bloques: aliados consecutivos pueden actuar en orden flexible, los jugadores ganan empates frente a enemigos y los enemigos del mismo perfil comparten bloque.
-- Cada dado puede marcarse como disponible, comprometido o gastado; las rondas posteriores solicitan una nueva tirada sin recalcular la iniciativa.
-- El estado de combate se sincroniza en el documento del encuentro `canvas_scenarios` mediante transacciones para conservar tiradas simultáneas de distintos jugadores.
+- El orden se presenta por bloques: aliados consecutivos pueden actuar en orden flexible, los enemigos ganan empates frente a jugadores (`enemies` antes que `players`) y los enemigos del mismo perfil comparten bloque.
+- El estado de combate se sincroniza en tiempo real en `canvas_scenarios` mediante un modelo optimista síncrono local con cola de escritura secuencial (`writeQueueRef`) y protección de marca de tiempo (`updatedAt`), permitiendo clics ultrarrápidos sobre dados y acciones sin retrasos ni rebotes visuales.
+- Depuración y saneamiento automático de participantes (`pruneCombatState`): cuando se eliminan tokens del tablero, se purgan de inmediato del orden de combate sin dejar fichas fantasma en Firebase ni en la interfaz.
+- **Mesa de Dados (Tirada Libre), Críticos y Modificador Fijo**: Sub-pestaña dedicada en `Ronda` con diseño adaptado del tablero de cartas (`BoardCard`), soporte de dados críticos/explosivos por tipo de dado (D4, D6, D8, D10, D12 y D20), modificador fijo graduable (`−5 / −1 / +1 / +5` e input directo) que se suma al cómputo total al final sin aplicar crítico, desglose individual por dado con explosiones automáticas (+), anulación/reactivación interactiva de dados individuales en el historial y total recalculado en tiempo real.
+- **Sincronización de Iniciativa en el HUD y Selección de Token**: Las acciones del HUD de combate y la selección de tokens responden directamente al bloque de iniciativa activo de `canvasCombat`, habilitando la interacción cuando corresponde a la ficha sin lanzar bloqueos ni advertencias de turnos desfasados.
+- **Duelos y Formaciones Persistentes sin Modo Combate**: La distribución visual lado a lado para 2 tokens en la misma casilla (aliados en formación y enemigos en duelo) se mantiene activa de forma permanente independientemente de que se desactive el modo combate en la configuración del escenario.
+- **Modelo Híbrido de Movimiento y Flujo de Activación en Canvas**:
+  - `movementRuntime` (`base`, `modifier`, `spent`, `history`) calcula en tiempo real `Movimiento disponible = base + modificador − gastado`.
+  - El jugador mueve directamente su token: arrastra en escritorio o toca una casilla alcanzable en móvil, sin abrir selectores ni paneles adicionales.
+  - La nueva posición queda provisional hasta pulsar **Fin Turno**; esa única acción confirma el desplazamiento y completa la activación.
+  - En móvil solo aparece un control circular y discreto para cancelar el movimiento y regresar al origen. En escritorio basta con devolver el token a su casilla inicial.
+  - Los ajustes manuales de Movimiento para bonificaciones o penalizaciones permanecen en el panel `Ronda`, separados del gesto de mover.
+  - El Máster cuenta con el botón **«Deshacer mov»** para restaurar la posición previa del token y devolver las casillas gastadas.
+
+### ⚔️ Primer flujo de ataques Roguelite en Canvas
+
+- El HUD de combate del Canvas ofrece únicamente las armas del conjunto equipado; las habilidades y el inventario no equipado no se mezclan en el selector.
+- Cada arma exige su coste real de dados de acción (de 1 a 3); las armas Pesadas requieren al menos dos. Las opciones quedan bloqueadas con una explicación cuando faltan dados disponibles.
+- Tras elegir arma y objetivo, el Canvas reutiliza el lenguaje visual del modal central de combate: el atacante solo selecciona los dados de acción que compromete y confirma la acción.
+- El perfil completo del arma y su crítico se tiran automáticamente al confirmar; no existe un segundo formulario para introducir manualmente la tirada del arma.
+- El objetivo recibe el ataque en el modal central y puede comprometer cualquier dado de acción que aún no esté agotado o aceptar el golpe. La defensa resta Presión antes de comparar contra CD y cada múltiplo completo de CD elimina un bloque de Vida.
+- El dado de Amenaza de los enemigos es una decisión explícita del máster: solo se suma y se consume cuando se selecciona para ese ataque.
+- Se aplican las primeras reglas espaciales del sistema nuevo: alcance por casillas, restricciones de Duelo y uso de armas de Toque a una casilla solo con una mano y sin resolver sus rasgos.
+- El resultado actualiza el token y la run vinculada, se sincroniza entre participantes y reutiliza el registro y las animaciones de combate existentes. El excedente defensivo queda indicado para resolver manualmente movimiento o contraataque hasta implementar esa segunda fase.
+- Todo el resolutor nuevo vive bajo `features/canvas`; BoardCards conserva su flujo de combate anterior.
 
 ### 📦 Sistema de Botín en el Canvas, Multiselección Táctica e Interacción de Mesa
 

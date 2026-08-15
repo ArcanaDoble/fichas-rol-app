@@ -23,6 +23,7 @@ export const createCanvasTokenController = ({
     boardCardHandTransferRef,
     cardStackQuickActionBlockUntilRef,
     clearBoardHandHoverSuppression,
+    combatRuntime,
     containerRef,
     currentUserId,
     focusedTargetId,
@@ -123,15 +124,19 @@ const addTokenToCanvas = (tokenUrl) => {
         event?.nativeEvent?.stopImmediatePropagation?.();
     };
 
-    const shouldUseMobileTacticalMove = (token, items = []) => (
-        isMobile &&
-        !isBoardMode &&
-        gridConfig.isCombatActive &&
-        activeLayer === 'TABLETOP' &&
-        isMobileTacticalMoveToken(token) &&
-        !isTokenDerribado(token) &&
-        canCombatTokenActNow(token, items)
-    );
+    const shouldUseMobileTacticalMove = (token, items = []) => {
+        const currentScenario = activeScenarioRef.current || activeScenario;
+        const isCombatActive = gridConfig.isCombatActive || currentScenario?.canvasCombat?.status === 'active';
+        return (
+            isMobile &&
+            !isBoardMode &&
+            isCombatActive &&
+            activeLayer === 'TABLETOP' &&
+            isMobileTacticalMoveToken(token) &&
+            !isTokenDerribado(token) &&
+            canCombatTokenActNow(token, items, currentScenario)
+        );
+    };
 
     const canUseBoardMobileTacticalMove = (token) => (
         isMobile &&
@@ -336,6 +341,46 @@ const addTokenToCanvas = (tokenUrl) => {
         triggerToast("Movimiento cancelado", "La previsualización vuelve al inicio del turno", 'info');
     };
 
+    const handleConfirmMobileTacticalMove = async (event, tokenId, options = {}) => {
+        consumeMobileMoveTemplateEvent(event);
+
+        const scenario = activeScenarioRef.current || activeScenario;
+        const pending = isUsablePendingTurnState(pendingTurnStateRef.current) && pendingTurnStateRef.current.tokenId === tokenId
+            ? pendingTurnStateRef.current
+            : null;
+        if (!scenario || !pending) return false;
+
+        const token = scenario.items.find(item => item.id === tokenId);
+        if (!token) return false;
+
+        const startX = Number.isFinite(Number(pending.startX)) ? Number(pending.startX) : token.x;
+        const startY = Number.isFinite(Number(pending.startY)) ? Number(pending.startY) : token.y;
+        const finalX = Number.isFinite(Number(pending.x)) ? Number(pending.x) : token.x;
+        const finalY = Number.isFinite(Number(pending.y)) ? Number(pending.y) : token.y;
+        const cost = Math.max(0, Number(pending.moveCost) || 0);
+        const isExceptional = Boolean(options.isExceptional || pending.isExceptional);
+
+        if (combatRuntime?.confirmMovement) {
+            await combatRuntime.confirmMovement(tokenId, {
+                from: { x: startX, y: startY },
+                to: { x: finalX, y: finalY },
+                cost,
+                isExceptional,
+            });
+        } else {
+            const nextItems = scenario.items.map(item => (
+                item.id === tokenId ? { ...item, x: finalX, y: finalY } : item
+            ));
+            setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
+            safePersistItems(scenario.id, nextItems, scenario.items, [tokenId]);
+        }
+
+        setPendingTurnState(null);
+        setMobileMoveHoverCellKey(null);
+        triggerToast("Movimiento confirmado", isExceptional ? "Desplazamiento excepcional registrado" : `${cost} casillas descontadas`, 'success');
+        return true;
+    };
+
     const handleTokenMouseDown = (e, token) => {
         const { x: curX, y: curY } = getEventCoords(e);
         const isTouch = e.type.startsWith('touch');
@@ -428,8 +473,11 @@ const addTokenToCanvas = (tokenUrl) => {
                 startBoardCardLongPressPreview(token, e, { cancelBoardDrag: true });
             }
 
+            const currentScenario = activeScenarioRef.current || activeScenario;
+            const isCombatActive = gridConfig.isCombatActive || currentScenario?.canvasCombat?.status === 'active';
+
             // Restricción de Turno: Si tienes un turno pendiente con otro token, debes terminarlo primero
-            if (!isScenePickup && !isBoardMode && isPlayerView && gridConfig.isCombatActive && pendingTurnState && pendingTurnState.tokenId !== token.id) {
+            if (!isScenePickup && !isBoardMode && isPlayerView && isCombatActive && pendingTurnState && pendingTurnState.tokenId !== token.id) {
                 const totalPendingCost = (pendingTurnState.moveCost || 0) + (pendingTurnState.actionCost || 0);
                 if (totalPendingCost > 0) {
                     triggerToast("Turno en progreso", "Termina las acciones de tu otro token antes de cambiar", 'warning');
@@ -441,14 +489,18 @@ const addTokenToCanvas = (tokenUrl) => {
                 }
             }
 
-            // RESTRICCIÓN DE MODO COMBATE: Solo mover si es tu turno (velocidad mínima)
-            if (!isBoardMode && gridConfig.isCombatActive && activeLayer === 'TABLETOP' && isCombatTokenItem(token)) {
-                const currentItems = (activeScenarioRef.current || activeScenario)?.items || [];
+            // RESTRICCIÓN DE MODO COMBATE: Solo mover si es tu turno
+            if (!isBoardMode && isCombatActive && activeLayer === 'TABLETOP' && isCombatTokenItem(token)) {
+                const currentItems = currentScenario?.items || [];
 
-                if (!canCombatTokenActNow(token, currentItems)) {
+                if (!canCombatTokenActNow(token, currentItems, currentScenario)) {
                     // No es tu turno, pero el Master puede mover cualquier cosa
                     if (isPlayerView) {
-                        triggerToast("No es tu turno", "Debes esperar a que tu velocidad sea la más baja", 'warning');
+                        const isCanvasCombat = currentScenario?.canvasCombat?.status === 'active';
+                        const toastMsg = isCanvasCombat
+                            ? "Debes esperar al bloque de iniciativa de tu personaje"
+                            : "Debes esperar a que tu velocidad sea la más baja";
+                        triggerToast("No es tu turno", toastMsg, 'warning');
                         return;
                     }
                 }
@@ -457,7 +509,6 @@ const addTokenToCanvas = (tokenUrl) => {
             // Si estamos redimensionando, no iniciar arrastre
             if (resizingTokenId) return;
 
-            const currentScenario = activeScenarioRef.current || activeScenario;
             const isMultiSelectModifier = Boolean(e.shiftKey || e.ctrlKey || e.metaKey);
             let newSelection = [...selectedTokenIds];
 
@@ -840,6 +891,7 @@ const addTokenToCanvas = (tokenUrl) => {
         handleMobileTacticalMoveCell,
         handleBoardMobileTacticalMoveCell,
         handleCancelMobileTacticalMove,
+        handleConfirmMobileTacticalMove,
         handleTokenMouseDown,
         handleRotationMouseDown,
         linkCharacter,

@@ -125,6 +125,7 @@ export const isMasterControlledCombatToken = (token) => {
     return controlledBy.length === 0 || controlledBy.includes('master') || controlledBy.includes('Master');
 };
 export const getCombatTokenSpeed = (token) => Math.max(0, Number(token?.velocidad) || 0);
+
 export const getActiveCombatTurnInfo = (items = []) => {
     const combatTokens = getCombatSpeedTokens(items);
     if (combatTokens.length === 0) {
@@ -138,12 +139,38 @@ export const getActiveCombatTurnInfo = (items = []) => {
 
     return { activeSpeed, hasMasterAtActiveSpeed };
 };
-export const canCombatTokenActNow = (token, items = []) => {
+
+export const canCombatTokenActNow = (token, items = [], scenarioOrCombat = null) => {
     if (!token) return false;
+
+    // 1. Soporte para el sistema de iniciativa por rondas y bloques (Canvas Combat)
+    const combatState = scenarioOrCombat?.canvasCombat || scenarioOrCombat;
+    if (combatState && combatState.status === 'active') {
+        if (combatState.roundPhase === 'rolling') {
+            return true; // En fase de preparación todos pueden interactuar y tirar dados
+        }
+        if (combatState.roundPhase === 'turns') {
+            const activeBlock = combatState.blocks?.[combatState.activeBlockIndex];
+            if (!activeBlock) return false;
+            const memberIds = Array.isArray(activeBlock.memberIds)
+                ? activeBlock.memberIds
+                : (Array.isArray(activeBlock.tokenIds) ? activeBlock.tokenIds : []);
+            const actedIds = Array.isArray(activeBlock.actedIds)
+                ? activeBlock.actedIds
+                : (Array.isArray(activeBlock.completedTokenIds) ? activeBlock.completedTokenIds : []);
+            const isParticipantInBlock = memberIds.includes(token.id);
+            const hasActed = actedIds.includes(token.id);
+            return isParticipantInBlock && !hasActed;
+        }
+        return true;
+    }
+
+    // 2. Sistema clásico por velocidad (cuando se usa modo combate clásico sin canvasCombat)
     const { activeSpeed, hasMasterAtActiveSpeed } = getActiveCombatTurnInfo(items);
     if (getCombatTokenSpeed(token) !== activeSpeed) return false;
     return !hasMasterAtActiveSpeed || isMasterControlledCombatToken(token);
 };
+
 export const sanitizeForFirestore = (value) => {
     if (value === undefined) return null;
     if (value === null) return null;
@@ -156,6 +183,7 @@ export const sanitizeForFirestore = (value) => {
     }
     return value;
 };
+
 export const getItemOverlapRatio = (a = {}, b = {}) => {
     const left = Math.max(Number(a.x) || 0, Number(b.x) || 0);
     const top = Math.max(Number(a.y) || 0, Number(b.y) || 0);
@@ -805,32 +833,26 @@ export const getTokenDuelContextAgainstAttacker = (targetToken, attackerToken, i
 };
 
 export const getCombatRenderPlacement = (token, items = [], config = {}) => {
+    const rawX = Number(token?.x) || 0;
+    const rawY = Number(token?.y) || 0;
     const cellW = Number(config.cellWidth) || DEFAULT_GRID_CONFIG.cellWidth;
     const cellH = Number(config.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight;
     const width = Number(token?.width) || cellW;
     const height = Number(token?.height) || cellH;
     const bounds = getTokenGridBounds(token, config);
-    const cell = getTokenPrimaryGridCell(token, config);
-    const cellRect = getGridCellWorldRect(cell, config);
     const occupiesSingleCell = bounds.w === 1 && bounds.h === 1;
-    const basePlacement = occupiesSingleCell
-        ? {
-            x: cellRect.x + ((cellW - width) / 2),
-            y: cellRect.y + ((cellH - height) / 2),
-        }
-        : {
-            x: cellRect.x,
-            y: cellRect.y,
-        };
 
     if (!canTokenShareCombatCell(token, config) || !occupiesSingleCell) {
-        return basePlacement;
+        return { x: rawX, y: rawY };
     }
 
     const context = getTokenCombatCellContext(token, items, config);
     if (context.occupants.length !== 2) {
-        return basePlacement;
+        return { x: rawX, y: rawY };
     }
+
+    const cell = getTokenPrimaryGridCell(token, config);
+    const cellRect = getGridCellWorldRect(cell, config);
 
     const orderedOccupants = [...context.occupants].sort((a, b) => {
         const sideA = Array.from(getTokenCombatSideKeys(a)).sort().join('|');
@@ -842,7 +864,7 @@ export const getCombatRenderPlacement = (token, items = [], config = {}) => {
     const slotIndex = orderedOccupants.findIndex((occupant) => occupant.id === token.id);
 
     if (slotIndex < 0) {
-        return basePlacement;
+        return { x: rawX, y: rawY };
     }
 
     return {
@@ -852,7 +874,7 @@ export const getCombatRenderPlacement = (token, items = [], config = {}) => {
 };
 
 export const getCombatRenderPlacementAtPosition = (token, position = {}, items = [], config = {}) => {
-    if (!isCombatTokenItem(token) || !config?.isCombatActive) {
+    if (!isCombatTokenItem(token)) {
         return {
             x: Number(position.x) || 0,
             y: Number(position.y) || 0,
@@ -868,8 +890,8 @@ export const getCombatRenderPlacementAtPosition = (token, position = {}, items =
     return getCombatRenderPlacement(simulatedToken, simulatedItems, config);
 };
 
-export const getCombatCellOccupancyIssue = ({ movingToken, nextX, nextY, items = [], config = {}, excludeIds = [], allowInactiveCombat = false }) => {
-    if ((!config?.isCombatActive && !allowInactiveCombat) || !isCombatTokenItem(movingToken)) return null;
+export const getCombatCellOccupancyIssue = ({ movingToken, nextX, nextY, items = [], config = {}, excludeIds = [] }) => {
+    if (!isCombatTokenItem(movingToken)) return null;
 
     const movedToken = { ...movingToken, x: nextX, y: nextY };
     const movedBounds = getTokenGridBounds(movedToken, config);
