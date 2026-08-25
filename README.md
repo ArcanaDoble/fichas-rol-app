@@ -3007,6 +3007,7 @@ Guía rápida: ver `docs/Minimapa.md`.
 - La gestión de usuarios muestra por jugador y clase si la ficha está preparada o mantiene una aventura activa. `Finalizar aventura` elimina el estado temporal y devuelve esa ficha a la base vigente conservando su nivel y sus talentos personales.
 - El listado del jugador muestra el estado de cada clase. En el Canvas, cualquier cambio relevante en el inspector activa `Hay cambios pendientes` dentro del bloque de vinculación; mover el token por el mapa no lo activa.
 - Las fichas personales que ya están abiertas permanecen suscritas a su definición y configuración Roguelite: `Confirmar cambios`, los guardados del máster y `Finalizar aventura` actualizan estadísticas, estados e inventario sin recargar la página. Un borrador local sin guardar se conserva y recibe la última versión remota al confirmarlo o descartarlo.
+- La entrada del jugador al Canvas muestra o actualiza su token únicamente después de que Firestore confirme la escritura. Si falla la sincronización, se restaura el último estado confirmado, los cambios permanecen pendientes y se muestra un aviso accionable en lugar de dejar una ficha visible solo para el jugador.
 
 ## Novedades: inventario interactivo en Canvas
 
@@ -3038,5 +3039,4 @@ Guía rápida: ver `docs/Minimapa.md`.
 - Equipamiento y habilidades disponen de una a cuatro ranuras. El equipo se busca en el catálogo general; las habilidades pueden escribirse para una criatura o guardarse en `rogueliteEnemyAbilities` para reutilizarlas.
 - `Añadir al encuentro` escribe un token `rogueliteEnemy` exclusivamente en el encuentro emitido por `gameSettings/canvasVisibility` dentro de `canvas_scenarios`. No utiliza ni modifica `BoardSection`.
 - El inspector del Canvas reconoce el nuevo perfil, presenta sus cinco estadísticas con barras editables y conserva equipo y habilidades mediante las tarjetas compactas del inventario Roguelite.
-
 

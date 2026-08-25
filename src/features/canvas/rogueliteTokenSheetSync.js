@@ -76,14 +76,22 @@ const resolveStatusIds = (sheetData) => (
 
 export const syncCanvasTokenWithSheet = (token, sheetData, catalogs = {}, options = {}) => {
   if (isRogueliteEnemySheet(sheetData)) {
-    const portrait = sheetData.image || sheetData.imageSource || sheetData.portrait || sheetData.img || token.portrait || token.img;
+    const portrait = sheetData.image || sheetData.portrait || sheetData.imageSource || sheetData.img || token.portrait || token.img;
+    const tokenImage = sheetData.tokenImageSource
+      || sheetData.imageSource
+      || token.tokenImageSource
+      || sheetData.img
+      || token.img
+      || portrait;
     return {
       ...token,
       ...sheetData,
       profileType: 'rogueliteEnemy',
       canvasRuntime: 'roguelite',
-      img: portrait,
+      img: tokenImage,
       portrait,
+      tokenImageSource: tokenImage,
+      tokenImageFit: sheetData.tokenImageFit || token.tokenImageFit || 'contain',
       controlledBy: ['master'],
       teamId: sheetData.teamId || 'enemies',
       linkedEnemyId: sheetData.id || sheetData.linkedEnemyId || token.linkedEnemyId || null,

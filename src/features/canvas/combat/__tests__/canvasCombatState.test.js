@@ -6,14 +6,18 @@ import {
   markParticipantActed,
   pruneCombatState,
   queueCanvasAttack,
+  rechargeEnemyMovementWithAttack,
   recordParticipantMovement,
   resolveQueuedCanvasAttack,
   rollParticipantActionDice,
   setActionDieStatus,
   setEnemyActionStatus,
   setParticipantMovementModifier,
+  setParticipantMovementResource,
+  spendActionDieForSprint,
   startNextRound,
   submitActionDice,
+  undoParticipantActivation,
   undoParticipantMovement,
   validateDiceResults,
 } from '../canvasCombatState';
@@ -44,6 +48,7 @@ const goblin = (id) => ({
   linkedEnemyId: 'goblin',
   fixedInitiative: 8,
   threatDie: 'd6',
+  stats: { movimiento: { current: 3, max: 3 } },
 });
 
 describe('Canvas roguelite combat state', () => {
@@ -127,6 +132,73 @@ describe('Canvas roguelite combat state', () => {
 
     state = startNextRound(state, { now: 200, random: () => 0 });
     expect(state.participants['goblin-a'].enemyActions.find((a) => a.id === 'attack').status).toBe('available');
+  });
+
+  it('spends Movimiento automatically and can spend Ataque to recharge the enemy base movement', () => {
+    const enemy = goblin('goblin-runner');
+    let state = createCanvasCombatState([enemy], { now: 10, random: () => 0 });
+
+    state = recordParticipantMovement(state, enemy.id, {
+      from: { x: 0, y: 0 },
+      to: { x: 100, y: 0 },
+      cost: 2,
+      actor: 'Master',
+    }, { now: 20 });
+
+    expect(getAvailableMovement(state.participants[enemy.id])).toBe(1);
+    expect(state.participants[enemy.id].enemyActions.find((action) => action.id === 'movement').status).toBe('spent');
+    expect(state.participants[enemy.id].enemyActions.find((action) => action.id === 'attack').status).toBe('available');
+
+    state = rechargeEnemyMovementWithAttack(state, enemy.id, { now: 30 });
+
+    expect(getAvailableMovement(state.participants[enemy.id])).toBe(3);
+    expect(state.participants[enemy.id].movementRuntime.spent).toBe(0);
+    expect(state.participants[enemy.id].movementRuntime.sprintBonus).toBe(0);
+    expect(state.participants[enemy.id].enemyActions.find((action) => action.id === 'attack').status).toBe('spent');
+    expect(state.history.at(-1)).toEqual(expect.objectContaining({
+      type: 'enemy-sprint-activated',
+      movementRestored: 3,
+      spentActionId: 'attack',
+    }));
+
+    const movedAfterRunning = recordParticipantMovement(state, enemy.id, {
+      from: { x: 100, y: 0 },
+      to: { x: 150, y: 0 },
+      cost: 1,
+    }, { now: 40 });
+    const { state: undoneAfterRunning } = undoParticipantMovement(movedAfterRunning, enemy.id, { now: 50 });
+    expect(undoneAfterRunning.participants[enemy.id].enemyActions.find((action) => action.id === 'movement').status).toBe('spent');
+  });
+
+  it('does not let an enemy run twice or waste Ataque while movement is full', () => {
+    const enemy = goblin('goblin-runner');
+    const initial = createCanvasCombatState([enemy], { now: 10, random: () => 0 });
+
+    expect(rechargeEnemyMovementWithAttack(initial, enemy.id, { now: 20 })).toBe(initial);
+
+    const moved = recordParticipantMovement(initial, enemy.id, {
+      from: { x: 0, y: 0 },
+      to: { x: 150, y: 0 },
+      cost: 3,
+    }, { now: 30 });
+    const recharged = rechargeEnemyMovementWithAttack(moved, enemy.id, { now: 40 });
+
+    expect(rechargeEnemyMovementWithAttack(recharged, enemy.id, { now: 50 })).toBe(recharged);
+  });
+
+  it('restores the enemy Movimiento action when its only confirmed move is undone', () => {
+    const enemy = goblin('goblin-undo');
+    const initial = createCanvasCombatState([enemy], { now: 10, random: () => 0 });
+    const moved = recordParticipantMovement(initial, enemy.id, {
+      from: { x: 0, y: 0 },
+      to: { x: 50, y: 0 },
+      cost: 1,
+    }, { now: 20 });
+
+    const { state: undone } = undoParticipantMovement(moved, enemy.id, { now: 30 });
+
+    expect(getAvailableMovement(undone.participants[enemy.id])).toBe(3);
+    expect(undone.participants[enemy.id].enemyActions.find((action) => action.id === 'movement').status).toBe('available');
   });
 
   it('prunes participants whose tokens were deleted from canvas', () => {
@@ -246,8 +318,12 @@ describe('Canvas roguelite combat state', () => {
     // Base movement initialized to 3
     expect(participant.movementRuntime).toEqual({
       base: 3,
+      statMax: 3,
       modifier: 0,
       spent: 0,
+      sprintBonus: 0,
+      sprintDieId: null,
+      sprintDieIds: [],
       history: [],
     });
     expect(getAvailableMovement(participant)).toBe(3);
@@ -303,11 +379,126 @@ describe('Canvas roguelite combat state', () => {
     state = startNextRound(state, { random: () => 0 });
     expect(state.participants[hero.id].movementRuntime).toEqual({
       base: 3,
+      statMax: 3,
       modifier: 0,
       spent: 0,
+      sprintBonus: 0,
+      sprintDieId: null,
+      sprintDieIds: [],
       history: [],
     });
     expect(getAvailableMovement(state.participants[hero.id])).toBe(3);
   });
-});
 
+  it('accumulates every available action die used to sprint and does not recharge spent sprint movement', () => {
+    const hero = {
+      ...barbarian,
+      stats: { movimiento: { current: 3, max: 3 } },
+    };
+    let state = createCanvasCombatState([hero]);
+    state = submitActionDice(state, hero.id, [7, 4, 2], { random: () => 0 });
+    const sprintDie = state.participants[hero.id].actionDice[0];
+
+    state = spendActionDieForSprint(state, hero.id, sprintDie.id, { now: 50 });
+    expect(state.participants[hero.id].actionDice[0].status).toBe('spent');
+    expect(state.participants[hero.id].movementRuntime.sprintBonus).toBe(7);
+    expect(state.participants[hero.id].movementRuntime.sprintDieId).toBe(sprintDie.id);
+    expect(state.participants[hero.id].movementRuntime.sprintDieIds).toEqual([sprintDie.id]);
+    expect(getAvailableMovement(state.participants[hero.id])).toBe(10);
+
+    const secondSprintDie = state.participants[hero.id].actionDice[1];
+    state = spendActionDieForSprint(
+      state,
+      hero.id,
+      secondSprintDie.id,
+    );
+    expect(state.participants[hero.id].actionDice[1].status).toBe('spent');
+    expect(state.participants[hero.id].movementRuntime.sprintBonus).toBe(11);
+    expect(state.participants[hero.id].movementRuntime.sprintDieIds).toEqual([sprintDie.id, secondSprintDie.id]);
+    expect(getAvailableMovement(state.participants[hero.id])).toBe(14);
+
+    state = recordParticipantMovement(state, hero.id, {
+      from: { x: 0, y: 0 },
+      to: { x: 14, y: 0 },
+      cost: 14,
+    });
+    expect(getAvailableMovement(state.participants[hero.id])).toBe(0);
+
+    state = setParticipantMovementResource(state, hero.id, {
+      current: 14,
+      max: 14,
+      field: 'current',
+    });
+    expect(getAvailableMovement(state.participants[hero.id])).toBe(3);
+
+    state = startNextRound(state, { random: () => 0 });
+    expect(state.participants[hero.id].movementRuntime.sprintBonus).toBe(0);
+    expect(state.participants[hero.id].movementRuntime.sprintDieId).toBeNull();
+    expect(state.participants[hero.id].movementRuntime.sprintDieIds).toEqual([]);
+    expect(getAvailableMovement(state.participants[hero.id])).toBe(3);
+  });
+
+  it('lets the master reopen the activation of a specific completed token', () => {
+    let state = createCanvasCombatState([barbarian, rogue]);
+    state = submitActionDice(state, barbarian.id, [6, 3, 2], { random: () => 0 });
+    state = submitActionDice(state, rogue.id, [5, 3, 2], { random: () => 0 });
+    const playerBlockIndex = state.blocks.findIndex((block) => block.side === 'players');
+    state = { ...state, activeBlockIndex: playerBlockIndex };
+    state = markParticipantActed(state, barbarian.id);
+    state = markParticipantActed(state, rogue.id);
+
+    const reopened = undoParticipantActivation(state, barbarian.id, { now: 80 });
+    expect(reopened.activeBlockIndex).toBe(playerBlockIndex);
+    expect(reopened.blocks[playerBlockIndex].actedIds).not.toContain(barbarian.id);
+    expect(reopened.blocks[playerBlockIndex].actedIds).toContain(rogue.id);
+  });
+
+  it('treats an inspector edit of Movimiento as a visible refund of spent movement', () => {
+    const hero = {
+      ...barbarian,
+      stats: { movimiento: { current: 3, max: 3 } },
+    };
+    let state = createCanvasCombatState([hero]);
+    state = recordParticipantMovement(state, hero.id, {
+      from: { x: 0, y: 0 },
+      to: { x: 3, y: 0 },
+      cost: 3,
+    });
+    expect(getAvailableMovement(state.participants[hero.id])).toBe(0);
+
+    state = setParticipantMovementResource(state, hero.id, {
+      current: 2,
+      max: 3,
+      field: 'current',
+    }, { now: 90, actor: 'Master' });
+
+    expect(state.participants[hero.id].movementRuntime.spent).toBe(1);
+    expect(getAvailableMovement(state.participants[hero.id])).toBe(2);
+    expect(state.history.at(-1)).toEqual(expect.objectContaining({
+      type: 'movement-resource-adjusted',
+      previousRemaining: 0,
+      remaining: 2,
+      actor: 'Master',
+    }));
+  });
+
+  it('keeps an edited movement base when the next round reloads movement', () => {
+    const hero = {
+      ...barbarian,
+      stats: { movimiento: { current: 3, max: 3 } },
+    };
+    let state = createCanvasCombatState([hero]);
+    state = setParticipantMovementResource(state, hero.id, {
+      current: 3,
+      max: 5,
+      field: 'max',
+    });
+
+    expect(state.participants[hero.id].movementRuntime.base).toBe(5);
+    expect(state.participants[hero.id].movementRuntime.statMax).toBe(5);
+
+    state = startNextRound(state, { random: () => 0 });
+    expect(state.participants[hero.id].movementRuntime.base).toBe(5);
+    expect(getAvailableMovement(state.participants[hero.id])).toBe(5);
+  });
+});

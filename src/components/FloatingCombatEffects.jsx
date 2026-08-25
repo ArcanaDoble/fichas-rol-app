@@ -237,6 +237,8 @@ const getPushEffectColor = (pushEffect) => (
 export function getCombatEffectLifetimeMs(effect) {
     if (!effect) return 5500;
 
+    if (effect.reactionType === 'sprint') return 3500;
+
     const {
         reactionType,
         finalDamage = 0,
@@ -475,7 +477,7 @@ export function getCombatEffectLifetimeMs(effect) {
 
 export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
     if (!effect) {
-        return { highlights: [], flyoffs: [] };
+        return { highlights: [], flyoffs: [], sprints: [] };
     }
 
     const {
@@ -499,6 +501,7 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
     const effectKey = sourceEventId || `${timestamp || 'no-ts'}-${attackerId || 'no-att'}-${targetId || 'no-target'}-${reactionType || 'none'}`;
     const flyoffs = [];
     const highlights = [];
+    const sprints = [];
     const targetAppliedTraitEffects = normalizeTraitEffects(
         Array.isArray(traitEffectsApplied?.target) ? traitEffectsApplied.target : []
     );
@@ -562,6 +565,29 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
                 : 0
         });
     };
+
+    if (reactionType === 'sprint' && targetPos) {
+        const sprintMovement = Math.max(0, Number(effect.sprintMovement) || 0);
+        sprints.push({
+            id: `${effectKey}-sprint-burst`,
+            x: targetPos.x,
+            y: targetPos.y,
+            width: targetPos.width,
+            height: targetPos.height,
+        });
+        addFlyoff('sprint-label', {
+            x: targetPos.x + targetPos.width / 2,
+            y: targetPos.y - 24,
+            text: '¡CORRER!',
+            color: '#c8aa6e',
+            label: effect.sprintMode === 'recharge'
+                ? `Movimiento recargado${sprintMovement ? ` · ${sprintMovement} casillas` : ''}`
+                : `${sprintMovement ? `+${sprintMovement} casillas` : 'Movimiento adicional'}`,
+            type: 'sprint',
+            delay: 0,
+        });
+        return { highlights, flyoffs, sprints };
+    }
 
     const addDamageFlyoff = (id, position, fallbackValue, baseDelay = 0, damageBlocks = targetBlocks) => {
         if (!position) return;
@@ -992,7 +1018,7 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
         });
     });
 
-    return { highlights, flyoffs };
+    return { highlights, flyoffs, sprints };
 }
 
 function FloatingCombatEffectsComponent({ effect, targetPos, attackerPos }) {
@@ -1012,6 +1038,38 @@ function FloatingCombatEffectsComponent({ effect, targetPos, attackerPos }) {
 
     return (
         <AnimatePresence>
+            {(visuals.sprints || []).map((sprint) => (
+                <motion.div
+                    key={sprint.id}
+                    initial={{ opacity: 0, scale: 0.55, x: -12 }}
+                    animate={{
+                        opacity: [0, 1, 0.9, 0],
+                        scale: [0.55, 1.05, 1.35, 1.65],
+                        x: [-12, 0, 12, 28],
+                    }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 1.35, times: [0, 0.18, 0.62, 1], ease: 'easeOut' }}
+                    className="absolute pointer-events-none z-[195] rounded-full border-2 border-[#c8aa6e]"
+                    style={{
+                        left: sprint.x - sprint.width * 0.12,
+                        top: sprint.y - sprint.height * 0.12,
+                        width: sprint.width * 1.24,
+                        height: sprint.height * 1.24,
+                        boxShadow: '0 0 18px rgba(200,170,110,0.9), inset 0 0 18px rgba(200,170,110,0.45)',
+                    }}
+                >
+                    {[0, 1, 2].map((index) => (
+                        <motion.span
+                            key={index}
+                            initial={{ opacity: 0, scaleX: 0.2 }}
+                            animate={{ opacity: [0, 0.9, 0], scaleX: [0.2, 1, 1.4], x: [-8, -30, -54] }}
+                            transition={{ duration: 1.05, delay: index * 0.1, ease: 'easeOut' }}
+                            className="absolute right-[72%] h-[2px] w-[70%] origin-right rounded-full bg-gradient-to-l from-[#f0d99f] via-[#c8aa6e] to-transparent"
+                            style={{ top: `${28 + index * 21}%` }}
+                        />
+                    ))}
+                </motion.div>
+            ))}
             {visuals.highlights.map((highlight) => (
                 <motion.div
                     key={highlight.id}
@@ -1057,7 +1115,7 @@ function FloatingCombatEffectsComponent({ effect, targetPos, attackerPos }) {
                             className="font-fantasy font-black italic tracking-tighter"
                             style={{
                                 color: flyoff.color,
-                                fontSize: ['damage', 'trait'].includes(flyoff.type) ? '48px' : (['state', 'speed', 'push'].includes(flyoff.type) ? '34px' : '32px'),
+                                fontSize: ['damage', 'trait'].includes(flyoff.type) ? '48px' : (['state', 'speed', 'push', 'sprint'].includes(flyoff.type) ? '34px' : '32px'),
                                 textShadow: `
                                     0 0 10px ${flyoff.color}80,
                                     0 0 20px #000,

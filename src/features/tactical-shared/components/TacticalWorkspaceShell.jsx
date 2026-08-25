@@ -92,6 +92,7 @@ export const TacticalWorkspaceShell = ({
     finiteMapWidth,
     focusedTargetId,
     getBoardMobileTacticalMoveOptions,
+    getCanvasMobileTacticalMoveOptions,
     getHandCardsForToken,
     globalActiveId,
     glossary,
@@ -816,6 +817,7 @@ export const TacticalWorkspaceShell = ({
                     finiteMapWidth={finiteMapWidth}
                     focusedTargetId={focusedTargetId}
                     getBoardMobileTacticalMoveOptions={getBoardMobileTacticalMoveOptions}
+                    getCanvasMobileTacticalMoveOptions={getCanvasMobileTacticalMoveOptions}
                     gridConfig={gridConfig}
                     handleBoardMobileTacticalMoveCell={handleBoardMobileTacticalMoveCell}
                     handleCancelMobileTacticalMove={handleCancelMobileTacticalMove}
@@ -998,6 +1000,7 @@ export const TacticalWorkspaceShell = ({
                     const hasPendingMovement = isUsablePendingTurnState(pendingTurnState)
                         && pendingTurnState.tokenId === hudToken.id
                         && (Number(pendingTurnState.moveCost) || 0) > 0;
+                    const hudCombatParticipant = combatRuntime?.combatState?.participants?.[hudToken.id];
 
                     return (
                         <CombatHUD
@@ -1019,6 +1022,9 @@ export const TacticalWorkspaceShell = ({
                             pendingCost={pendingTurnState?.tokenId === hudToken.id ? (pendingTurnState.moveCost + pendingTurnState.actionCost) : 0}
                             pendingActions={pendingTurnState?.tokenId === hudToken.id ? (pendingTurnState.actions || []) : []}
                             onCancelAction={(idx) => handleCancelAction(hudToken.id, idx)}
+                            actionDice={hudCombatParticipant?.actionDice || []}
+                            sprintBonus={hudCombatParticipant?.movementRuntime?.sprintBonus || 0}
+                            onSprint={(dieId) => combatRuntime?.activateSprint?.(hudToken.id, dieId)}
                             forceWeaponMenu={targetingState?.phase === 'weapon_selection' && targetingState.attackerId === hudToken.id}
                             targetDistance={targetDistance}
                             allowAdjacentTouchTargeting={allowAdjacentTouchTargeting}
@@ -1181,6 +1187,7 @@ export const TacticalWorkspaceShell = ({
                                         return canUseTouchAgainstAdjacentLockedTarget(attacker, target, gridConfig);
                                     })()
                                     : false;
+                                const hudCombatParticipant = combatRuntime?.combatState?.participants?.[hudToken.id];
 
                                 return (
                                     <motion.div
@@ -1216,6 +1223,19 @@ export const TacticalWorkspaceShell = ({
                                             pendingCost={pendingTurnState && pendingTurnState.tokenId === hudToken.id ? (pendingTurnState.moveCost + pendingTurnState.actionCost) : 0}
                                             pendingActions={pendingTurnState && pendingTurnState.tokenId === hudToken.id ? (pendingTurnState.actions || []) : []}
                                             onCancelAction={(index) => handleCancelAction(hudToken.id, index)}
+                                            actionDice={hudCombatParticipant?.actionDice || []}
+                                            sprintBonus={hudCombatParticipant?.movementRuntime?.sprintBonus || 0}
+                                            onSprint={(dieId) => combatRuntime?.activateSprint?.(hudToken.id, dieId)}
+                                            enemyActions={hudCombatParticipant?.enemyActions || []}
+                                            movementAvailable={combatRuntime?.getAvailableMovement?.(hudToken.id) || 0}
+                                            movementBase={hudCombatParticipant?.movementRuntime
+                                                ? Math.max(
+                                                    0,
+                                                    (Number(hudCombatParticipant.movementRuntime.base) || 0)
+                                                        + (Number(hudCombatParticipant.movementRuntime.modifier) || 0),
+                                                )
+                                                : 0}
+                                            onEnemySprint={() => combatRuntime?.activateEnemySprint?.(hudToken.id)}
                                             forceWeaponMenu={targetingState?.phase === 'weapon_selection' && targetingState.attackerId === hudToken.id}
                                             targetDistance={targetDistance}
                                             allowAdjacentTouchTargeting={allowAdjacentTouchTargeting}

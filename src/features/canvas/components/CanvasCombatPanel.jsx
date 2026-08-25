@@ -125,47 +125,46 @@ const SetupParticipant = ({ participant, canManage, runtime }) => {
 
 const ActionDie = ({ die, disabled, onChange }) => {
   const nextStatus = STATUS_ORDER[(STATUS_ORDER.indexOf(die.status) + 1) % STATUS_ORDER.length];
-  const tone = die.status === 'available'
-    ? 'border-[#c8aa6e]/40 text-[#d8bf88] bg-[#c8aa6e]/5 hover:bg-[#c8aa6e]/10'
-    : die.status === 'committed'
-      ? 'border-sky-400/60 text-sky-300 bg-sky-500/10 hover:bg-sky-500/15'
-      : 'border-slate-800/80 text-slate-500 bg-black/30 opacity-60';
-
-  const statusBadgeClass = die.status === 'available'
-    ? 'border-[#c8aa6e]/20 text-[#d8bf88]'
-    : die.status === 'committed'
-      ? 'border-sky-400/30 text-sky-300'
-      : 'border-slate-800 text-slate-600';
+  const isAvailable = die.status === 'available';
+  const isCommitted = die.status === 'committed';
+  const tone = isAvailable
+    ? 'border-[#c8aa6e]/40 bg-[#c8aa6e]/[0.05] hover:border-[#c8aa6e]/80 hover:bg-[#c8aa6e]/[0.10]'
+    : isCommitted
+      ? 'border-sky-400/50 bg-sky-500/[0.08] hover:border-sky-400/80 hover:bg-sky-500/[0.14]'
+      : 'border-slate-800/80 bg-black/40 opacity-40 grayscale hover:opacity-60';
+  const labelTone = isAvailable ? 'text-[#d8bf88]' : isCommitted ? 'text-sky-300' : 'text-slate-500';
 
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={() => onChange(nextStatus)}
-      className={`group relative flex min-w-0 flex-1 flex-col items-center justify-between border py-2 px-1 text-center transition-all ${tone} ${
-        disabled ? 'cursor-default' : 'hover:border-[#c8aa6e] active:scale-[0.98]'
+      className={`group relative flex min-w-0 flex-1 flex-col items-center justify-between rounded border px-1.5 py-2 text-center transition-all ${tone} ${
+        disabled ? 'cursor-default' : 'active:scale-[0.97]'
       }`}
       aria-label={`${die.die} con resultado ${die.value}: ${STATUS_LABELS[die.status]}`}
       title={`${die.die} (${die.value}) — ${STATUS_LABELS[die.status]}`}
     >
-      <div className="flex w-full items-center justify-between px-1 text-[8px] font-bold uppercase tracking-wider opacity-75">
-        <span className="font-['Cinzel']">{die.die}</span>
-        <span className="font-mono text-[9px] font-bold">{die.value}</span>
+      <div className="flex w-full items-center justify-center">
+        <span className="font-['Cinzel'] text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">
+          {die.die}
+        </span>
       </div>
-      <div className="my-1 flex items-center justify-center">
-        <DiceSvg faces={die.sides} value={die.value} className="h-7 w-7" />
+      <div className="my-1.5 flex items-center justify-center">
+        <DiceSvg faces={die.sides} value={die.value} className="h-8 w-8" />
       </div>
-      <span className={`w-full py-0.5 text-[8px] font-bold uppercase tracking-[0.08em] border-t ${statusBadgeClass}`}>
+      <span className={`text-[8px] font-bold uppercase tracking-[0.14em] ${labelTone}`}>
         {STATUS_LABELS[die.status]}
       </span>
     </button>
   );
 };
 
-const EnemyAction = ({ action, disabled, onChange }) => {
+const EnemyAction = ({ action, disabled, onChange, statusLabel = null, title = null }) => {
   const nextStatus = STATUS_ORDER[(STATUS_ORDER.indexOf(action.status) + 1) % STATUS_ORDER.length];
   const isMove = action.id === 'movement';
-  const Icon = isMove ? Footprints : Swords;
+  const Icon = action.icon || (isMove ? Footprints : Swords);
+  const visibleStatus = statusLabel || STATUS_LABELS[action.status];
   const tone = action.status === 'available'
     ? 'border-[#c8aa6e]/40 text-[#d8bf88] bg-[#c8aa6e]/5 hover:bg-[#c8aa6e]/10'
     : action.status === 'committed'
@@ -186,8 +185,8 @@ const EnemyAction = ({ action, disabled, onChange }) => {
       className={`group relative flex min-w-0 flex-1 flex-col items-center justify-between border py-2 px-1 text-center transition-all ${tone} ${
         disabled ? 'cursor-default' : 'hover:border-[#c8aa6e] active:scale-[0.98]'
       }`}
-      aria-label={`${action.label}: ${STATUS_LABELS[action.status]}`}
-      title={`${action.label} — ${STATUS_LABELS[action.status]} (Haz clic para cambiar)`}
+      aria-label={`${action.label}: ${visibleStatus}`}
+      title={title || `${action.label} — ${visibleStatus} (Haz clic para cambiar)`}
     >
       <div className="flex w-full items-center justify-center px-1 text-[8px] font-bold uppercase tracking-wider opacity-75">
         <span className="font-['Cinzel'] truncate">{action.label}</span>
@@ -196,14 +195,14 @@ const EnemyAction = ({ action, disabled, onChange }) => {
         <Icon size={17} className={action.status === 'committed' ? 'text-sky-300' : (action.status === 'available' ? 'text-[#d8bf88]' : 'text-slate-500')} />
       </div>
       <span className={`w-full py-0.5 text-[8px] font-bold uppercase tracking-[0.08em] border-t ${statusBadgeClass}`}>
-        {STATUS_LABELS[action.status]}
+        {visibleStatus}
       </span>
     </button>
   );
 };
 
-const RoundParticipant = ({ participant, activeBlock, canManage, runtime, isPlayerView }) => {
-  const hasActed = activeBlock?.actedIds?.includes(participant.tokenId);
+const RoundParticipant = ({ participant, activeBlock, participantBlock, canManage, runtime, isPlayerView }) => {
+  const hasActed = participantBlock?.actedIds?.includes(participant.tokenId);
   const isInActiveBlock = activeBlock?.memberIds?.includes(participant.tokenId);
   const isEnemy = participant.side === 'enemies';
   const enemyActions = participant.enemyActions || [
@@ -214,7 +213,14 @@ const RoundParticipant = ({ participant, activeBlock, canManage, runtime, isPlay
   const movementBase = participant.movementRuntime?.base ?? getMovementBase(participant);
   const movementModifier = participant.movementRuntime?.modifier ?? 0;
   const movementSpent = participant.movementRuntime?.spent ?? 0;
-  const movementAvailable = Math.max(0, movementBase + movementModifier - movementSpent);
+  const sprintBonus = participant.movementRuntime?.sprintBonus ?? 0;
+  const movementAvailable = Math.max(0, movementBase + movementModifier + sprintBonus - movementSpent);
+  const enemyAttackAction = isEnemy ? enemyActions.find((action) => action.id === 'attack') : null;
+  const enemyMovementBase = Math.max(0, movementBase + movementModifier);
+  const canEnemySprint = isEnemy
+    && canManage
+    && enemyAttackAction?.status !== 'spent'
+    && movementAvailable < enemyMovementBase;
   const hasMovementHistory = (participant.movementRuntime?.history || []).length > 0;
 
   return (
@@ -237,7 +243,7 @@ const RoundParticipant = ({ participant, activeBlock, canManage, runtime, isPlay
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <h5 className="truncate font-['Cinzel'] text-[11px] font-bold uppercase tracking-[0.08em] text-[#eee5d3]">{participant.name}</h5>
-            {isInActiveBlock && !hasActed && <span className="text-[8px] font-bold uppercase tracking-[0.14em] text-emerald-400">Activo</span>}
+            {isInActiveBlock && !hasActed && <span className="text-[8px] font-bold uppercase tracking-[0.14em] text-[#c8aa6e]">Activo</span>}
           </div>
           <div className="flex items-center justify-between gap-2 mt-0.5">
             <span className="font-mono text-[9px] text-[#d7b867]">Iniciativa {participant.initiative}</span>
@@ -245,7 +251,7 @@ const RoundParticipant = ({ participant, activeBlock, canManage, runtime, isPlay
               <span className="text-[9px] font-bold text-slate-400 flex items-center gap-0.5">
                 <Footprints size={10} className="text-[#c8aa6e]" />
                 <span className="text-[#c8aa6e] font-mono">{movementAvailable}</span>
-                <span className="text-[8px] text-slate-500">({movementBase}{movementModifier !== 0 ? (movementModifier > 0 ? `+${movementModifier}` : movementModifier) : ''})</span>
+                <span className="text-[8px] text-slate-500">({movementBase}{movementModifier !== 0 ? (movementModifier > 0 ? `+${movementModifier}` : movementModifier) : ''}{sprintBonus > 0 ? ` + correr ${sprintBonus}` : ''})</span>
               </span>
               {canManage && (
                 <div className="flex items-center gap-0.5 ml-1">
@@ -298,6 +304,27 @@ const RoundParticipant = ({ participant, activeBlock, canManage, runtime, isPlay
                   : runtime.updateDieStatus(participant.tokenId, action.id, status))}
               />
             ))}
+            <EnemyAction
+              action={{
+                id: 'sprint',
+                label: 'Correr',
+                type: 'sprint',
+                status: canEnemySprint ? 'available' : 'spent',
+                icon: RotateCcw,
+              }}
+              disabled={!canEnemySprint}
+              statusLabel={enemyAttackAction?.status === 'spent'
+                ? 'Sin ataque'
+                : movementAvailable >= enemyMovementBase
+                  ? 'Completo'
+                  : 'Gasta ataque'}
+              title={enemyAttackAction?.status === 'spent'
+                ? 'La acción de Ataque ya está gastada'
+                : movementAvailable >= enemyMovementBase
+                  ? 'El movimiento base ya está completo'
+                  : `Gastar Ataque para recargar ${enemyMovementBase} casillas`}
+              onChange={() => runtime.activateEnemySprint?.(participant.tokenId)}
+            />
           </div>
           {participant.threatDie && (
             <p className="text-[8px] uppercase tracking-[0.12em] text-slate-500">
@@ -319,13 +346,23 @@ const RoundParticipant = ({ participant, activeBlock, canManage, runtime, isPlay
             <span>Deshacer mov</span>
           </button>
         )}
+        {!isPlayerView && hasActed && (
+          <button
+            type="button"
+            onClick={() => runtime.undoActivation && runtime.undoActivation(participant.tokenId)}
+            className="h-8 flex-1 border border-amber-500/35 bg-amber-500/10 text-[8px] font-bold uppercase tracking-[0.12em] text-amber-300 hover:bg-amber-500/20 rounded"
+            title={`Reabrir la activación de ${participant.name}`}
+          >
+            Reabrir turno
+          </button>
+        )}
         {isInActiveBlock && !hasActed && canManage && (
           <button
             type="button"
             onClick={() => runtime.completeActivation(participant.tokenId)}
-            className="h-8 flex-1 border border-emerald-500/35 bg-emerald-500/10 text-[9px] font-bold uppercase tracking-[0.14em] text-emerald-300 hover:bg-emerald-500/20 rounded"
+            className="h-8 flex-1 border border-[#c8aa6e]/50 bg-[#c8aa6e]/10 text-[9px] font-bold uppercase tracking-[0.16em] text-[#e8cf91] hover:bg-[#c8aa6e]/20 hover:border-[#c8aa6e] rounded transition-all"
           >
-            Finalizar activación
+            Finalizar turno
           </button>
         )}
       </div>
@@ -458,6 +495,7 @@ const CanvasCombatPanel = ({ activeTab, combatRuntime = {}, isPlayerView, player
                     key={participant.tokenId}
                     participant={participant}
                     activeBlock={activeBlock}
+                    participantBlock={state.blocks.find((block) => block.memberIds.includes(participant.tokenId))}
                     canManage={participantCanBeManaged(participant, combatRuntime?.controlledTokenIds)}
                     runtime={combatRuntime}
                     isPlayerView={isPlayerView}

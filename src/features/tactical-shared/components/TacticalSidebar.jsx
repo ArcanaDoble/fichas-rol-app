@@ -272,7 +272,7 @@ export const CanvasSidebar = ({
                                 {/* --- TAB: INSPECTOR --- */}
                                 <TokenInspectorPanel {...{
                         BOARD_DIE_SIDES, BoardDieVisual, BoardMarkerVisual, PRESET_COLORS, accesorios, activeScenario,
-                        activeTab, armaduras, armas, availableCharacters, deleteItem, existingPlayers,
+                        activeTab, armaduras, armas, availableCharacters, combatRuntime, deleteItem, existingPlayers,
                         glossary, gridConfig, habilidades, handleBoardCardBackUpload, highlightText, isBoardMode,
                         isMaster, isPlayerView, lastFlipTimesRef, linkCharacter, playerName, rarityColorMap,
                         rollBoardDie, selectedTokenIds, unlinkCharacter, unstackSpecificCard, updateItem,

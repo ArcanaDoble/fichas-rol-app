@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { addDoc, collection, doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db } from '../../../firebase';
 import {
@@ -7,19 +7,24 @@ import {
   createCanvasCombatState,
   finishCanvasCombat,
   getAvailableMovement,
+  getMovementAllowance,
   getMovementBase,
   markParticipantActed,
   pruneCombatState,
   queueCanvasAttack,
+  rechargeEnemyMovementWithAttack,
   recordParticipantMovement,
   resolveQueuedCanvasAttack,
   rollDiceProfile,
   setActionDieStatus,
   setEnemyActionStatus,
   setParticipantMovementModifier,
+  setParticipantMovementResource,
+  spendActionDieForSprint,
   startNextRound,
   submitActionDice,
   undoLastActivation,
+  undoParticipantActivation,
   undoParticipantMovement,
 } from './canvasCombatState';
 import {
@@ -59,6 +64,54 @@ const saveCombatDoc = async (scenarioRef, nextCombat) => {
   }
 };
 
+const publishSprintAnimation = async ({ scenarioId, token, movement, mode }) => {
+  if (!scenarioId || !token?.id) return;
+  const clientTimestamp = Date.now();
+  try {
+    const effectRef = await addDoc(collection(db, 'combat_effects'), {
+      scenarioId,
+      sourceEventId: `canvas-sprint-${token.id}-${clientTimestamp}`,
+      reactionType: 'sprint',
+      targetId: token.id,
+      targetName: token.name || 'Token',
+      attackerId: null,
+      sprintMovement: Math.max(0, Number(movement) || 0),
+      sprintMode: mode === 'recharge' ? 'recharge' : 'additional',
+      clientTimestamp,
+      timestamp: serverTimestamp(),
+    });
+    if (effectRef?.id) {
+      setTimeout(() => {
+        deleteDoc(doc(db, 'combat_effects', effectRef.id)).catch(() => {});
+      }, 12000);
+    }
+  } catch (error) {
+    console.warn('No se pudo publicar la animación de Correr:', error);
+  }
+};
+
+const syncMovementCharacteristic = (token, participant, { reset = false } = {}) => {
+  if (!token || !participant?.movementRuntime) return token;
+  const runtime = participant.movementRuntime;
+  const base = Math.max(0, Number(runtime.base) || 0);
+  const originalMax = Math.max(0, Number(runtime.statMax) || base);
+  const current = reset ? base : getAvailableMovement(participant);
+  const max = reset ? originalMax : Math.max(originalMax, getMovementAllowance(participant));
+
+  return {
+    ...token,
+    stats: {
+      ...(token.stats || {}),
+      movimiento: {
+        ...(token.stats?.movimiento || {}),
+        label: token.stats?.movimiento?.label || 'Movimiento',
+        current,
+        max,
+      },
+    },
+  };
+};
+
 export const useCanvasCombatRuntime = ({
   activeScenario,
   activeScenarioRef,
@@ -72,7 +125,12 @@ export const useCanvasCombatRuntime = ({
 }) => {
   const [attackDraft, setAttackDraft] = useState(null);
   const localCombatRef = useRef(activeScenario?.canvasCombat || null);
+  const localItemsRef = useRef(activeScenario?.items || []);
   const writeQueueRef = useRef(Promise.resolve());
+
+  useEffect(() => {
+    localItemsRef.current = activeScenario?.items || [];
+  }, [activeScenario?.items]);
 
   useEffect(() => {
     const remoteCombat = activeScenario?.canvasCombat;
@@ -145,6 +203,30 @@ export const useCanvasCombatRuntime = ({
     setActiveScenario,
     triggerToast,
   ]);
+
+  const persistCombatAndItems = useCallback((scenario, nextCombat, nextItems, errorTitle = 'No se pudo sincronizar la ronda') => {
+    if (!scenario?.id || !nextCombat) return false;
+    localCombatRef.current = nextCombat;
+    localItemsRef.current = nextItems;
+    setActiveScenario((active) => (
+      active?.id === scenario.id
+        ? { ...active, items: nextItems, canvasCombat: nextCombat }
+        : active
+    ));
+
+    writeQueueRef.current = writeQueueRef.current.then(async () => {
+      const scenarioRef = doc(db, scenarioCollectionName, scenario.id);
+      await updateDoc(scenarioRef, {
+        items: localItemsRef.current || nextItems,
+        canvasCombat: localCombatRef.current || nextCombat,
+        combatModifiedAt: Date.now(),
+      });
+    }).catch((error) => {
+      console.error(`${errorTitle}:`, error);
+      triggerToast(errorTitle, error?.message || 'Reinténtalo', 'error');
+    });
+    return true;
+  }, [scenarioCollectionName, setActiveScenario, triggerToast]);
 
   const startCombat = useCallback(() => {
     if (isPlayerView) return;
@@ -238,52 +320,213 @@ export const useCanvasCombatRuntime = ({
 
   const setMovementModifier = useCallback((tokenId, modifier) => {
     const scenario = activeScenarioRef.current || activeScenario;
-    const token = (scenario?.items || []).find((item) => item.id === tokenId);
+    const currentItems = localItemsRef.current || scenario?.items || [];
+    const token = currentItems.find((item) => item.id === tokenId);
     if (!canControlToken(token, isPlayerView, playerName)) return false;
-    return updateCombat((current) => setParticipantMovementModifier(current, tokenId, modifier));
-  }, [activeScenario, activeScenarioRef, isPlayerView, playerName, updateCombat]);
+    const currentCombat = localCombatRef.current || scenario?.canvasCombat;
+    const nextCombat = setParticipantMovementModifier(currentCombat, tokenId, modifier);
+    if (!nextCombat || nextCombat === currentCombat) return false;
+    const nextParticipant = nextCombat.participants?.[tokenId];
+    const nextItems = currentItems.map((item) => (
+      item.id === tokenId ? syncMovementCharacteristic(item, nextParticipant) : item
+    ));
+    return persistCombatAndItems(scenario, nextCombat, nextItems);
+  }, [activeScenario, activeScenarioRef, isPlayerView, persistCombatAndItems, playerName]);
+
+  const reconcileMovementResource = useCallback((tokenId, updates, meta = {}) => {
+    const scenario = activeScenarioRef.current || activeScenario;
+    const currentItems = localItemsRef.current || scenario?.items || [];
+    const token = currentItems.find((item) => item.id === tokenId);
+    if (!canControlToken(token, isPlayerView, playerName)) return false;
+    const currentCombat = localCombatRef.current || scenario?.canvasCombat;
+    const participant = currentCombat?.participants?.[tokenId];
+    const requestedMovement = updates?.stats?.movimiento;
+    if (currentCombat?.status !== 'active' || !participant || !requestedMovement) return false;
+
+    const previousRemaining = getAvailableMovement(participant);
+    const nextCombat = setParticipantMovementResource(currentCombat, tokenId, {
+      current: requestedMovement.current,
+      max: requestedMovement.max,
+      field: meta.field,
+    }, {
+      actor: isPlayerView ? (token.name || playerName || 'Jugador') : 'Master',
+    });
+    if (!nextCombat || nextCombat === currentCombat) return true;
+
+    const nextParticipant = nextCombat.participants[tokenId];
+    const editedToken = { ...token, ...updates };
+    const nextToken = syncMovementCharacteristic(editedToken, nextParticipant);
+    const nextItems = currentItems.map((item) => (item.id === tokenId ? nextToken : item));
+    persistCombatAndItems(scenario, nextCombat, nextItems, 'No se pudo ajustar el movimiento');
+
+    const nextRemaining = getAvailableMovement(nextParticipant);
+    triggerToast(
+      nextRemaining > previousRemaining ? 'Movimiento recargado' : 'Movimiento ajustado',
+      `${token.name || 'La ficha'} dispone ahora de ${nextRemaining} casillas.`,
+      nextRemaining > previousRemaining ? 'success' : 'info',
+    );
+    return true;
+  }, [
+    activeScenario,
+    activeScenarioRef,
+    isPlayerView,
+    persistCombatAndItems,
+    playerName,
+    triggerToast,
+  ]);
+
+  const activateSprint = useCallback((tokenId, dieId) => {
+    const scenario = activeScenarioRef.current || activeScenario;
+    const currentItems = localItemsRef.current || scenario?.items || [];
+    const token = currentItems.find((item) => item.id === tokenId);
+    if (!canControlToken(token, isPlayerView, playerName)) {
+      triggerToast('No puedes correr', 'No controlas esta ficha.', 'warning');
+      return false;
+    }
+
+    const currentCombat = localCombatRef.current || scenario?.canvasCombat;
+    const participant = currentCombat?.participants?.[tokenId];
+    const die = participant?.actionDice?.find((candidate) => candidate.id === dieId);
+    if (!participant || !die || die.status !== 'available') {
+      triggerToast('No puedes correr', 'Ese dado de acción ya no está disponible.', 'warning');
+      return false;
+    }
+    const nextCombat = spendActionDieForSprint(currentCombat, tokenId, dieId);
+    if (nextCombat === currentCombat) {
+      triggerToast('No puedes correr', 'La ficha no está en su activación.', 'warning');
+      return false;
+    }
+    const nextParticipant = nextCombat.participants[tokenId];
+    const nextItems = currentItems.map((item) => (
+      item.id === tokenId ? syncMovementCharacteristic(item, nextParticipant) : item
+    ));
+    persistCombatAndItems(scenario, nextCombat, nextItems, 'No se pudo activar Correr');
+    publishSprintAnimation({
+      scenarioId: scenario?.id,
+      token,
+      movement: die.value,
+      mode: 'additional',
+    });
+    triggerToast(
+      'Correr activado',
+      `El ${die.die.toUpperCase()} aporta ${die.value} casillas adicionales${nextParticipant.movementRuntime?.sprintBonus > die.value ? ` (${nextParticipant.movementRuntime.sprintBonus} acumuladas)` : ''}.`,
+      'success',
+    );
+    return true;
+  }, [activeScenario, activeScenarioRef, isPlayerView, persistCombatAndItems, playerName, triggerToast]);
+
+  const activateEnemySprint = useCallback((tokenId) => {
+    const scenario = activeScenarioRef.current || activeScenario;
+    const currentItems = localItemsRef.current || scenario?.items || [];
+    const token = currentItems.find((item) => item.id === tokenId);
+    if (!token || token.profileType !== 'rogueliteEnemy' || !canControlToken(token, isPlayerView, playerName)) return false;
+
+    const currentCombat = localCombatRef.current || scenario?.canvasCombat;
+    const participant = currentCombat?.participants?.[tokenId];
+    const attackAction = (participant?.enemyActions || []).find((action) => action.id === 'attack');
+    const baseAllowance = participant?.movementRuntime
+      ? Math.max(
+        0,
+        (Number(participant.movementRuntime.base) || 0)
+          + (Number(participant.movementRuntime.modifier) || 0),
+      )
+      : 0;
+
+    if (!participant || attackAction?.status === 'spent') {
+      triggerToast('Ataque agotado', 'El enemigo ya no puede gastar Ataque para correr esta ronda.', 'warning');
+      return false;
+    }
+    if (getAvailableMovement(participant) >= baseAllowance) {
+      triggerToast('Movimiento completo', 'El enemigo todavía dispone de todo su movimiento base.', 'info');
+      return false;
+    }
+
+    const nextCombat = rechargeEnemyMovementWithAttack(currentCombat, tokenId, { actor: 'Master' });
+    if (!nextCombat || nextCombat === currentCombat) return false;
+    const nextParticipant = nextCombat.participants?.[tokenId];
+    const nextItems = currentItems.map((item) => (
+      item.id === tokenId ? syncMovementCharacteristic(item, nextParticipant) : item
+    ));
+    persistCombatAndItems(scenario, nextCombat, nextItems, 'No se pudo activar Correr');
+    publishSprintAnimation({
+      scenarioId: scenario?.id,
+      token,
+      movement: baseAllowance,
+      mode: 'recharge',
+    });
+    triggerToast(
+      'El enemigo corre',
+      `${token.name || 'El enemigo'} recupera ${baseAllowance} casillas y gasta su acción de Ataque.`,
+      'success',
+    );
+    return true;
+  }, [
+    activeScenario,
+    activeScenarioRef,
+    isPlayerView,
+    persistCombatAndItems,
+    playerName,
+    triggerToast,
+  ]);
 
   const confirmMovement = useCallback(async (tokenId, { from, to, cost = 0, isExceptional = false }) => {
     const scenario = activeScenarioRef.current || activeScenario;
-    const token = (scenario?.items || []).find((item) => item.id === tokenId);
+    const currentItems = localItemsRef.current || scenario?.items || [];
+    const token = currentItems.find((item) => item.id === tokenId);
     if (!canControlToken(token, isPlayerView, playerName)) return false;
 
-    const nextItems = (scenario.items || []).map((item) => (
-      item.id === tokenId ? { ...item, x: to.x, y: to.y } : item
-    ));
-
     const currentCombat = localCombatRef.current || scenario.canvasCombat;
+    const participant = currentCombat?.participants?.[tokenId];
+    const numericCost = Math.max(0, Number(cost) || 0);
+    const availableMovement = getAvailableMovement(participant);
+    if (!isExceptional && participant && numericCost > availableMovement) {
+      triggerToast(
+        'Movimiento agotado',
+        token.profileType === 'rogueliteEnemy'
+          ? `Solo quedan ${availableMovement} casillas. Usa Correr para gastar Ataque y recargar el movimiento base.`
+          : `Solo quedan ${availableMovement} casillas. Usa Correr y elige un dado de acción para avanzar más.`,
+        'warning',
+      );
+      return false;
+    }
+
     const nextCombat = currentCombat
       ? recordParticipantMovement(currentCombat, tokenId, {
           from,
           to,
-          cost,
+          cost: numericCost,
           isExceptional,
           actor: isPlayerView ? (token.name || playerName) : 'Master',
         })
       : null;
-
-    if (nextCombat) localCombatRef.current = nextCombat;
-
-    setActiveScenario((active) => (
-      active?.id === scenario.id
-        ? { ...active, items: nextItems, ...(nextCombat ? { canvasCombat: nextCombat } : {}) }
-        : active
-    ));
-
-    writeQueueRef.current = writeQueueRef.current.then(async () => {
-      const scenarioRef = doc(db, scenarioCollectionName, scenario.id);
-      await updateDoc(scenarioRef, {
-        items: nextItems,
-        ...(nextCombat ? { canvasCombat: nextCombat } : {}),
-      });
-    }).catch((error) => {
-      console.error('No se pudo guardar el movimiento confirmado:', error);
-      triggerToast('Error al confirmar movimiento', error?.message || 'Reinténtalo', 'error');
+    const nextParticipant = nextCombat?.participants?.[tokenId];
+    const nextItems = currentItems.map((item) => {
+      if (item.id !== tokenId) return item;
+      const moved = { ...item, x: to.x, y: to.y };
+      return nextParticipant ? syncMovementCharacteristic(moved, nextParticipant) : moved;
     });
 
+    if (nextCombat) {
+      persistCombatAndItems(scenario, nextCombat, nextItems, 'Error al confirmar movimiento');
+    } else {
+      localItemsRef.current = nextItems;
+      setActiveScenario((active) => (
+        active?.id === scenario.id ? { ...active, items: nextItems } : active
+      ));
+      safePersistItems?.(scenario.id, nextItems, currentItems, [tokenId], { persistRuntime: false });
+    }
+
     return true;
-  }, [activeScenario, activeScenarioRef, isPlayerView, playerName, scenarioCollectionName, setActiveScenario, triggerToast]);
+  }, [
+    activeScenario,
+    activeScenarioRef,
+    isPlayerView,
+    persistCombatAndItems,
+    playerName,
+    safePersistItems,
+    setActiveScenario,
+    triggerToast,
+  ]);
 
   const undoMovement = useCallback(async (tokenId) => {
     if (isPlayerView) return false;
@@ -298,47 +541,60 @@ export const useCanvasCombatRuntime = ({
       return false;
     }
 
-    const nextItems = (scenario.items || []).map((item) => (
-      item.id === tokenId ? { ...item, x: undoneEntry.from.x, y: undoneEntry.from.y } : item
-    ));
-
-    localCombatRef.current = nextCombat;
-    setActiveScenario((active) => (
-      active?.id === scenario.id
-        ? { ...active, items: nextItems, canvasCombat: nextCombat }
-        : active
-    ));
-
-    writeQueueRef.current = writeQueueRef.current.then(async () => {
-      const scenarioRef = doc(db, scenarioCollectionName, scenario.id);
-      await updateDoc(scenarioRef, {
-        items: nextItems,
-        canvasCombat: nextCombat,
-      });
-      triggerToast(
-        'Movimiento deshecho',
-        `Restaurada posición de ${undoneEntry.actor || 'token'}${undoneEntry.cost > 0 ? ` (+${undoneEntry.cost} mov devuelto)` : ''}`,
-        'info',
-      );
-    }).catch((error) => {
-      console.error('No se pudo deshacer el movimiento:', error);
-      triggerToast('Error al deshacer movimiento', error?.message || 'Reinténtalo', 'error');
+    const currentItems = localItemsRef.current || scenario.items || [];
+    const nextParticipant = nextCombat.participants?.[tokenId];
+    const nextItems = currentItems.map((item) => {
+      if (item.id !== tokenId) return item;
+      return syncMovementCharacteristic({
+        ...item,
+        x: undoneEntry.from.x,
+        y: undoneEntry.from.y,
+      }, nextParticipant);
     });
 
+    persistCombatAndItems(scenario, nextCombat, nextItems, 'Error al deshacer movimiento');
+    triggerToast(
+      'Movimiento deshecho',
+      `Restaurada posición de ${undoneEntry.actor || 'token'}${undoneEntry.cost > 0 ? ` (+${undoneEntry.cost} mov devuelto)` : ''}`,
+      'info',
+    );
+
     return true;
-  }, [activeScenario, activeScenarioRef, isPlayerView, scenarioCollectionName, setActiveScenario, triggerToast]);
+  }, [activeScenario, activeScenarioRef, isPlayerView, persistCombatAndItems, triggerToast]);
 
   const nextRound = useCallback(() => {
-    if (!isPlayerView) updateCombat((current) => startNextRound(current));
-  }, [isPlayerView, updateCombat]);
+    if (isPlayerView) return false;
+    const scenario = activeScenarioRef.current || activeScenario;
+    const currentCombat = localCombatRef.current || scenario?.canvasCombat;
+    if (!scenario?.id || !currentCombat) return false;
+    const nextCombat = startNextRound(currentCombat);
+    const currentItems = localItemsRef.current || scenario.items || [];
+    const nextItems = currentItems.map((item) => {
+      const participant = nextCombat.participants?.[item.id];
+      return participant ? syncMovementCharacteristic(item, participant, { reset: true }) : item;
+    });
+    return persistCombatAndItems(scenario, nextCombat, nextItems);
+  }, [activeScenario, activeScenarioRef, isPlayerView, persistCombatAndItems]);
 
-  const undoActivation = useCallback(() => {
-    if (!isPlayerView) updateCombat((current) => undoLastActivation(current));
+  const undoActivation = useCallback((tokenId = null) => {
+    if (!isPlayerView) updateCombat((current) => (
+      tokenId ? undoParticipantActivation(current, tokenId) : undoLastActivation(current)
+    ));
   }, [isPlayerView, updateCombat]);
 
   const finishCombat = useCallback(() => {
-    if (!isPlayerView) updateCombat((current) => finishCanvasCombat(current));
-  }, [isPlayerView, updateCombat]);
+    if (isPlayerView) return false;
+    const scenario = activeScenarioRef.current || activeScenario;
+    const currentCombat = localCombatRef.current || scenario?.canvasCombat;
+    if (!scenario?.id || !currentCombat) return false;
+    const nextCombat = finishCanvasCombat(currentCombat);
+    const currentItems = localItemsRef.current || scenario.items || [];
+    const nextItems = currentItems.map((item) => {
+      const participant = nextCombat.participants?.[item.id];
+      return participant ? syncMovementCharacteristic(item, participant, { reset: true }) : item;
+    });
+    return persistCombatAndItems(scenario, nextCombat, nextItems);
+  }, [activeScenario, activeScenarioRef, isPlayerView, persistCombatAndItems]);
 
   const beginAttackDraft = useCallback(({ attackerId, targetId, weapon }) => {
     const scenario = activeScenarioRef.current || activeScenario;
@@ -774,6 +1030,9 @@ export const useCanvasCombatRuntime = ({
     updateEnemyActionStatus,
     completeActivation,
     setMovementModifier,
+    reconcileMovementResource,
+    activateSprint,
+    activateEnemySprint,
     confirmMovement,
     undoMovement,
     getMovementBase: getMovementBaseForToken,

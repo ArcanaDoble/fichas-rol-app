@@ -118,3 +118,75 @@ test('Confirmar cambios saves the encounter and the pending Roguelite class runt
     'success',
   );
 });
+
+test('a rejected queued write keeps local edits pending instead of marking them as synchronized', async () => {
+  const baselineToken = {
+    id: 'token-1',
+    stats: { vida: { current: 8, max: 8 } },
+  };
+  const changedToken = {
+    ...baselineToken,
+    stats: { vida: { current: 4, max: 8 } },
+  };
+  const localUnsavedEditsRef = {
+    current: { 'token-1': { stats: changedToken.stats } },
+  };
+  const recentLocalWritesRef = { current: {} };
+  const persistQueueRef = {
+    current: jest.fn().mockResolvedValue(false),
+  };
+  const controller = createCanvasScenarioController({
+    localUnsavedEditsRef,
+    persistQueueRef,
+    recentLocalWritesRef,
+  });
+
+  const didPersist = await controller.safePersistItems(
+    'room-1',
+    [changedToken],
+    [baselineToken],
+    ['token-1'],
+  );
+
+  expect(didPersist).toBe(false);
+  expect(localUnsavedEditsRef.current).toEqual({
+    'token-1': { stats: changedToken.stats },
+  });
+  expect(recentLocalWritesRef.current).toEqual({});
+});
+
+test('a confirmed queued write clears only the fields Firebase accepted', async () => {
+  const baselineToken = {
+    id: 'token-1',
+    x: 10,
+    y: 20,
+  };
+  const changedToken = {
+    ...baselineToken,
+    x: 30,
+  };
+  const localUnsavedEditsRef = {
+    current: { 'token-1': { x: 30, y: 25 } },
+  };
+  const recentLocalWritesRef = { current: {} };
+  const controller = createCanvasScenarioController({
+    localUnsavedEditsRef,
+    persistQueueRef: { current: jest.fn().mockResolvedValue(true) },
+    recentLocalWritesRef,
+  });
+
+  const didPersist = await controller.safePersistItems(
+    'room-1',
+    [changedToken],
+    [baselineToken],
+    ['token-1'],
+  );
+
+  expect(didPersist).toBe(true);
+  expect(localUnsavedEditsRef.current).toEqual({
+    'token-1': { y: 25 },
+  });
+  expect(recentLocalWritesRef.current['token-1']).toEqual(expect.objectContaining({
+    fields: { x: 30 },
+  }));
+});

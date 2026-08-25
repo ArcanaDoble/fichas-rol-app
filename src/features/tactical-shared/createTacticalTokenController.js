@@ -158,6 +158,19 @@ const addTokenToCanvas = (tokenUrl) => {
         })
     );
 
+    const getCanvasMobileTacticalMoveOptions = (token, items = []) => {
+        const pending = isUsablePendingTurnState(pendingTurnStateRef.current)
+            && pendingTurnStateRef.current.tokenId === token?.id
+            ? pendingTurnStateRef.current
+            : null;
+        const available = Math.max(
+            0,
+            Number(combatRuntime?.getAvailableMovement?.(token?.id)) || 0,
+        );
+        const remaining = Math.max(0, available - (Number(pending?.moveCost) || 0));
+        return getMobileTacticalMoveOptions(token, items, gridConfig, remaining);
+    };
+
     const handleMobileTacticalMoveCell = (event, tokenId, targetCell) => {
         consumeMobileMoveTemplateEvent(event);
 
@@ -170,7 +183,7 @@ const addTokenToCanvas = (tokenUrl) => {
             return;
         }
 
-        const option = getMobileTacticalMoveOptions(token, scenario.items, gridConfig)
+        const option = getCanvasMobileTacticalMoveOptions(token, scenario.items)
             .find(candidate => candidate.cell.x === targetCell.x && candidate.cell.y === targetCell.y);
         if (!option) return;
 
@@ -361,12 +374,13 @@ const addTokenToCanvas = (tokenUrl) => {
         const isExceptional = Boolean(options.isExceptional || pending.isExceptional);
 
         if (combatRuntime?.confirmMovement) {
-            await combatRuntime.confirmMovement(tokenId, {
+            const confirmed = await combatRuntime.confirmMovement(tokenId, {
                 from: { x: startX, y: startY },
                 to: { x: finalX, y: finalY },
                 cost,
                 isExceptional,
             });
+            if (!confirmed) return false;
         } else {
             const nextItems = scenario.items.map(item => (
                 item.id === tokenId ? { ...item, x: finalX, y: finalY } : item
@@ -888,6 +902,7 @@ const addTokenToCanvas = (tokenUrl) => {
         shouldUseMobileTacticalMove,
         canUseBoardMobileTacticalMove,
         getBoardMobileTacticalMoveOptions,
+        getCanvasMobileTacticalMoveOptions,
         handleMobileTacticalMoveCell,
         handleBoardMobileTacticalMoveCell,
         handleCancelMobileTacticalMove,

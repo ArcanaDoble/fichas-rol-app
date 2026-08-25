@@ -203,14 +203,17 @@ export const createRogueliteEnemyTokenPayload = (candidate = {}, options = {}) =
     .map((slot, index) => flattenSlotItem(slot, 'ability', index))
     .filter(Boolean);
   const portrait = enemy.image || enemy.imageSource || '';
+  const tokenImage = enemy.imageSource || enemy.image || enemy.headerImage || '';
 
   return {
     profileType: 'rogueliteEnemy',
     canvasRuntime: 'roguelite',
     linkedEnemyId: enemy.id,
     name: enemy.name,
-    img: portrait,
+    img: tokenImage,
     portrait,
+    tokenImageSource: tokenImage,
+    tokenImageFit: 'contain',
     controlledBy: ['master'],
     teamId: 'enemies',
     isCircular: true,

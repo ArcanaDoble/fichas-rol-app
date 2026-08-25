@@ -60,7 +60,8 @@ describe('bestiario Roguelite', () => {
       ...base,
       id: 'enemy-1',
       name: 'Guardia de ceniza',
-      image: 'guardia.webp',
+      image: 'guardia-retrato.webp',
+      imageSource: 'guardia-original.webp',
       threatDie: 'd8',
       equipmentSlots: [{ id: 'sword-1', name: 'Mandoble', type: 'weapon' }, null, null],
       abilitySlots: [{ id: 'skill-1', name: 'Carga', description: 'Avanza.' }, null, null],
@@ -72,7 +73,10 @@ describe('bestiario Roguelite', () => {
       controlledBy: ['master'],
       teamId: 'enemies',
       threatDie: 'd8',
-      portrait: 'guardia.webp',
+      portrait: 'guardia-retrato.webp',
+      img: 'guardia-original.webp',
+      tokenImageSource: 'guardia-original.webp',
+      tokenImageFit: 'contain',
     }));
     expect(payload.equippedItems).toHaveLength(1);
     expect(payload.enemyAbilities).toHaveLength(1);

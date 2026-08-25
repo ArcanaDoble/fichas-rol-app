@@ -127,6 +127,26 @@ describe('Canvas Roguelite class adapter', () => {
     expect(syncCanvasTokenWithSheet(token, sheet)).toEqual(syncLegacyTokenWithSheet(token, sheet));
   });
 
+  it('keeps the enemy card portrait separate from the complete Canvas token image', () => {
+    const synced = syncCanvasTokenWithSheet(
+      { id: 'enemy-token' },
+      {
+        id: 'enemy-1',
+        profileType: 'rogueliteEnemy',
+        image: 'enemy-portrait.webp',
+        imageSource: 'enemy-original.webp',
+        stats: { iniciativa: { current: 2 }, ofensiva: { current: 3 } },
+      },
+    );
+
+    expect(synced).toEqual(expect.objectContaining({
+      img: 'enemy-original.webp',
+      portrait: 'enemy-portrait.webp',
+      tokenImageSource: 'enemy-original.webp',
+      tokenImageFit: 'contain',
+    }));
+  });
+
   it('applies the statistics saved in the personal class during an explicit sync', () => {
     const sheet = createClassSheet();
     const activeRun = createRogueliteActiveRun(sheet, { runId: 'run-1', now: 100 });

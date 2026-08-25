@@ -216,7 +216,12 @@ test('uses the editable roguelite summary for the master class sheet', async () 
 
   fireEvent.click(screen.getByRole('button', { name: 'Añadir talento a la clase' }));
   const talentNameInput = screen.getByDisplayValue('Nuevo talento');
+  fireEvent.change(talentNameInput, { target: { value: '' } });
+  expect(talentNameInput).toHaveValue('');
   fireEvent.change(talentNameInput, { target: { value: 'Intimidación' } });
+  const talentDescriptionInput = screen.getByRole('textbox', { name: 'Descripción del talento' });
+  fireEvent.change(talentDescriptionInput, { target: { value: 'Impone miedo ' } });
+  expect(talentDescriptionInput).toHaveValue('Impone miedo ');
   fireEvent.click(screen.getByRole('button', { name: 'Cerrar editor de talento' }));
   expect(screen.getAllByText('Intimidación').length).toBeGreaterThan(0);
 
@@ -227,7 +232,7 @@ test('uses the editable roguelite summary for the master class sheet', async () 
       .find(([, data]) => data.talentCatalog?.some((talent) => talent.name === 'Intimidación'))[1];
     expect(savedClass.talentCatalog).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'athletics', name: 'Atletismo' }),
-      expect.objectContaining({ name: 'Intimidación', available: true }),
+      expect.objectContaining({ name: 'Intimidación', description: 'Impone miedo ', available: true }),
     ]));
     expect(savedClass.roguelite.talentCatalog).toEqual(savedClass.talentCatalog);
   });

@@ -27,6 +27,43 @@ const ROGUELITE_RUNTIME_FIELDS = new globalThis.Set([
     'money',
 ]);
 
+const assertRuntimePersistenceSucceeded = (results) => {
+    const rejectedResult = Array.isArray(results)
+        ? results.find((result) => result?.persisted === false)
+        : null;
+
+    if (!rejectedResult) return;
+
+    const error = new Error(
+        rejectedResult.reason === 'stale-scenario'
+            ? 'La aventura activa cambió antes de terminar el guardado.'
+            : 'No se pudo guardar el progreso de la aventura.',
+    );
+    error.code = rejectedResult.reason === 'stale-scenario'
+        ? 'roguelite/stale-scenario'
+        : 'roguelite/runtime-persist-failed';
+    throw error;
+};
+
+const getPersistenceErrorMessage = (error) => {
+    const code = String(error?.code || '');
+
+    if (code.includes('permission-denied')) {
+        return 'Firebase rechazó el permiso de escritura. Revisa las reglas de Firestore.';
+    }
+    if (code.includes('unavailable') || code.includes('network-request-failed')) {
+        return 'No hay conexión estable con Firebase. Conservamos los cambios para reintentarlo.';
+    }
+    if (code === 'roguelite/stale-scenario') {
+        return 'La aventura activa cambió. Vuelve a entrar con «Jugar aventura» y reintenta.';
+    }
+    if (code.includes('not-found')) {
+        return 'El encuentro ya no existe o dejó de estar disponible.';
+    }
+
+    return error?.message || 'Firebase no confirmó el guardado. Los cambios siguen pendientes.';
+};
+
 /** Frozen CRUD and persistence host shared by tactical modes. */
 export const createCanvasScenarioController = ({
     activeScenario,
@@ -328,12 +365,13 @@ const saveCurrentScenario = async () => {
             }
 
             if (persistRuntimeItems && pendingRuntimeTokenIds.length > 0) {
-                await persistRuntimeItems({
+                const runtimeResults = await persistRuntimeItems({
                     scenarioId: activeScenario.id,
                     finalItems: persistedItems || confirmedItems,
                     originalItems: baselineItems,
                     explicitModifiedIds: pendingRuntimeTokenIds,
                 });
+                assertRuntimePersistenceSucceeded(runtimeResults);
                 setActiveScenario((current) => {
                     if (current?.id !== activeScenario.id) return current;
                     return {
@@ -436,8 +474,11 @@ const saveCurrentScenario = async () => {
             );
         } catch (error) {
             console.error(" Error al guardar escenario:", error);
-            setToastType('error');
-            setShowToast(true);
+            triggerToast(
+                'NO SE PUDO GUARDAR',
+                getPersistenceErrorMessage(error),
+                'error',
+            );
         } finally {
             setIsSaving(false);
         }
@@ -581,8 +622,8 @@ const safePersistItems = async (
         originalItems,
         explicitModifiedIds = null,
         options = {},
-    ) => {
-        if (!scenarioId || !finalItems) return;
+) => {
+        if (!scenarioId || !finalItems) return false;
 
         const registerRecentPersistedFields = (itemsToPersist, origItems, explicitIds) => {
             const { originalMap, modifiedOrAdded } = buildScenarioItemChanges(itemsToPersist, origItems, explicitIds);
@@ -613,14 +654,12 @@ const safePersistItems = async (
             });
         };
 
-        registerRecentPersistedFields(finalItems, originalItems, explicitModifiedIds);
-
         // Definimos la función interna que ejecuta el guardado
         const executePersist = async (reqId, itemsToPersist, origItems, explicitIds) => {
             const docRef = doc(db, scenarioCollectionName, reqId);
             const { modifiedOrAdded, deletedIds } = buildScenarioItemChanges(itemsToPersist, origItems, explicitIds);
 
-            if (modifiedOrAdded.length === 0 && deletedIds.length === 0) return;
+            if (modifiedOrAdded.length === 0 && deletedIds.length === 0) return true;
 
             const modifiedItemIds = Array.from(new globalThis.Set([
                 ...modifiedOrAdded.map(item => item.id),
@@ -636,7 +675,11 @@ const safePersistItems = async (
                 try {
                     await runTransaction(db, async (transaction) => {
                         const sfDoc = await transaction.get(docRef);
-                        if (!sfDoc.exists()) return;
+                        if (!sfDoc.exists()) {
+                            const missingScenarioError = new Error('El encuentro ya no existe.');
+                            missingScenarioError.code = 'not-found';
+                            throw missingScenarioError;
+                        }
 
                         const currentData = sfDoc.data();
                         const currentItems = currentData.items || [];
@@ -656,14 +699,15 @@ const safePersistItems = async (
                         });
                     });
                     if (persistRuntimeItems && options.persistRuntime === true) {
-                        await persistRuntimeItems({
+                        const runtimeResults = await persistRuntimeItems({
                             scenarioId: reqId,
                             finalItems: itemsToPersist,
                             originalItems: origItems,
                             explicitModifiedIds: modifiedItemIds,
                         });
+                        assertRuntimePersistenceSucceeded(runtimeResults);
                     }
-                    return;
+                    return true;
                 } catch (error) {
                     lastError = error;
                     if (attempt < maxPersistAttempts - 1) {
@@ -678,9 +722,15 @@ const safePersistItems = async (
         };
 
         // Cada delta conserva su turno: ninguna acción rápida reemplaza a otra pendiente.
-        return persistQueueRef.current(() => (
+        const didPersist = await persistQueueRef.current(() => (
             executePersist(scenarioId, finalItems, originalItems, explicitModifiedIds)
         ));
+
+        if (didPersist === true) {
+            registerRecentPersistedFields(finalItems, originalItems, explicitModifiedIds);
+        }
+
+        return didPersist === true;
     };
 
     const updateItem = (itemId, updates, persist = false) => {
@@ -739,7 +789,15 @@ const safePersistItems = async (
             if (!didChange) return prev;
 
             if (persist && prev.id) {
-                safePersistItems(prev.id, newItems, prev.items, [itemId]);
+                safePersistItems(prev.id, newItems, prev.items, [itemId]).then((didPersist) => {
+                    if (!didPersist) {
+                        triggerToast(
+                            'CAMBIO NO SINCRONIZADO',
+                            'Firebase no confirmó el cambio. Pulsa «Guardar cambios» para reintentarlo.',
+                            'error',
+                        );
+                    }
+                });
             }
 
             return { ...prev, items: newItems };

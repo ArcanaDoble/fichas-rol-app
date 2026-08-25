@@ -22,6 +22,54 @@ import { normalizeGeometryKind } from '../geometry';
 
 export { normalizeGeometryKind } from '../geometry';
 
+export const resolveTokenMovementIndicator = ({
+    item = {},
+    participant = null,
+    pendingState = null,
+    originalPosition = null,
+    gridConfig = {},
+    isPlayerView = false,
+} = {}) => {
+    const runtime = participant?.movementRuntime;
+    const pendingMovement = Math.max(0, Number(pendingState?.moveCost) || 0);
+    const dragMovement = originalPosition
+        ? Math.max(
+            Math.round(Math.abs((Number(item.x) || 0) - (Number(originalPosition.x) || 0)) / (Number(gridConfig.cellWidth) || 50)),
+            Math.round(Math.abs((Number(item.y) || 0) - (Number(originalPosition.y) || 0)) / (Number(gridConfig.cellHeight) || 50)),
+        )
+        : 0;
+
+    if (runtime) {
+        const allowance = Math.max(
+            0,
+            (Number(runtime.base) || 0)
+                + (Number(runtime.modifier) || 0)
+                + Math.max(0, Number(runtime.sprintBonus) || 0),
+        );
+        const previewCost = pendingState ? pendingMovement : dragMovement;
+        const spent = Math.max(0, Number(runtime.spent) || 0) + previewCost;
+        const remaining = allowance - spent;
+
+        return {
+            value: remaining,
+            isExceeded: remaining < 0,
+            allowance,
+            spent,
+            sprintBonus: Math.max(0, Number(runtime.sprintBonus) || 0),
+        };
+    }
+
+    const currentVelocity = Math.max(0, Number(item.velocidad) || 0);
+    const pendingVelocity = isPlayerView && pendingState
+        ? pendingMovement + Math.max(0, Number(pendingState.actionCost) || 0)
+        : 0;
+    const totalVelocity = currentVelocity + pendingVelocity;
+
+    return totalVelocity > 0
+        ? { value: totalVelocity, isExceeded: pendingVelocity > 0, allowance: null, spent: totalVelocity, sprintBonus: 0 }
+        : null;
+};
+
 export const renderGeometryVisual = (item = {}) => {
     const kind = normalizeGeometryKind(item);
     const color = item.backgroundColor || (kind === 'hazard' ? '#ef4444' : kind === 'stairs' ? '#c8aa6e' : '#22c55e');
@@ -88,6 +136,7 @@ export const createSceneItemRenderer = ({
     activeLayer,
     activeScenario,
     boardCardHandTransferRef,
+    combatRuntime,
     combatOccupancyFeedback,
     consumeCardStackQuickActionEvent,
     currentDieRollSpeed,
@@ -109,6 +158,7 @@ export const createSceneItemRenderer = ({
     resolveScenePickupRecipient,
     isUsablePendingTurnState,
     lastFlipTimesRef,
+    lastTokenTapTimesRef,
     lastSelectedIdRef,
     pendingTurnState,
     playerName,
@@ -142,6 +192,9 @@ const renderItemJSX = (item) => {
         const occupancyFeedbackForItem = combatOccupancyFeedback?.tokenId === item.id ? combatOccupancyFeedback : null;
         const pendingStateForItem = isUsablePendingTurnState(pendingTurnState) && pendingTurnState.tokenId === item.id
             ? pendingTurnState
+            : null;
+        const combatParticipant = combatRuntime?.combatState?.status === 'active'
+            ? (combatRuntime.combatState.participants?.[item.id] || null)
             : null;
         const isSelected = selectedTokenIds.includes(item.id);
         const isLight = item.type === 'light';
@@ -832,20 +885,33 @@ const renderItemJSX = (item) => {
                                 </div>
                             )}
 
-                            {/* Indicador de Velocidad (Derecha) */}
+                            {/* Indicador de movimiento restante (Derecha) */}
                             {isToken && (() => {
-                                const currentVel = item.velocidad || 0;
-                                const pendingVel = (isPlayerView && pendingStateForItem)
-                                    ? (pendingStateForItem.moveCost + pendingStateForItem.actionCost)
-                                    : 0;
-                                const totalVel = currentVel + pendingVel;
+                                const movementIndicator = resolveTokenMovementIndicator({
+                                    item,
+                                    participant: combatParticipant,
+                                    pendingState: pendingStateForItem,
+                                    originalPosition: tokenOriginalPos[item.id],
+                                    gridConfig,
+                                    isPlayerView,
+                                });
 
-                                if (totalVel <= 0) return null;
+                                if (!movementIndicator) return null;
+                                const { value, isExceeded, allowance, spent, sprintBonus } = movementIndicator;
+                                const title = allowance === null
+                                    ? `Velocidad acumulada: ${value}`
+                                    : isExceeded
+                                        ? `Movimiento excedido en ${Math.abs(value)} · ${spent}/${allowance} casillas`
+                                        : `Movimiento disponible: ${value} · ${spent}/${allowance} usado${sprintBonus ? ` · Correr +${sprintBonus}` : ''}`;
 
                                 return (
-                                    <div className={`absolute -top-[1px] -right-[1px] translate-x-1/2 -translate-y-1/2 w-[16px] h-[16px] flex flex-col items-center justify-center rounded-full shadow-[0_0_10px_rgba(200,170,110,0.4)] border border-white/20 z-40 pointer-events-none ${pendingVel > 0 ? 'bg-[#ef4444]' : 'bg-[#c8aa6e]'} transition-colors`}>
-                                        <span className={`text-[8px] font-black leading-none font-mono ${pendingVel > 0 ? 'text-white' : 'text-[#0b1120]'}`}>
-                                            {totalVel}
+                                    <div
+                                        className={`absolute -top-[1px] -right-[1px] translate-x-1/2 -translate-y-1/2 min-w-[18px] h-[18px] px-1 flex flex-col items-center justify-center rounded-full border border-white/25 z-40 pointer-events-none transition-colors ${isExceeded ? 'bg-[#ef4444] shadow-[0_0_10px_rgba(239,68,68,0.55)]' : 'bg-[#c8aa6e] shadow-[0_0_10px_rgba(200,170,110,0.5)]'}`}
+                                        title={title}
+                                        data-testid={`movement-remaining-${item.id}`}
+                                    >
+                                        <span className={`text-[8px] font-black leading-none font-mono ${isExceeded ? 'text-white' : 'text-[#0b1120]'}`}>
+                                            {value}
                                         </span>
                                     </div>
                                 );
@@ -1053,7 +1119,7 @@ const renderItemJSX = (item) => {
                                     src={item.img}
                                     label={item.name || 'Token'}
                                     className="w-full h-full rounded-full border-2 border-[#c8aa6e] shadow-[0_0_12px_rgba(200,170,110,0.4)]"
-                                    imageClassName="w-full h-full object-cover"
+                                    imageClassName={`w-full h-full ${item.tokenImageFit === 'contain' ? 'object-contain' : 'object-cover'}`}
                                 />
                             ) : (
                                 <TokenImageWithLoader
@@ -1076,37 +1142,60 @@ const renderItemJSX = (item) => {
                         )}
 
 
-                        {/* MOVEMENT DISTANCE INDICATOR (Solo para tokens al arrastrar) */}
-                        {isToken && canInteract && tokenOriginalPos[item.id] && (
+                        {/* MOVEMENT DISTANCE INDICATOR */}
+                        {isToken && canInteract && (tokenOriginalPos[item.id] || (combatParticipant?.movementRuntime?.spent || 0) > 0) && (
                             (() => {
                                 const original = tokenOriginalPos[item.id];
-                                const dx = Math.abs(item.x - original.x);
-                                const dy = Math.abs(item.y - original.y);
                                 const cellW = gridConfig.cellWidth || 50;
                                 const cellH = gridConfig.cellHeight || 50;
-
-                                // Distancia en casillas (Regla Chebyshev: Diagonal = 1)
-                                const moveX = Math.round(dx / cellW);
-                                const moveY = Math.round(dy / cellH);
-                                const distance = Math.max(moveX, moveY);
+                                const runtime = combatParticipant?.movementRuntime;
+                                const movementSpent = Math.max(0, Number(runtime?.spent) || 0);
+                                const pendingDistance = Math.max(0, Number(pendingStateForItem?.moveCost) || 0);
+                                const dragDistance = original
+                                    ? Math.max(
+                                        Math.round(Math.abs(item.x - original.x) / cellW),
+                                        Math.round(Math.abs(item.y - original.y) / cellH),
+                                    )
+                                    : 0;
+                                const distance = movementSpent + (pendingStateForItem ? pendingDistance : dragDistance);
+                                const baseAllowance = runtime
+                                    ? Math.max(
+                                        0,
+                                        (Number(runtime.base) || 0) + (Number(runtime.modifier) || 0),
+                                    )
+                                    : distance;
+                                const sprintBonus = Math.max(0, Number(runtime?.sprintBonus) || 0);
+                                const totalAllowance = baseAllowance + sprintBonus;
+                                const allowedDistance = runtime ? Math.min(distance, totalAllowance) : distance;
+                                const exceededDistance = runtime ? Math.max(0, distance - totalAllowance) : 0;
+                                const isOverLimit = Boolean(runtime) && distance > totalAllowance;
 
                                 if (distance === 0) return null;
 
+                                const renderPips = (count, colorClass) => {
+                                    if (count <= 0) return null;
+                                    if (count > 8) {
+                                        return (
+                                            <span className="flex items-center gap-1">
+                                                <span className={`h-3 w-3 rounded-full ${colorClass}`} />
+                                                <span className="font-mono text-[10px] font-black text-white">×{count}</span>
+                                            </span>
+                                        );
+                                    }
+                                    return Array.from({ length: count }, (_, index) => (
+                                        <span key={`${colorClass}-${index}`} className={`h-3 w-3 rounded-full shadow-sm ${colorClass}`} />
+                                    ));
+                                };
+
                                 return (
-                                    <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none whitespace-nowrap">
-                                        <div className="bg-black/80 backdrop-blur-md border border-yellow-500/50 rounded-full px-3 py-1 flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(234,179,8,0.3)]">
-                                            {distance <= 5 ? (
-                                                <span className="text-xs leading-none flex gap-0.5">
-                                                    {Array(distance).fill('🟡').map((_, i) => (
-                                                        <span key={i} className="drop-shadow-md">🟡</span>
-                                                    ))}
-                                                </span>
-                                            ) : (
-                                                <div className="flex items-center gap-1">
-                                                    <span className="text-xs leading-none drop-shadow-md">🟡</span>
-                                                    <span className="text-yellow-400 font-bold text-xs font-mono leading-none">x{distance}</span>
-                                                </div>
-                                            )}
+                                    <div className="absolute -top-[4.5rem] left-1/2 -translate-x-1/2 z-50 pointer-events-none whitespace-nowrap">
+                                        <div
+                                            className={`bg-black/85 backdrop-blur-md border rounded-full px-3 py-1.5 flex items-center justify-center gap-1 shadow-lg ${isOverLimit ? 'border-red-500/70 shadow-red-950/40' : 'border-yellow-500/50 shadow-yellow-950/30'}`}
+                                            title={`${distance} casillas · base ${baseAllowance}${sprintBonus ? ` · Correr +${sprintBonus}` : ''}`}
+                                        >
+                                            {renderPips(allowedDistance, 'bg-yellow-400')}
+                                            {renderPips(exceededDistance, 'bg-red-600 ring-1 ring-red-300')}
+                                            {isOverLimit && <span className="ml-1 text-[9px] font-black uppercase tracking-wider text-red-300">Excedido</span>}
                                         </div>
                                     </div>
                                 );

@@ -17,7 +17,7 @@ const normalizeValue = (value) => {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 };
 
-const CanvasTokenResources = ({ token, onUpdate }) => {
+const CanvasTokenResources = ({ token, onUpdate, movementRuntime = null }) => {
   if (token?.profileType !== 'rogueliteClass' && token?.profileType !== 'rogueliteEnemy') {
     return <LegacyTokenResources token={token} onUpdate={onUpdate} />;
   }
@@ -45,13 +45,15 @@ const CanvasTokenResources = ({ token, onUpdate }) => {
         ...(resourceId === 'ofensiva' ? { offenseBase: nextStat.current } : {}),
       }
       : {};
-    onUpdate({
+    const updates = {
       stats: {
         ...stats,
         [resourceId]: nextStat,
       },
       ...runtimeMirror,
-    });
+    };
+    if (resourceId === 'movimiento') onUpdate(updates, { resourceId, field });
+    else onUpdate(updates);
   };
 
   const setCurrentStat = (resourceId, value) => {
@@ -65,7 +67,7 @@ const CanvasTokenResources = ({ token, onUpdate }) => {
         ...(resourceId === 'ofensiva' ? { offenseBase: nextCurrent } : {}),
       }
       : {};
-    onUpdate({
+    const updates = {
       stats: {
         ...stats,
         [resourceId]: {
@@ -75,7 +77,9 @@ const CanvasTokenResources = ({ token, onUpdate }) => {
         },
       },
       ...runtimeMirror,
-    });
+    };
+    if (resourceId === 'movimiento') onUpdate(updates, { resourceId, field: 'current' });
+    else onUpdate(updates);
   };
 
   return (
@@ -100,6 +104,19 @@ const CanvasTokenResources = ({ token, onUpdate }) => {
           const maximum = normalizeValue(stat.max);
           const color = stat.color || fallbackColor;
           const label = stat.label || fallbackLabel;
+          const movementBaseMaximum = id === 'movimiento' && movementRuntime
+            ? Math.max(
+              normalizeValue(movementRuntime.statMax ?? movementRuntime.base),
+              normalizeValue((Number(movementRuntime.base) || 0) + (Number(movementRuntime.modifier) || 0)),
+            )
+            : maximum;
+          const sprintExtension = id === 'movimiento'
+            ? Math.min(
+              normalizeValue(movementRuntime?.sprintBonus),
+              Math.max(0, maximum - movementBaseMaximum),
+            )
+            : 0;
+          const sprintStart = Math.max(0, maximum - sprintExtension);
 
           return (
             <div key={id} className="space-y-2.5 px-3 py-3">
@@ -144,6 +161,8 @@ const CanvasTokenResources = ({ token, onUpdate }) => {
                   {Array.from({ length: maximum }).map((_, index) => {
                     const value = index + 1;
                     const isFilled = value <= current;
+                    const isSprintMovement = sprintExtension > 0 && index >= sprintStart;
+                    const segmentColor = isSprintMovement ? '#c8aa6e' : color;
                     return (
                       <button
                         key={value}
@@ -151,12 +170,20 @@ const CanvasTokenResources = ({ token, onUpdate }) => {
                         onClick={() => setCurrentStat(id, value === current ? value - 1 : value)}
                         className="min-w-0 flex-1 border transition-[background-color,border-color,opacity] duration-150 hover:opacity-100 active:scale-y-90"
                         style={{
-                          backgroundColor: isFilled ? color : 'transparent',
-                          borderColor: isFilled ? color : '#263244',
-                          opacity: isFilled ? 0.9 : 0.65,
+                          backgroundColor: isFilled
+                            ? segmentColor
+                            : (isSprintMovement ? 'rgba(200, 170, 110, 0.16)' : 'transparent'),
+                          borderColor: isFilled
+                            ? segmentColor
+                            : (isSprintMovement ? 'rgba(200, 170, 110, 0.5)' : '#263244'),
+                          boxShadow: isFilled && isSprintMovement
+                            ? '0 0 8px rgba(200, 170, 110, 0.38)'
+                            : 'none',
+                          opacity: isFilled ? 0.9 : (isSprintMovement ? 0.8 : 0.65),
                         }}
-                        aria-label={`Fijar ${label} en ${value === current ? value - 1 : value}`}
+                        aria-label={`Fijar ${label} en ${value === current ? value - 1 : value}${isSprintMovement ? ' (Correr)' : ''}`}
                         aria-pressed={isFilled}
+                        data-movement-segment={isSprintMovement ? 'sprint' : (id === 'movimiento' ? 'base' : undefined)}
                       />
                     );
                   })}
@@ -173,6 +200,7 @@ const CanvasTokenResources = ({ token, onUpdate }) => {
 CanvasTokenResources.propTypes = {
   token: PropTypes.object.isRequired,
   onUpdate: PropTypes.func.isRequired,
+  movementRuntime: PropTypes.object,
 };
 
 export default CanvasTokenResources;

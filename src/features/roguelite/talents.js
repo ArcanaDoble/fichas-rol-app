@@ -10,17 +10,32 @@ const slugifyTalentId = (value, index = 0) => {
   return slug || `talento-${index + 1}`;
 };
 
+const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
+
+const resolveEditableText = (value, primaryKey, legacyKey, fallback = '') => {
+  if (hasOwn(value, primaryKey)) {
+    return String(value[primaryKey] ?? '');
+  }
+  if (hasOwn(value, legacyKey)) {
+    return String(value[legacyKey] ?? '');
+  }
+  return fallback;
+};
+
 const normalizeTalent = (talent, index, legacySource = false) => {
   const rawTalent = talent && typeof talent === 'object' ? talent : {};
-  const name = String(
-    rawTalent.name || rawTalent.nombre || `Talento ${index + 1}`
-  ).trim();
+  const name = resolveEditableText(
+    rawTalent,
+    'name',
+    'nombre',
+    `Talento ${index + 1}`
+  );
 
   return {
     ...rawTalent,
     id: String(rawTalent.id || slugifyTalentId(name, index)).trim(),
     name,
-    description: String(rawTalent.description || rawTalent.desc || '').trim(),
+    description: resolveEditableText(rawTalent, 'description', 'desc'),
     image: rawTalent.image || rawTalent.icon || '',
     imageSource: rawTalent.imageSource || '',
     available: legacySource

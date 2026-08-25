@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import FloatingCombatEffects from '../../../components/FloatingCombatEffects';
 import { getBoardLightFlickerStyle, getBoardLightVisualProfile } from '../../../utils/boardLighting';
 import {
-    getCombatRenderPlacement, getGridCellWorldRect, getMobileTacticalMoveOptions,
+    getCombatRenderPlacement, getGridCellWorldRect,
     getSweepAreaCells, getSweepTargetsForCells, getTokenGridBounds,
     isCombatTokenItem,
 } from '../legacyCombatRules';
@@ -29,6 +29,7 @@ export const CanvasViewport = ({
     finiteMapWidth,
     focusedTargetId,
     getBoardMobileTacticalMoveOptions,
+    getCanvasMobileTacticalMoveOptions,
     gridConfig,
     handleBoardMobileTacticalMoveCell,
     handleCancelMobileTacticalMove,
@@ -226,7 +227,7 @@ export const CanvasViewport = ({
                                     const hasPendingMovement = isCanvasMobileMove && Math.max(0, Number(pendingMove?.moveCost) || 0) > 0;
                                     const moveOptions = isBoardMobileMove
                                         ? getBoardMobileTacticalMoveOptions(token, items)
-                                        : getMobileTacticalMoveOptions(token, items, gridConfig);
+                                        : getCanvasMobileTacticalMoveOptions(token, items);
                                     if (moveOptions.length === 0 && !hasPendingMovement) return null;
 
                                     const tokenCenterX = token.x + ((Number(token.width) || gridConfig.cellWidth || 50) / 2);

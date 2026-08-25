@@ -80,4 +80,23 @@ describe('roguelite talent ownership', () => {
     });
     expect(talent.id).not.toBe('existing');
   });
+
+  test('preserves empty names and spaces while a dedicated talent is being edited', () => {
+    const catalog = resolveRogueliteTalentCatalog({
+      talentCatalog: [
+        {
+          id: 'editable-talent',
+          name: '',
+          description: 'Obtienes ventaja ',
+          available: true,
+        },
+      ],
+    });
+
+    expect(catalog[0]).toMatchObject({
+      id: 'editable-talent',
+      name: '',
+      description: 'Obtienes ventaja ',
+    });
+  });
 });

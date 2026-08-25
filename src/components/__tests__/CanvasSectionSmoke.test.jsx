@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import CanvasSection from '../CanvasSection';
 import BoardSection from '../BoardSection';
 
@@ -151,6 +151,11 @@ test.each([
         expect(screen.getByTitle('Capa de Mesa (Tokens)')).toBeInTheDocument();
         expect(screen.getByText('Token de prueba')).toBeInTheDocument();
     });
+    const tokenElement = container.querySelector(`[data-board-item-id="${mode}-token"]`);
+    expect(tokenElement).not.toBeNull();
+    expect(() => fireEvent.touchStart(tokenElement, {
+        touches: [{ clientX: 100, clientY: 100, identifier: 1 }],
+    })).not.toThrow();
     try {
         unmount();
     } catch (error) {
@@ -168,25 +173,35 @@ test('creates a Roguelite class token in the active Canvas encounter', async () 
     };
     let persistedItems = null;
     let persistedRun = null;
+    let confirmScenarioWrite;
+    let transactionCount = 0;
+    const scenarioWriteConfirmation = new Promise((resolve) => {
+        confirmScenarioWrite = resolve;
+    });
 
     firestore.getDoc.mockImplementation((reference) => Promise.resolve(
         reference?.path === 'players/Ada/rogueliteClasses/barbarian'
             ? { exists: () => false, data: () => ({}) }
             : { exists: () => true, data: () => scenario },
     ));
-    firestore.runTransaction.mockImplementation(async (_database, callback) => callback({
-        get: jest.fn((reference) => Promise.resolve(
-            reference?.path === 'players/Ada/rogueliteClasses/barbarian'
-                ? { exists: () => false, data: () => ({}) }
-                : { exists: () => true, data: () => scenario },
-        )),
-        update: jest.fn((_reference, payload) => {
-            persistedItems = payload.items;
-        }),
-        set: jest.fn((_reference, payload) => {
-            persistedRun = payload.activeRun;
-        }),
-    }));
+    firestore.runTransaction.mockImplementation(async (_database, callback) => {
+        transactionCount += 1;
+        if (transactionCount === 1) await scenarioWriteConfirmation;
+
+        return callback({
+            get: jest.fn((reference) => Promise.resolve(
+                reference?.path === 'players/Ada/rogueliteClasses/barbarian'
+                    ? { exists: () => false, data: () => ({}) }
+                    : { exists: () => true, data: () => scenario },
+            )),
+            update: jest.fn((_reference, payload) => {
+                persistedItems = payload.items;
+            }),
+            set: jest.fn((_reference, payload) => {
+                persistedRun = payload.activeRun;
+            }),
+        });
+    });
     firestore.onSnapshot.mockImplementation((ref, onNext) => {
         if (ref?.path === 'gameSettings/canvasVisibility') {
             onNext({ exists: () => true, data: () => ({ activeScenarioId: scenario.id }) });
@@ -231,7 +246,15 @@ test('creates a Roguelite class token in the active Canvas encounter', async () 
         />,
     );
 
+    await waitFor(() => expect(firestore.runTransaction).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Bárbaro')).not.toBeInTheDocument();
+
+    await act(async () => {
+        confirmScenarioWrite();
+    });
+
     await waitFor(() => expect(persistedItems).not.toBeNull());
+    expect((await screen.findAllByText('Bárbaro')).length).toBeGreaterThan(0);
     expect(firestore.runTransaction).toHaveBeenCalledTimes(2);
     expect(persistedItems).toHaveLength(1);
     expect(persistedItems[0]).toEqual(expect.objectContaining({

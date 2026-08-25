@@ -22,6 +22,7 @@ export const useCanvasInteractionController = ({
     boardCardHandTransferRef,
     cardPreviewSuppressTouchEndRef,
     cardStackQuickActionBlockUntilRef,
+    combatRuntime,
     containerRef,
     currentDieRollSpeed,
     divToWorld,
@@ -596,7 +597,7 @@ const handleMouseMove = (e) => {
         setDraggingWallHandle({ id: item.id, handleIndex });
     };
 
-    const handleMouseUp = (e) => {
+    const handleMouseUp = async (e) => {
         if (cardPreviewSuppressTouchEndRef.current) {
             setDraggedTokenId(null);
             setRotatingTokenId(null);
@@ -1122,6 +1123,48 @@ const handleMouseMove = (e) => {
                         setCombatOccupancyFeedback(null);
                         document.body.style.cursor = 'default';
                         return; // No persistimos a Firebase aún
+                    }
+                }
+
+                if (
+                    isCanvasCombatActive
+                    && !isPlayerView
+                    && selectedTokenIds.length === 1
+                    && draggedTokenId
+                    && combatRuntime?.combatState?.participants?.[draggedTokenId]
+                ) {
+                    const movedToken = finalItems.find((item) => item.id === draggedTokenId);
+                    const original = tokenOriginalPos[draggedTokenId];
+                    if (movedToken && original && (movedToken.x !== original.x || movedToken.y !== original.y)) {
+                        const cellW = gridConfig.cellWidth || 50;
+                        const cellH = gridConfig.cellHeight || 50;
+                        const cost = Math.max(
+                            Math.round(Math.abs(movedToken.x - original.x) / cellW),
+                            Math.round(Math.abs(movedToken.y - original.y) / cellH),
+                        );
+                        const confirmed = await combatRuntime.confirmMovement(draggedTokenId, {
+                            from: { x: original.x, y: original.y },
+                            to: { x: movedToken.x, y: movedToken.y },
+                            cost,
+                        });
+
+                        if (!confirmed) {
+                            setActiveScenario((current) => current ? {
+                                ...current,
+                                items: current.items.map((item) => (
+                                    item.id === draggedTokenId
+                                        ? { ...item, x: original.x, y: original.y }
+                                        : item
+                                )),
+                            } : current);
+                        }
+
+                        setDraggedTokenId(null);
+                        setTokenOriginalPos({});
+                        setDragVisualOrigin({});
+                        setCombatOccupancyFeedback(null);
+                        document.body.style.cursor = 'default';
+                        return;
                     }
                 }
 

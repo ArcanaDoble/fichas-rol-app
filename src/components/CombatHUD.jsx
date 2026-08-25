@@ -1,12 +1,13 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sword, ArrowUp, Shield, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X, Zap, RotateCw } from 'lucide-react';
+import { Sword, ArrowUp, Shield, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X, Zap, RotateCw, Footprints } from 'lucide-react';
 import { parseAttrBonuses, getSpeedConsumption } from '../utils/combatSystem';
 import CombatModifiersPanel, { applyModifiersToWeapon } from './CombatModifiersPanel';
 import { getCustomImage, useCustomEquipmentImages } from '../hooks/useCustomEquipmentImages';
 import { PRONE_STATUS_IDS } from '../utils/statusEffects';
 import { getCardDisplayImage } from '../utils/cardImages';
 import { reorderCardItems } from '../utils/cardBoard';
+import DiceSvg from './DiceSvg';
 
 const RANGE_MAP = {
     toque: 0,
@@ -234,6 +235,13 @@ const CombatHUD = ({
     pendingCost = 0, // Coste acumulado en este turno no confirmado
     pendingActions = [], // Array de nombres de acciones pendientes
     onCancelAction, // Función para cancelar una acción pendiente
+    actionDice = [],
+    sprintBonus = 0,
+    onSprint = null,
+    enemyActions = [],
+    movementAvailable = 0,
+    movementBase = 0,
+    onEnemySprint = null,
     forceWeaponMenu = false, // Nueva prop para forzar la apertura del menú de armas
     targetDistance = null, // Distancia al objetivo actual (en casillas)
     allowAdjacentTouchTargeting = false,
@@ -302,9 +310,23 @@ const CombatHUD = ({
     }, []);
 
     const tokenStatus = Array.isArray(token?.status) ? token.status : [];
+    const isRogueliteEnemy = token?.profileType === 'rogueliteEnemy';
+    const enemyAttackAction = isRogueliteEnemy
+        ? enemyActions.find((action) => action.id === 'attack')
+        : null;
+    const canEnemySprint = isRogueliteEnemy
+        && typeof onEnemySprint === 'function'
+        && enemyAttackAction?.status !== 'spent'
+        && Number(movementAvailable) < Number(movementBase);
     const hasControllableStatus = tokenStatus.includes('sangrado');
     const isProne = PRONE_STATUS_IDS.some((statusId) => tokenStatus.includes(statusId));
     const cardsInHand = Array.isArray(handCards) ? handCards : [];
+    const displayedActionDice = useMemo(() => (
+        Array.isArray(actionDice) ? actionDice : []
+    ), [actionDice]);
+    const availableActionDice = useMemo(() => (
+        displayedActionDice.filter((die) => die.status === 'available')
+    ), [displayedActionDice]);
     const displayedHandCards = useMemo(() => {
         if (!handDragPreview?.overHand || !handDragPreview?.cardId) return cardsInHand;
         return reorderCardItems(cardsInHand, handDragPreview.cardId, handDragPreview.dropIndex);
@@ -393,6 +415,13 @@ const CombatHUD = ({
             }
             // Primer paso: informar al canvas que queremos iniciar un ataque (apuntar)
             onAction('attack');
+        } else if (actionId === 'dash') {
+            if (isRogueliteEnemy) {
+                if (canEnemySprint) onEnemySprint();
+                setSelectedActionId(null);
+                return;
+            }
+            setSelectedActionId((current) => current === 'dash' ? null : 'dash');
         } else {
             // Otras acciones directas
             onAction(actionId);
@@ -418,7 +447,14 @@ const CombatHUD = ({
     const actions = [
         { id: 'attack', label: 'Atacar', icon: Sword },
         { id: 'stand_up', label: 'Levantarse', icon: ArrowUp },
-        { id: 'placeholder', label: 'Acción 3', icon: Sparkles, disabled: true },
+        {
+            id: 'dash',
+            label: isRogueliteEnemy
+                ? 'Correr (Ataque)'
+                : (sprintBonus > 0 ? `Correr +${sprintBonus}` : 'Correr'),
+            icon: Footprints,
+            disabled: isRogueliteEnemy ? !canEnemySprint : displayedActionDice.length === 0,
+        },
     ];
 
     const panelVariants = {
@@ -1054,9 +1090,75 @@ const CombatHUD = ({
                                 )}
                             </AnimatePresence>
 
+                            <AnimatePresence>
+                                {selectedActionId === 'dash' && (
+                                    <motion.div
+                                        key="dash-selector"
+                                        variants={panelVariants}
+                                        initial="initial"
+                                        animate="animate"
+                                        exit="exit"
+                                        className="relative pointer-events-auto translate-y-[12px] md:translate-y-[1px] overflow-hidden"
+                                    >
+                                        <div className="w-[200px] md:w-80 bg-[#0b1120]/98 border-t-2 border-x-2 border-[#c8aa6e] border-b-0 rounded-t-2xl overflow-hidden shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
+                                            <div className="bg-[#c8aa6e] px-2.5 py-2 md:px-4 md:py-3 flex justify-between items-center">
+                                                <div className="flex items-center gap-2">
+                                                    <Footprints size={14} className="text-[#0b1120]" />
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[#0b1120] text-[9px] md:text-[11px] font-black uppercase tracking-widest">Dado para correr</span>
+                                                        <span className="hidden md:block text-[#0b1120]/65 text-[8px] uppercase tracking-wider">
+                                                            {availableActionDice.length > 0 ? 'El valor añade casillas' : 'Todos los dados están agotados'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <button type="button" onClick={() => setSelectedActionId(null)} className="text-[#0b1120]/60 hover:text-[#0b1120] p-1 transition-colors" aria-label="Cerrar selector de Correr">
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+                                            <div className="p-1.5 md:p-2.5 grid grid-cols-3 gap-1.5 md:gap-2 bg-black/40 border-b border-[#c8aa6e]/20">
+                                                {displayedActionDice.map((die) => {
+                                                    const isAvailableDie = die.status === 'available';
+                                                    return (
+                                                        <button
+                                                            key={die.id}
+                                                            type="button"
+                                                            aria-label={isAvailableDie
+                                                                ? `Correr con ${die.die} de valor ${die.value}`
+                                                                : `${die.die} de valor ${die.value} agotado`}
+                                                            disabled={!isAvailableDie}
+                                                            onClick={() => {
+                                                                if (!isAvailableDie) return;
+                                                                const result = onSprint
+                                                                    ? onSprint(die.id)
+                                                                    : onAction?.('dash', die);
+                                                                if (result !== false) setSelectedActionId(null);
+                                                            }}
+                                                            className={`relative min-w-0 h-[72px] md:h-[92px] rounded border transition-all flex flex-col items-center justify-between px-0.5 py-1.5 md:py-2 ${isAvailableDie
+                                                                ? 'border-[#c8aa6e]/40 bg-[#c8aa6e]/[0.05] hover:border-[#c8aa6e]/80 hover:bg-[#c8aa6e]/[0.10] active:scale-[0.97]'
+                                                                : 'cursor-not-allowed border-slate-700/35 bg-slate-950/70 opacity-45 grayscale'
+                                                            }`}
+                                                        >
+                                                            <span className={`font-['Cinzel'] text-[8px] md:text-[9px] font-bold uppercase tracking-[0.14em] ${isAvailableDie ? 'text-slate-400' : 'text-slate-600'}`}>{die.die}</span>
+                                                            <DiceSvg
+                                                                faces={die.sides || Number(String(die.die).replace(/\D/g, '')) || 6}
+                                                                value={die.value}
+                                                                className="h-7 w-7 md:h-9 md:w-9"
+                                                            />
+                                                            <span className={`text-[7px] md:text-[8px] font-bold uppercase tracking-[0.08em] ${isAvailableDie ? 'text-[#d8bf88]' : 'text-red-400/80'}`}>
+                                                                {isAvailableDie ? `+${die.value} casillas` : 'Agotado'}
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+
                             {/* 2. Notificaciones Pendientes (Unificado) */}
                             <div
-                                className={`flex flex-col-reverse items-center gap-2 pointer-events-auto w-[200px] md:w-full max-w-sm px-0 md:px-4 transition-all duration-500 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] ${selectedActionId === 'attack' ? 'mb-0' : 'mb-2.5 md:mb-4'}`}
+                                className={`flex flex-col-reverse items-center gap-2 pointer-events-auto w-[200px] md:w-full max-w-sm px-0 md:px-4 transition-all duration-500 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] ${selectedActionId ? 'mb-0' : 'mb-2.5 md:mb-4'}`}
                             >
                                 <AnimatePresence>
                                     {pendingActions.map((action, index) => (
@@ -1259,7 +1361,7 @@ const CombatHUD = ({
                 <div className={`hidden md:flex flex-col items-center justify-end relative z-20 shrink-0 h-32 w-32 group transition-all duration-500 ${isActive ? 'opacity-100 scale-100' : 'opacity-20 scale-90 pointer-events-none'}`}>
                     <button
                         onClick={onEndTurn}
-                        title="Finalizar activación y confirmar el movimiento"
+                        title="Finalizar turno y confirmar el movimiento"
                         className="w-32 h-32 rounded-full bg-[#0b1120] border-4 border-[#c8aa6e] hover:border-[#f0e6d2] hover:scale-110 active:scale-95 shadow-[0_0_30px_rgba(200,170,110,0.2)] flex flex-col items-center justify-center transition-all duration-300 relative overflow-hidden group/btn"
                     >
                         <div className="absolute inset-0 bg-gradient-to-b from-[#1a1b26] to-[#0b1120] pointer-events-none"></div>

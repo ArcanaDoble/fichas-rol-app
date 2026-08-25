@@ -1,6 +1,32 @@
 import { buildCombatEffectVisuals } from '../FloatingCombatEffects';
 
 describe('buildCombatEffectVisuals', () => {
+  it('builds a golden running burst around the token', () => {
+    const visuals = buildCombatEffectVisuals({
+      effect: {
+        reactionType: 'sprint',
+        targetId: 'runner-1',
+        sprintMovement: 6,
+        sprintMode: 'additional',
+        clientTimestamp: 100,
+      },
+      targetPos: { x: 100, y: 150, width: 50, height: 50 },
+      attackerPos: null,
+    });
+
+    expect(visuals.sprints).toEqual([
+      expect.objectContaining({ x: 100, y: 150, width: 50, height: 50 }),
+    ]);
+    expect(visuals.flyoffs).toEqual([
+      expect.objectContaining({
+        text: '¡CORRER!',
+        label: '+6 casillas',
+        color: '#c8aa6e',
+        type: 'sprint',
+      }),
+    ]);
+  });
+
   it('escalona multiples bloques perdidos en flyoffs separados', () => {
     const visuals = buildCombatEffectVisuals({
       effect: {

@@ -56,4 +56,44 @@ describe('CanvasTokenResources', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Fijar Base ofensiva en 2' }));
     expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ offenseBase: 2 }));
   });
+
+  it('identifies Movimiento edits so combat can reconcile the remaining allowance', () => {
+    const onUpdate = jest.fn();
+    render(<CanvasTokenResources token={createToken()} onUpdate={onUpdate} />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Fijar Movimiento en 1' }).at(-1));
+
+    expect(onUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stats: expect.objectContaining({
+          movimiento: expect.objectContaining({ current: 1, max: 3 }),
+        }),
+      }),
+      { resourceId: 'movimiento', field: 'current' },
+    );
+  });
+
+  it('paints the movement added by Correr with the project gold', () => {
+    const token = createToken();
+    token.stats.movimiento = {
+      ...token.stats.movimiento,
+      current: 6,
+      max: 7,
+    };
+    const { container } = render(
+      <CanvasTokenResources
+        token={token}
+        onUpdate={jest.fn()}
+        movementRuntime={{ base: 3, modifier: 0, spent: 1, sprintBonus: 4 }}
+      />,
+    );
+
+    const baseSegments = container.querySelectorAll('[data-movement-segment="base"]');
+    const sprintSegments = container.querySelectorAll('[data-movement-segment="sprint"]');
+
+    expect(baseSegments).toHaveLength(3);
+    expect(sprintSegments).toHaveLength(4);
+    expect(sprintSegments[0]).toHaveStyle({ backgroundColor: '#c8aa6e' });
+    expect(sprintSegments[3]).toHaveStyle({ borderColor: 'rgba(200, 170, 110, 0.5)' });
+  });
 });

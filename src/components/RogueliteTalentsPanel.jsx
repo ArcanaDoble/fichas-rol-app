@@ -623,6 +623,8 @@ const RogueliteTalentsPanel = ({
                           name: event.target.value,
                         })
                       }
+                      aria-label="Nombre del talento"
+                      placeholder="Nombre del talento"
                       className="h-11 w-full border border-slate-700 bg-[#05080f] px-3 text-sm text-[#f0e6d2] outline-none focus:border-[#c8aa6e]"
                     />
                   </label>
@@ -637,6 +639,8 @@ const RogueliteTalentsPanel = ({
                           description: event.target.value,
                         })
                       }
+                      aria-label="Descripción del talento"
+                      placeholder="Describe el efecto de este talento."
                       rows={5}
                       className="w-full resize-y border border-slate-700 bg-[#05080f] px-3 py-2 text-sm leading-relaxed text-slate-300 outline-none focus:border-[#c8aa6e]"
                     />

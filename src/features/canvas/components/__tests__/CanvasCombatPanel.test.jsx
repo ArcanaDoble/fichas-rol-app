@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import CanvasCombatPanel from '../CanvasCombatPanel';
-import { createCanvasCombatState, submitActionDice } from '../../combat/canvasCombatState';
+import { createCanvasCombatState, markParticipantActed, submitActionDice } from '../../combat/canvasCombatState';
 
 const token = {
   id: 'barbarian-token',
@@ -96,11 +96,13 @@ describe('CanvasCombatPanel', () => {
     const state = createCanvasCombatState([token, enemyToken]);
     const active = submitActionDice(state, token.id, [6, 4, 2], { random: () => 0 });
     const updateEnemyActionStatus = jest.fn();
+    const activateEnemySprint = jest.fn();
     const completeActivation = jest.fn();
     const runtime = {
       ...createRuntime(active),
       controlledTokenIds: [token.id, enemyToken.id],
       updateEnemyActionStatus,
+      activateEnemySprint,
       completeActivation,
     };
 
@@ -115,15 +117,56 @@ describe('CanvasCombatPanel', () => {
     const attackAction = screen.getByRole('button', { name: 'Ataque: Disponible' });
     expect(moveAction).toBeInTheDocument();
     expect(attackAction).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Correr: Completo' })).toBeDisabled();
 
     fireEvent.click(moveAction);
     expect(updateEnemyActionStatus).toHaveBeenCalledWith('goblin-token', 'movement', 'committed');
 
     // Check the Roguelite activation action (the legacy end-turn label no longer applies)
-    const finishTurnBtn = screen.getByRole('button', { name: 'Finalizar activación' });
+    const finishTurnBtn = screen.getByRole('button', { name: 'Finalizar turno' });
     expect(finishTurnBtn).toBeInTheDocument();
     fireEvent.click(finishTurnBtn);
     expect(completeActivation).toHaveBeenCalledWith(expect.any(String));
+  });
+
+  it('offers enemy Correr after movement has been spent and consumes Ataque through the runtime', () => {
+    const enemyToken = {
+      id: 'goblin-token',
+      name: 'Duende',
+      profileType: 'rogueliteEnemy',
+      stats: {
+        iniciativa: { current: 3, max: 3 },
+        movimiento: { current: 3, max: 3 },
+      },
+    };
+    const active = createCanvasCombatState([enemyToken]);
+    const participant = active.participants[enemyToken.id];
+    const movedState = {
+      ...active,
+      participants: {
+        ...active.participants,
+        [enemyToken.id]: {
+          ...participant,
+          movementRuntime: { ...participant.movementRuntime, spent: 2 },
+          enemyActions: participant.enemyActions.map((action) => (
+            action.id === 'movement' ? { ...action, status: 'spent' } : action
+          )),
+        },
+      },
+    };
+    const activateEnemySprint = jest.fn();
+    const runtime = {
+      ...createRuntime(movedState),
+      controlledTokenIds: [enemyToken.id],
+      activateEnemySprint,
+    };
+
+    render(<CanvasCombatPanel activeTab="ROUND" combatRuntime={runtime} isPlayerView={false} />);
+
+    const sprintButton = screen.getByRole('button', { name: 'Correr: Gasta ataque' });
+    expect(sprintButton).toBeEnabled();
+    fireEvent.click(sprintButton);
+    expect(activateEnemySprint).toHaveBeenCalledWith(enemyToken.id);
   });
 
   it('allows switching between Combate and Tirada libre sub-tabs', () => {
@@ -153,5 +196,21 @@ describe('CanvasCombatPanel', () => {
     fireEvent.click(combatBtn);
 
     expect(screen.getByText('Ronda 1')).toBeInTheDocument();
+  });
+
+  it('lets the master reopen the turn of the specific token that already acted', () => {
+    let state = submitActionDice(
+      createCanvasCombatState([token]),
+      token.id,
+      [7, 4, 2],
+      { random: () => 0 },
+    );
+    state = markParticipantActed(state, token.id);
+    const runtime = createRuntime(state);
+
+    render(<CanvasCombatPanel activeTab="ROUND" combatRuntime={runtime} isPlayerView={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Reabrir turno' }));
+
+    expect(runtime.undoActivation).toHaveBeenCalledWith(token.id);
   });
 });

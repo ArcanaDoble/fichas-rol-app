@@ -24,6 +24,7 @@ export const TokenInspectorPanel = ({
     armaduras,
     armas,
     availableCharacters,
+    combatRuntime,
     deleteItem,
     existingPlayers,
     glossary,
@@ -756,7 +757,19 @@ export const TokenInspectorPanel = ({
                                                     <div className="pt-4 border-t border-slate-800/50">
                                                         <TokenResourcesComponent
                                                             token={token}
-                                                            onUpdate={(updates) => updateItem(token.id, updates)}
+                                                            movementRuntime={combatRuntime?.combatState?.participants?.[token.id]?.movementRuntime || null}
+                                                            onUpdate={(updates, meta = {}) => {
+                                                                if (
+                                                                    meta.resourceId === 'movimiento'
+                                                                    && combatRuntime?.combatState?.status === 'active'
+                                                                    && combatRuntime?.combatState?.participants?.[token.id]
+                                                                    && combatRuntime?.reconcileMovementResource
+                                                                ) {
+                                                                    combatRuntime.reconcileMovementResource(token.id, updates, meta);
+                                                                    return;
+                                                                }
+                                                                updateItem(token.id, updates);
+                                                            }}
                                                         />
                                                     </div>
                                                 )}
@@ -1114,7 +1127,7 @@ export const TokenInspectorPanel = ({
                                                 })()}
 
                                                 {/* BOTÓN ELIMINAR TOKEN DEL CANVAS */}
-                                                {!isPlayerView && (
+                                                {!isPlayerView && !isCombatTokenItem(token) && (
                                                     <div className="pt-8 pb-4 border-t border-slate-800/50">
                                                         <button
                                                             onClick={() => {

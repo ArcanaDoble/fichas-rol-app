@@ -30,6 +30,7 @@ import { WORLD_SIZE, snapWorldPositionToGrid, getCenteredSpawnPosition } from '.
 
 
 import { syncTokenWithSheet } from './tokenSheetSync';
+import { canControlToken } from './tokenControlUtils';
 import { createSceneItemRenderer } from './components/createSceneItemRenderer';
 
 
@@ -364,8 +365,9 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
 
     // Helper para enriquecer tokens con datos de la ficha (armas, atributos, etc.)
     const enrichTokenWithCharacterData = useCallback((rawToken) => {
-        if (!rawToken || !rawToken.linkedCharacterId || availableCharacters.length === 0) return rawToken;
-        const charData = availableCharacters.find(c => c.id === rawToken.linkedCharacterId);
+        if (!rawToken || (!rawToken.linkedCharacterId && !rawToken.linkedClassId) || availableCharacters.length === 0) return rawToken;
+        const charId = rawToken.linkedCharacterId || rawToken.linkedClassId;
+        const charData = availableCharacters.find(c => c.id === charId || c.templateId === charId);
         if (!charData) return rawToken;
         return syncModeTokenWithSheet(
             rawToken,
@@ -586,7 +588,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         const selectedCombatToken = activeScenario.items.find(item => (
             selectedTokenIds.includes(item.id) &&
             isCombatTokenItem(item) &&
-            (!isPlayerView || item.controlledBy?.includes(playerName))
+            canControlToken(item, isPlayerView, playerName)
         ));
         if (selectedCombatToken) {
             setActiveBoardHandTokenId(selectedCombatToken.id);
@@ -1129,9 +1131,9 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                     const targetToken = items.find(i => i.id === eventData.targetId);
 
                     if (targetToken) {
+                        const isControlledByMe = canControlToken(targetToken, isPlayerView, playerName);
                         const controlledBy = targetToken.controlledBy;
-                        const isControlledByMe = isPlayerView && playerName && Array.isArray(controlledBy) && controlledBy.includes(playerName);
-                        const isMasterNPC = isMasterView && (!controlledBy || !Array.isArray(controlledBy) || controlledBy.length === 0 || controlledBy.includes('master'));
+                        const isMasterNPC = isMasterView && (!controlledBy || (Array.isArray(controlledBy) && (controlledBy.length === 0 || controlledBy.includes('master'))));
 
                         if (isControlledByMe || isMasterNPC) {
                             setCombatEventQueue(prev => {
@@ -1751,6 +1753,15 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                 }
             }
 
+            // UNDO MOVEMENT (CTRL+Z / CMD+Z)
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                if (activeScenario?.canvasCombat?.status === 'active' && selectedTokenIds.length === 1) {
+                    e.preventDefault();
+                    combatRuntime?.undoMovement?.(selectedTokenIds[0]);
+                    return;
+                }
+            }
+
             // DELETE / BACKSPACE / CTRL+DELETE
             if (e.key === 'Delete' || e.key === 'Backspace' || (e.ctrlKey && e.key === 'Delete')) {
                 if (selectedTokenIds.length > 0 && activeScenario) {
@@ -1783,6 +1794,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         const scenarioId = activeScenario.id;
 
         const safeSync = async () => {
+            let lastConfirmedServerItems = null;
             try {
                 const runtimeSheet = loadRuntimeSheet
                     ? await loadRuntimeSheet(characterData, { playerName, scenarioId })
@@ -1795,6 +1807,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                 }
                 const freshData = freshSnap.data();
                 const freshItems = freshData.items || [];
+                lastConfirmedServerItems = freshItems;
 
                 // 2. Buscar si el token del jugador ya existe en los datos FRESCOS del servidor
                 const isRogueliteClassLaunch = runtimeSheet.profileType === 'rogueliteClass';
@@ -1837,14 +1850,17 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                         console.log('[SafeSync] Sincronizando token existente al entrar:', characterName);
                         // Modificar SOLO el token del jugador en la lista fresca del servidor
                         const updatedItems = freshItems.map(i => i.id === existingToken.id ? syncedToken : i);
-                        setActiveScenario(prev => prev?.id === scenarioId ? { ...prev, items: updatedItems } : prev);
-                        await safePersistItems(
+                        const didPersist = await safePersistItems(
                             scenarioId,
                             updatedItems,
                             freshItems,
                             [existingToken.id],
                             { persistRuntime: isRogueliteClassLaunch },
                         );
+                        if (!didPersist) {
+                            throw new Error('Firebase no confirmó la sincronización del token.');
+                        }
+                        setActiveScenario(prev => prev?.id === scenarioId ? { ...prev, items: updatedItems } : prev);
                     } else {
                         // Si no hay cambios, solo actualizar estado local con datos frescos
                         setActiveScenario(prev => prev?.id === scenarioId ? { ...prev, items: freshItems } : prev);
@@ -1883,6 +1899,18 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
 
                     // Añadir a la lista fresca del servidor (no a la local)
                     const updatedItems = [...freshItems, newToken];
+                    const didPersist = await safePersistItems(
+                        scenarioId,
+                        updatedItems,
+                        freshItems,
+                        [newToken.id],
+                        { persistRuntime: isRogueliteClassLaunch },
+                    );
+                    if (!didPersist) {
+                        throw new Error('Firebase no confirmó la creación del token.');
+                    }
+
+                    // Mostrar el token solo después de que Firestore haya confirmado la escritura.
                     setActiveScenario(prev => prev?.id === scenarioId ? { ...prev, items: updatedItems } : prev);
 
                     const playerZoom = 1.2;
@@ -1891,19 +1919,21 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                         x: -(spawnPosition.x + defaultTokenDimensions.width / 2 - WORLD_SIZE / 2) * playerZoom,
                         y: -(spawnPosition.y + defaultTokenDimensions.height / 2 - WORLD_SIZE / 2) * playerZoom,
                     });
-
-                    await safePersistItems(
-                        scenarioId,
-                        updatedItems,
-                        freshItems,
-                        [newToken.id],
-                        { persistRuntime: isRogueliteClassLaunch },
-                    );
                 }
 
             } catch (err) {
                 autoTokenScenarioReservationRef.current = null;
+                if (lastConfirmedServerItems) {
+                    setActiveScenario(prev => prev?.id === scenarioId
+                        ? { ...prev, items: lastConfirmedServerItems }
+                        : prev);
+                }
                 console.error(' [SafeSync] Error en sincronización segura:', err);
+                triggerToast(
+                    'TOKEN NO SINCRONIZADO',
+                    'Firebase no confirmó el token. Vuelve a entrar con «Jugar aventura» para reintentarlo.',
+                    'error',
+                );
             }
         };
 
@@ -1971,11 +2001,19 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
 
                 if (hasChanges) {
                     console.log(' [SafeSync] Sincronización en tiempo real para:', name);
+                    const didPersist = await safePersistItems(currentScenario.id, updatedItems, freshItems);
+                    if (!didPersist) {
+                        throw new Error('Firebase no confirmó la sincronización de la ficha.');
+                    }
                     setActiveScenario(prev => prev?.id === currentScenario.id ? { ...prev, items: updatedItems } : prev);
-                    await safePersistItems(currentScenario.id, updatedItems, freshItems);
                 }
             } catch (err) {
                 console.error(' [SafeSync] Error sincronizando ficha en tiempo real:', err);
+                triggerToast(
+                    'FICHA NO SINCRONIZADA',
+                    'Firebase no confirmó los cambios de la ficha. Pulsa «Guardar cambios» para reintentarlo.',
+                    'error',
+                );
             }
         };
 
@@ -2099,6 +2137,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         offset,
         pendingBoardHandTransferLocksRef,
         playerName,
+        recentLocalWritesRef,
         safePersistItems,
         scenarioCollectionName,
         selectedTokenIds,
@@ -2243,6 +2282,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         boardCardHandTransferRef,
         cardPreviewSuppressTouchEndRef,
         cardStackQuickActionBlockUntilRef,
+        combatRuntime,
         containerRef,
         currentDieRollSpeed,
         divToWorld,
@@ -2313,6 +2353,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         shouldUseMobileTacticalMove,
         canUseBoardMobileTacticalMove,
         getBoardMobileTacticalMoveOptions,
+        getCanvasMobileTacticalMoveOptions,
         handleMobileTacticalMoveCell,
         handleBoardMobileTacticalMoveCell,
         handleCancelMobileTacticalMove,
@@ -2497,6 +2538,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
 
     const renderItemJSX = createSceneItemRenderer({
         BoardDieVisual,
+        combatRuntime,
         BoardMarkerVisual,
         ScenePickupVisual,
         activeLayer,
@@ -2625,7 +2667,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
             currentBackgroundGridPresetIndex, deleteCard, deleteItem, deleteScenario, deleteToken, dragOverLibraryItemId,
             draggedLibraryItemId, draggedLibraryItemType, draggedTokenId, draggingHandCard, enrichTokenWithCharacterData, existingPlayers,
             fileInputRef, finiteGridHeight, finiteGridWidth, finiteMapHeight, finiteMapWidth, focusedTargetId,
-            getBoardMobileTacticalMoveOptions, getHandCardsForToken, globalActiveId, glossary, gridConfig, gridInputDrafts,
+            getBoardMobileTacticalMoveOptions, getCanvasMobileTacticalMoveOptions, getHandCardsForToken, globalActiveId, glossary, gridConfig, gridInputDrafts,
             habilidades, handDragGhostRef, handleBoardCardBackUpload, handleBoardMobileTacticalMoveCell, handleCancelAction, handleCancelMobileTacticalMove,
             handleConfirmMobileTacticalMove,
             handleCanvasBackgroundMouseDown, handleCardUpload, handleCombatAction, handleConfigChange, handleEndTurn, handleGridDraftChange,
@@ -2680,9 +2722,6 @@ TacticalSectionCore.propTypes = {
 };
 
 export default TacticalSectionCore;
-
-
-
 
 
 

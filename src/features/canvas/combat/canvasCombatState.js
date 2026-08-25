@@ -76,8 +76,8 @@ export const defaultEnemyActions = () => [
 ];
 
 export const getMovementBase = (token) => Math.max(0, asInteger(
-  token?.stats?.movimiento?.current
-    ?? token?.stats?.movimiento?.max
+  token?.stats?.movimiento?.max
+    ?? token?.stats?.movimiento?.current
     ?? token?.stats?.movement
     ?? token?.movimiento
     ?? token?.movement
@@ -85,13 +85,30 @@ export const getMovementBase = (token) => Math.max(0, asInteger(
   2,
 ));
 
-export const getAvailableMovement = (participant) => {
+export const getMovementStatMax = (token) => Math.max(0, asInteger(
+  token?.stats?.movimiento?.max
+    ?? token?.stats?.movimiento?.current
+    ?? token?.stats?.movement
+    ?? token?.movimiento
+    ?? token?.movement
+    ?? 2,
+  2,
+));
+
+export const getMovementAllowance = (participant) => {
   const runtime = participant?.movementRuntime;
   if (!runtime) return 0;
   const base = Number(runtime.base) || 0;
   const modifier = Number(runtime.modifier) || 0;
+  const sprintBonus = Number(runtime.sprintBonus) || 0;
+  return Math.max(0, base + modifier + sprintBonus);
+};
+
+export const getAvailableMovement = (participant) => {
+  const runtime = participant?.movementRuntime;
+  if (!runtime) return 0;
   const spent = Number(runtime.spent) || 0;
-  return Math.max(0, base + modifier - spent);
+  return Math.max(0, getMovementAllowance(participant) - spent);
 };
 
 const createParticipant = (token, index) => {
@@ -113,8 +130,12 @@ const createParticipant = (token, index) => {
     enemyActions: side === 'enemies' ? defaultEnemyActions() : [],
     movementRuntime: {
       base: movementBase,
+      statMax: getMovementStatMax(token),
       modifier: 0,
       spent: 0,
+      sprintBonus: 0,
+      sprintDieId: null,
+      sprintDieIds: [],
       history: [],
     },
     awaitingRoll: side === 'players' && profile.length > 0,
@@ -473,13 +494,154 @@ export const undoLastActivation = (state, options = {}) => {
   return { ...state, blocks, activeBlockIndex: index, updatedAt: options.now || Date.now() };
 };
 
+export const undoParticipantActivation = (state, tokenId, options = {}) => {
+  const blocks = (state?.blocks || []).map((block) => ({
+    ...block,
+    actedIds: [...(block.actedIds || [])],
+  }));
+  const blockIndex = blocks.findIndex((block) => block.actedIds.includes(tokenId));
+  if (blockIndex < 0) return state;
+
+  blocks[blockIndex].actedIds = blocks[blockIndex].actedIds.filter((id) => id !== tokenId);
+  return {
+    ...state,
+    blocks,
+    activeBlockIndex: blockIndex,
+    updatedAt: options.now || Date.now(),
+  };
+};
+
+export const spendActionDieForSprint = (state, tokenId, dieId, options = {}) => {
+  const participant = state?.participants?.[tokenId];
+  const activeBlock = state?.blocks?.[state.activeBlockIndex];
+  const runtime = participant?.movementRuntime;
+  const die = participant?.actionDice?.find((candidate) => candidate.id === dieId);
+  const spentSprintDieIds = Array.isArray(runtime?.sprintDieIds)
+    ? runtime.sprintDieIds
+    : [runtime?.sprintDieId].filter(Boolean);
+  const canActNow = state?.status === 'active'
+    && state?.roundPhase === 'turns'
+    && activeBlock?.memberIds?.includes(tokenId)
+    && !activeBlock?.actedIds?.includes(tokenId);
+
+  if (
+    !participant
+    || participant.side !== 'players'
+    || !runtime
+    || !canActNow
+    || spentSprintDieIds.includes(dieId)
+    || !die
+    || die.status !== 'available'
+  ) return state;
+
+  const sprintBonus = Math.max(0, asInteger(die.value, 0));
+  if (sprintBonus <= 0) return state;
+  const now = options.now || Date.now();
+
+  return {
+    ...state,
+    participants: {
+      ...state.participants,
+      [tokenId]: {
+        ...participant,
+        actionDice: participant.actionDice.map((candidate) => (
+          candidate.id === dieId ? { ...candidate, status: 'spent' } : candidate
+        )),
+        movementRuntime: {
+          ...runtime,
+          sprintBonus: Math.max(0, Number(runtime.sprintBonus) || 0) + sprintBonus,
+          sprintDieId: dieId,
+          sprintDieIds: [...spentSprintDieIds, dieId],
+        },
+      },
+    },
+    history: [
+      ...(state.history || []).slice(-39),
+      {
+        id: `sprint-${tokenId}-${now}`,
+        type: 'sprint-activated',
+        tokenId,
+        dieId,
+        die: die.die,
+        value: sprintBonus,
+        round: state.round,
+        timestamp: now,
+      },
+    ],
+    updatedAt: now,
+  };
+};
+
+export const rechargeEnemyMovementWithAttack = (state, tokenId, options = {}) => {
+  const participant = state?.participants?.[tokenId];
+  const activeBlock = state?.blocks?.[state.activeBlockIndex];
+  const runtime = participant?.movementRuntime;
+  const actions = participant?.enemyActions || defaultEnemyActions();
+  const attackAction = actions.find((action) => action.id === 'attack');
+  const canActNow = state?.status === 'active'
+    && state?.roundPhase === 'turns'
+    && activeBlock?.memberIds?.includes(tokenId)
+    && !activeBlock?.actedIds?.includes(tokenId);
+  const baseAllowance = runtime
+    ? Math.max(0, (Number(runtime.base) || 0) + (Number(runtime.modifier) || 0))
+    : 0;
+
+  if (
+    !participant
+    || participant.side !== 'enemies'
+    || !runtime
+    || !canActNow
+    || !attackAction
+    || attackAction.status === 'spent'
+    || getAvailableMovement(participant) >= baseAllowance
+  ) return state;
+
+  const now = options.now || Date.now();
+  return {
+    ...state,
+    participants: {
+      ...state.participants,
+      [tokenId]: {
+        ...participant,
+        enemyActions: actions.map((action) => (
+          action.id === 'attack' ? { ...action, status: 'spent' } : action
+        )),
+        movementRuntime: {
+          ...runtime,
+          spent: 0,
+          sprintBonus: 0,
+          sprintDieId: null,
+          sprintDieIds: [],
+        },
+      },
+    },
+    history: [
+      ...(state.history || []).slice(-39),
+      {
+        id: `enemy-sprint-${tokenId}-${now}`,
+        type: 'enemy-sprint-activated',
+        tokenId,
+        movementRestored: baseAllowance,
+        spentActionId: 'attack',
+        actor: options.actor || 'Master',
+        timestamp: now,
+      },
+    ],
+    updatedAt: now,
+  };
+};
+
 export const setParticipantMovementModifier = (state, tokenId, modifier, options = {}) => {
   const participant = state?.participants?.[tokenId];
   if (!participant) return state;
   const runtime = participant.movementRuntime || {
     base: getMovementBase(participant),
+    statMax: getMovementStatMax(participant),
     modifier: 0,
     spent: 0,
+    sprintBonus: 0,
+    sprintDieId: null,
+    sprintDieIds: [],
     history: [],
   };
   const nextModifier = asInteger(modifier, 0);
@@ -499,13 +661,89 @@ export const setParticipantMovementModifier = (state, tokenId, modifier, options
   };
 };
 
+export const setParticipantMovementResource = (state, tokenId, resource = {}, options = {}) => {
+  const participant = state?.participants?.[tokenId];
+  if (!participant) return state;
+  const runtime = participant.movementRuntime || {
+    base: getMovementBase(participant),
+    statMax: getMovementStatMax(participant),
+    modifier: 0,
+    spent: 0,
+    sprintBonus: 0,
+    sprintDieId: null,
+    sprintDieIds: [],
+    history: [],
+  };
+  const field = resource.field === 'max' ? 'max' : 'current';
+  const modifier = Number(runtime.modifier) || 0;
+  const sprintBonus = Math.max(0, Number(runtime.sprintBonus) || 0);
+  const transientBonus = modifier + sprintBonus;
+  const previousBaseAllowance = Math.max(0, (Number(runtime.base) || 0) + modifier);
+  const previousSpent = Math.max(0, Number(runtime.spent) || 0);
+  const sprintSpent = Math.min(sprintBonus, Math.max(0, previousSpent - previousBaseAllowance));
+  const sprintRemaining = Math.max(0, sprintBonus - sprintSpent);
+  const requestedMax = Math.max(0, asInteger(resource.max, runtime.statMax ?? runtime.base));
+  const nextBase = field === 'max'
+    ? Math.max(0, requestedMax - transientBonus)
+    : Math.max(0, Number(runtime.base) || 0);
+  const nextStatMax = field === 'max' ? nextBase : (runtime.statMax ?? nextBase);
+  const nextAllowance = Math.max(0, nextBase + transientBonus);
+  const nextBaseAllowance = Math.max(0, nextBase + modifier);
+  const maximumRechargeable = Math.min(nextAllowance, nextBaseAllowance + sprintRemaining);
+  const requestedCurrent = Math.max(0, asInteger(resource.current, getAvailableMovement(participant)));
+  const nextCurrent = Math.min(requestedCurrent, maximumRechargeable);
+  const nextSpent = Math.max(0, nextAllowance - nextCurrent);
+
+  if (
+    nextBase === (Number(runtime.base) || 0)
+    && nextStatMax === (Number(runtime.statMax) || 0)
+    && nextSpent === (Number(runtime.spent) || 0)
+  ) return state;
+
+  const now = options.now || Date.now();
+  return {
+    ...state,
+    participants: {
+      ...state.participants,
+      [tokenId]: {
+        ...participant,
+        movementRuntime: {
+          ...runtime,
+          base: nextBase,
+          statMax: nextStatMax,
+          spent: nextSpent,
+        },
+      },
+    },
+    history: [
+      ...(state.history || []).slice(-39),
+      {
+        id: `movement-adjusted-${tokenId}-${now}`,
+        type: 'movement-resource-adjusted',
+        tokenId,
+        field,
+        previousRemaining: getAvailableMovement(participant),
+        remaining: nextCurrent,
+        allowance: nextAllowance,
+        actor: options.actor || null,
+        timestamp: now,
+      },
+    ],
+    updatedAt: now,
+  };
+};
+
 export const recordParticipantMovement = (state, tokenId, { from, to, cost = 0, isExceptional = false, actor = null }, options = {}) => {
   const participant = state?.participants?.[tokenId];
   if (!participant) return state;
   const runtime = participant.movementRuntime || {
     base: getMovementBase(participant),
+    statMax: getMovementStatMax(participant),
     modifier: 0,
     spent: 0,
+    sprintBonus: 0,
+    sprintDieId: null,
+    sprintDieIds: [],
     history: [],
   };
   const numericCost = Math.max(0, asInteger(cost, 0));
@@ -529,6 +767,11 @@ export const recordParticipantMovement = (state, tokenId, { from, to, cost = 0, 
       ...state.participants,
       [tokenId]: {
         ...participant,
+        enemyActions: participant.side === 'enemies' && effectiveCost > 0
+          ? (participant.enemyActions || defaultEnemyActions()).map((action) => (
+            action.id === 'movement' ? { ...action, status: 'spent' } : action
+          ))
+          : participant.enemyActions,
         movementRuntime: {
           ...runtime,
           spent: nextSpent,
@@ -571,6 +814,11 @@ export const undoParticipantMovement = (state, tokenId, options = {}) => {
       ...state.participants,
       [tokenId]: {
         ...participant,
+        enemyActions: participant.side === 'enemies' && nextHistory.length === 0
+          ? (participant.enemyActions || defaultEnemyActions()).map((action) => (
+            action.id === 'movement' ? { ...action, status: 'available' } : action
+          ))
+          : participant.enemyActions,
         movementRuntime: {
           ...runtime,
           spent: nextSpent,
@@ -607,8 +855,12 @@ export const startNextRound = (state, options = {}) => {
         awaitingRoll: participant.actionDiceProfile.length > 0,
         movementRuntime: {
           base: participant.movementRuntime?.base || getMovementBase(participant),
+          statMax: participant.movementRuntime?.statMax || participant.movementRuntime?.base || getMovementStatMax(participant),
           modifier: 0,
           spent: 0,
+          sprintBonus: 0,
+          sprintDieId: null,
+          sprintDieIds: [],
           history: [],
         },
       }
@@ -618,8 +870,12 @@ export const startNextRound = (state, options = {}) => {
         enemyActions: defaultEnemyActions(),
         movementRuntime: {
           base: participant.movementRuntime?.base || getMovementBase(participant),
+          statMax: participant.movementRuntime?.statMax || participant.movementRuntime?.base || getMovementStatMax(participant),
           modifier: 0,
           spent: 0,
+          sprintBonus: 0,
+          sprintDieId: null,
+          sprintDieIds: [],
           history: [],
         },
       },
