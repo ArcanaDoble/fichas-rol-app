@@ -25,13 +25,17 @@ const CanvasInitiativeTimeline = ({ tokens = [], selectedId, onSelect }) => {
   if (blocks.length === 0) return null;
 
   return (
-    <div className="pointer-events-none absolute left-1/2 top-10 z-[45] w-[min(76vw,620px)] -translate-x-1/2">
-      <div className="pointer-events-auto flex items-center gap-1 overflow-x-auto border-y border-[#c8aa6e]/20 bg-[#080d16]/90 px-2 py-1.5 shadow-[0_8px_22px_rgba(0,0,0,0.38)] scrollbar-hide">
+    <div className="pointer-events-none absolute left-20 right-20 top-8 z-[45] md:left-1/2 md:right-auto md:top-10 md:w-[min(76vw,620px)] md:-translate-x-1/2">
+      <div
+        className="pointer-events-auto flex max-w-full items-center gap-0 overflow-x-auto border-y border-[#c8aa6e]/20 bg-[#080d16]/90 px-1 py-1 shadow-[0_8px_22px_rgba(0,0,0,0.38)] scrollbar-hide md:gap-1 md:px-2 md:py-1.5"
+        role="region"
+        aria-label="Orden de iniciativa"
+      >
         {blocks.map((block, blockIndex) => (
           <React.Fragment key={block.id}>
-            {blockIndex > 0 && <span className="h-px w-3 shrink-0 bg-slate-700/50" />}
+            {blockIndex > 0 && <span className="h-px w-2 shrink-0 bg-slate-700/50 md:w-3" />}
             <div
-              className={`flex shrink-0 items-center gap-1.5 border px-1.5 py-1 transition-colors ${block.active ? 'border-[#c8aa6e]/70 bg-[#c8aa6e]/10' : 'border-transparent'}`}
+              className={`flex shrink-0 items-center gap-1 border px-1 py-1 transition-colors md:gap-1.5 md:px-1.5 ${block.active ? 'border-[#c8aa6e]/70 bg-[#c8aa6e]/10' : 'border-transparent'}`}
               aria-label={`Bloque de iniciativa ${block.initiative}`}
             >
               {block.tokens.length > 1 && <Users size={11} className={block.side === 'players' ? 'text-sky-300' : 'text-red-300'} />}
@@ -41,7 +45,7 @@ const CanvasInitiativeTimeline = ({ tokens = [], selectedId, onSelect }) => {
                     type="button"
                     key={token.id}
                     onClick={() => onSelect(token.id)}
-                    className={`relative h-7 w-7 overflow-hidden rounded-full border bg-[#111827] transition-transform hover:z-10 hover:scale-110 ${selectedId === token.id ? 'z-10 border-white' : block.active ? 'border-[#c8aa6e]' : 'border-slate-700'} ${token.hasActed ? 'grayscale opacity-45' : ''}`}
+                    className={`relative h-6 w-6 overflow-hidden rounded-full border bg-[#111827] transition-transform hover:z-10 hover:scale-110 md:h-7 md:w-7 ${selectedId === token.id ? 'z-10 border-white' : block.active ? 'border-[#c8aa6e]' : 'border-slate-700'} ${token.hasActed ? 'grayscale opacity-45' : ''}`}
                     title={`${token.name} · iniciativa ${token.initiative}`}
                   >
                     {token.portrait || token.img
@@ -50,7 +54,7 @@ const CanvasInitiativeTimeline = ({ tokens = [], selectedId, onSelect }) => {
                   </button>
                 ))}
               </div>
-              <span className={`min-w-5 text-center font-mono text-[10px] font-bold ${block.active ? 'text-[#e4ca91]' : 'text-slate-500'}`}>
+              <span className={`min-w-4 text-center font-mono text-[9px] font-bold md:min-w-5 md:text-[10px] ${block.active ? 'text-[#e4ca91]' : 'text-slate-500'}`}>
                 {block.initiative}
               </span>
             </div>
@@ -62,4 +66,3 @@ const CanvasInitiativeTimeline = ({ tokens = [], selectedId, onSelect }) => {
 };
 
 export default CanvasInitiativeTimeline;
-

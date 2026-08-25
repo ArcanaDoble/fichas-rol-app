@@ -31,3 +31,7 @@ export const canControlToken = (token, isPlayerView, playerName) => {
 
     return false;
 };
+
+export const isCanvasCombatRoundActive = (scenario) => (
+    scenario?.canvasCombat?.status === 'active'
+);

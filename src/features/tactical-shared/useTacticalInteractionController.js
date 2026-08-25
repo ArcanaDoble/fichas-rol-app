@@ -12,6 +12,7 @@ import {
     isValidSelectionBox,
 } from './legacyCombatRules';
 import { WORLD_SIZE, lineRectIntersect, linesIntersect, snapWorldPositionToGrid } from './spatial';
+import { canControlToken, isCanvasCombatRoundActive } from './tokenControlUtils';
 
 /** Handles rule-neutral pointer, touch, selection and drag transactions. */
 export const useCanvasInteractionController = ({
@@ -88,9 +89,7 @@ export const useCanvasInteractionController = ({
 }) => {
 const lastPinchDist = useRef(null);
     const lastTouchPos = useRef({ x: 0, y: 0 });
-    const isCanvasCombatActive = !isBoardMode && (
-        gridConfig.isCombatActive || activeScenario?.canvasCombat?.status === 'active'
-    );
+    const isCanvasCombatActive = !isBoardMode && isCanvasCombatRoundActive(activeScenario);
 
     const getTouchDistance = (touches) => {
         return Math.hypot(
@@ -695,7 +694,7 @@ const handleMouseMove = (e) => {
                     // Restricción de Jugador: No permitir seleccionar tokens ajenos
                     if (isPlayerView && !isLight && !isWall && !isGeometry) {
                         const isSandboxItem = item.type === 'card' || item.type === 'card_container' || item.type === 'board_marker' || item.type === 'board_die' || isScenePickup;
-                        const hasPermission = isSandboxItem || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName));
+                        const hasPermission = isSandboxItem || canControlToken(item, isPlayerView, playerName);
                         if (!hasPermission) return false;
                     } else if (isPlayerView && (isLight || isWall || isGeometry)) {
                         return false;
@@ -1168,10 +1167,11 @@ const handleMouseMove = (e) => {
                     }
                 }
 
-                // --- ACUMULACIÓN DE VELOCIDAD POR MOVIMIENTO (MODO NORMAL O MASTER) ---
+                // El Canvas sin ronda activa es una fase de preparación: mover fichas
+                // solo cambia su posición, sin consumir velocidad ni recursos.
                 const sangradoMovementAnimations = [];
                 finalItems = finalItems.map(item => {
-                    if (selectedTokenIds.includes(item.id) && isCombatTokenItem(item)) {
+                    if (isBoardMode && gridConfig.isCombatActive && selectedTokenIds.includes(item.id) && isCombatTokenItem(item)) {
                         const original = tokenOriginalPos[item.id];
                         if (original) {
                             if (item.x !== original.x || item.y !== original.y) {
@@ -1183,17 +1183,14 @@ const handleMouseMove = (e) => {
 
                                 if (distance > 0) {
                                     const movedItem = { ...item, velocidad: (item.velocidad || 0) + distance };
-                                    if (gridConfig.isCombatActive) {
-                                        const sangradoPenalty = applySangradoSpeedPenalty(movedItem, distance);
-                                        if (sangradoPenalty.lostVida > 0) {
-                                            sangradoMovementAnimations.push({
-                                                token: sangradoPenalty.token,
-                                                lostVida: sangradoPenalty.lostVida
-                                            });
-                                        }
-                                        return sangradoPenalty.token;
+                                    const sangradoPenalty = applySangradoSpeedPenalty(movedItem, distance);
+                                    if (sangradoPenalty.lostVida > 0) {
+                                        sangradoMovementAnimations.push({
+                                            token: sangradoPenalty.token,
+                                            lostVida: sangradoPenalty.lostVida
+                                        });
                                     }
-                                    return movedItem;
+                                    return sangradoPenalty.token;
                                 }
                             }
                         }

@@ -10,6 +10,7 @@ import {
 } from './legacyCombatRules';
 import { WORLD_SIZE, snapWorldPositionToGrid } from './spatial';
 import { ACTIVE_BOARD_DIE_ROLL_IDS } from '../../utils/boardDiceRuntime';
+import { canControlToken, isCanvasCombatRoundActive } from './tokenControlUtils';
 
 /** Frozen token and item commands shared by the legacy tactical host. */
 export const createCanvasTokenController = ({
@@ -126,7 +127,7 @@ const addTokenToCanvas = (tokenUrl) => {
 
     const shouldUseMobileTacticalMove = (token, items = []) => {
         const currentScenario = activeScenarioRef.current || activeScenario;
-        const isCombatActive = gridConfig.isCombatActive || currentScenario?.canvasCombat?.status === 'active';
+        const isCombatActive = isCanvasCombatRoundActive(currentScenario);
         return (
             isMobile &&
             !isBoardMode &&
@@ -476,6 +477,7 @@ const addTokenToCanvas = (tokenUrl) => {
                 (isBoardDieItem(token) && isBoardMode) ||
                 (isCardContainerItem(token) && isBoardMode) ||
                 isScenePickup ||
+                canControlToken(token, isPlayerView, playerName) ||
                 (Array.isArray(token.controlledBy) ? token.controlledBy.includes(playerName) : token.controlledBy === playerName) ||
                 token.ownerName === playerName;
             if (!isOwner) return;
@@ -488,7 +490,7 @@ const addTokenToCanvas = (tokenUrl) => {
             }
 
             const currentScenario = activeScenarioRef.current || activeScenario;
-            const isCombatActive = gridConfig.isCombatActive || currentScenario?.canvasCombat?.status === 'active';
+            const isCombatActive = isCanvasCombatRoundActive(currentScenario);
 
             // Restricción de Turno: Si tienes un turno pendiente con otro token, debes terminarlo primero
             if (!isScenePickup && !isBoardMode && isPlayerView && isCombatActive && pendingTurnState && pendingTurnState.tokenId !== token.id) {
@@ -542,7 +544,7 @@ const addTokenToCanvas = (tokenUrl) => {
                 return; // No iniciamos drag si estamos deseleccionando
             }
 
-            if (gridConfig.isCombatActive && activeLayer === 'TABLETOP' && currentScenario) {
+            if (isCombatActive && activeLayer === 'TABLETOP' && currentScenario) {
                 const hasProneTokenInSelection = currentScenario.items.some(item =>
                     newSelection.includes(item.id) && isTokenDerribado(item)
                 );
@@ -579,7 +581,7 @@ const addTokenToCanvas = (tokenUrl) => {
                 isTouch &&
                 isMobile &&
                 !isBoardMode &&
-                gridConfig.isCombatActive &&
+                isCombatActive &&
                 activeLayer === 'TABLETOP' &&
                 isMobileTacticalMoveToken(token)
             ) {

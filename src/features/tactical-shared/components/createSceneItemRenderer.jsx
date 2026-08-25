@@ -19,6 +19,7 @@ import {
 } from '../legacyCombatRules';
 import { CardImageWithLoader, TokenImageWithLoader } from './TacticalAssetImage';
 import { normalizeGeometryKind } from '../geometry';
+import { canControlToken } from '../tokenControlUtils';
 
 export { normalizeGeometryKind } from '../geometry';
 
@@ -326,7 +327,7 @@ const renderItemJSX = (item) => {
         } else if (isPlayerView && isScenePickup) {
             canInteract = true;
         } else if (isPlayerView && isToken) {
-            const hasPermission = (Array.isArray(item.controlledBy) ? item.controlledBy.includes(playerName) : item.controlledBy === playerName) || item.ownerName === playerName;
+            const hasPermission = canControlToken(item, isPlayerView, playerName);
             if (!hasPermission) {
                 canInteract = false;
             }
@@ -793,8 +794,7 @@ const renderItemJSX = (item) => {
 
                         if (now - lastTap < 350 && !isScenePickup) {
                             const hasPermission = !isPlayerView || isCard || isCardContainer || isBoardMarker || isBoardDie ||
-                                (Array.isArray(item.controlledBy) ? item.controlledBy.includes(playerName) : item.controlledBy === playerName) ||
-                                item.ownerName === playerName;
+                                canControlToken(item, isPlayerView, playerName);
                             if (hasPermission) {
                                 e.stopPropagation();
                                 setSelectedTokenIds([item.id]);
@@ -824,8 +824,7 @@ const renderItemJSX = (item) => {
 
                         // RESTRICCIÓN: Solo abrir inspector si el jugador es dueño del token (o es Master)
                         const hasPermission = !isPlayerView || isScenePickup || isCard || isCardContainer || isBoardMarker || isBoardDie ||
-                            (Array.isArray(item.controlledBy) ? item.controlledBy.includes(playerName) : item.controlledBy === playerName) ||
-                            item.ownerName === playerName;
+                            canControlToken(item, isPlayerView, playerName);
                         if (!hasPermission) return;
 
                         e.stopPropagation();
@@ -1143,7 +1142,7 @@ const renderItemJSX = (item) => {
 
 
                         {/* MOVEMENT DISTANCE INDICATOR */}
-                        {isToken && canInteract && (tokenOriginalPos[item.id] || (combatParticipant?.movementRuntime?.spent || 0) > 0) && (
+                        {isToken && canInteract && (isBoardMode || combatParticipant) && (tokenOriginalPos[item.id] || (combatParticipant?.movementRuntime?.spent || 0) > 0) && (
                             (() => {
                                 const original = tokenOriginalPos[item.id];
                                 const cellW = gridConfig.cellWidth || 50;
@@ -1282,7 +1281,7 @@ const renderItemJSX = (item) => {
                         ) : null}
 
                         {/* Controles de Acción */}
-                        {(!isPlayerView || ((isCard || isCardContainer || isBoardMarker || isBoardDie) && canInteract) || (item.controlledBy && Array.isArray(item.controlledBy) && item.controlledBy.includes(playerName))) && (
+                        {(!isPlayerView || ((isCard || isCardContainer || isBoardMarker || isBoardDie) && canInteract) || canControlToken(item, isPlayerView, playerName)) && (
                             <div className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${isSelected ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none md:group-hover:opacity-100 md:group-hover:pointer-events-auto'}`}>
                                 {!isScenePickup && <button
                                     onMouseDown={(e) => {

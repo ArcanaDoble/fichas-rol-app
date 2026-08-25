@@ -20,6 +20,7 @@ import { CardImageWithLoader } from './TacticalAssetImage';
 import { CanvasThumbnail, SaveToast, SpeedTimeline } from './TacticalFeedback';
 import { CanvasSidebar } from './TacticalSidebar';
 import { CanvasViewport } from './TacticalViewport';
+import { canControlToken, isCanvasCombatRoundActive } from '../tokenControlUtils';
 
 /** Stateless composition layer for the canvas workspace and its HUD overlays. */
 export const TacticalWorkspaceShell = ({
@@ -943,7 +944,7 @@ export const TacticalWorkspaceShell = ({
             {/* --- COMBAT HUD (PLAYER VIEW) --- */}
             {isPlayerView && activeScenario && (() => {
                 const myTokens = activeScenario.items?.filter(i =>
-                    i.controlledBy?.includes(playerName) && isCombatTokenItem(i)
+                    canControlToken(i, isPlayerView, playerName) && isCombatTokenItem(i)
                 ) || [];
 
                 // En Tablero, la mano solo debe ocupar pantalla cuando hay token seleccionado.
@@ -1041,7 +1042,9 @@ export const TacticalWorkspaceShell = ({
                             } : null}
                             suppressHandHover={isBoardHandHoverSuppressed}
                             isActive={(() => {
-                                const isCombatActive = gridConfig.isCombatActive || activeScenario?.canvasCombat?.status === 'active';
+                                const isCombatActive = isBoardMode
+                                    ? gridConfig.isCombatActive
+                                    : isCanvasCombatRoundActive(activeScenario);
                                 if (!isCombatActive) return true;
                                 return canCombatTokenActNow(hudToken, activeScenario?.items || [], activeScenario);
                             })()}
@@ -1246,7 +1249,9 @@ export const TacticalWorkspaceShell = ({
                                             onHandCardDragStart={handleHandCardDragStart}
                                             onCardPreviewStart={handleHandCardDragStart}
                                             isActive={(() => {
-                                                const isCombatActive = gridConfig.isCombatActive || activeScenario?.canvasCombat?.status === 'active';
+                                                const isCombatActive = isBoardMode
+                                                    ? gridConfig.isCombatActive
+                                                    : isCanvasCombatRoundActive(activeScenario);
                                                 if (!isCombatActive) return true;
                                                 return canCombatTokenActNow(hudToken, activeScenario?.items || [], activeScenario);
                                             })()}
