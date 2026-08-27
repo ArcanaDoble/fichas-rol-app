@@ -15,6 +15,7 @@ import {
 } from './grid';
 import { WORLD_SIZE } from './spatial';
 import { areScenarioFieldValuesEqual } from './scenarioState';
+import { sanitizeForFirestore } from './legacyCombatRules';
 import { STATUS_EFFECT_IDS } from './tokenSheetSync';
 
 const ROGUELITE_RUNTIME_FIELDS = new globalThis.Set([
@@ -670,6 +671,7 @@ const safePersistItems = async (
             const retryDelay = (ms) => new Promise(resolve => globalThis.setTimeout(resolve, ms));
             const maxPersistAttempts = 8;
             let lastError = null;
+            let scenarioPersisted = false;
 
             for (let attempt = 0; attempt < maxPersistAttempts; attempt += 1) {
                 try {
@@ -683,11 +685,13 @@ const safePersistItems = async (
 
                         const currentData = sfDoc.data();
                         const currentItems = currentData.items || [];
-                        const nextItems = mergeScenarioItemsForPersist(
-                            currentItems,
-                            modifiedOrAdded,
-                            deletedIds,
-                            origItems
+                        const nextItems = sanitizeForFirestore(
+                            mergeScenarioItemsForPersist(
+                                currentItems,
+                                modifiedOrAdded,
+                                deletedIds,
+                                origItems
+                            )
                         );
 
                         transaction.update(docRef, {
@@ -698,16 +702,8 @@ const safePersistItems = async (
                             lastModifiedByRole: writerRole
                         });
                     });
-                    if (persistRuntimeItems && options.persistRuntime === true) {
-                        const runtimeResults = await persistRuntimeItems({
-                            scenarioId: reqId,
-                            finalItems: itemsToPersist,
-                            originalItems: origItems,
-                            explicitModifiedIds: modifiedItemIds,
-                        });
-                        assertRuntimePersistenceSucceeded(runtimeResults);
-                    }
-                    return true;
+                    scenarioPersisted = true;
+                    break;
                 } catch (error) {
                     lastError = error;
                     if (attempt < maxPersistAttempts - 1) {
@@ -717,8 +713,29 @@ const safePersistItems = async (
                 }
             }
 
-            console.error("Error in safePersistItems transaction after retries:", lastError);
-            return false;
+            if (!scenarioPersisted) {
+                console.error("Error in safePersistItems transaction after retries:", lastError);
+                return false;
+            }
+
+            // La posición/token del escenario ya está confirmada. El progreso de la
+            // aventura vive en otro documento y no debe convertir una escritura válida
+            // del Canvas en un falso "token no sincronizado" ni repetirla ocho veces.
+            if (persistRuntimeItems && options.persistRuntime === true) {
+                try {
+                    const runtimeResults = await persistRuntimeItems({
+                        scenarioId: reqId,
+                        finalItems: itemsToPersist,
+                        originalItems: origItems,
+                        explicitModifiedIds: modifiedItemIds,
+                    });
+                    assertRuntimePersistenceSucceeded(runtimeResults);
+                } catch (runtimeError) {
+                    console.error("Canvas guardado; progreso Roguelite pendiente:", runtimeError);
+                }
+            }
+
+            return true;
         };
 
         // Cada delta conserva su turno: ninguna acción rápida reemplaza a otra pendiente.

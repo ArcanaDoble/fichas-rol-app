@@ -4,6 +4,8 @@ import {
   canRogueliteTokenClaimRun,
   createRogueliteActiveRunFromToken,
 } from '../roguelite/activeRun';
+import { sanitizeForFirestore } from '../tactical-shared/legacyCombatRules';
+import { syncCanvasTokenWithSheet } from './rogueliteTokenSheetSync';
 
 const isRunToken = (item) => Boolean(
   item?.layer === 'TOKEN'
@@ -37,6 +39,9 @@ export const mergeCanvasRogueliteRuntimeSheet = (
 ) => {
   const owner = sheetData.owner || options.playerName;
   const classId = sheetData.id || sheetData.templateId;
+  const personalTalentSlots = Array.isArray(storedProfile.equippedTalentIds)
+    ? storedProfile.equippedTalentIds
+    : storedProfile.talents?.slots;
 
   return {
     ...storedProfile,
@@ -48,6 +53,17 @@ export const mergeCanvasRogueliteRuntimeSheet = (
     templateId: sheetData.templateId || classId,
     owner,
     profileType: 'rogueliteClass',
+    ...(Array.isArray(personalTalentSlots)
+      ? { equippedTalentIds: personalTalentSlots }
+      : {}),
+    ...(Array.isArray(storedProfile.equippedSkillIds)
+      ? { equippedSkillIds: storedProfile.equippedSkillIds }
+      : {}),
+    talents: {
+      ...(storedProfile.talents || {}),
+      ...(sheetData.talents || {}),
+      ...(Array.isArray(personalTalentSlots) ? { slots: personalTalentSlots } : {}),
+    },
   };
 };
 
@@ -62,6 +78,37 @@ export const loadCanvasRogueliteRuntimeSheet = async (sheetData, options = {}) =
   if (!snapshot.exists()) return { ...sheetData, owner, id: classId };
 
   return mergeCanvasRogueliteRuntimeSheet(sheetData, snapshot.data(), { owner, playerName: owner });
+};
+
+export const syncCanvasTokenWithRuntimeProfile = (
+  token,
+  storedProfile = {},
+  scenarioId = null,
+  options = {},
+) => {
+  const activeRun = storedProfile?.activeRun;
+  const hasNewerRevision = (Number(activeRun?.revision) || 0) > (Number(token.runRevision) || 0);
+  if (
+    !isRunToken(token)
+    || !activeRun?.id
+    || activeRun.id !== token.runId
+    || (activeRun.currentScenarioId && scenarioId && activeRun.currentScenarioId !== scenarioId)
+    || (!hasNewerRevision && !options.forceMetadataSync)
+  ) {
+    return token;
+  }
+
+  return syncCanvasTokenWithSheet(token, {
+    ...storedProfile,
+    id: token.linkedClassId,
+    templateId: token.linkedClassId,
+    owner: token.linkedClassOwner,
+    profileType: 'rogueliteClass',
+    activeRun,
+  }, {}, {
+    scenarioId,
+    preserveTokenState: !hasNewerRevision,
+  });
 };
 
 const persistTokenRun = async (token, scenarioId) => {
@@ -92,13 +139,13 @@ const persistTokenRun = async (token, scenarioId) => {
       now: Date.now(),
     });
 
-    transaction.set(profileRef, {
+    transaction.set(profileRef, sanitizeForFirestore({
       id: token.linkedClassId,
       templateId: token.linkedClassId,
       owner: token.linkedClassOwner,
       profileType: 'rogueliteClass',
       activeRun: nextRun,
-    }, { merge: true });
+    }), { merge: true });
 
     return { persisted: true, activeRun: nextRun };
   });

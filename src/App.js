@@ -11,8 +11,6 @@ import {
   getDocs,
   onSnapshot,
   serverTimestamp,
-  query,
-  where,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { BsDice6 } from 'react-icons/bs';
@@ -65,7 +63,6 @@ import { ToastProvider } from './components/Toast';
 import { syncArmorState } from './utils/armorSystem';
 import DiceCalculator from './components/DiceCalculator';
 import BarraReflejos from './components/BarraReflejos';
-import { CharacterCreatorView } from './components/CharacterCreatorView';
 import { CharacterListView } from './components/CharacterListView';
 import InitiativeTracker from './components/InitiativeTracker';
 import CanvasSection from './components/CanvasSection';
@@ -117,7 +114,6 @@ import useConfirm from './hooks/useConfirm';
 import useResourcesHook from './hooks/useResources';
 import useGlossary from './hooks/useGlossary';
 import useEnemyInstances from './hooks/useEnemyInstances';
-import { uploadDataUrl } from './utils/storage';
 import { deepEqual } from './utils/deepEqual';
 import Cropper from 'react-easy-crop';
 import Modal from './components/Modal';
@@ -1277,7 +1273,6 @@ function App() {
   const [editingAccessory, setEditingAccessory] = useState(null);
   const [newAccessoryError, setNewAccessoryError] = useState('');
 
-  const [showCharacterCreator, setShowCharacterCreator] = useState(false);
   const [newAbility, setNewAbility] = useState(createEmptyAbilityCatalogItem);
   const [editingAbility, setEditingAbility] = useState(null); // Now stores the ID instead of the name
   const [newAbilityError, setNewAbilityError] = useState('');
@@ -1339,45 +1334,6 @@ function App() {
   const [playerLoginError, setPlayerLoginError] = useState(null);
   const [playerLoginTransition, setPlayerLoginTransition] = useState(false);
 
-  const handleSaveNewCharacter = async (newCharacter) => {
-    try {
-      const charId = newCharacter.id;
-      let imageUrl = newCharacter.image;
-      let avatarUrl = newCharacter.avatar;
-      let portraitSource = newCharacter.portraitSource;
-
-      // Subir imagen principal si es data URL
-      if (imageUrl && imageUrl.startsWith('data:')) {
-        imageUrl = await uploadDataUrl(imageUrl, `characters/${charId}/image.jpg`);
-      }
-
-      // Subir avatar si es data URL
-      if (avatarUrl && avatarUrl.startsWith('data:')) {
-        avatarUrl = await uploadDataUrl(avatarUrl, `characters/${charId}/avatar.jpg`);
-      }
-
-      // Subir fuente del retrato para permitir re-edición sin pérdida
-      if (portraitSource && portraitSource.startsWith('data:')) {
-        portraitSource = await uploadDataUrl(portraitSource, `characters/${charId}/source.jpg`);
-      }
-
-      const charToSave = {
-        ...newCharacter,
-        image: imageUrl,
-        avatar: avatarUrl,
-        portraitSource: portraitSource,
-        owner: playerName,
-        createdAt: serverTimestamp(),
-      };
-
-      await setDoc(doc(db, 'characters', charId), charToSave);
-      setShowCharacterCreator(false);
-    } catch (error) {
-      console.error("Error saving character:", error);
-      throw error; // Re-lanzar para que CharacterCreatorView lo capture
-    }
-  };
-
   const handlePlayerLogin = async () => {
     if (!loginTarget) return;
     try {
@@ -1390,9 +1346,6 @@ function App() {
           return;
         }
 
-        const charactersQuery = query(collection(db, 'characters'), where('owner', '==', loginTarget));
-        const charSnap = await getDocs(charactersQuery);
-
         setPlayerLoginError(null);
         setPlayerLoginTransition(true);
         setTimeout(() => {
@@ -1401,12 +1354,6 @@ function App() {
           setLoginTarget(null);
           setLoginPassword('');
           setPlayerLoginTransition(false);
-
-          if (charSnap.empty) {
-            setShowCharacterCreator(true);
-          } else {
-            setShowCharacterCreator(false);
-          }
         }, 600);
       } else {
         setPlayerLoginError('Error: El usuario no existe');
@@ -4368,15 +4315,6 @@ function App() {
 
   // FICHA JUGADOR
   if (userType === 'player' && nameEntered) {
-    if (showCharacterCreator) {
-      return withTooltips(
-        <CharacterCreatorView
-          onBack={() => setShowCharacterCreator(false)}
-          onSave={handleSaveNewCharacter}
-        />
-      );
-    }
-
     return withTooltips(
       <div className="min-h-screen bg-[#0b1120]">
         {showPlayerCanvas && (
@@ -8042,4 +7980,3 @@ const AppWithProviders = () => {
   );
 };
 export default AppWithProviders;
-

@@ -86,7 +86,15 @@ describe('Canvas Roguelite class adapter', () => {
   });
 
   it('creates an explicit class-linked token and keeps runtime stats on a later sync', () => {
-    const sheet = createClassSheet();
+    const sheet = createClassSheet({
+      talentCatalog: [{ id: 'guardian', name: 'Guardián', description: 'Protege a un aliado.' }],
+      equippedTalentIds: ['guardian', null, null],
+      equippedSkillIds: ['ability:fireball', null, null],
+      equipment: {
+        ...createClassSheet().equipment,
+        abilities: [{ name: 'Bola de fuego', templateId: 'ability:fireball', description: 'Inflige daño de fuego.' }],
+      },
+    });
     const created = syncCanvasTokenWithSheet({ id: 'token-1' }, sheet);
 
     expect(created).toEqual(expect.objectContaining({
@@ -98,12 +106,30 @@ describe('Canvas Roguelite class adapter', () => {
       runId: expect.stringContaining('run-jugador-1-barbarian-'),
       portrait: 'barbarian.webp',
       actionDice: ['d8', 'd6', 'd4'],
+      equippedTalentIds: ['guardian', null, null],
     }));
+    expect(created.equippedTalents).toEqual([
+      expect.objectContaining({ id: 'guardian', name: 'Guardián' }),
+    ]);
+    expect(created.equippedTalentSlots).toEqual([
+      expect.objectContaining({ id: 'guardian', name: 'Guardián' }),
+      null,
+      null,
+    ]);
+    expect(created.equippedSkills).toEqual([
+      expect.objectContaining({ templateId: 'ability:fireball', name: 'Bola de fuego' }),
+    ]);
+    expect(created.equippedSkillSlots).toEqual([
+      expect.objectContaining({ templateId: 'ability:fireball', name: 'Bola de fuego' }),
+      null,
+      null,
+    ]);
     expect(created.equippedItems).toHaveLength(4);
     expect(created.inventory.map((item) => item.name)).toEqual([
       'Hacha vieja',
       'Mandoble',
       'Mallas',
+      'Bola de fuego',
       'Poción',
       'Amuleto',
     ]);
@@ -112,6 +138,10 @@ describe('Canvas Roguelite class adapter', () => {
 
     const editedInCanvas = {
       ...created,
+      usedTalentSlots: [true, false, false],
+      usedTalentSlotIds: ['guardian', null, null],
+      usedSkillSlots: [true, false, false],
+      usedSkillSlotIds: ['ability:fireball', null, null],
       stats: {
         ...created.stats,
         vida: { ...created.stats.vida, current: 3, max: 12 },
@@ -119,6 +149,29 @@ describe('Canvas Roguelite class adapter', () => {
     };
     const resynced = syncCanvasTokenWithSheet(editedInCanvas, sheet);
     expect(resynced.stats.vida).toEqual(expect.objectContaining({ current: 3, max: 12 }));
+    expect(resynced.usedTalentSlots).toEqual([true, false, false]);
+    expect(resynced.usedSkillSlots).toEqual([true, false, false]);
+  });
+
+  it('keeps resolving personal talent ids with the master catalog already carried by the token', () => {
+    const masterSheet = createClassSheet({
+      talentCatalog: [{ id: 'guardian', name: 'Guardián', description: 'Protege a un aliado.' }],
+      equippedTalentIds: ['guardian', null, null],
+    });
+    const token = syncCanvasTokenWithSheet({ id: 'token-1' }, masterSheet);
+
+    const synced = syncCanvasTokenWithSheet(token, {
+      id: 'barbarian',
+      owner: 'jugador-1',
+      profileType: 'rogueliteClass',
+      equippedTalentIds: ['guardian', null, null],
+    });
+
+    expect(synced.equippedTalentSlots).toEqual([
+      expect.objectContaining({ id: 'guardian', name: 'Guardián' }),
+      null,
+      null,
+    ]);
   });
 
   it('delegates legacy character sheets to the existing adapter', () => {
@@ -197,5 +250,45 @@ describe('Canvas Roguelite class adapter', () => {
     expect(sword.isEquipped).toBe(true);
     expect(sword.equippedSlots).toContain('mainHand');
     expect(synced.equippedItems.some((item) => item.name === 'Espada de Acero')).toBe(true);
+  });
+
+  it('uses the active run loadout instead of stale profile equipment after dropping an item', () => {
+    const sheet = createClassSheet();
+    const activeRun = createRogueliteActiveRun(sheet, {
+      runId: 'run-1',
+      scenarioId: 'room-1',
+      now: 100,
+    });
+    activeRun.revision = 2;
+    activeRun.inventory = { weapons: [], armor: [], abilities: [], objects: [], accessories: [] };
+    activeRun.equippedItems = {
+      activeWeaponSet: 0,
+      weaponSets: [
+        { mainHand: null, offHand: null },
+        { mainHand: null, offHand: null },
+      ],
+      mainHand: null,
+      offHand: null,
+      body: null,
+      accessory_1: null,
+      accessory_2: null,
+    };
+
+    const synced = syncCanvasTokenWithSheet({
+      id: 'token-1',
+      profileType: 'rogueliteClass',
+      linkedClassId: 'barbarian',
+      linkedClassOwner: 'jugador-1',
+      runId: 'run-1',
+      inventory: [],
+    }, {
+      ...sheet,
+      // La copia superior sigue teniendo el equipamiento anterior.
+      activeRun,
+    }, {}, { scenarioId: 'room-1', preserveTokenState: false });
+
+    expect(synced.inventory).toEqual([]);
+    expect(synced.equippedItems).toEqual([]);
+    expect(synced.equipmentLoadout.mainHand).toBeNull();
   });
 });

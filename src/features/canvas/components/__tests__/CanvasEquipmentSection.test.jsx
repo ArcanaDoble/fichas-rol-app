@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import CanvasEquipmentSection from '../CanvasEquipmentSection';
 
 jest.mock('../../../../hooks/useCustomEquipmentImages', () => ({
@@ -7,7 +7,7 @@ jest.mock('../../../../hooks/useCustomEquipmentImages', () => ({
 }));
 
 jest.mock('../../../tactical-shared/components/TacticalAssetImage', () => ({
-  getObjectImage: () => null,
+  getObjectImage: (item) => item?.customImage || null,
 }));
 
 describe('CanvasEquipmentSection', () => {
@@ -87,14 +87,85 @@ describe('CanvasEquipmentSection', () => {
             type: 'ability',
             isEquipped: false,
             isPrepared: true,
+            customImage: 'fireball.webp',
           }],
         }}
       />,
     );
 
-    expect(screen.getByText('Bola de fuego')).toBeInTheDocument();
-    expect(screen.getByText('Habilidad · Preparada')).toBeInTheDocument();
+    expect(screen.getByText('Conjuros & Magia')).toBeInTheDocument();
+    expect(screen.getByText('Habilidades equipadas')).toBeInTheDocument();
+    expect(screen.getAllByText('Bola de fuego')).toHaveLength(2);
+    expect(screen.getByLabelText('1 habilidades equipadas')).toHaveTextContent('1/3');
+    expect(within(screen.getByTestId('roguelite-token-spells')).getAllByText('Ranura vacía')).toHaveLength(2);
+    expect(screen.queryByText('Habilidad · Preparada')).not.toBeInTheDocument();
+    expect(screen.queryAllByTestId('inventory-item-card')).toHaveLength(0);
     expect(screen.queryByText('Objeto')).not.toBeInTheDocument();
+    expect(screen.getByTestId('roguelite-token-spells').querySelector('img')).toHaveAttribute('src', 'fireball.webp');
+  });
+
+  test('restores equipped talents with the original three-slot ledger design', () => {
+    render(
+      <CanvasEquipmentSection
+        token={{
+          profileType: 'rogueliteClass',
+          equippedTalentIds: ['guardian', null, null],
+          equippedTalentSlots: [{
+              id: 'guardian',
+              name: 'Guardián',
+              description: 'Protege a un aliado cercano.',
+              imageSource: 'guardian.webp',
+            }, null, null],
+          inventory: [],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Talentos equipados')).toBeInTheDocument();
+    expect(screen.getAllByText('Guardián')).toHaveLength(2);
+    expect(screen.getByLabelText('1 talentos equipados')).toHaveTextContent('1/3');
+    expect(within(screen.getByTestId('roguelite-token-talents')).getAllByText('Ranura vacía')).toHaveLength(2);
+    expect(screen.queryByText('Talento · Equipado')).not.toBeInTheDocument();
+    expect(screen.queryAllByTestId('inventory-item-card')).toHaveLength(0);
+    expect(screen.getByTestId('roguelite-token-talents').querySelector('img')).toHaveAttribute('src', 'guardian.webp');
+  });
+
+  test('persists used state and expands a slot to show its complete information', () => {
+    const onUpdateToken = jest.fn();
+    render(
+      <CanvasEquipmentSection
+        token={{
+          profileType: 'rogueliteClass',
+          equippedTalentIds: ['guardian', null, null],
+          equippedTalentSlots: [{
+            id: 'guardian',
+            name: 'Guardián',
+            description: 'Protege a un aliado cercano durante toda la reacción.',
+            traits: ['Reacción', 'Defensa'],
+          }, null, null],
+          inventory: [],
+        }}
+        onUpdateToken={onUpdateToken}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar Guardián como usado' }));
+    expect(onUpdateToken).toHaveBeenCalledWith({
+      usedTalentSlots: [true, false, false],
+      usedTalentSlotIds: ['guardian', null, null],
+    }, true);
+
+    expect(screen.queryByTestId('roguelite-token-talents-details-0')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Mostrar detalles de Guardián' }));
+    expect(screen.getByTestId('roguelite-token-talents-details-0')).toHaveTextContent(
+      'Protege a un aliado cercano durante toda la reacción.',
+    );
+    expect(screen.getByTestId('roguelite-token-talents-details-0')).toHaveTextContent('Reacción');
+    expect(screen.getByRole('button', { name: 'Ocultar detalles de Guardián' })).toHaveAttribute('aria-expanded', 'true');
+    expect(within(screen.getByTestId('roguelite-token-talents')).getByText('Detalle abierto')).toBeInTheDocument();
+    expect(screen.getAllByText('Protege a un aliado cercano durante toda la reacción.')).toHaveLength(1);
+    expect(screen.getByTestId('roguelite-token-talents-details-0').querySelector('.noma-token-feature__details-scroll'))
+      .toBeInTheDocument();
   });
 
   test('reorders inventory from the accessible drag handle', () => {

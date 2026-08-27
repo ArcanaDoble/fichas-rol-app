@@ -282,6 +282,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 **Resumen de cambios v2.7.25:**
 
+- El primer acceso de un jugador abre directamente `Mis personajes`; ya no fuerza el creador de personajes tradicionales cuando su biblioteca está vacía.
 - **Sincronización robusta con transacciones atómicas**:
   - Implementación de guardado transaccional a nivel de elementos (`safePersistItems`) para todas las acciones del canvas (arrastre, rotación, redimensionamiento, unstacking, eliminación, enlace de personajes, reinicio de velocidad, reacciones de combate y fin de turno).
   - Fusión inteligente en tiempo real que previene que los movimientos simultáneos de jugadores se pisen o que cartas y elementos eliminados vuelvan a aparecer (snapback).
@@ -2990,6 +2991,7 @@ Guía rápida: ver `docs/Minimapa.md`.
 - El inspector utiliza las estadísticas Roguelite `Vida`, `CD`, `Movimiento`, `Iniciativa` y el recurso propio de la clase. Tanto el valor actual como el máximo pueden editarse durante el encuentro sin alterar la definición maestra.
 - El token carga el inventario completo de la clase personal y conserva por separado la configuración equipada. El inspector identifica visualmente qué piezas están en uso y permite retirar objetos durante la aventura.
 - Las piezas del inventario reutilizan en el inspector el lenguaje visual de las tarjetas Roguelite mediante una variante compacta.
+- El inspector vuelve a separar los talentos equipados y los conjuros preparados del inventario físico mediante los mismos registros compactos de tres ranuras, iconos hexagonales y contadores `0/3` de la ficha Roguelite. La sincronización combina la selección personal con el catálogo maestro para conservar nombre, descripción e imagen; cada ranura puede marcarse como usada/disponible con persistencia inmediata en el token y abrir un acordeón adaptable para leer efecto, rasgos y requisitos. Al abrirlo, la previsualización duplicada desaparece y los textos extensos se mantienen dentro de un área de lectura con desplazamiento propio.
 - La adaptación de ficha a token, los recursos del inspector y la presentación del equipamiento se inyectan desde la definición del modo Canvas. Board continúa usando su sincronización e inspector heredados.
 - Las estadísticas del inspector recuperan la interacción táctil de barras: cada bloque modifica el valor actual y un único control compacto ajusta el máximo. Los nombres y colores siguen procediendo del nuevo modelo Roguelite.
 - El retrato de un token con `linkedClassId` abre directamente esa clase desbloqueada dentro de la ficha del jugador, sin detenerse en la biblioteca de personajes tradicionales.
@@ -3039,4 +3041,3 @@ Guía rápida: ver `docs/Minimapa.md`.
 - Equipamiento y habilidades disponen de una a cuatro ranuras. El equipo se busca en el catálogo general; las habilidades pueden escribirse para una criatura o guardarse en `rogueliteEnemyAbilities` para reutilizarlas.
 - `Añadir al encuentro` escribe un token `rogueliteEnemy` exclusivamente en el encuentro emitido por `gameSettings/canvasVisibility` dentro de `canvas_scenarios`. No utiliza ni modifica `BoardSection`.
 - El inspector del Canvas reconoce el nuevo perfil, presenta sus cinco estadísticas con barras editables y conserva equipo y habilidades mediante las tarjetas compactas del inventario Roguelite.
-

@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../../firebase';
 import {
     CANVAS_INVENTORY_DRAG_END_EVENT,
     CANVAS_INVENTORY_DRAG_PREVIEW_EVENT,
@@ -14,6 +16,10 @@ import {
     resolveCanvasInventoryItemIdentity,
 } from './canvasInventoryTransfer';
 import { useCanvasCombatRuntime } from './combat/useCanvasCombatRuntime';
+import {
+    mergeCanvasRogueliteRuntimeSheet,
+    syncCanvasTokenWithRuntimeProfile,
+} from './rogueliteRunPersistence';
 
 const noop = () => undefined;
 const emptyList = () => [];
@@ -37,6 +43,10 @@ export const useCanvasFeatureController = ({
     triggerToast,
 }) => {
     const [sceneDropPreview, setSceneDropPreview] = useState(null);
+    const runtimeSyncCallbacksRef = useRef({ safePersistItems, triggerToast });
+    useEffect(() => {
+        runtimeSyncCallbacksRef.current = { safePersistItems, triggerToast };
+    }, [safePersistItems, triggerToast]);
     const combatRuntime = useCanvasCombatRuntime({
         activeScenario,
         activeScenarioRef,
@@ -48,6 +58,133 @@ export const useCanvasFeatureController = ({
         setActiveScenario,
         triggerToast,
     });
+    const runtimeProfileSubscriptionKey = (activeScenario?.items || [])
+        .filter((item) => (
+            item?.profileType === 'rogueliteClass'
+            && item.linkedClassOwner
+            && item.linkedClassId
+            && item.runId
+        ))
+        .map((item) => `${item.linkedClassOwner}/${item.linkedClassId}/${item.runId}`)
+        .sort()
+        .join('|');
+
+    useEffect(() => {
+        const scenarioId = activeScenario?.id;
+        if (!scenarioId || !runtimeProfileSubscriptionKey) return undefined;
+
+        const profileKeys = Array.from(new Set(
+            (activeScenario.items || [])
+                .filter((item) => (
+                    item?.profileType === 'rogueliteClass'
+                    && item.linkedClassOwner
+                    && item.linkedClassId
+                    && item.runId
+                ))
+                .map((item) => `${item.linkedClassOwner}\u0000${item.linkedClassId}`),
+        ));
+
+        const unsubscribers = profileKeys.flatMap((profileKey) => {
+            const [owner, classId] = profileKey.split('\u0000');
+            let storedProfile = null;
+            let classDefinition = null;
+            let profileLoaded = false;
+            let definitionLoaded = false;
+
+            const syncLoadedProfile = () => {
+                if (!profileLoaded || !definitionLoaded || !storedProfile) return;
+                const scenario = activeScenarioRef.current;
+                if (!scenario?.id || scenario.id !== scenarioId) return;
+
+                const runtimeProfile = classDefinition
+                    ? mergeCanvasRogueliteRuntimeSheet(classDefinition, storedProfile, { playerName: owner })
+                    : {
+                        ...storedProfile,
+                        id: classId,
+                        templateId: classId,
+                        owner,
+                        profileType: 'rogueliteClass',
+                    };
+                const modifiedIds = [];
+                const nextItems = (scenario.items || []).map((item) => {
+                    if (
+                        item.linkedClassOwner !== owner
+                        || item.linkedClassId !== classId
+                    ) return item;
+
+                    const synced = syncCanvasTokenWithRuntimeProfile(
+                        item,
+                        runtimeProfile,
+                        scenarioId,
+                        { forceMetadataSync: true },
+                    );
+                    if (synced === item || JSON.stringify(synced) === JSON.stringify(item)) return item;
+                    modifiedIds.push(item.id);
+                    return synced;
+                });
+
+                if (modifiedIds.length === 0) return;
+                setActiveScenario((current) => (
+                    current?.id === scenarioId ? { ...current, items: nextItems } : current
+                ));
+                runtimeSyncCallbacksRef.current.safePersistItems(
+                    scenarioId,
+                    nextItems,
+                    scenario.items,
+                    modifiedIds,
+                    { persistRuntime: false },
+                ).then((didPersist) => {
+                    if (!didPersist) {
+                        runtimeSyncCallbacksRef.current.triggerToast(
+                            'FICHA PENDIENTE',
+                            'El inventario se actualizó, pero el token aún no confirmó el cambio.',
+                            'warning',
+                        );
+                    }
+                });
+            };
+
+            const unsubscribeProfile = onSnapshot(
+                doc(db, 'players', owner, 'rogueliteClasses', classId),
+                (profileSnapshot) => {
+                    profileLoaded = true;
+                    storedProfile = typeof profileSnapshot.exists === 'function' && profileSnapshot.exists()
+                        ? profileSnapshot.data()
+                        : null;
+                    syncLoadedProfile();
+                },
+                (error) => {
+                    console.error('No se pudo escuchar el progreso Roguelite del token:', error);
+                },
+            );
+
+            const unsubscribeDefinition = onSnapshot(
+                doc(db, 'classes', classId),
+                (definitionSnapshot) => {
+                    definitionLoaded = true;
+                    classDefinition = typeof definitionSnapshot.exists === 'function' && definitionSnapshot.exists()
+                        ? { ...definitionSnapshot.data(), id: classId }
+                        : null;
+                    syncLoadedProfile();
+                },
+                (error) => {
+                    definitionLoaded = true;
+                    classDefinition = null;
+                    console.error('No se pudo cargar la definición Roguelite del token:', error);
+                    syncLoadedProfile();
+                },
+            );
+
+            return [unsubscribeProfile, unsubscribeDefinition];
+        });
+
+        return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+    }, [
+        activeScenario?.id,
+        activeScenarioRef,
+        runtimeProfileSubscriptionKey,
+        setActiveScenario,
+    ]);
 
     const handleModeItemDrop = useCallback(({
         draggedItemId,
@@ -79,10 +216,7 @@ export const useCanvasFeatureController = ({
             }
 
             if (recipient) {
-                const nextRecipient = {
-                    ...addCanvasLootToInventory(recipient, movedLoot.lootItem),
-                    runtimeDirty: false,
-                };
+                const nextRecipient = addCanvasLootToInventory(recipient, movedLoot.lootItem);
                 const nextItems = finalItems
                     .filter((item) => item.id !== movedLoot.id)
                     .map((item) => (item.id === recipient.id ? nextRecipient : item));
@@ -238,11 +372,8 @@ export const useCanvasFeatureController = ({
             }
 
             if (recipient && recipient.id !== sourceToken.id) {
-                const nextRecipient = {
-                    ...addCanvasLootToInventory(recipient, detached.item, detail.image),
-                    runtimeDirty: false,
-                };
-                const nextSourceToken = { ...sourceToken, ...detached.updates, runtimeDirty: false };
+                const nextRecipient = addCanvasLootToInventory(recipient, detached.item, detail.image);
+                const nextSourceToken = { ...sourceToken, ...detached.updates };
                 const nextItems = scenario.items.map((item) => {
                     if (item.id === sourceToken.id) return nextSourceToken;
                     if (item.id === recipient.id) return nextRecipient;
@@ -280,7 +411,7 @@ export const useCanvasFeatureController = ({
                 sourceToken,
                 position,
             });
-            const nextSourceToken = { ...sourceToken, ...detached.updates, runtimeDirty: false };
+            const nextSourceToken = { ...sourceToken, ...detached.updates };
             const nextItems = scenario.items
                 .map((item) => (item.id === sourceToken.id ? nextSourceToken : item))
                 .concat(loot);

@@ -190,3 +190,63 @@ test('a confirmed queued write clears only the fields Firebase accepted', async 
     fields: { x: 30 },
   }));
 });
+
+test('confirms a new Canvas token even when the secondary run update is rejected', async () => {
+  const firestore = require('firebase/firestore');
+  const transactionUpdate = jest.fn();
+  firestore.runTransaction.mockImplementation(async (_db, callback) => callback({
+    get: jest.fn().mockResolvedValue({
+      exists: () => true,
+      data: () => ({ items: [] }),
+    }),
+    update: transactionUpdate,
+  }));
+
+  const newToken = {
+    id: 'token-new',
+    layer: 'TOKEN',
+    profileType: 'rogueliteClass',
+    linkedClassId: 'barbarian',
+    linkedClassOwner: 'Ada',
+    runId: 'run-1',
+    portrait: undefined,
+    inventory: [{ name: 'Antorcha', optionalNote: undefined }],
+  };
+  const persistRuntimeItems = jest.fn().mockResolvedValue([
+    { persisted: false, reason: 'stale-scenario' },
+  ]);
+  const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+  const controller = createCanvasScenarioController({
+    activeScenario: { id: 'room-1', items: [] },
+    getLocalSyncActorId: () => 'Ada',
+    isPlayerView: true,
+    localUnsavedEditsRef: { current: {} },
+    persistQueueRef: { current: (task) => task() },
+    persistRuntimeItems,
+    recentLocalWritesRef: { current: {} },
+    scenarioCollectionName: 'canvas_scenarios',
+    setActiveScenario: jest.fn(),
+  });
+
+  const didPersist = await controller.safePersistItems(
+    'room-1',
+    [newToken],
+    [],
+    ['token-new'],
+    { persistRuntime: true },
+  );
+
+  expect(didPersist).toBe(true);
+  expect(firestore.runTransaction).toHaveBeenCalledTimes(1);
+  expect(transactionUpdate.mock.calls[0][1]).toEqual(
+    expect.objectContaining({
+      items: [expect.objectContaining({
+        id: 'token-new',
+        portrait: null,
+        inventory: [expect.objectContaining({ optionalNote: null })],
+      })],
+    }),
+  );
+  expect(persistRuntimeItems).toHaveBeenCalledTimes(1);
+  consoleError.mockRestore();
+});

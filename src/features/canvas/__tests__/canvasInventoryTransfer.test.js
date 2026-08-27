@@ -319,6 +319,7 @@ describe('canvas inventory transfer', () => {
         expect(result.nextToken.inventory[0].name).toBe('Poción de Vida');
         expect(result.nextToken.inventory[0].rareza).toBe('Raro');
         expect(result.nextToken.inventory[0].image).toBe('/objetos/pocion.webp');
+        expect(result.nextToken.runtimeDirty).toBe(true);
         expect(result.nextItems.find((item) => item.id === 'loot-potion')).toBeUndefined();
     });
 

@@ -25,7 +25,7 @@ const CanvasInitiativeTimeline = ({ tokens = [], selectedId, onSelect }) => {
   if (blocks.length === 0) return null;
 
   return (
-    <div className="pointer-events-none absolute left-20 right-20 top-8 z-[45] md:left-1/2 md:right-auto md:top-10 md:w-[min(76vw,620px)] md:-translate-x-1/2">
+    <div className="pointer-events-none absolute left-20 right-20 top-10 z-[45] md:left-1/2 md:right-auto md:w-[min(76vw,620px)] md:-translate-x-1/2">
       <div
         className="pointer-events-auto flex max-w-full items-center gap-0 overflow-x-auto border-y border-[#c8aa6e]/20 bg-[#080d16]/90 px-1 py-1 shadow-[0_8px_22px_rgba(0,0,0,0.38)] scrollbar-hide md:gap-1 md:px-2 md:py-1.5"
         role="region"

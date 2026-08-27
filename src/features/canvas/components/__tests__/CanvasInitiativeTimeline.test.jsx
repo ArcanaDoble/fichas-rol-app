@@ -33,8 +33,8 @@ describe('CanvasInitiativeTimeline', () => {
     );
 
     const timeline = screen.getByRole('region', { name: 'Orden de iniciativa' });
-    expect(timeline.parentElement).toHaveClass('left-20', 'right-20', 'top-8');
-    expect(timeline.parentElement).toHaveClass('md:left-1/2', 'md:top-10');
+    expect(timeline.parentElement).toHaveClass('left-20', 'right-20', 'top-10');
+    expect(timeline.parentElement).toHaveClass('md:left-1/2');
     expect(timeline).toHaveClass('max-w-full', 'overflow-x-auto');
     expect(container.querySelector('[aria-label="Bloque de iniciativa 8"]')).toBeInTheDocument();
 

@@ -659,7 +659,9 @@ export const pickUpCanvasLootForToken = ({
 
     const nextToken = {
         ...currentToken,
-        runtimeDirty: false,
+        // Se limpia cuando el documento personal del activeRun confirma la
+        // transferencia; hasta entonces «Guardar cambios» puede reintentarla.
+        runtimeDirty: true,
     };
 
     const nextItems = items
