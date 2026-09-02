@@ -1764,6 +1764,11 @@ body.noma-canvas-inventory-dragging {
   user-select: none;
 }
 
+body.noma-class-inventory-reordering {
+  cursor: grabbing;
+  user-select: none;
+}
+
 body.noma-canvas-inventory-dragging [data-tactical-sidebar-backdrop="true"] {
   opacity: 0;
   pointer-events: none;
@@ -1791,6 +1796,54 @@ body.noma-canvas-inventory-dragging [data-tactical-sidebar-backdrop="true"] {
   background: #111722;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32), inset 0 0 0 1px rgba(255, 255, 255, 0.018);
   transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.noma-class-inventory-entry {
+  width: 100%;
+  align-self: start;
+}
+
+.noma-class-inventory-entry > .noma-inventory-card {
+  height: auto;
+}
+
+@media (min-width: 768px) {
+  .noma-class-inventory-grid {
+    grid-auto-rows: 350px;
+    align-items: stretch;
+  }
+
+  .noma-class-inventory-entry {
+    height: 100%;
+    align-self: stretch;
+  }
+
+  .noma-class-inventory-entry > .noma-inventory-card {
+    min-height: 0;
+    height: 100%;
+  }
+
+  .noma-class-inventory-entry .noma-inventory-card__body {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .noma-class-inventory-entry .noma-inventory-card__description {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-color: var(--noma-item-accent-soft) transparent;
+    scrollbar-width: thin;
+  }
+
+  .noma-class-inventory-entry .noma-inventory-card__description::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .noma-class-inventory-entry .noma-inventory-card__description::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: var(--noma-item-accent-soft);
+  }
 }
 
 .noma-inventory-card::before {
@@ -2231,6 +2284,57 @@ body.noma-canvas-inventory-dragging [data-tactical-sidebar-backdrop="true"] {
   .noma-inventory-card__art,
   .noma-inventory-card__remove {
     transition: none;
+  }
+}
+
+/* Forja Roguelite: comparte el acabado Arcana Vault de las clases y el menú Master. */
+.noma-forge-fields .noma-forge-section input:not([type='file']):not([type='color']),
+.noma-forge-fields .noma-forge-section select,
+.noma-forge-fields .noma-forge-section textarea,
+.noma-forge-fields .noma-forge-section [role='group'] {
+  border-color: rgba(200, 170, 110, 0.25);
+  border-radius: 0.25rem;
+  background: rgba(0, 0, 0, 0.38);
+  color: #e8dfcf;
+}
+
+.noma-forge-fields .noma-forge-section input:not([type='file']):not([type='color']):focus,
+.noma-forge-fields .noma-forge-section select:focus,
+.noma-forge-fields .noma-forge-section textarea:focus {
+  border-color: rgba(200, 170, 110, 0.8);
+  box-shadow: 0 0 0 1px rgba(200, 170, 110, 0.16);
+}
+
+.noma-forge-fields .noma-forge-section [role='group'] {
+  overflow: hidden;
+}
+
+.noma-forge-fields .noma-forge-section [role='group'] button {
+  border-color: rgba(200, 170, 110, 0.16);
+}
+
+.noma-forge-fields .noma-forge-section [role='group'] button[aria-pressed='true'] {
+  background: linear-gradient(180deg, #d6bd83, #b8944f);
+  color: #09090b;
+}
+
+.noma-forge-fields .noma-forge-section label > span:first-child {
+  color: #8f9bad;
+  font-family: 'Lato', sans-serif;
+}
+
+.noma-forge .noma-inventory-card--inspector {
+  border-color: color-mix(in srgb, var(--noma-item-accent) 58%, #785a28);
+  box-shadow: 0 18px 42px -24px rgba(0, 0, 0, 0.95), 0 0 24px -18px var(--noma-item-accent);
+}
+
+@media (max-width: 767px) {
+  .noma-forge {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .noma-forge-editor {
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom));
   }
 }
 

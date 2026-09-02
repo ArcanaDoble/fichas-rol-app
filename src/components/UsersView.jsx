@@ -16,9 +16,12 @@ import {
 import Boton from './Boton';
 import Modal from './Modal';
 import {
+    normalizeCharacterAccess,
     normalizeRogueliteAccess,
+    setCharacterAccessEnabled,
     setRogueliteEnabled,
     toggleRogueliteClass,
+    withCharacterAccess,
     withRogueliteAccess,
 } from '../features/roguelite/access';
 import { mergeRogueliteClassCatalogs } from '../features/roguelite/classDefinition';
@@ -53,7 +56,7 @@ const UsersView = ({ onBack }) => {
 
     const [isCreating, setIsCreating] = useState(false);
     const [editingPasswordFor, setEditingPasswordFor] = useState(null);
-    const [formData, setFormData] = useState({ name: '', passcode: '' });
+    const [formData, setFormData] = useState({ name: '', passcode: '', profileMode: 'full' });
 
     useEffect(() => {
         const fetchPlayers = async () => {
@@ -188,6 +191,8 @@ const UsersView = ({ onBack }) => {
         const exists = players.some(p => p.name.toLowerCase() === formData.name.trim().toLowerCase());
         if (exists) return alert("Ya existe un jugador con este nombre");
 
+        const isRogueliteOnly = formData.profileMode === 'roguelite-only';
+
         try {
             await setDoc(doc(db, 'players', formData.name.trim()), {
                 name: formData.name.trim(),
@@ -195,8 +200,11 @@ const UsersView = ({ onBack }) => {
                 createdAt: new Date(),
                 permissions: {},
                 gameAccess: {
+                    characters: {
+                        enabled: !isRogueliteOnly,
+                    },
                     roguelite: {
-                        enabled: false,
+                        enabled: isRogueliteOnly,
                         unlockedClassIds: [],
                     },
                 },
@@ -233,8 +241,11 @@ const UsersView = ({ onBack }) => {
                 passcode: formData.passcode.trim(),
                 permissions: {},
                 gameAccess: {
+                    characters: {
+                        enabled: !isRogueliteOnly,
+                    },
                     roguelite: {
-                        enabled: false,
+                        enabled: isRogueliteOnly,
                         unlockedClassIds: [],
                     },
                 },
@@ -242,7 +253,7 @@ const UsersView = ({ onBack }) => {
             };
             setPlayers([...players, newPlayer]);
             setIsCreating(false);
-            setFormData({ name: '', passcode: '' });
+            setFormData({ name: '', passcode: '', profileMode: 'full' });
         } catch (error) {
             console.error("Error creating user:", error);
             alert("Error al crear el usuario");
@@ -263,7 +274,7 @@ const UsersView = ({ onBack }) => {
             );
             setPlayers(updatedPlayers);
             setEditingPasswordFor(null);
-            setFormData({ name: '', passcode: '' });
+            setFormData({ name: '', passcode: '', profileMode: 'full' });
         } catch (error) {
             console.error("Error updating password:", error);
             alert("Error al actualizar la contraseña");
@@ -314,6 +325,39 @@ const UsersView = ({ onBack }) => {
         } catch (error) {
             console.error("Error updating permissions:", error);
         }
+    };
+
+    const persistCharacterAccess = async (player, nextAccess) => {
+        if (!player?.id) return;
+        const previousAccess = normalizeCharacterAccess(player);
+
+        setPlayers((currentPlayers) => currentPlayers.map((currentPlayer) => (
+            currentPlayer.id === player.id
+                ? withCharacterAccess(currentPlayer, nextAccess)
+                : currentPlayer
+        )));
+
+        try {
+            await updateDoc(doc(db, 'players', player.id), {
+                'gameAccess.characters': nextAccess,
+            });
+        } catch (error) {
+            console.error('Error updating personal character access:', error);
+            setPlayers((currentPlayers) => currentPlayers.map((currentPlayer) => (
+                currentPlayer.id === player.id
+                    ? withCharacterAccess(currentPlayer, previousAccess)
+                    : currentPlayer
+            )));
+            alert('No se pudo actualizar el acceso a personajes propios.');
+        }
+    };
+
+    const handleCharacterAccessChange = (player) => {
+        const currentAccess = normalizeCharacterAccess(player);
+        persistCharacterAccess(
+            player,
+            setCharacterAccessEnabled(player, !currentAccess.enabled),
+        );
     };
 
     const persistRogueliteAccess = async (player, nextAccess) => {
@@ -504,7 +548,7 @@ const UsersView = ({ onBack }) => {
                         <button
                             type="button"
                             onClick={() => {
-                                setFormData({ name: '', passcode: '' });
+                                setFormData({ name: '', passcode: '', profileMode: 'full' });
                                 setIsCreating(true);
                             }}
                             className="flex h-10 items-center justify-center gap-2 border border-[#c8aa6e]/60 bg-[#c8aa6e]/15 px-4 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.1em] text-[#f0e6d2] transition hover:bg-[#c8aa6e]/30 hover:border-[#c8aa6e] active:bg-[#c8aa6e]/40"
@@ -548,6 +592,7 @@ const UsersView = ({ onBack }) => {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {filteredPlayers.map((player, index) => {
+                            const characterAccess = normalizeCharacterAccess(player);
                             const rogueliteAccess = normalizeRogueliteAccess(player);
                             const unlockedCount = rogueliteAccess.unlockedClassIds.length;
 
@@ -580,7 +625,7 @@ const UsersView = ({ onBack }) => {
                                                 <button
                                                     type="button"
                                                     onClick={() => {
-                                                        setFormData({ name: player.name, passcode: player.passcode || '' });
+                                                        setFormData({ name: player.name, passcode: player.passcode || '', profileMode: 'full' });
                                                         setEditingPasswordFor(player);
                                                     }}
                                                     className="flex h-8 items-center gap-1 border border-slate-700/60 bg-[#080c17] px-2 text-[10px] font-mono text-slate-400 transition hover:border-[#c8aa6e]/50 hover:text-[#c8aa6e]"
@@ -670,6 +715,40 @@ const UsersView = ({ onBack }) => {
                                                     );
                                                 })}
                                             </div>
+                                        </div>
+
+                                        {/* Modo Roguelite Section */}
+                                        <div className="flex items-center justify-between gap-3 border border-slate-800 bg-[#090e1a] p-3.5">
+                                            <div className="flex min-w-0 items-center gap-2.5">
+                                                <span className="flex h-8 w-8 shrink-0 items-center justify-center border border-slate-700 bg-slate-900/70 text-slate-400">
+                                                    <FiUser className="h-4 w-4" />
+                                                </span>
+                                                <div className="min-w-0">
+                                                    <p className="truncate font-['Cinzel'] text-xs font-bold uppercase tracking-wider text-[#f0e6d2]">
+                                                        Personajes propios
+                                                    </p>
+                                                    <p className="text-[10px] text-slate-500">
+                                                        {characterAccess.enabled ? 'Creación y biblioteca activas' : 'Perfil solo de clases'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleCharacterAccessChange(player)}
+                                                aria-label={`${characterAccess.enabled ? 'Desactivar' : 'Activar'} personajes propios para ${player.name || player.id}`}
+                                                aria-pressed={characterAccess.enabled}
+                                                className={`relative h-7 w-12 shrink-0 border transition-colors ${characterAccess.enabled
+                                                    ? 'border-emerald-400/60 bg-emerald-500/25'
+                                                    : 'border-slate-700 bg-slate-850'
+                                                    }`}
+                                            >
+                                                <span className={`absolute top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center transition-all ${characterAccess.enabled
+                                                    ? 'left-6 bg-emerald-400 text-emerald-950'
+                                                    : 'left-1 bg-slate-600 text-slate-900'
+                                                    }`}>
+                                                    {characterAccess.enabled && <FiCheck className="h-3 w-3" />}
+                                                </span>
+                                            </button>
                                         </div>
 
                                         {/* Modo Roguelite Section */}
@@ -921,7 +1000,7 @@ const UsersView = ({ onBack }) => {
             >
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-xs font-['Cinzel'] font-bold uppercase tracking-wider text-slate-400 mb-1">Nombre del Personaje</label>
+                        <label className="block text-xs font-['Cinzel'] font-bold uppercase tracking-wider text-slate-400 mb-1">Nombre del jugador</label>
                         <input
                             type="text"
                             className="w-full bg-[#070c16] border border-slate-700 p-2.5 text-xs text-slate-200 focus:border-[#c8aa6e] focus:outline-none"
@@ -940,6 +1019,39 @@ const UsersView = ({ onBack }) => {
                             onChange={e => setFormData({ ...formData, passcode: e.target.value })}
                         />
                         <p className="text-[11px] text-slate-500 mt-1">Esta será la contraseña que usará el jugador para entrar.</p>
+                    </div>
+                    <div>
+                        <span className="block text-xs font-['Cinzel'] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                            Tipo de perfil
+                        </span>
+                        <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Tipo de perfil del jugador">
+                            <button
+                                type="button"
+                                role="radio"
+                                aria-checked={formData.profileMode === 'full'}
+                                onClick={() => setFormData({ ...formData, profileMode: 'full' })}
+                                className={`border p-3 text-left transition-colors ${formData.profileMode === 'full'
+                                    ? 'border-[#c8aa6e]/70 bg-[#c8aa6e]/10 text-[#f0e6d2]'
+                                    : 'border-slate-700 bg-[#070c16] text-slate-400 hover:border-slate-500'
+                                    }`}
+                            >
+                                <span className="block font-['Cinzel'] text-[11px] font-bold uppercase tracking-wider">Perfil completo</span>
+                                <span className="mt-1 block text-[10px] leading-relaxed text-slate-500">Puede crear personajes propios; el modo roguelite se activa aparte.</span>
+                            </button>
+                            <button
+                                type="button"
+                                role="radio"
+                                aria-checked={formData.profileMode === 'roguelite-only'}
+                                onClick={() => setFormData({ ...formData, profileMode: 'roguelite-only' })}
+                                className={`border p-3 text-left transition-colors ${formData.profileMode === 'roguelite-only'
+                                    ? 'border-[#c8aa6e]/70 bg-[#c8aa6e]/10 text-[#f0e6d2]'
+                                    : 'border-slate-700 bg-[#070c16] text-slate-400 hover:border-slate-500'
+                                    }`}
+                            >
+                                <span className="block font-['Cinzel'] text-[11px] font-bold uppercase tracking-wider">Solo clases roguelite</span>
+                                <span className="mt-1 block text-[10px] leading-relaxed text-slate-500">No muestra la creación de personajes y activa directamente la gestión de clases.</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </Modal>

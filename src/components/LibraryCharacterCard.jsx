@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { FiImage, FiLock, FiTrash2 } from 'react-icons/fi';
 
@@ -14,6 +14,48 @@ export const LibraryCharacterCard = ({
 }) => {
   const isLocked = item.status === 'locked';
   const filledStars = Math.max(0, Math.min(starCount, Number(starValue) || 0));
+  const imageRef = useRef(null);
+  const [imageState, setImageState] = useState(item.image ? 'loading' : 'empty');
+
+  useEffect(() => {
+    setImageState(item.image ? 'loading' : 'empty');
+    if (!item.image) return undefined;
+
+    const image = imageRef.current;
+    if (!image?.complete) return undefined;
+
+    if (!image.naturalWidth) {
+      setImageState('error');
+      return undefined;
+    }
+
+    let active = true;
+    const reveal = () => {
+      if (active) setImageState('loaded');
+    };
+
+    if (typeof image.decode === 'function') {
+      image.decode().then(reveal).catch(reveal);
+    } else {
+      reveal();
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [item.image]);
+
+  const handleImageLoad = async (event) => {
+    const image = event.currentTarget;
+    if (typeof image.decode === 'function') {
+      try {
+        await image.decode();
+      } catch (error) {
+        // A completed image can still be revealed if decode is unavailable or interrupted.
+      }
+    }
+    setImageState('loaded');
+  };
 
   return (
     <div
@@ -26,19 +68,31 @@ export const LibraryCharacterCard = ({
           onOpen();
         }
       }}
-      className="group relative aspect-[3/4.5] cursor-pointer rounded-sm transition-all duration-500 ease-out hover:-translate-y-2 hover:shadow-[0_15px_40px_-10px_rgba(200,170,110,0.3)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c8aa6e]"
+      className="group relative aspect-[3/4.5] cursor-pointer rounded-sm animate-in fade-in duration-500 transition-all ease-out hover:-translate-y-2 hover:shadow-[0_15px_40px_-10px_rgba(200,170,110,0.3)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c8aa6e]"
       aria-label={ariaLabel || `Abrir ${item.name}`}
     >
       <div className={`absolute inset-0 overflow-hidden border bg-[#1a1b26] ${isLocked ? 'border-slate-700' : 'border-[#785a28]'}`}>
         <div className="absolute inset-0 overflow-hidden">
-          {item.image ? (
+          <div
+            className={`absolute inset-0 bg-[#141824] transition-opacity duration-500 ${imageState === 'loading' ? 'animate-pulse opacity-100' : 'opacity-100'}`}
+            aria-hidden="true"
+          />
+          {item.image && imageState !== 'error' ? (
             <img
+              ref={imageRef}
               src={item.image}
               alt={item.name}
-              className={`h-full w-full object-cover transition-transform duration-700 group-hover:scale-110 ${isLocked ? 'grayscale opacity-40' : 'opacity-90'}`}
+              decoding="async"
+              onLoad={handleImageLoad}
+              onError={() => setImageState('error')}
+              className={`relative h-full w-full object-cover transition-[opacity,transform] duration-700 group-hover:scale-110 ${imageState === 'loaded'
+                ? (isLocked ? 'opacity-40 grayscale' : 'opacity-90')
+                : 'opacity-0'
+                }`}
             />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-[#1a1b26] text-slate-700">
+          ) : null}
+          {(imageState === 'empty' || imageState === 'error') && (
+            <div className="absolute inset-0 flex h-full w-full items-center justify-center bg-[#1a1b26] text-slate-700">
               <FiImage className="h-12 w-12 opacity-20" />
             </div>
           )}

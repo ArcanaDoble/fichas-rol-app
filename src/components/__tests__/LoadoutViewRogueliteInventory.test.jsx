@@ -117,6 +117,63 @@ test('the roguelite player can only search and filter the master pool', () => {
   expect(screen.queryByText('Armadura de cuero')).not.toBeInTheDocument();
 });
 
+test('the backpack exposes persistent manual ordering from the card handle', () => {
+  const onReorderEquipment = jest.fn();
+  renderInventory({
+    rogueliteRole: 'player',
+    onReorderEquipment,
+  });
+
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Mover Gran hacha' }), {
+    key: 'ArrowDown',
+  });
+
+  expect(onReorderEquipment).toHaveBeenCalledWith([
+    expect.objectContaining({ category: 'armor', index: 0 }),
+    expect.objectContaining({ category: 'weapons', index: 0 }),
+  ]);
+});
+
+test('the backpack restores the persisted manual order', () => {
+  renderInventory({
+    rogueliteRole: 'player',
+    dndClass: createClass({
+      equipment: {
+        ...equipment,
+        weapons: [{ ...equipment.weapons[0], _inventoryOrder: 1 }],
+        armor: [{ ...equipment.armor[0], _inventoryOrder: 0 }],
+      },
+    }),
+  });
+
+  const cards = screen.getAllByTestId('inventory-item-card');
+  expect(within(cards[0]).getByText('Armadura de cuero')).toBeInTheDocument();
+  expect(within(cards[1]).getByText('Gran hacha')).toBeInTheDocument();
+});
+
+test('backpack cards use a uniform desktop grid without content-driven row sizing', () => {
+  renderInventory({
+    rogueliteRole: 'player',
+    dndClass: createClass({
+      equipment: {
+        ...equipment,
+        weapons: [{
+          ...equipment.weapons[0],
+          description: 'Una descripción deliberadamente larga. '.repeat(12),
+        }],
+      },
+    }),
+  });
+
+  const grid = screen.getByTestId('class-inventory-grid');
+  expect(grid).toHaveClass('noma-class-inventory-grid');
+  expect(grid).not.toHaveClass('auto-rows-fr');
+  screen.getAllByTestId('inventory-item-card').forEach((card) => {
+    expect(card.parentElement).toHaveClass('noma-class-inventory-entry');
+    expect(card.parentElement).not.toHaveClass('self-start');
+  });
+});
+
 test('the master keeps the existing catalog add controls', () => {
   const onAddEquipment = jest.fn();
   renderInventory({

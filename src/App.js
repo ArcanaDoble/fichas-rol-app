@@ -74,6 +74,7 @@ import BestiaryView from './components/BestiaryView';
 import EnemyBestiaryGateway from './features/roguelite-bestiary/EnemyBestiaryGateway';
 import StatusEffectsManager from './components/StatusEffectsManager';
 import EquipmentImageManager from './components/EquipmentImageManager';
+import RogueliteForge from './components/RogueliteForge';
 import ChatPanel from './components/ChatPanel';
 import sanitize from './utils/sanitize';
 import { getGlossaryTooltipId, escapeGlossaryWord } from './utils/glossary';
@@ -7092,6 +7093,26 @@ function App() {
         habilidades={habilidades}
         accesorios={accesorios}
         onBack={() => setChosenView(null)}
+      />
+    );
+  }
+  if (userType === 'master' && authenticated && chosenView === 'roguelite_forge') {
+    return withTooltips(
+      <RogueliteForge
+        armas={armas}
+        armaduras={armaduras}
+        habilidades={habilidades}
+        accesorios={accesorios}
+        rarities={rarities}
+        glossary={glossary}
+        rarityColorMap={rarityColorMap}
+        onBack={() => setChosenView(null)}
+        onCatalogChanged={async (category) => {
+          if (category === 'weapons') await fetchArmas();
+          if (category === 'armor') await fetchArmaduras();
+          if (category === 'abilities') await fetchHabilidades();
+          if (category === 'accessories') await fetchAccesorios();
+        }}
       />
     );
   }

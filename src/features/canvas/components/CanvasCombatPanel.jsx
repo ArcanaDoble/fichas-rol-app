@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Check, ChevronLeft, Dices, Flag, Footprints, RotateCcw, Shield, Swords, Undo } from 'lucide-react';
 
-import DiceSvg from '../../../components/DiceSvg';
+import ActionDieSvg from '../../../components/ActionDieSvg';
 
 import { getAvailableMovement, getMovementBase, sortCombatParticipants } from '../combat/canvasCombatState';
 import CanvasDiceTable from './CanvasDiceTable';
@@ -85,9 +85,18 @@ const SetupParticipant = ({ participant, canManage, runtime }) => {
             )}
           </div>
           {!isEnemy && (
-            <p className="mt-1 text-[9px] uppercase tracking-[0.12em] text-slate-500">
-              {participant.actionDiceProfile.map((die) => die.toUpperCase()).join(' · ')}
-            </p>
+            <div className="mt-1 flex items-center gap-1.5" aria-label={participant.actionDiceProfile.map((die) => die.toUpperCase()).join(' · ')}>
+              <span className="sr-only">{participant.actionDiceProfile.map((die) => die.toUpperCase()).join(' · ')}</span>
+              {participant.actionDiceProfile.map((die, dieIndex) => {
+                const faces = Number.parseInt(String(die).replace(/\D/g, ''), 10) || 6;
+                return (
+                  <span key={`${die}-${dieIndex}`} className="flex items-center gap-0.5 text-[8px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                    <ActionDieSvg faces={faces} value={faces} title={die.toUpperCase()} className="h-5 w-5" />
+                    {die.toUpperCase()}
+                  </span>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>
@@ -151,7 +160,15 @@ const ActionDie = ({ die, disabled, onChange }) => {
         </span>
       </div>
       <div className="my-1.5 flex items-center justify-center">
-        <DiceSvg faces={die.sides} value={die.value} className="h-8 w-8" />
+        <ActionDieSvg
+          faces={die.sides}
+          value={die.value}
+          status={die.status}
+          accent={isCommitted ? 'blue' : 'gold'}
+          selected={isCommitted}
+          className="h-10 w-10"
+          title={`${die.die} · ${die.value} · ${STATUS_LABELS[die.status]}`}
+        />
       </div>
       <span className={`text-[8px] font-bold uppercase tracking-[0.14em] ${labelTone}`}>
         {STATUS_LABELS[die.status]}

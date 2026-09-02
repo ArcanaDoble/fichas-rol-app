@@ -7,7 +7,7 @@ import { getCustomImage, useCustomEquipmentImages } from '../hooks/useCustomEqui
 import { PRONE_STATUS_IDS } from '../utils/statusEffects';
 import { getCardDisplayImage } from '../utils/cardImages';
 import { reorderCardItems } from '../utils/cardBoard';
-import DiceSvg from './DiceSvg';
+import ActionDieSvg from './ActionDieSvg';
 
 const RANGE_MAP = {
     toque: 0,
@@ -1139,10 +1139,12 @@ const CombatHUD = ({
                                                             }`}
                                                         >
                                                             <span className={`font-['Cinzel'] text-[8px] md:text-[9px] font-bold uppercase tracking-[0.14em] ${isAvailableDie ? 'text-slate-400' : 'text-slate-600'}`}>{die.die}</span>
-                                                            <DiceSvg
+                                                            <ActionDieSvg
                                                                 faces={die.sides || Number(String(die.die).replace(/\D/g, '')) || 6}
                                                                 value={die.value}
-                                                                className="h-7 w-7 md:h-9 md:w-9"
+                                                                status={isAvailableDie ? 'available' : 'spent'}
+                                                                className="h-9 w-9 md:h-12 md:w-12"
+                                                                title={`${die.die} · ${die.value}`}
                                                             />
                                                             <span className={`text-[7px] md:text-[8px] font-bold uppercase tracking-[0.08em] ${isAvailableDie ? 'text-[#d8bf88]' : 'text-red-400/80'}`}>
                                                                 {isAvailableDie ? `+${die.value} casillas` : 'Agotado'}

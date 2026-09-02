@@ -66,6 +66,8 @@ import HexIcon from './HexIcon';
 import { RelicsView } from './RelicsView';
 import KarmaBar from './KarmaBar';
 import { LibraryCharacterCard } from './LibraryCharacterCard';
+import LoadingImage from './LoadingImage';
+import ActionDieSvg from './ActionDieSvg';
 import { isYuuzuName, KARMA_MIN, KARMA_MAX } from '../utils/karma';
 import {
   createRogueliteProfileClass,
@@ -1460,17 +1462,21 @@ const DiceSelector = ({ value, onChange }) => {
   }, []);
 
   const diceOptions = ['d4', 'd6', 'd8', 'd10', 'd12'];
+  const getFaces = (die) => Number.parseInt(String(die).replace(/\D/g, ''), 10) || 6;
 
   return (
     <div className="relative" ref={containerRef}>
       <button
+        type="button"
+        aria-label={value}
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center justify-center w-[60px] h-[60px] transition-transform hover:scale-110 focus:outline-none"
+        className="flex h-[72px] w-[72px] items-center justify-center transition-transform hover:-translate-y-1 focus:outline-none focus-visible:ring-1 focus-visible:ring-[#c8aa6e]"
       >
-        <img
-          src={`/dados/${value.toUpperCase()}.webp`}
-          alt={value}
-          className="w-full h-full object-contain drop-shadow-[0_0_5px_rgba(200,170,110,0.5)]"
+        <ActionDieSvg
+          faces={getFaces(value)}
+          value={getFaces(value)}
+          title={value.toUpperCase()}
+          className="h-full w-full"
         />
       </button>
 
@@ -1495,6 +1501,8 @@ const DiceSelector = ({ value, onChange }) => {
               return (
                 <button
                   key={dice}
+                  type="button"
+                  aria-label={dice}
                   onClick={() => {
                     onChange(dice);
                     setIsOpen(false);
@@ -1502,7 +1510,13 @@ const DiceSelector = ({ value, onChange }) => {
                   className={`flex flex-col items-center justify-center p-1 rounded-lg transition-all duration-200 group ${gridPos} ${value === dice ? 'bg-[#c8aa6e]/20 border border-[#c8aa6e]/50' : 'hover:bg-[#c8aa6e]/10 border border-transparent'}`}
                 >
                   <div className="w-8 h-8 mb-0.5 transition-transform group-hover:scale-110">
-                    <img src={`/dados/${dice.toUpperCase()}.webp`} alt={dice} className="w-full h-full object-contain" />
+                    <ActionDieSvg
+                      faces={getFaces(dice)}
+                      value={getFaces(dice)}
+                      title={dice.toUpperCase()}
+                      className="h-full w-full"
+                      selected={value === dice}
+                    />
                   </div>
                   <span className={`text-[9px] font-bold uppercase tracking-tighter ${value === dice ? 'text-[#c8aa6e]' : 'text-slate-400 group-hover:text-[#c8aa6e]'}`}>
                     {dice.toUpperCase()}
@@ -1544,8 +1558,11 @@ const ClassList = ({
   currentUserId = null,
   knownPlayers = [],
   additionalLibrarySection = null,
+  primaryLibraryEnabled = true,
+  allowCreation = true,
 }) => {
   const [classes, setClasses] = useState([]);
+  const [isClassesLoading, setIsClassesLoading] = useState(true);
   const [isAutoOpening, setIsAutoOpening] = useState(!!initialCharacterName);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
@@ -1661,6 +1678,7 @@ const ClassList = ({
     let isMounted = true;
 
     const fetchClasses = async () => {
+      setIsClassesLoading(true);
       try {
         let q;
         if (ownerFilter) {
@@ -1684,6 +1702,8 @@ const ClassList = ({
         }
       } catch (error) {
         console.error('Error al cargar las clases desde Firebase', error);
+      } finally {
+        if (isMounted) setIsClassesLoading(false);
       }
     };
 
@@ -1694,10 +1714,16 @@ const ClassList = ({
     };
   }, [collectionPath, ownerFilter]); // Added dependencies to refetch if props change
 
+  useEffect(() => {
+    if (!allowCreation || !primaryLibraryEnabled) {
+      setIsCreating(false);
+    }
+  }, [allowCreation, primaryLibraryEnabled]);
+
   // Auto-open a specific character when initialCharacterName is provided
   const hasAutoOpened = useRef(false);
   useEffect(() => {
-    if (!initialCharacterName || hasAutoOpened.current || classes.length === 0) return;
+    if (!initialCharacterName || hasAutoOpened.current || isClassesLoading) return;
 
     const targetClass = classes.find(c => c.name === initialCharacterName);
     if (targetClass) {
@@ -1709,7 +1735,7 @@ const ClassList = ({
       // If we finished loading but didn't find the character, just show the list
       setIsAutoOpening(false);
     }
-  }, [initialCharacterName, classes]);
+  }, [initialCharacterName, classes, isClassesLoading]);
 
   const highlightText = useCallback(
     (rawValue) => {
@@ -2058,6 +2084,27 @@ const ClassList = ({
         draft.equipment[category].splice(index, 1);
       }
     });
+  };
+
+  const handleReorderEquipment = (orderedEntries = []) => {
+    updateEditingClass((draft) => {
+      if (!draft.equipment || orderedEntries.length === 0) return;
+
+      if (Array.isArray(draft.equipment)) {
+        const reordered = orderedEntries
+          .map((entry) => draft.equipment[entry.index])
+          .filter(Boolean);
+        if (reordered.length === draft.equipment.length) {
+          draft.equipment = reordered;
+        }
+        return;
+      }
+
+      orderedEntries.forEach((entry, order) => {
+        const item = draft.equipment?.[entry.category]?.[entry.index];
+        if (item) item._inventoryOrder = order;
+      });
+    }, { notify: true });
   };
 
   const handleDeleteClass = async (classId) => {
@@ -3941,7 +3988,13 @@ const ClassList = ({
 
                 {/* Capa 2: Imagen del campeón desenfocada */}
                 {dndClass.image && (
-                  <img src={dndClass.image} className="w-full h-full object-cover opacity-40 blur-sm" alt="" />
+                  <LoadingImage
+                    src={dndClass.image}
+                    alt=""
+                    imageClassName="h-full w-full object-cover opacity-40 blur-sm"
+                    skeletonClassName="bg-[#09090b]"
+                    showFailureFallback={false}
+                  />
                 )}
 
                 {/* Capa 3: Gradiente lateral para que el texto se lea mejor */}
@@ -4136,7 +4189,12 @@ const ClassList = ({
                           <div className="absolute -inset-6 bg-[#c8aa6e] rounded-full opacity-20 blur-[50px] group-hover:opacity-30 transition-opacity"></div>
                           <div className="absolute inset-0 z-10 rounded-xl overflow-hidden border-[3px] border-[#785a28] bg-[#1a1b26] shadow-2xl transition-transform duration-700 transform group-hover:scale-[1.02] group-hover:rotate-y-12">
                             {dndClass.image ? (
-                              <img src={dndClass.image} alt={dndClass.name} className="w-full h-full object-cover" />
+                              <LoadingImage
+                                src={dndClass.image}
+                                alt={dndClass.name}
+                                imageClassName="h-full w-full object-cover"
+                                skeletonClassName="bg-[#1a1b26]"
+                              />
                             ) : (
                               <div className="flex h-full w-full items-center justify-center bg-[#1a1b26] text-slate-700">
                                 <FiImage className="h-24 w-24 opacity-20" />
@@ -4618,20 +4676,24 @@ const ClassList = ({
                           </h4>
                         </div>
                         {isRogueliteClassSummary ? (
-                          <div className="grid grid-cols-3 gap-4" data-testid="roguelite-action-dice">
+                          <div
+                            className="grid grid-cols-3 gap-4"
+                            data-testid="roguelite-action-dice"
+                          >
                             {normalizeRogueliteActionDice(
                               editingClass.actionDice || editingClass.roguelite?.actionDice,
                             ).map((diceValue, index) => (
                               <div
                                 key={`${diceValue}-${index}`}
-                                className="bg-[#161f32]/80 p-4 rounded-xl border border-[#c8aa6e]/20 hover:border-[#c8aa6e]/50 transition-colors group flex flex-col items-center w-full"
+                                className="group flex w-full flex-col items-center rounded-xl border border-[#c8aa6e]/20 bg-[#161f32]/80 p-4 transition-colors hover:border-[#c8aa6e]/50"
                               >
                                 {isRoguelitePlayerClass ? (
-                                  <div className="w-16 h-16 transition-transform group-hover:scale-110">
-                                    <img
-                                      src={`/dados/${diceValue.toUpperCase()}.webp`}
-                                      alt={diceValue.toUpperCase()}
-                                      className="w-full h-full object-contain opacity-90 drop-shadow-[0_0_4px_rgba(203,213,225,0.3)]"
+                                  <div className="h-16 w-16 transition-transform group-hover:scale-110">
+                                    <ActionDieSvg
+                                      faces={Number.parseInt(diceValue.replace(/\D/g, ''), 10)}
+                                      value={Number.parseInt(diceValue.replace(/\D/g, ''), 10)}
+                                      title={diceValue.toUpperCase()}
+                                      className="h-full w-full"
                                     />
                                   </div>
                                 ) : (
@@ -4646,7 +4708,7 @@ const ClassList = ({
                                     }}
                                   />
                                 )}
-                                <div className="text-center text-sm text-[#c8aa6e] font-bold mt-3 tracking-widest">
+                                <div className="mt-3 text-center text-sm font-bold tracking-widest text-[#c8aa6e]">
                                   {diceValue.toUpperCase()}
                                 </div>
                               </div>
@@ -5334,6 +5396,7 @@ const ClassList = ({
               rarityColorMap={rarityColorMap}
               onAddEquipment={handleAddEquipment}
               onRemoveEquipment={handleRemoveEquipment}
+              onReorderEquipment={handleReorderEquipment}
               onUpdateTalent={handleUpdateTalent}
               onUpdateResource={updateMasterRogueliteResource}
               onUpdateTalentCatalog={handleUpdateTalentCatalog}
@@ -5468,10 +5531,12 @@ const ClassList = ({
                 </p>
 
                 <div className="flex flex-wrap gap-3 pt-2">
-                  <div className="flex items-center gap-2 rounded-sm border border-[#c8aa6e]/30 bg-[#c8aa6e]/5 px-3 py-1.5">
-                    <span className="font-['Cinzel'] text-lg font-bold text-[#c8aa6e]">{classes.length}</span>
-                    <span className="text-[0.65rem] uppercase tracking-[0.2em] text-[#94a3b8]">Activos</span>
-                  </div>
+                  {primaryLibraryEnabled && (
+                    <div className="flex items-center gap-2 rounded-sm border border-[#c8aa6e]/30 bg-[#c8aa6e]/5 px-3 py-1.5">
+                      <span className="font-['Cinzel'] text-lg font-bold text-[#c8aa6e]">{isClassesLoading ? '—' : classes.length}</span>
+                      <span className="text-[0.65rem] uppercase tracking-[0.2em] text-[#94a3b8]">Activos</span>
+                    </div>
+                  )}
                   {!isPlayerMode && (
                     <>
                       <div className="flex items-center gap-2 rounded-sm border border-slate-700/50 bg-slate-900/50 px-3 py-1.5">
@@ -5500,6 +5565,7 @@ const ClassList = ({
               </div>
             </div>
 
+            {primaryLibraryEnabled && (
             <div className="sticky top-4 z-30 flex flex-col gap-4 rounded-xl border border-[#c8aa6e]/20 bg-[#0f172a]/80 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl md:flex-row md:items-center md:justify-between">
               <div className="relative w-full md:max-w-md">
                 <FiSearch className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#c8aa6e]/70" />
@@ -5541,8 +5607,9 @@ const ClassList = ({
                 </div>
               </div>
             </div>
+            )}
 
-            {isCreating ? (
+            {primaryLibraryEnabled && (isCreating ? (
               <CreatorComponent
                 onBack={() => setIsCreating(false)}
                 onSave={handleSaveNewClass}
@@ -5559,35 +5626,52 @@ const ClassList = ({
                 <div
                   className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
                 >
-                  {/* Create New Class Card - Only if not readOnly */}
-                  {!readOnly && (
-                    <div
-                      onClick={() => setIsCreating(true)}
-                      className="group relative aspect-[3/4.5] rounded-sm cursor-pointer transition-all duration-300 border-2 border-dashed border-[#c8aa6e]/30 hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/5 flex flex-col items-center justify-center gap-4"
-                    >
-                      <div className="w-16 h-16 rounded-full bg-[#0b1120] border border-[#c8aa6e]/50 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg group-hover:shadow-[0_0_20px_rgba(200,170,110,0.3)]">
-                        <FiPlus className="w-8 h-8 text-[#c8aa6e]" />
-                      </div>
-                      <div className="text-center">
-                        <h3 className="font-fantasy font-bold text-[#c8aa6e] uppercase tracking-wider text-lg">Crear Nuevo</h3>
-                        <p className="text-slate-500 text-xs mt-1 uppercase tracking-widest">{creatorLabel}</p>
-                      </div>
+                  {isClassesLoading ? (
+                    <div className="col-span-full flex min-h-12 items-center justify-center border-y border-[#c8aa6e]/10 text-[10px] uppercase tracking-[0.18em] text-slate-600">
+                      Preparando personajes
                     </div>
-                  )}
+                  ) : (
+                    <>
+                      {/* Create New Class Card - Only if creation is enabled */}
+                      {!readOnly && allowCreation && (
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setIsCreating(true)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              setIsCreating(true);
+                            }
+                          }}
+                          className="group relative aspect-[3/4.5] rounded-sm cursor-pointer transition-all duration-300 border-2 border-dashed border-[#c8aa6e]/30 hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/5 flex flex-col items-center justify-center gap-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c8aa6e]"
+                          aria-label={`Crear nuevo ${creatorLabel.toLowerCase()}`}
+                        >
+                          <div className="w-16 h-16 rounded-full bg-[#0b1120] border border-[#c8aa6e]/50 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg group-hover:shadow-[0_0_20px_rgba(200,170,110,0.3)]">
+                            <FiPlus className="w-8 h-8 text-[#c8aa6e]" />
+                          </div>
+                          <div className="text-center">
+                            <h3 className="font-fantasy font-bold text-[#c8aa6e] uppercase tracking-wider text-lg">Crear Nuevo</h3>
+                            <p className="text-slate-500 text-xs mt-1 uppercase tracking-widest">{creatorLabel}</p>
+                          </div>
+                        </div>
+                      )}
 
-                  {filteredClasses.map((classItem) => (
-                    <LibraryCharacterCard
-                      key={classItem.id}
-                      item={classItem}
-                      onOpen={() => openClassDetails(classItem)}
-                      onPortraitEdit={!readOnly ? () => handleStartPortraitEdit(classItem) : undefined}
-                      onDelete={!readOnly ? () => handleDeleteClass(classItem.id) : undefined}
-                      starValue={classItem.rating || 0}
-                    />
-                  ))}
+                      {filteredClasses.map((classItem) => (
+                        <LibraryCharacterCard
+                          key={classItem.id}
+                          item={classItem}
+                          onOpen={() => openClassDetails(classItem)}
+                          onPortraitEdit={!readOnly ? () => handleStartPortraitEdit(classItem) : undefined}
+                          onDelete={!readOnly ? () => handleDeleteClass(classItem.id) : undefined}
+                          starValue={classItem.rating || 0}
+                        />
+                      ))}
+                    </>
+                  )}
                 </div>
               </div>
-            )}
+            ))}
           </motion.div>
         ) : (
           <motion.div
@@ -5635,6 +5719,8 @@ ClassList.propTypes = {
   currentUserId: PropTypes.string,
   knownPlayers: PropTypes.arrayOf(PropTypes.string),
   additionalLibrarySection: PropTypes.oneOfType([PropTypes.node, PropTypes.func]),
+  primaryLibraryEnabled: PropTypes.bool,
+  allowCreation: PropTypes.bool,
 };
 
 const normalizeRogueliteActionDice = (value) => {

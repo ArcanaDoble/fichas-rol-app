@@ -13,6 +13,7 @@ import {
   FiZap,
 } from 'react-icons/fi';
 import HexIcon from './HexIcon';
+import LoadingImage from './LoadingImage';
 import { uploadDataUrl } from '../utils/storage';
 import {
   ROGUELITE_SKILL_SLOT_COUNT,
@@ -98,7 +99,13 @@ const renderInDocumentBody = (content) =>
 const TalentImage = ({ image, name, size = 'sm' }) => (
   <HexIcon size={size} active={Boolean(image)}>
     {image ? (
-      <img src={image} alt="" className="h-full w-full object-cover" />
+      <LoadingImage
+        src={image}
+        alt=""
+        imageClassName="h-full w-full object-cover"
+        skeletonClassName="bg-[#111827]"
+        showFailureFallback={false}
+      />
     ) : (
       <FiStar
         className={
@@ -296,7 +303,12 @@ const RogueliteTalentsPanel = ({
       >
         <div className="noma-talent-stage__art" aria-hidden="true">
           {resource.image ? (
-            <img src={resource.image} alt="" />
+            <LoadingImage
+              src={resource.image}
+              alt=""
+              skeletonClassName="bg-[#0d1421]"
+              showFailureFallback={false}
+            />
           ) : (
             <FiStar />
           )}
@@ -532,7 +544,13 @@ const RogueliteTalentsPanel = ({
                   </span>
                   <HexIcon size="sm" active={Boolean(image)}>
                     {image ? (
-                      <img src={image} alt="" className="h-full w-full object-cover" />
+                      <LoadingImage
+                        src={image}
+                        alt=""
+                        imageClassName="h-full w-full object-cover"
+                        skeletonClassName="bg-[#111827]"
+                        showFailureFallback={false}
+                      />
                     ) : (
                       <FiZap className="h-4 w-4 text-amber-400" />
                     )}
@@ -598,10 +616,12 @@ const RogueliteTalentsPanel = ({
                   aria-label={`Editar imagen de ${selectedTalent.name}`}
                 >
                   {selectedTalent.image ? (
-                    <img
+                    <LoadingImage
                       src={selectedTalent.image}
                       alt=""
-                      className="h-full w-full object-cover"
+                      imageClassName="h-full w-full object-cover"
+                      skeletonClassName="bg-[#111827]"
+                      showFailureFallback={false}
                     />
                   ) : (
                     <FiImage className="mx-auto h-full w-8 text-slate-700" />
@@ -878,7 +898,13 @@ const RogueliteTalentsPanel = ({
                     >
                       <HexIcon size="sm" active={Boolean(image)}>
                         {image ? (
-                          <img src={image} alt="" className="h-full w-full object-cover" />
+                          <LoadingImage
+                            src={image}
+                            alt=""
+                            imageClassName="h-full w-full object-cover"
+                            skeletonClassName="bg-[#111827]"
+                            showFailureFallback={false}
+                          />
                         ) : (
                           <FiZap className="h-4 w-4 text-amber-400" />
                         )}

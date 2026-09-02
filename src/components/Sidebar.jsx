@@ -143,7 +143,7 @@ const Sidebar = ({
                 <div className="relative mb-4">
                     {/* Animated Level Progress Ring (Visual only) */}
                     <div className="w-24 h-24 rounded-full p-[2px] bg-gradient-to-tr from-[#c8aa6e] to-[#785a28]">
-                        <div className="w-full h-full rounded-full bg-[#0b1120] p-1 overflow-hidden">
+                        <div className="relative w-full h-full rounded-full bg-[#0b1120] p-1 overflow-hidden">
                             {characterAvatar || characterImage ? (
                                 <LoadingImage
                                     src={characterAvatar || characterImage}

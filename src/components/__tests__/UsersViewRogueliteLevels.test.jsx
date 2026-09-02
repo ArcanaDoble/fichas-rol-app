@@ -125,3 +125,25 @@ test('lets the master finish and reset one personal active run', async () => {
     );
   });
 });
+
+test('creates a classes-only player without enabling personal character creation', async () => {
+  render(<UsersView onBack={jest.fn()} />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Crear Jugador' }));
+  fireEvent.change(screen.getByPlaceholderText('Ej. Arthas'), { target: { value: 'Lina' } });
+  fireEvent.change(screen.getByPlaceholderText('Contraseña'), { target: { value: 'secreto' } });
+  fireEvent.click(screen.getByRole('radio', { name: /Solo clases roguelite/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Crear Usuario' }));
+
+  await waitFor(() => {
+    expect(require('firebase/firestore').setDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'players/Lina' }),
+      expect.objectContaining({
+        gameAccess: {
+          characters: { enabled: false },
+          roguelite: { enabled: true, unlockedClassIds: [] },
+        },
+      }),
+    );
+  });
+});

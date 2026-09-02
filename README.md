@@ -6,10 +6,17 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 
 ## ✨ Características principales
 
+### Biblioteca de personajes y clases sin saltos de carga
+
+- Las bibliotecas de personajes y clases utilizan un único indicador discreto durante la consulta, sin tarjetas ficticias. Los retratos permanecen ocultos hasta completar su carga y decodificación, y aparecen mediante una transición suave con respaldo neutro si fallan.
+- Los retratos de ficha y las ilustraciones de Inventario y Equipables reservan su superficie con un fondo neutro hasta que el navegador termina de decodificarlas. Las imágenes ya vistas se recuerdan durante la sesión para evitar nuevos destellos al cambiar de pestaña o volver a una clase.
+- La creación de jugadores permite elegir `Perfil completo` o `Solo clases roguelite`. Los perfiles solo de clases no muestran la biblioteca ni el creador de personajes propios, el Máster puede cambiar esta preferencia posteriormente desde Gestión de jugadores y los perfiles antiguos con clases pero sin personajes se reconocen antes de montar la biblioteca clásica.
+
 ### 🎲 Rondas, dados de acción e iniciativa Roguelite en Canvas
 
 - El Canvas dispone de un panel propio `Ronda` y deja intacta la iniciativa de BoardCards.
 - Cada token de clase hereda el perfil definido en su ficha (`actionDice`), por ejemplo `d8 · d6 · d4` para el Bárbaro.
+- **Dados de acción vectoriales**: D4, D6, D8, D10 y D12 se dibujan como SVG nativo con geometría propia, facetas de obsidiana y aristas de latón. La ficha los reúne en una bandeja compacta sin tarjetas aisladas, mientras el Canvas reutiliza el mismo lenguaje visual y distingue mediante color y luminosidad los estados disponible, reservado y gastado sin depender de imágenes rasterizadas.
 - La tirada inicial se reutiliza: el resultado mayor se suma a la iniciativa base y los tres resultados permanecen disponibles como dados de acción de la primera ronda.
 - Las tiradas pueden hacerse digitalmente o anotarse desde dados físicos mediante controles válidos para cada tipo de dado.
 - El orden se presenta por bloques: aliados consecutivos pueden actuar en orden flexible, los enemigos ganan empates frente a jugadores (`enemies` antes que `players`) y los enemigos del mismo perfil comparten bloque.

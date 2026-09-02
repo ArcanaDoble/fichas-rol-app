@@ -129,7 +129,8 @@ test('mounts the roguelite card and opens it in the shared character sheet', asy
 
   const actionDice = screen.getByTestId('roguelite-action-dice');
   expect(screen.getByText('DADOS DE ACCIÓN')).toBeInTheDocument();
-  expect(actionDice.querySelectorAll('img')).toHaveLength(3);
+  expect(actionDice.querySelectorAll('[data-action-die]')).toHaveLength(3);
+  expect(actionDice.querySelector('img')).not.toBeInTheDocument();
   expect(actionDice.querySelector('button')).not.toBeInTheDocument();
   expect(screen.queryByText('ATRIBUTOS')).not.toBeInTheDocument();
   expect(screen.queryByText('Editar Retrato')).not.toBeInTheDocument();
@@ -225,6 +226,43 @@ test('mounts the roguelite card and opens it in the shared character sheet', asy
     expect(savedProfile.talentCatalog).toBeUndefined();
     expect(savedProfile.roguelite?.talentCatalog).toBeUndefined();
   });
+});
+
+test('infers a legacy classes-only player before rendering the personal character library', async () => {
+  const firestore = require('firebase/firestore');
+  const defaultSnapshotImplementation = firestore.onSnapshot.getMockImplementation();
+
+  firestore.onSnapshot.mockImplementation((ref, onNext, onError) => {
+    if (ref.path === 'players/Ada') {
+      onNext({
+        exists: () => true,
+        data: () => ({
+          gameAccess: {
+            roguelite: { enabled: true, unlockedClassIds: ['barbarian'] },
+          },
+        }),
+      });
+      return jest.fn();
+    }
+    return defaultSnapshotImplementation(ref, onNext, onError);
+  });
+
+  render(
+    <CharacterListView
+      playerName="Ada"
+      armas={[]}
+      armaduras={[]}
+      habilidades={[]}
+      glossary={[]}
+      rarityColorMap={{}}
+      onBack={jest.fn()}
+    />,
+  );
+
+  expect(await screen.findByRole('button', { name: 'Abrir clase Bárbaro' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Mis Clases' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Crear nuevo personaje' })).not.toBeInTheDocument();
+  expect(screen.queryByText('PERSONAJES DISPONIBLES')).not.toBeInTheDocument();
 });
 
 test('keeps a mixed-case Firebase ability in the run inventory after launching', async () => {

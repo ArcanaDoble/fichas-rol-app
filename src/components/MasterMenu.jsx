@@ -119,6 +119,15 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
             isNew: true,
         },
         {
+            id: 'roguelite_forge',
+            title: 'Forja Roguelite',
+            description: 'Crea, ajusta, duplica y prueba objetos del roguelite desde móvil o PC.',
+            color: 'amber',
+            icon: FiTool,
+            features: ['Objetos', 'Vista previa', 'Mobile'],
+            isNew: true,
+        },
+        {
             id: 'equipment_images',
             title: 'Gestor de Equipamiento',
             description: 'Gestiona las imágenes de armas, armaduras, objetos, habilidades y accesorios.',

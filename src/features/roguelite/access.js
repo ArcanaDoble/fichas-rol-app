@@ -3,6 +3,10 @@ export const EMPTY_ROGUELITE_ACCESS = Object.freeze({
   unlockedClassIds: [],
 });
 
+export const DEFAULT_CHARACTER_ACCESS = Object.freeze({
+  enabled: true,
+});
+
 const normalizeClassId = (value) => String(value || '').trim();
 
 export const normalizeRogueliteAccess = (player = {}) => {
@@ -20,6 +24,20 @@ export const normalizeRogueliteAccess = (player = {}) => {
     unlockedClassIds,
   };
 };
+
+export const normalizeCharacterAccess = (player = {}) => {
+  const source = player?.gameAccess?.characters || player?.characterAccess;
+
+  return {
+    // Existing players predate this setting and keep their current behaviour.
+    enabled: source?.enabled !== false,
+  };
+};
+
+export const setCharacterAccessEnabled = (player, enabled) => ({
+  ...normalizeCharacterAccess(player),
+  enabled: Boolean(enabled),
+});
 
 export const setRogueliteEnabled = (player, enabled) => ({
   ...normalizeRogueliteAccess(player),
@@ -45,5 +63,15 @@ export const withRogueliteAccess = (player, rogueliteAccess) => ({
   gameAccess: {
     ...(player?.gameAccess || {}),
     roguelite: normalizeRogueliteAccess({ rogueliteAccess }),
+  },
+});
+
+export const withCharacterAccess = (player, characterAccess) => ({
+  ...player,
+  gameAccess: {
+    ...(player?.gameAccess || {}),
+    characters: {
+      enabled: characterAccess?.enabled !== false,
+    },
   },
 });

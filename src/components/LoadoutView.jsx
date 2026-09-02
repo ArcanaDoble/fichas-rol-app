@@ -7,6 +7,7 @@ import { Sword, Shield, Zap, Gem, LockKeyhole, RefreshCw } from 'lucide-react';
 import HexIcon from './HexIcon';
 import RogueliteTalentsPanel from './RogueliteTalentsPanel';
 import RogueliteInventoryCard from './RogueliteInventoryCard';
+import LoadingImage from './LoadingImage';
 import { db } from '../firebase';
 import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { useCustomEquipmentImages, getCustomImage } from '../hooks/useCustomEquipmentImages';
@@ -305,6 +306,7 @@ const LoadoutView = ({
     rarityColorMap = {},
     onAddEquipment,
     onRemoveEquipment,
+    onReorderEquipment,
     onUpdateTalent,
     onUpdateProficiency,
     onUpdateEquipped,
@@ -325,6 +327,13 @@ const LoadoutView = ({
     const [accessories, setAccessories] = useState([]); // Add state for accessories
     const [editingBeltNote, setEditingBeltNote] = useState(null);
     const [tempBeltNote, setTempBeltNote] = useState('');
+    const [inventoryDrag, setInventoryDrag] = useState(null);
+    const inventoryDragCleanupRef = React.useRef(null);
+
+    React.useEffect(() => () => {
+        inventoryDragCleanupRef.current?.();
+        document.body.classList.remove('noma-class-inventory-reordering');
+    }, []);
 
     const renderTrait = (t, i) => {
         const traitName = t.trim();
@@ -559,15 +568,43 @@ const LoadoutView = ({
 
     const rawEquipment = dndClass.equipment || {};
     const fullEquipment = useMemo(() => {
-        if (Array.isArray(rawEquipment)) return rawEquipment;
+        const sortByManualOrder = (items) => {
+            const hasManualOrder = items.some((item) => Number.isFinite(Number(item._inventoryOrder)));
+            if (!hasManualOrder) return items;
+
+            return [...items].sort((left, right) => {
+                const leftOrder = Number(left._inventoryOrder);
+                const rightOrder = Number(right._inventoryOrder);
+                const normalizedLeft = Number.isFinite(leftOrder) ? leftOrder : Number.MAX_SAFE_INTEGER;
+                const normalizedRight = Number.isFinite(rightOrder) ? rightOrder : Number.MAX_SAFE_INTEGER;
+                return normalizedLeft - normalizedRight || left._sourcePosition - right._sourcePosition;
+            });
+        };
+
+        if (Array.isArray(rawEquipment)) {
+            return sortByManualOrder(rawEquipment.map((item, index) => ({
+                ...item,
+                _category: item._category || item.category || 'objects',
+                _index: index,
+                _sourcePosition: index,
+                _inventorySourceKey: `array:${index}`,
+            })));
+        }
 
         const list = [];
-        if (rawEquipment.weapons) list.push(...rawEquipment.weapons.map((item, idx) => ({ ...item, _category: 'weapons', _index: idx })));
-        if (rawEquipment.armor) list.push(...rawEquipment.armor.map((item, idx) => ({ ...item, _category: 'armor', _index: idx })));
-        if (rawEquipment.abilities) list.push(...rawEquipment.abilities.map((item, idx) => ({ ...item, _category: 'abilities', _index: idx })));
-        if (rawEquipment.objects) list.push(...rawEquipment.objects.map((item, idx) => ({ ...item, _category: 'objects', _index: idx })));
-        if (rawEquipment.accessories) list.push(...rawEquipment.accessories.map((item, idx) => ({ ...item, _category: 'accessories', _index: idx })));
-        return list;
+        INVENTORY_CATEGORIES.forEach(({ id: category }) => {
+            if (!Array.isArray(rawEquipment[category])) return;
+            rawEquipment[category].forEach((item, index) => {
+                list.push({
+                    ...item,
+                    _category: category,
+                    _index: index,
+                    _sourcePosition: list.length,
+                    _inventorySourceKey: `${category}:${index}`,
+                });
+            });
+        });
+        return sortByManualOrder(list);
     }, [rawEquipment]);
 
     const abilityCatalog = useMemo(() => {
@@ -652,6 +689,102 @@ const LoadoutView = ({
             return searchableText.includes(normalizedSearch);
         });
     }, [equipment, searchTerm, selectedCategory, rogueliteRole]);
+
+    const commitInventoryReorder = (fromIndex, toIndex) => {
+        if (!onReorderEquipment || fromIndex === toIndex) return;
+        if (
+            fromIndex < 0
+            || toIndex < 0
+            || fromIndex >= equipment.length
+            || toIndex >= equipment.length
+        ) return;
+
+        const reordered = [...equipment];
+        const [movedItem] = reordered.splice(fromIndex, 1);
+        reordered.splice(toIndex, 0, movedItem);
+        onReorderEquipment(reordered.map((item) => ({
+            category: item._category,
+            index: item._index,
+            sourceKey: item._inventorySourceKey,
+        })));
+    };
+
+    const moveInventoryItemByKeyboard = (item, delta) => {
+        const currentIndex = equipment.findIndex(
+            (candidate) => candidate._inventorySourceKey === item._inventorySourceKey,
+        );
+        if (currentIndex < 0) return;
+        const targetIndex = Math.max(0, Math.min(equipment.length - 1, currentIndex + delta));
+        commitInventoryReorder(currentIndex, targetIndex);
+    };
+
+    const beginInventoryReorder = (event, item) => {
+        if (!onReorderEquipment || (typeof event.button === 'number' && event.button !== 0)) return;
+        const currentIndex = equipment.findIndex(
+            (candidate) => candidate._inventorySourceKey === item._inventorySourceKey,
+        );
+        if (currentIndex < 0) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        inventoryDragCleanupRef.current?.();
+
+        const drag = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            currentIndex,
+            targetIndex: currentIndex,
+            dragging: false,
+        };
+
+        const cleanup = () => {
+            window.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', finishDrag);
+            window.removeEventListener('pointercancel', finishDrag);
+            document.body.classList.remove('noma-class-inventory-reordering');
+            if (inventoryDragCleanupRef.current === cleanup) {
+                inventoryDragCleanupRef.current = null;
+            }
+        };
+
+        const handlePointerMove = (pointerEvent) => {
+            if (pointerEvent.pointerId !== undefined && drag.pointerId !== undefined && pointerEvent.pointerId !== drag.pointerId) return;
+            const distance = Math.hypot(pointerEvent.clientX - drag.startX, pointerEvent.clientY - drag.startY);
+            if (!drag.dragging && distance < 6) return;
+            if (!drag.dragging) {
+                drag.dragging = true;
+                document.body.classList.add('noma-class-inventory-reordering');
+            }
+            pointerEvent.preventDefault();
+
+            const hovered = document.elementFromPoint?.(pointerEvent.clientX, pointerEvent.clientY)
+                ?.closest?.('[data-class-inventory-index]');
+            const hoveredIndex = Number(hovered?.getAttribute('data-class-inventory-index'));
+            if (Number.isInteger(hoveredIndex) && hoveredIndex >= 0 && hoveredIndex < equipment.length) {
+                drag.targetIndex = hoveredIndex;
+            }
+            setInventoryDrag({
+                currentIndex: drag.currentIndex,
+                targetIndex: drag.targetIndex,
+            });
+        };
+
+        const finishDrag = (pointerEvent) => {
+            if (pointerEvent?.pointerId !== undefined && drag.pointerId !== undefined && pointerEvent.pointerId !== drag.pointerId) return;
+            if (drag.dragging && drag.targetIndex !== drag.currentIndex) {
+                commitInventoryReorder(drag.currentIndex, drag.targetIndex);
+            }
+            cleanup();
+            setInventoryDrag(null);
+        };
+
+        inventoryDragCleanupRef.current = cleanup;
+        window.addEventListener('pointermove', handlePointerMove, { passive: false });
+        window.addEventListener('pointerup', finishDrag);
+        window.addEventListener('pointercancel', finishDrag);
+    };
 
     // Filtrar catálogo según búsqueda
     const filteredCatalog = useMemo(() => {
@@ -909,7 +1042,10 @@ const LoadoutView = ({
                                     </span>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-fr">
+                                <div
+                                    className="noma-class-inventory-grid grid grid-cols-1 gap-4 md:grid-cols-2"
+                                    data-testid="class-inventory-grid"
+                                >
                                     {filteredInventory.length > 0 ? (
                                         filteredInventory.map((item, index) => {
                                             // Determinar icono basado en itemType
@@ -949,25 +1085,51 @@ const LoadoutView = ({
                                             const categoryLabel = item.category
                                                 || INVENTORY_CATEGORIES.find((category) => category.id === item._category)?.label
                                                 || 'Objeto';
+                                            const equipmentIndex = equipment.findIndex(
+                                                (candidate) => candidate._inventorySourceKey === item._inventorySourceKey,
+                                            );
+                                            const canReorder = Boolean(onReorderEquipment && equipment.length > 1);
+                                            const isDragging = inventoryDrag?.currentIndex === equipmentIndex;
+                                            const isDropTarget = Boolean(
+                                                inventoryDrag
+                                                && inventoryDrag.targetIndex === equipmentIndex
+                                                && inventoryDrag.currentIndex !== equipmentIndex,
+                                            );
 
                                             return (
-                                                <RogueliteInventoryCard
-                                                    key={item.templateId || `${item._category}-${item._index}-${index}`}
-                                                    item={item}
-                                                    image={objectImage}
-                                                    fallbackIcon={getIcon()}
-                                                    categoryLabel={categoryLabel}
-                                                    rarityAccent={rarityAccent}
-                                                    raritySoft={hexToRgba(rarityAccent, 0.34)}
-                                                    rarityFaint={hexToRgba(rarityAccent, 0.12)}
-                                                    actionCost={actionCost}
-                                                    handsRequired={handsRequired}
-                                                    visibleTraits={visibleTraits}
-                                                    glossary={glossary}
-                                                    proficiencyWarning={rogueliteRole !== 'legacy' ? proficiencyWarning : null}
-                                                    canRemove={rogueliteRole !== 'player'}
-                                                    onRemove={() => onRemoveEquipment && onRemoveEquipment(item._index, item._category)}
-                                                />
+                                                <div
+                                                    key={`${item.templateId || item.id || item.name || 'item'}-${item._inventorySourceKey || index}`}
+                                                    className="noma-class-inventory-entry min-w-0"
+                                                    data-class-inventory-index={equipmentIndex}
+                                                >
+                                                    <RogueliteInventoryCard
+                                                        item={item}
+                                                        image={objectImage}
+                                                        fallbackIcon={getIcon()}
+                                                        categoryLabel={categoryLabel}
+                                                        rarityAccent={rarityAccent}
+                                                        raritySoft={hexToRgba(rarityAccent, 0.34)}
+                                                        rarityFaint={hexToRgba(rarityAccent, 0.12)}
+                                                        actionCost={actionCost}
+                                                        handsRequired={handsRequired}
+                                                        visibleTraits={visibleTraits}
+                                                        glossary={glossary}
+                                                        proficiencyWarning={rogueliteRole !== 'legacy' ? proficiencyWarning : null}
+                                                        canDrag={canReorder}
+                                                        onDragPointerDown={canReorder ? (event) => beginInventoryReorder(event, item) : undefined}
+                                                        onDragKeyDown={canReorder ? (event) => {
+                                                            if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+                                                            event.preventDefault();
+                                                            const delta = event.key === 'ArrowUp' || event.key === 'ArrowLeft' ? -1 : 1;
+                                                            moveInventoryItemByKeyboard(item, delta);
+                                                        } : undefined}
+                                                        dragTitle={canReorder ? 'Arrastra para ordenar la mochila' : undefined}
+                                                        isDragging={isDragging}
+                                                        isDropTarget={isDropTarget}
+                                                        canRemove={rogueliteRole !== 'player'}
+                                                        onRemove={() => onRemoveEquipment && onRemoveEquipment(item._index, item._category)}
+                                                    />
+                                                </div>
                                             );
                                         })
                                     ) : (
@@ -1058,11 +1220,13 @@ const LoadoutView = ({
                                                             {isOccupiedByTwoHanded ? (
                                                                 <>
                                                                     {occupyingWeaponImage && (
-                                                                        <img
+                                                                        <LoadingImage
                                                                             src={occupyingWeaponImage}
                                                                             alt=""
                                                                             aria-hidden="true"
-                                                                            className="absolute inset-0 h-full w-full scale-105 object-cover opacity-20 grayscale"
+                                                                            imageClassName="absolute inset-0 h-full w-full scale-105 object-cover opacity-20 grayscale"
+                                                                            skeletonClassName="bg-[#0b1120]"
+                                                                            showFailureFallback={false}
                                                                         />
                                                                     )}
                                                                     <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(11,17,32,0.7),rgba(11,17,32,0.94))]"></div>
@@ -1079,10 +1243,12 @@ const LoadoutView = ({
                                                                     {/* Weapon Image Background */}
                                                                     {weaponImage && (
                                                                         <>
-                                                                            <img
+                                                                            <LoadingImage
                                                                                 src={weaponImage}
                                                                                 alt={equippedItem.name}
-                                                                                className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-500 z-0"
+                                                                                imageClassName="absolute inset-0 z-0 h-full w-full object-cover opacity-60 group-hover:opacity-80"
+                                                                                skeletonClassName="bg-[#111827]"
+                                                                                showFailureFallback={false}
                                                                             />
                                                                             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/10 z-0"></div>
                                                                         </>
@@ -1229,9 +1395,15 @@ const LoadoutView = ({
                                                                                     ${warning ? 'cursor-not-allowed bg-orange-950/20 opacity-60 hover:bg-orange-950/20' : ''}
                                                                                 `}
                                                                             >
-                                                                                <div className="w-8 h-8 flex items-center justify-center shrink-0 text-[#c8aa6e] bg-slate-900/50 rounded overflow-hidden border border-slate-700/50">
+                                                                                <div className="relative w-8 h-8 flex items-center justify-center shrink-0 text-[#c8aa6e] bg-slate-900/50 rounded overflow-hidden border border-slate-700/50">
                                                                                     {getObjectImage(weapon, customEquipmentImages) ? (
-                                                                                        <img src={getObjectImage(weapon, customEquipmentImages)} alt="" className="w-full h-full object-cover" />
+                                                                                        <LoadingImage
+                                                                                            src={getObjectImage(weapon, customEquipmentImages)}
+                                                                                            alt=""
+                                                                                            imageClassName="h-full w-full object-cover"
+                                                                                            skeletonClassName="bg-slate-900"
+                                                                                            showFailureFallback={false}
+                                                                                        />
                                                                                     ) : (
                                                                                         <Sword className="w-5 h-5" />
                                                                                     )}
@@ -1336,10 +1508,12 @@ const LoadoutView = ({
                                                                     {/* Armor Image Background */}
                                                                     {armorImage && (
                                                                         <>
-                                                                            <img
+                                                                            <LoadingImage
                                                                                 src={armorImage}
                                                                                 alt={equippedArmor.name}
-                                                                                className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-500 z-0"
+                                                                                imageClassName="absolute inset-0 z-0 h-full w-full object-cover opacity-60 group-hover:opacity-80"
+                                                                                skeletonClassName="bg-[#111827]"
+                                                                                showFailureFallback={false}
                                                                             />
                                                                             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/10 z-0"></div>
                                                                         </>
@@ -1458,9 +1632,15 @@ const LoadoutView = ({
                                                                                     ${warning ? 'cursor-not-allowed bg-orange-950/20 opacity-60 hover:bg-orange-950/20' : ''}
                                                                                 `}
                                                                             >
-                                                                                <div className="w-8 h-8 flex items-center justify-center shrink-0 text-[#c8aa6e] bg-slate-900/50 rounded overflow-hidden border border-slate-700/50">
+                                                                                <div className="relative w-8 h-8 flex items-center justify-center shrink-0 text-[#c8aa6e] bg-slate-900/50 rounded overflow-hidden border border-slate-700/50">
                                                                                     {getObjectImage(armor, customEquipmentImages) ? (
-                                                                                        <img src={getObjectImage(armor, customEquipmentImages)} alt="" className="w-full h-full object-cover" />
+                                                                                        <LoadingImage
+                                                                                            src={getObjectImage(armor, customEquipmentImages)}
+                                                                                            alt=""
+                                                                                            imageClassName="h-full w-full object-cover"
+                                                                                            skeletonClassName="bg-slate-900"
+                                                                                            showFailureFallback={false}
+                                                                                        />
                                                                                     ) : (
                                                                                         <Shield className="w-5 h-5" />
                                                                                     )}
@@ -1542,10 +1722,12 @@ const LoadoutView = ({
                                                                 <>
                                                                     {objectImage ? (
                                                                         <>
-                                                                            <img
+                                                                            <LoadingImage
                                                                                 src={objectImage}
                                                                                 alt={equippedItem.name}
-                                                                                className="absolute inset-0 w-full h-full object-cover opacity-80 transition-opacity group-hover:opacity-100"
+                                                                                imageClassName="absolute inset-0 h-full w-full object-cover opacity-80 group-hover:opacity-100"
+                                                                                skeletonClassName="bg-slate-900"
+                                                                                showFailureFallback={false}
                                                                             />
                                                                             <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors"></div>
                                                                         </>
@@ -1725,9 +1907,15 @@ const LoadoutView = ({
                                                                                 onClick={() => handleEquipItem(slotId, item)}
                                                                                 className="w-full p-3 text-left flex items-center gap-3 hover:bg-[#c8aa6e]/10 transition-colors border-b border-slate-800 last:border-b-0"
                                                                             >
-                                                                                <div className="w-8 h-8 flex items-center justify-center shrink-0 text-[#c8aa6e] bg-slate-900/50 rounded overflow-hidden border border-slate-700/50">
+                                                                                <div className="relative w-8 h-8 flex items-center justify-center shrink-0 text-[#c8aa6e] bg-slate-900/50 rounded overflow-hidden border border-slate-700/50">
                                                                                     {itemImg ? (
-                                                                                        <img src={itemImg} alt="" className="w-full h-full object-cover" />
+                                                                                        <LoadingImage
+                                                                                            src={itemImg}
+                                                                                            alt=""
+                                                                                            imageClassName="h-full w-full object-cover"
+                                                                                            skeletonClassName="bg-slate-900"
+                                                                                            showFailureFallback={false}
+                                                                                        />
                                                                                     ) : (
                                                                                         <span className="text-lg leading-none">📦</span>
                                                                                     )}
@@ -1827,10 +2015,12 @@ const LoadoutView = ({
                                                                     {/* Accessory Image Background */}
                                                                     {accessoryImage && (
                                                                         <>
-                                                                            <img
+                                                                            <LoadingImage
                                                                                 src={accessoryImage}
                                                                                 alt={equippedAccessory.name || equippedAccessory.nombre}
-                                                                                className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-500 z-0"
+                                                                                imageClassName="absolute inset-0 z-0 h-full w-full object-cover opacity-60 group-hover:opacity-80"
+                                                                                skeletonClassName="bg-[#111827]"
+                                                                                showFailureFallback={false}
                                                                             />
                                                                             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/10 z-0"></div>
                                                                         </>
@@ -1927,9 +2117,15 @@ const LoadoutView = ({
                                                                                     ${isAlreadyEquipped ? 'opacity-40 cursor-not-allowed' : ''}
                                                                                 `}
                                                                             >
-                                                                                <div className="w-8 h-8 flex items-center justify-center shrink-0 text-[#c8aa6e] bg-slate-900/50 rounded overflow-hidden border border-slate-700/50">
+                                                                                <div className="relative w-8 h-8 flex items-center justify-center shrink-0 text-[#c8aa6e] bg-slate-900/50 rounded overflow-hidden border border-slate-700/50">
                                                                                     {getObjectImage(accessory, customEquipmentImages) ? (
-                                                                                        <img src={getObjectImage(accessory, customEquipmentImages)} alt="" className="w-full h-full object-cover" />
+                                                                                        <LoadingImage
+                                                                                            src={getObjectImage(accessory, customEquipmentImages)}
+                                                                                            alt=""
+                                                                                            imageClassName="h-full w-full object-cover"
+                                                                                            skeletonClassName="bg-slate-900"
+                                                                                            showFailureFallback={false}
+                                                                                        />
                                                                                     ) : (
                                                                                         <Gem className="w-5 h-5" />
                                                                                     )}
@@ -2379,6 +2575,7 @@ LoadoutView.propTypes = {
     rarityColorMap: PropTypes.objectOf(PropTypes.string),
     onAddEquipment: PropTypes.func,
     onRemoveEquipment: PropTypes.func,
+    onReorderEquipment: PropTypes.func,
     onUpdateTalent: PropTypes.func,
     onUpdateProficiency: PropTypes.func,
     onUpdateEquipped: PropTypes.func,

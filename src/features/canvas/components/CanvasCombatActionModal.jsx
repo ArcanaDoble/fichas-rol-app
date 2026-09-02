@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Swords, X } from 'lucide-react';
 import DiceSvg from '../../../components/DiceSvg';
+import ActionDieSvg from '../../../components/ActionDieSvg';
 import {
   getUsableDefenseDice,
   resolveCanvasAttackDamage,
@@ -13,16 +14,6 @@ const getDieFaces = (die = {}) => {
 };
 
 const ActionDieButton = ({ die, selected, disabled, onClick, accent = 'gold' }) => {
-  const palette = accent === 'blue'
-    ? {
-      selected: { backgroundColor: 'rgba(59, 130, 246, 0.18)', borderColor: '#60a5fa', color: '#93c5fd', boxShadow: '0 0 12px rgba(59,130,246,0.32)' },
-      idle: { backgroundColor: 'rgba(15, 23, 42, 0.72)', borderColor: '#64748b', color: '#94a3b8' },
-    }
-    : {
-      selected: { backgroundColor: 'rgba(200, 170, 110, 0.18)', borderColor: '#c8aa6e', color: '#e8cf91', boxShadow: '0 0 12px rgba(200,170,110,0.3)' },
-      idle: { backgroundColor: 'rgba(15, 23, 42, 0.72)', borderColor: '#64748b', color: '#94a3b8' },
-    };
-
   return (
     <button
       type="button"
@@ -35,11 +26,13 @@ const ActionDieButton = ({ die, selected, disabled, onClick, accent = 'gold' }) 
           : 'border-slate-700/80 bg-black/25 hover:border-slate-500'
       } disabled:cursor-not-allowed disabled:opacity-30`}
     >
-      <DiceSvg
+      <ActionDieSvg
         faces={getDieFaces(die)}
         value={die.value}
         className="h-10 w-10"
-        style={selected ? palette.selected : palette.idle}
+        accent={accent}
+        selected={selected}
+        status={disabled ? 'spent' : 'available'}
         title={`${die.die || `d${getDieFaces(die)}`} · ${die.value}`}
       />
       <span className={`mt-1 text-[9px] font-bold uppercase tracking-[0.18em] ${selected ? 'text-[#f0e6d2]' : 'text-slate-500'}`}>
@@ -49,14 +42,24 @@ const ActionDieButton = ({ die, selected, disabled, onClick, accent = 'gold' }) 
   );
 };
 
-const ResultDie = ({ faces, value, label, accent = 'red' }) => {
+const ResultDie = ({ faces, value, label, accent = 'red', action = false }) => {
   const style = accent === 'gold'
     ? { backgroundColor: 'rgba(200, 170, 110, 0.16)', borderColor: '#c8aa6e', color: '#e8cf91', boxShadow: '0 0 10px rgba(200,170,110,0.24)' }
     : { backgroundColor: 'rgba(185, 55, 55, 0.15)', borderColor: '#ef4444', color: '#fca5a5', boxShadow: '0 0 10px rgba(239,68,68,0.22)' };
 
   return (
     <div className="flex min-w-[58px] flex-col items-center">
-      <DiceSvg faces={faces} value={value} className="h-10 w-10" style={style} title={label} />
+      {action ? (
+        <ActionDieSvg
+          faces={faces}
+          value={value}
+          className="h-11 w-11"
+          selected
+          title={label}
+        />
+      ) : (
+        <DiceSvg faces={faces} value={value} className="h-10 w-10" style={style} title={label} />
+      )}
       <span className="mt-1 text-center text-[8px] font-bold uppercase tracking-[0.13em] text-slate-500">{label}</span>
     </div>
   );
@@ -165,7 +168,7 @@ const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView }
             </div>
             <div className="flex flex-wrap justify-center gap-3">
               {(pending.actionDice || []).map((die) => (
-                <ResultDie key={die.id} faces={getDieFaces(die)} value={die.value} label="Acción" accent="gold" />
+                <ResultDie key={die.id} faces={getDieFaces(die)} value={die.value} label="Acción" accent="gold" action />
               ))}
               {(pending.weaponResults || []).map((value, index) => (
                 <ResultDie

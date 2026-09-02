@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { Dices, GripVertical } from 'lucide-react';
 import { FiX } from 'react-icons/fi';
 import { normalizeGlossaryWord } from '../utils/glossary';
+import LoadingImage from './LoadingImage';
 
 const RogueliteInventoryCard = ({
     item,
@@ -78,10 +79,12 @@ const RogueliteInventoryCard = ({
                 }}
             >
                 {image ? (
-                    <img
+                    <LoadingImage
                         src={image}
                         alt=""
-                        className="noma-inventory-card__art"
+                        imageClassName="noma-inventory-card__art"
+                        skeletonClassName="bg-[#111722]"
+                        showFailureFallback={false}
                         aria-hidden="true"
                     />
                 ) : (

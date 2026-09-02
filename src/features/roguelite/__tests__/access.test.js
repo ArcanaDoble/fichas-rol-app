@@ -1,11 +1,29 @@
 import {
+  normalizeCharacterAccess,
   normalizeRogueliteAccess,
+  setCharacterAccessEnabled,
   setRogueliteEnabled,
   toggleRogueliteClass,
+  withCharacterAccess,
   withRogueliteAccess,
 } from '../access';
 
 describe('roguelite player access', () => {
+  test('keeps personal characters enabled for existing players without the new setting', () => {
+    expect(normalizeCharacterAccess({ name: 'Ada' })).toEqual({ enabled: true });
+  });
+
+  test('can persist a classes-only profile without changing other access modes', () => {
+    const player = { gameAccess: { roguelite: { enabled: true, unlockedClassIds: ['mage'] } } };
+    const disabled = setCharacterAccessEnabled(player, false);
+    const updated = withCharacterAccess(player, disabled);
+
+    expect(updated.gameAccess).toEqual({
+      characters: { enabled: false },
+      roguelite: { enabled: true, unlockedClassIds: ['mage'] },
+    });
+  });
+
   test('is disabled by default for existing players', () => {
     expect(normalizeRogueliteAccess({ name: 'Ada' })).toEqual({
       enabled: false,

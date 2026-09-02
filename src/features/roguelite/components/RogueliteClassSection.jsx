@@ -10,42 +10,52 @@ import { createRogueliteProfileClass } from '../profileClass';
 
 const RogueliteClassSection = ({
   playerName,
+  access: providedAccess,
   onOpenClass,
   onClassesChange,
   initialClassId,
 }) => {
-  const [access, setAccess] = useState(null);
+  const [loadedAccess, setLoadedAccess] = useState(null);
   const [classDefinitions, setClassDefinitions] = useState([]);
   const [profileConfigurations, setProfileConfigurations] = useState({});
+  const [catalogLoading, setCatalogLoading] = useState({ legacy: true, roguelite: true });
+  const [profilesLoading, setProfilesLoading] = useState(true);
   const [accessError, setAccessError] = useState('');
   const [catalogError, setCatalogError] = useState('');
   const openedInitialClassId = useRef(null);
+  const access = providedAccess || loadedAccess;
+  const isLoading = catalogLoading.legacy || catalogLoading.roguelite || profilesLoading;
 
   useEffect(() => {
+    if (providedAccess) return undefined;
+
     if (!playerName) {
-      setAccess(normalizeRogueliteAccess());
+      setLoadedAccess(normalizeRogueliteAccess());
       return undefined;
     }
 
     return onSnapshot(
       doc(db, 'players', playerName),
       (snapshot) => {
-        setAccess(normalizeRogueliteAccess(snapshot.exists() ? snapshot.data() : {}));
+        setLoadedAccess(normalizeRogueliteAccess(snapshot.exists() ? snapshot.data() : {}));
         setAccessError('');
       },
       (snapshotError) => {
         console.error('Error loading roguelite player access:', snapshotError);
-        setAccess(normalizeRogueliteAccess());
+        setLoadedAccess(normalizeRogueliteAccess());
         setAccessError('No se pudo comprobar el acceso al modo roguelite.');
       },
     );
-  }, [playerName]);
+  }, [playerName, providedAccess]);
 
   useEffect(() => {
     if (!access?.enabled) {
       setClassDefinitions([]);
+      setCatalogLoading({ legacy: false, roguelite: false });
       return undefined;
     }
+
+    setCatalogLoading({ legacy: true, roguelite: true });
 
     const catalogs = {
       legacy: [],
@@ -73,10 +83,14 @@ const RogueliteClassSection = ({
           id: classDoc.id,
         }));
         failedCatalogs.delete(catalogName);
+        setCatalogLoading((current) => ({ ...current, [catalogName]: false }));
         setCatalogError('');
         updateDefinitions();
       },
-      (snapshotError) => handleCatalogError(catalogName, snapshotError),
+      (snapshotError) => {
+        setCatalogLoading((current) => ({ ...current, [catalogName]: false }));
+        handleCatalogError(catalogName, snapshotError);
+      },
     );
 
     const unsubscribeLegacyClasses = subscribeToCatalog('classes', 'legacy');
@@ -91,8 +105,11 @@ const RogueliteClassSection = ({
   useEffect(() => {
     if (!access?.enabled || !playerName) {
       setProfileConfigurations({});
+      setProfilesLoading(false);
       return undefined;
     }
+
+    setProfilesLoading(true);
 
     return onSnapshot(
       collection(db, 'players', playerName, 'rogueliteClasses'),
@@ -103,10 +120,12 @@ const RogueliteClassSection = ({
             { ...configurationDoc.data(), id: configurationDoc.id },
           ]),
         ));
+        setProfilesLoading(false);
       },
       (snapshotError) => {
         console.error('Error loading personal roguelite class configurations:', snapshotError);
         setProfileConfigurations({});
+        setProfilesLoading(false);
       },
     );
   }, [access?.enabled, playerName]);
@@ -129,7 +148,7 @@ const RogueliteClassSection = ({
   }, [onClassesChange, unlockedClasses]);
 
   useEffect(() => {
-    if (!initialClassId || openedInitialClassId.current === initialClassId || unlockedClasses.length === 0) return;
+    if (isLoading || !initialClassId || openedInitialClassId.current === initialClassId || unlockedClasses.length === 0) return;
     const initialClass = unlockedClasses.find((classItem) => classItem.id === initialClassId);
     if (!initialClass) return;
 
@@ -141,7 +160,7 @@ const RogueliteClassSection = ({
       storagePrefix: `roguelite-profiles/${playerName}`,
       updateMainLibrary: false,
     });
-  }, [initialClassId, onOpenClass, playerName, unlockedClasses]);
+  }, [initialClassId, isLoading, onOpenClass, playerName, unlockedClasses]);
 
   const missingClassCount = access?.enabled
     ? Math.max(0, access.unlockedClassIds.length - unlockedClasses.length)
@@ -161,7 +180,11 @@ const RogueliteClassSection = ({
         <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-[#c8aa6e]/30 to-transparent" />
       </div>
 
-      {error ? (
+      {isLoading ? (
+        <div className="flex min-h-12 items-center justify-center border-y border-[#c8aa6e]/10 text-[10px] uppercase tracking-[0.18em] text-slate-600">
+          Sincronizando clases
+        </div>
+      ) : error ? (
         <div className="rounded-lg border border-red-500/25 bg-red-500/5 px-5 py-6 text-center text-sm text-red-300">
           {error}
         </div>
@@ -214,12 +237,17 @@ const RogueliteClassSection = ({
 
 RogueliteClassSection.propTypes = {
   playerName: PropTypes.string.isRequired,
+  access: PropTypes.shape({
+    enabled: PropTypes.bool,
+    unlockedClassIds: PropTypes.arrayOf(PropTypes.string),
+  }),
   onOpenClass: PropTypes.func.isRequired,
   onClassesChange: PropTypes.func,
   initialClassId: PropTypes.string,
 };
 
 RogueliteClassSection.defaultProps = {
+  access: null,
   initialClassId: null,
 };
 
