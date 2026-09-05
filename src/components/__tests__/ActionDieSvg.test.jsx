@@ -4,7 +4,7 @@ import { render, screen } from '@testing-library/react';
 import ActionDieSvg from '../ActionDieSvg';
 
 describe('ActionDieSvg', () => {
-  it.each([4, 6, 8, 10, 12])('renders D%s as native SVG geometry', (faces) => {
+  it.each([4, 6, 8, 10, 12, 20])('renders D%s as native SVG geometry', (faces) => {
     const { container } = render(
       <ActionDieSvg faces={faces} value={faces} title={`D${faces}`} />,
     );
@@ -66,5 +66,14 @@ describe('ActionDieSvg', () => {
     expect(numeral).toHaveAttribute('x', '59');
     expect(numeral).toHaveAttribute('y', '60');
     expect(container.querySelector('polygon[points="60,6 92,16 111,43 111,77 92,104 60,114 28,104 9,77 9,43 28,16"]')).not.toBeInTheDocument();
+  });
+
+  it('uses the separated triangular facets from the D20 reference', () => {
+    const { container } = render(<ActionDieSvg faces={20} value={17} title="D20" />);
+    const facets = container.querySelectorAll('[data-d20-facet]');
+    expect(facets).toHaveLength(10);
+    expect(container.querySelector('[data-d20-facet="center"]')).toHaveAttribute('points', '35,49 85,49 60,90');
+    expect(container.querySelector('[data-d20-facet="base-left"]')).toHaveAttribute('points', '8,99 56,104 56,116');
+    expect(container.querySelector('polygon[points="60,6 101,29 101,78 60,112 19,78 19,29"]')).not.toBeInTheDocument();
   });
 });

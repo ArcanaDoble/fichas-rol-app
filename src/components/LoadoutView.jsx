@@ -329,7 +329,6 @@ const LoadoutView = ({
     const [tempBeltNote, setTempBeltNote] = useState('');
     const [inventoryDrag, setInventoryDrag] = useState(null);
     const inventoryDragCleanupRef = React.useRef(null);
-
     React.useEffect(() => () => {
         inventoryDragCleanupRef.current?.();
         document.body.classList.remove('noma-class-inventory-reordering');

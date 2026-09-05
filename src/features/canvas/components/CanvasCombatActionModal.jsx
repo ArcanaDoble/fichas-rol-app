@@ -1,69 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Swords, X } from 'lucide-react';
-import DiceSvg from '../../../components/DiceSvg';
-import ActionDieSvg from '../../../components/ActionDieSvg';
+import { X } from 'lucide-react';
+import { useCustomEquipmentImages } from '../../../hooks/useCustomEquipmentImages';
+import { resolveEquipmentImage } from '../../../utils/equipmentImages';
 import {
+  getEnemyActiveDefenseEligibility,
   getUsableDefenseDice,
   resolveCanvasAttackDamage,
 } from '../combat/canvasAttackRules';
 
-const getDieFaces = (die = {}) => {
-  const explicit = Number(die.sides ?? die.faces);
-  if (Number.isFinite(explicit) && explicit > 0) return explicit;
-  return Number.parseInt(String(die.die || die.type || '').match(/\d+/)?.[0], 10) || 6;
-};
-
-const ActionDieButton = ({ die, selected, disabled, onClick, accent = 'gold' }) => {
-  return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      disabled={disabled}
-      onClick={onClick}
-      className={`group flex min-w-[76px] flex-col items-center border px-3 py-2 transition-all ${
-        selected
-          ? accent === 'blue' ? 'border-blue-400/65 bg-blue-950/35' : 'border-[#c8aa6e]/70 bg-[#c8aa6e]/10'
-          : 'border-slate-700/80 bg-black/25 hover:border-slate-500'
-      } disabled:cursor-not-allowed disabled:opacity-30`}
-    >
-      <ActionDieSvg
-        faces={getDieFaces(die)}
-        value={die.value}
-        className="h-10 w-10"
-        accent={accent}
-        selected={selected}
-        status={disabled ? 'spent' : 'available'}
-        title={`${die.die || `d${getDieFaces(die)}`} · ${die.value}`}
-      />
-      <span className={`mt-1 text-[9px] font-bold uppercase tracking-[0.18em] ${selected ? 'text-[#f0e6d2]' : 'text-slate-500'}`}>
-        {die.die || `d${getDieFaces(die)}`}
-      </span>
-    </button>
-  );
-};
-
-const ResultDie = ({ faces, value, label, accent = 'red', action = false }) => {
-  const style = accent === 'gold'
-    ? { backgroundColor: 'rgba(200, 170, 110, 0.16)', borderColor: '#c8aa6e', color: '#e8cf91', boxShadow: '0 0 10px rgba(200,170,110,0.24)' }
-    : { backgroundColor: 'rgba(185, 55, 55, 0.15)', borderColor: '#ef4444', color: '#fca5a5', boxShadow: '0 0 10px rgba(239,68,68,0.22)' };
-
-  return (
-    <div className="flex min-w-[58px] flex-col items-center">
-      {action ? (
-        <ActionDieSvg
-          faces={faces}
-          value={value}
-          className="h-11 w-11"
-          selected
-          title={label}
-        />
-      ) : (
-        <DiceSvg faces={faces} value={value} className="h-10 w-10" style={style} title={label} />
-      )}
-      <span className="mt-1 text-center text-[8px] font-bold uppercase tracking-[0.13em] text-slate-500">{label}</span>
-    </div>
-  );
-};
+import {
+  ActionDieButton, DefenseEquipmentChoice, DefenseRollSummary, getItemTraits,
+  IncomingAttackSummary, ResolutionMetrics, ThreatChoice,
+} from './CanvasCombatDetails';
 
 const ModalFrame = ({ children }) => (
   <div className="pointer-events-auto fixed inset-0 z-[100] flex items-stretch justify-center overflow-y-auto bg-black/80 p-2 backdrop-blur-sm sm:items-center sm:p-4">
@@ -72,17 +20,35 @@ const ModalFrame = ({ children }) => (
       className="relative my-auto flex max-h-[calc(100dvh-1rem)] w-full max-w-lg flex-col overflow-hidden rounded-lg border-2 border-red-900/50 bg-[#1a1b26] p-4 shadow-2xl shadow-red-900/20 sm:max-h-[85vh] sm:p-6"
     >
       <div className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 rounded-full bg-red-600/10 blur-3xl" />
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col">{children}</div>
+      <div className="combat-details relative z-10 flex min-h-0 flex-1 flex-col">{children}</div>
     </section>
   </div>
 );
 
+const resolveEquippedArmor = (token = {}) => {
+  const equipped = token.equippedItems;
+  const items = Array.isArray(equipped) ? equipped : [];
+  const armor = items.find((item) => {
+    const type = String(item?.type || item?.itemType || item?._category || item?.category || '').toLowerCase();
+    return item?.canvasSlot === 'body' || ['armor', 'armadura', 'armaduras'].includes(type);
+  });
+  if (armor) return armor;
+
+  const loadout = token.equipmentLoadout || (!Array.isArray(equipped) ? equipped : null);
+  return loadout?.body || null;
+};
+
 const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView }) => {
+  const customEquipmentImages = useCustomEquipmentImages();
   const draft = combatRuntime?.attackDraft;
   const pending = combatRuntime?.pendingAttack;
   const [selectedActionDice, setSelectedActionDice] = useState([]);
   const [selectedDefenseDice, setSelectedDefenseDice] = useState([]);
-  const [useThreat, setUseThreat] = useState(false);
+  const [attackThreatMode, setAttackThreatMode] = useState('none');
+  const [attackCustomThreatSides, setAttackCustomThreatSides] = useState(6);
+  const [enemyDefenseEquipmentId, setEnemyDefenseEquipmentId] = useState('');
+  const [enemyThreatMode, setEnemyThreatMode] = useState('none');
+  const [customThreatSides, setCustomThreatSides] = useState(6);
 
   const items = activeScenario?.items || [];
   const attacker = draft ? items.find((item) => item.id === draft.attackerId) : null;
@@ -92,23 +58,20 @@ const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView }
   const pendingTargetParticipant = pending
     ? combatRuntime?.combatState?.participants?.[pending.targetId]
     : null;
-  const hasAssignedPlayer = Boolean(
-    (Array.isArray(pendingTarget?.controlledBy) && pendingTarget.controlledBy.length > 0)
-    || pendingTarget?.linkedClassOwner,
-  );
   const isTargetPlayerSide = pendingTargetParticipant?.side === 'players' || pendingTarget?.profileType === 'rogueliteClass';
   const canResolvePending = Boolean(
     pending
     && (
       isPlayerView
         ? combatRuntime?.controlledTokenIds?.includes(pending.targetId)
-        : (!hasAssignedPlayer && !isTargetPlayerSide) || (combatRuntime?.controlledTokenIds?.includes(pending.targetId) && !hasAssignedPlayer)
+        : !isTargetPlayerSide
     ),
   );
 
   useEffect(() => {
     setSelectedActionDice([]);
-    setUseThreat(false);
+    setAttackThreatMode('none');
+    setAttackCustomThreatSides(6);
   }, [
     draft?.attackerId,
     draft?.targetId,
@@ -117,6 +80,11 @@ const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView }
     draft?.weapon?.nombre,
   ]);
   useEffect(() => setSelectedDefenseDice([]), [pending?.id]);
+  useEffect(() => {
+    setEnemyDefenseEquipmentId('');
+    setEnemyThreatMode('none');
+    setCustomThreatSides(6);
+  }, [pending?.id]);
 
   const availableActionDice = useMemo(() => (
     (attackerParticipant?.actionDice || []).filter((die) => die.status === 'available')
@@ -125,6 +93,94 @@ const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView }
   if (!draft && (!pending || !canResolvePending)) return null;
 
   if (pending && canResolvePending) {
+    const isEnemyTarget = pendingTarget?.profileType === 'rogueliteEnemy';
+    const enemyDefense = isEnemyTarget
+      ? getEnemyActiveDefenseEligibility({ token: pendingTarget, participant: pendingTargetParticipant })
+      : null;
+    const selectedEnemyEquipment = enemyDefense?.equipment?.find((item, index) => (
+      String(item.id || item.catalogId || item.name || item.nombre || index) === String(enemyDefenseEquipmentId)
+    )) || enemyDefense?.equipment?.[0];
+    const storedThreatValue = pendingTargetParticipant?.threatValue;
+    const hasStoredThreat = storedThreatValue !== null
+      && storedThreatValue !== undefined
+      && Number.isFinite(Number(storedThreatValue));
+
+    if (isEnemyTarget) {
+      const defenseWasRolled = pending.status === 'defense-rolled';
+      const remainingPressure = Number(pending.remainingPressure) || 0;
+      const defensiveExcess = Number(pending.defensiveExcess) || 0;
+      return (
+        <ModalFrame>
+          <header className="relative shrink-0 text-center">
+            <h2 className="font-fantasy text-2xl uppercase tracking-widest text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)] sm:text-3xl">
+              ¡Ataque inminente!
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-300">
+              <strong className="text-white">{pending.attackerName}</strong> ataca a{' '}
+              <strong className="text-blue-300">{pending.targetName}</strong> con{' '}
+              <strong className="text-red-400">{pending.weaponName}</strong>.
+            </p>
+          </header>
+
+          <div className="mt-5 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1 custom-scrollbar sm:pr-2">
+            <IncomingAttackSummary pending={pending} customImages={customEquipmentImages} threatDie={combatRuntime.combatState?.participants?.[pending.attackerId]?.threatDie} />
+
+            {!defenseWasRolled ? (
+              <>
+                {enemyDefense?.eligible ? (
+                  <div className="space-y-4">
+                    <div>
+                      <div className="combat-section-heading"><h3>Equipo defensivo</h3><span>Consume tu acción principal</span></div>
+                      <div className="mt-3 grid gap-2">
+                        {enemyDefense.equipment.map((item, index) => {
+                          const identity = String(item.id || item.catalogId || item.name || item.nombre || index);
+                          const selected = (enemyDefenseEquipmentId || String(enemyDefense.equipment[0]?.id || enemyDefense.equipment[0]?.catalogId || enemyDefense.equipment[0]?.name || enemyDefense.equipment[0]?.nombre || 0)) === identity;
+                          return (
+                            <DefenseEquipmentChoice key={identity} item={item} selected={selected}
+                              customImages={customEquipmentImages}
+                              onClick={() => setEnemyDefenseEquipmentId(identity)} />
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <ThreatChoice mode={enemyThreatMode} onModeChange={setEnemyThreatMode}
+                      hasStoredThreat={hasStoredThreat} storedThreatValue={storedThreatValue}
+                      sides={customThreatSides} onSidesChange={setCustomThreatSides} />
+                  </div>
+                ) : (
+                  <p className="border border-slate-800 bg-black/20 px-4 py-3 text-center text-sm italic text-slate-500">{enemyDefense?.reason}</p>
+                )}
+              </>
+            ) : (
+              <div className="space-y-4">
+                <DefenseRollSummary pending={pending} />
+                <ResolutionMetrics defense={pending.totalDefense} remaining={remainingPressure} excess={defensiveExcess} />
+              </div>
+            )}
+          </div>
+
+          <footer className="mt-5 shrink-0 border-t border-red-900/30 pt-4 pb-[calc(env(safe-area-inset-bottom)+0.25rem)]">
+            {!defenseWasRolled ? (
+              <div className={`grid gap-3 ${enemyDefense?.eligible ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                <button type="button" onClick={() => combatRuntime.resolvePendingAttack([])} className="rounded bg-gradient-to-r from-red-600 to-red-800 px-5 py-3 font-fantasy text-sm uppercase tracking-[0.18em] text-white shadow-lg active:scale-[0.98]">Recibir ataque</button>
+                {enemyDefense?.eligible && (
+                  <button type="button" onClick={() => combatRuntime.rollEnemyDefense({ equipmentId: String(selectedEnemyEquipment?.id || selectedEnemyEquipment?.catalogId || selectedEnemyEquipment?.name || selectedEnemyEquipment?.nombre || 0), threatMode: enemyThreatMode, customThreatSides })} className="rounded border border-blue-400/50 bg-blue-950/35 px-5 py-3 font-fantasy text-sm uppercase tracking-[0.18em] text-blue-100 active:scale-[0.98]">Defender</button>
+                )}
+              </div>
+            ) : defensiveExcess > 0 ? (
+              <div className="grid grid-cols-1 gap-2 min-[380px]:grid-cols-2 sm:gap-3">
+                <button type="button" onClick={() => combatRuntime.resolvePendingAttack([], { excessChoice: 'reposition' })} className="rounded border border-blue-400/50 bg-blue-950/35 px-4 py-3 font-fantasy text-xs uppercase tracking-[0.15em] text-blue-100">Reposicionarse · {defensiveExcess}</button>
+                <button type="button" onClick={() => combatRuntime.resolvePendingAttack([], { excessChoice: 'counterattack', counterWeapon: pending.defenseItem })} className="rounded border border-red-500/50 bg-red-950/35 px-4 py-3 font-fantasy text-xs uppercase tracking-[0.15em] text-red-100">Contraatacar · {defensiveExcess}</button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => combatRuntime.resolvePendingAttack([])} className="w-full rounded bg-gradient-to-r from-red-600 to-red-800 px-6 py-3 font-fantasy text-sm uppercase tracking-[0.2em] text-white shadow-lg active:scale-[0.98]">{remainingPressure > 0 ? 'Aplicar ataque' : 'Anular ataque'}</button>
+            )}
+          </footer>
+        </ModalFrame>
+      );
+    }
+
     const defenseDice = getUsableDefenseDice(pendingTargetParticipant);
     const selectedDefenseObjects = defenseDice.filter((die) => selectedDefenseDice.includes(die.id));
     const preview = resolveCanvasAttackDamage({
@@ -134,19 +190,16 @@ const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView }
       weapon: pending.weapon,
       suppressTraits: pending.range?.suppressTraits,
     });
+    const equippedArmor = resolveEquippedArmor(pendingTarget);
+    const equippedArmorName = equippedArmor?.name || equippedArmor?.nombre || '';
+    const equippedArmorImage = equippedArmor
+      ? resolveEquipmentImage(equippedArmor, customEquipmentImages)
+      : null;
+    const cdIsModified = preview.effectiveCd !== preview.baseCd;
 
     return (
       <ModalFrame>
         <header className="relative shrink-0 text-center">
-          <button
-            type="button"
-            onClick={combatRuntime.cancelPendingAttack}
-            className="absolute -right-1 -top-1 p-2 text-slate-500 transition-colors hover:text-white"
-            aria-label="Descartar o cancelar ataque"
-            title="Descartar o cancelar ataque"
-          >
-            <X size={22} />
-          </button>
           <h2 className="font-fantasy text-2xl uppercase tracking-widest text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)] sm:text-3xl">
             ¡Ataque inminente!
           </h2>
@@ -158,60 +211,44 @@ const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView }
         </header>
 
         <div className="mt-5 min-h-0 flex-1 space-y-5 overflow-y-auto pr-1 custom-scrollbar sm:pr-2">
-          <div className="border border-[#c8aa6e]/20 bg-black/40 p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">Dados del atacante</p>
-              <div className="text-right">
-                <span className="block text-[8px] font-bold uppercase tracking-[0.18em] text-slate-500">Presión</span>
-                <strong className="font-fantasy text-2xl text-red-400">{pending.pressure?.total || 0}</strong>
-              </div>
-            </div>
-            <div className="flex flex-wrap justify-center gap-3">
-              {(pending.actionDice || []).map((die) => (
-                <ResultDie key={die.id} faces={getDieFaces(die)} value={die.value} label="Acción" accent="gold" action />
-              ))}
-              {(pending.weaponResults || []).map((value, index) => (
-                <ResultDie
-                  key={`weapon-${index}`}
-                  faces={pending.weaponDiceProfile?.[index]?.sides || 6}
-                  value={value}
-                  label="Arma"
-                />
-              ))}
-              {Number(pending.criticalResult) > 0 && (
-                <ResultDie
-                  faces={pending.criticalDieSides || pending.weaponDiceProfile?.[0]?.sides || 6}
-                  value={pending.criticalResult}
-                  label="Crítico"
-                  accent="gold"
-                />
-              )}
-            </div>
-            {pending.pressure?.actionPressure > 0 && pending.actionDice?.length === 0 && (
-              <p className="mt-3 text-center text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                Base ofensiva +{pending.pressure.actionPressure}
-                {pending.pressure?.threatPressure > 0 ? ` · Amenaza +${pending.pressure.threatPressure}` : ''}
-              </p>
-            )}
-          </div>
+          <IncomingAttackSummary pending={pending} customImages={customEquipmentImages} threatDie={combatRuntime.combatState?.participants?.[pending.attackerId]?.threatDie} />
 
-          <div>
-            <div className="mb-3 flex items-end justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-300">Defensa</p>
-                <p className="mt-1 text-xs text-slate-500">Selecciona un dado disponible que quieras gastar para defenderte.</p>
+          <section className="combat-defense-panel" aria-label={`Defensa actual, CD ${preview.effectiveCd}`}>
+            {equippedArmorImage && <img className="combat-defense-art" src={equippedArmorImage} alt="" />}
+            <div className="combat-defense-shade" />
+            <div className="combat-defense-card-content">
+              <div className="combat-defense-copy">
+                <div className="combat-defense-identity">
+                  <span className="combat-eyebrow">Tu defensa</span>
+                  <h3>{equippedArmorName || 'Protección actual'}</h3>
+                  <span>{equippedArmor ? 'Armadura equipada' : 'Clase de defensa actual'}</span>
+                </div>
+                <div className="combat-defense-rule">
+                  <p>Cada {preview.effectiveCd} puntos de Presión restante cuestan 1 bloque de Vida.</p>
+                  {cdIsModified && <span>CD base {preview.baseCd} · Perforante −1</span>}
+                </div>
               </div>
-              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
-                CD {preview.effectiveCd}
-              </span>
+              <div className="combat-cd-seal" data-modified={cdIsModified}>
+                <span>CD</span>
+                <strong>{preview.effectiveCd}</strong>
+                <small>actual</small>
+              </div>
             </div>
-            <div className="flex min-h-[76px] flex-wrap justify-center gap-2 border-y border-slate-700/60 py-3">
+          </section>
+
+          <div className="combat-defense-pool">
+            <div className="combat-section-heading">
+              <h3>Dados de defensa</h3>
+              <span>{selectedDefenseDice.length} seleccionados</span>
+            </div>
+            <p className="combat-help mb-3">Elige los dados que quieres gastar para reducir la presión.</p>
+            <div className="combat-dice-tray combat-defense-dice-tray">
               {defenseDice.length > 0 ? defenseDice.map((die) => (
                 <ActionDieButton
                   key={die.id}
                   die={die}
-                  accent="blue"
                   selected={selectedDefenseDice.includes(die.id)}
+                  selectedLabel="En defensa"
                   onClick={() => setSelectedDefenseDice((current) => (
                     current.includes(die.id) ? current.filter((id) => id !== die.id) : [...current, die.id]
                   ))}
@@ -222,32 +259,14 @@ const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView }
             </div>
           </div>
 
-          <div className="grid grid-cols-3 border border-slate-700/50 bg-black/25 text-center">
-            {[
-              ['Defensa', preview.defense],
-              ['Presión final', preview.finalPressure],
-              ['Vida', `−${preview.lifeLost}`],
-            ].map(([label, value]) => (
-              <div key={label} className="border-r border-slate-700/50 px-2 py-2 last:border-r-0">
-                <span className="block text-[8px] font-bold uppercase tracking-[0.14em] text-slate-500">{label}</span>
-                <strong className="font-fantasy text-lg text-[#f0e6d2]">{value}</strong>
-              </div>
-            ))}
-          </div>
+          <ResolutionMetrics defense={preview.defense} remaining={preview.finalPressure} excess={preview.surplus} cd={preview.effectiveCd} />
         </div>
 
-        <footer className="mt-5 flex items-center gap-3 shrink-0 border-t border-red-900/30 pt-4 pb-[calc(env(safe-area-inset-bottom)+0.25rem)]">
-          <button
-            type="button"
-            onClick={combatRuntime.cancelPendingAttack}
-            className="flex-1 rounded border border-slate-700 bg-slate-800/80 px-4 py-3 font-fantasy text-xs uppercase tracking-[0.15em] text-slate-300 transition-all hover:bg-slate-700 hover:text-white active:scale-[0.98]"
-          >
-            Descartar ataque
-          </button>
+        <footer className="mt-5 shrink-0 border-t border-red-900/30 pt-4 pb-[calc(env(safe-area-inset-bottom)+0.25rem)]">
           <button
             type="button"
             onClick={() => combatRuntime.resolvePendingAttack(selectedDefenseDice)}
-            className="flex-[2] rounded bg-gradient-to-r from-red-600 to-red-800 px-6 py-3 font-fantasy text-sm uppercase tracking-[0.2em] text-white shadow-lg transition-all hover:shadow-red-600/20 active:scale-[0.98]"
+            className="w-full rounded bg-gradient-to-r from-red-600 to-red-800 px-6 py-3 font-fantasy text-sm uppercase tracking-[0.2em] text-white shadow-lg transition-all hover:shadow-red-600/20 active:scale-[0.98]"
           >
             {selectedDefenseDice.length > 0 ? 'Confirmar defensa' : 'Recibir ataque'}
           </button>
@@ -259,6 +278,12 @@ const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView }
   const isEnemy = attacker?.profileType === 'rogueliteEnemy';
   const canSubmit = isEnemy || selectedActionDice.length === draft.actionCost;
   const damageProfile = draft.weaponDiceProfile.map((die) => die.die).join(' + ');
+  const attackWeaponImage = resolveEquipmentImage(draft.weapon, customEquipmentImages);
+  const attackWeaponTraits = getItemTraits(draft.weapon);
+  const attackStoredThreatValue = attackerParticipant?.threatValue;
+  const hasAttackStoredThreat = attackStoredThreatValue !== null
+    && attackStoredThreatValue !== undefined
+    && Number.isFinite(Number(attackStoredThreatValue));
 
   return (
     <ModalFrame>
@@ -266,49 +291,59 @@ const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView }
         <button
           type="button"
           onClick={combatRuntime.cancelAttackDraft}
-          className="absolute -right-1 -top-1 p-2 text-slate-500 transition-colors hover:text-white"
+          className="absolute -right-1 -top-1 z-10 flex h-11 w-11 items-center justify-center text-slate-500 transition-colors hover:text-white"
           aria-label="Cancelar ataque"
         >
           <X size={22} />
         </button>
-        <h2 className="font-fantasy text-2xl uppercase tracking-widest text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)] sm:text-3xl">
+        <h2 className="px-6 font-fantasy text-2xl uppercase tracking-widest text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.5)] sm:text-3xl">
           Preparar ataque
         </h2>
         <p className="mt-2 text-sm text-slate-300">
           <strong className="text-white">{attacker?.name}</strong>
-          <span className="mx-2 text-slate-600">contra</span>
+          <span className="mx-2 font-fantasy text-xs uppercase tracking-[0.2em] text-red-400/80">VS</span>
           <strong className="text-blue-300">{target?.name}</strong>
         </p>
       </header>
 
       <div className="mt-5 min-h-0 flex-1 space-y-5 overflow-y-auto pr-1 custom-scrollbar sm:pr-2">
-        <div className="border border-[#c8aa6e]/20 bg-black/40 p-4">
-          <div className="flex items-center gap-3">
-            <Swords className="h-5 w-5 shrink-0 text-red-400" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-fantasy text-base uppercase tracking-[0.08em] text-[#f0e6d2]">
-                {draft.weapon.name || draft.weapon.nombre}
-              </p>
-              <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">
-                {damageProfile} · {draft.range.rangeName} · {draft.range.distance} casilla(s)
-              </p>
+        <div className="relative min-h-[150px] overflow-hidden rounded-md border border-[#c8aa6e]/30 bg-[#090d15] shadow-[0_12px_30px_rgba(0,0,0,0.28)] sm:min-h-[170px]">
+          {attackWeaponImage ? (
+            <img src={attackWeaponImage} alt={draft.weapon.name || draft.weapon.nombre || 'Arma'} className="absolute inset-0 h-full w-full object-cover" />
+          ) : (
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_75%_25%,rgba(200,170,110,0.14),transparent_35%),linear-gradient(135deg,#171b24,#090d15_70%)]" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#080c14] via-[#080c14]/90 to-[#080c14]/20" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#080c14] via-transparent to-black/15" />
+          <div className="relative flex min-h-[150px] flex-col justify-between p-4 sm:min-h-[170px] sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <span className="text-[8px] font-black uppercase tracking-[0.24em] text-[#c8aa6e]/65">Arma seleccionada</span>
+                <h3 className="mt-1 break-words font-fantasy text-xl uppercase tracking-[0.1em] text-[#f0e6d2] drop-shadow-md sm:text-2xl">{draft.weapon.name || draft.weapon.nombre}</h3>
+              </div>
+              <div className="shrink-0 rounded-sm border border-[#c8aa6e]/35 bg-black/55 px-3 py-2 text-right backdrop-blur-sm">
+                <span className="block text-[7px] font-black uppercase tracking-[0.18em] text-slate-500">Coste</span>
+                <strong className="font-fantasy text-sm text-[#e4c77c] sm:text-base">{isEnemy ? 'Acción' : `${draft.actionCost} dado${draft.actionCost === 1 ? '' : 's'}`}</strong>
+              </div>
             </div>
-            <div className="shrink-0 border-l border-slate-700/70 pl-3 text-right">
-              <span className="block text-[8px] font-bold uppercase tracking-[0.16em] text-slate-500">Coste</span>
-              <strong className="font-fantasy text-lg text-[#c8aa6e]">
-                {isEnemy ? 'Acción' : `${draft.actionCost} dado${draft.actionCost === 1 ? '' : 's'}`}
-              </strong>
+            <div>
+              <div className="flex flex-wrap gap-1.5">
+                <span className="rounded-sm border border-red-500/25 bg-red-950/45 px-2 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-red-200">{damageProfile}</span>
+                <span className="rounded-sm border border-slate-600/40 bg-black/45 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-300">{draft.range.rangeName} · {draft.range.distance} casilla(s)</span>
+              </div>
+              {attackWeaponTraits.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {attackWeaponTraits.slice(0, 6).map((trait) => <span key={trait} className="rounded-sm border border-[#c8aa6e]/20 bg-black/45 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.1em] text-[#c8aa6e]/80">◆ {trait}</span>)}
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         {!isEnemy ? (
           <div>
-            <p className="text-center text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">Dados de acción</p>
-            <p className="mt-1 text-center text-xs text-slate-500">
-              Selecciona exactamente {draft.actionCost} para comprometer en el ataque.
-            </p>
-            <div className="mt-3 flex min-h-[80px] flex-wrap justify-center gap-3 border-y border-slate-700/60 py-3">
+            <div className="combat-section-heading"><h3>Dados de acción</h3><span>{selectedActionDice.length} / {draft.actionCost} seleccionados</span></div>
+            <div className="combat-dice-tray">
               {availableActionDice.map((die) => (
                 <ActionDieButton
                   key={die.id}
@@ -323,34 +358,15 @@ const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView }
             </div>
           </div>
         ) : (
-          <div className="border-y border-slate-700/60 py-4 text-center">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#c8aa6e]">Acción enemiga</p>
-            <p className="mt-1 text-xs text-slate-500">La Base ofensiva se suma automáticamente al perfil del arma.</p>
-            {attackerParticipant?.threatValue !== null && attackerParticipant?.threatValue !== undefined && (
-              <button
-                type="button"
-                aria-pressed={useThreat}
-                onClick={() => setUseThreat((current) => !current)}
-                className={`mx-auto mt-3 flex min-w-[180px] items-center justify-center gap-3 border px-4 py-2 transition-all ${
-                  useThreat
-                    ? 'border-[#c8aa6e] bg-[#c8aa6e]/15 text-[#f0e6d2]'
-                    : 'border-slate-700 bg-black/25 text-slate-400 hover:border-[#c8aa6e]/60'
-                }`}
-              >
-                <DiceSvg
-                  faces={getDieFaces({ die: attackerParticipant.threatDie })}
-                  value={attackerParticipant.threatValue}
-                  className="h-9 w-9"
-                  style={useThreat
-                    ? { backgroundColor: 'rgba(200,170,110,0.18)', borderColor: '#c8aa6e', color: '#e8cf91' }
-                    : { backgroundColor: 'rgba(15,23,42,0.72)', borderColor: '#64748b', color: '#94a3b8' }}
-                />
-                <span className="text-left">
-                  <span className="block text-[9px] font-bold uppercase tracking-[0.18em]">Dado de amenaza</span>
-                  <span className="block text-xs">{useThreat ? 'Se gastará en este ataque' : 'Reservar para otra acción'}</span>
-                </span>
-              </button>
-            )}
+          <div>
+            <div className="combat-section-heading"><h3>Acción enemiga</h3><span>Perfil del arma + Base ofensiva</span></div>
+            <p className="combat-help">El arma se tira al confirmar. Se consume la acción principal.</p>
+            <div className="mt-4">
+              <ThreatChoice mode={attackThreatMode} onModeChange={setAttackThreatMode}
+                hasStoredThreat={hasAttackStoredThreat} storedThreatValue={attackStoredThreatValue}
+                sides={attackCustomThreatSides} onSidesChange={setAttackCustomThreatSides}
+                purpose="ataque" />
+            </div>
           </div>
         )}
 
@@ -363,7 +379,11 @@ const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView }
         <button
           type="button"
           disabled={!canSubmit}
-          onClick={() => combatRuntime.confirmAttack({ actionDieIds: selectedActionDice, useThreat })}
+          onClick={() => combatRuntime.confirmAttack({
+            actionDieIds: selectedActionDice,
+            threatMode: isEnemy ? attackThreatMode : 'none',
+            customThreatSides: attackCustomThreatSides,
+          })}
           className="w-full rounded bg-gradient-to-r from-red-600 to-red-800 px-6 py-3 font-fantasy text-sm uppercase tracking-[0.2em] text-white shadow-lg transition-all hover:shadow-red-600/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35"
         >
           Confirmar ataque

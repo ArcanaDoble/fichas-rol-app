@@ -103,6 +103,33 @@ beforeEach(() => {
   });
 });
 
+test('uses preloaded access data without showing the intermediate loading screen', async () => {
+  const firestore = require('firebase/firestore');
+  firestore.onSnapshot.mockImplementation(() => jest.fn());
+
+  render(
+    <CharacterListView
+      playerName="Ada"
+      initialPlayerRecord={{
+        gameAccess: {
+          characters: { enabled: false },
+          roguelite: { enabled: true, unlockedClassIds: ['barbarian'] },
+        },
+      }}
+      initialOwnedCharacterCount={0}
+      armas={[]}
+      armaduras={[]}
+      habilidades={[]}
+      glossary={[]}
+      rarityColorMap={{}}
+      onBack={jest.fn()}
+    />,
+  );
+
+  expect(screen.queryByTestId('character-library-loading')).not.toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Mis Clases' })).toBeInTheDocument();
+});
+
 test('mounts the roguelite card and opens it in the shared character sheet', async () => {
   const onLaunchCanvas = jest.fn();
   render(

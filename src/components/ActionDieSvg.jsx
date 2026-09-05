@@ -110,15 +110,20 @@ const DieGeometry = ({ faces, ids }) => {
           <polygon points="47,78 74,78 82,53 60,37 38,53" fill={`url(#${ids.body})`} stroke={`url(#${ids.metal})`} strokeWidth="3.2" strokeLinejoin="round" />
         </>
       );
+    case 20:
     default:
       return (
         <>
-          <polygon points="60,6 101,29 101,78 60,112 19,78 19,29" {...shared} />
-          <polygon points="60,20 91,76 29,76" fill={`url(#${ids.body})`} stroke={`url(#${ids.metal})`} strokeWidth="2.1" strokeLinejoin="round" />
-          <polygon points="60,6 101,29 91,76 60,20" {...facet} opacity="0.42" />
-          <polygon points="19,29 60,6 60,20 29,76" {...facet} opacity="0.58" />
-          <polygon points="29,76 91,76 60,112" {...facet} opacity="0.3" />
-          <path d="M60 6V20M19 29L29 76M101 29L91 76M19 78L29 76M101 78L91 76M60 112L29 76M60 112L91 76" {...facetLine} />
+          <polygon data-d20-facet="upper-left" points="8,27 44,4 27,40" {...facet} strokeWidth="2" fillOpacity="0.72" />
+          <polygon data-d20-facet="upper" points="60,3 33,42 87,42" {...facet} strokeWidth="2" fillOpacity="0.9" />
+          <polygon data-d20-facet="upper-right" points="76,4 112,27 93,40" {...facet} strokeWidth="2" fillOpacity="0.78" />
+          <polygon data-d20-facet="middle-left" points="5,36 24,47 5,75" {...facet} strokeWidth="2" fillOpacity="0.62" />
+          <polygon data-d20-facet="middle-right" points="115,36 96,47 115,75" {...facet} strokeWidth="2" fillOpacity="0.7" />
+          <polygon data-d20-facet="center" points="35,49 85,49 60,90" fill={`url(#${ids.body})`} stroke={`url(#${ids.metal})`} strokeWidth="2.4" strokeLinejoin="round" />
+          <polygon data-d20-facet="lower-left" points="29,52 54,95 5,90" {...facet} strokeWidth="2" fillOpacity="0.66" />
+          <polygon data-d20-facet="lower-right" points="91,52 66,95 115,90" {...facet} strokeWidth="2" fillOpacity="0.76" />
+          <polygon data-d20-facet="base-left" points="8,99 56,104 56,116" {...facet} strokeWidth="2" fillOpacity="0.58" />
+          <polygon data-d20-facet="base-right" points="64,104 112,99 64,116" {...facet} strokeWidth="2" fillOpacity="0.7" />
         </>
       );
   }

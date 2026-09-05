@@ -221,16 +221,19 @@ describe('Canvas roguelite combat state', () => {
     let state = createCanvasCombatState([enemy, rogue]);
     state = submitActionDice(state, rogue.id, [6, 5, 3], { random: () => 0 });
     const defenseDie = state.participants[rogue.id].actionDice[1];
+    state = setActionDieStatus(state, rogue.id, defenseDie.id, 'committed');
 
     state = queueCanvasAttack(state, {
       id: 'attack-1',
       attackerId: enemy.id,
       targetId: rogue.id,
       actionDieIds: [],
+      threatDieSides: undefined,
       pressure: { total: 12 },
     }, { now: 50 });
 
     expect(state.pendingAttack).toEqual(expect.objectContaining({ id: 'attack-1', status: 'awaiting-defense' }));
+    expect(state.pendingAttack).not.toHaveProperty('threatDieSides');
     expect(state.participants[enemy.id].enemyActions.find((action) => action.id === 'attack').status).toBe('spent');
 
     state = resolveQueuedCanvasAttack(state, {
@@ -500,5 +503,29 @@ describe('Canvas roguelite combat state', () => {
     state = startNextRound(state, { random: () => 0 });
     expect(state.participants[hero.id].movementRuntime.base).toBe(5);
     expect(getAvailableMovement(state.participants[hero.id])).toBe(5);
+  });
+
+  it('spends defensive excess as a separate reposition allowance', () => {
+    const defenseEnemy = goblin('defending-goblin');
+    let state = createCanvasCombatState([defenseEnemy]);
+    state = {
+      ...state,
+      participants: {
+        ...state.participants,
+        [defenseEnemy.id]: {
+          ...state.participants[defenseEnemy.id],
+          defensiveReposition: { remaining: 3, ignoresDuelExit: true },
+        },
+      },
+    };
+
+    expect(getAvailableMovement(state.participants[defenseEnemy.id])).toBe(3);
+    state = recordParticipantMovement(state, defenseEnemy.id, {
+      from: { x: 0, y: 0 },
+      to: { x: 100, y: 0 },
+      cost: 2,
+    });
+    expect(state.participants[defenseEnemy.id].defensiveReposition.remaining).toBe(1);
+    expect(state.participants[defenseEnemy.id].enemyActions.find((action) => action.id === 'movement').status).toBe('available');
   });
 });

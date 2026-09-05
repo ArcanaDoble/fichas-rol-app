@@ -9,6 +9,8 @@ import {
   deleteDoc,
   collection,
   getDocs,
+  query,
+  where,
   onSnapshot,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -94,10 +96,6 @@ import {
   weaponCatalogItemToStorage,
 } from './features/roguelite/catalogItem';
 import { resolveEquipmentHandsRequired } from './features/roguelite/equipmentPool';
-import {
-  isValidHexColor as isValidGlossaryHexColor,
-  normalizeHexColor as normalizeGlossaryHexColor,
-} from './utils/color';
 import { nanoid } from 'nanoid';
 const MinimapBuilder = React.lazy(() => import('./components/MinimapV2'));
 const CampaignMapView = React.lazy(() => import('./components/CampaignMapView'));
@@ -152,6 +150,11 @@ const stripTokenMetadata = (token) => {
   return rest;
 };
 const MASTER_PASSWORD = '0904';
+
+export const isPlayerPasscodeAccepted = (configuredPasscode, attemptedPasscode) => {
+  const normalizedPasscode = typeof configuredPasscode === 'string' ? configuredPasscode.trim() : '';
+  return !normalizedPasscode || normalizedPasscode === attemptedPasscode;
+};
 
 const atributos = ['destreza', 'vigor', 'intelecto', 'voluntad'];
 const atributoColor = {
@@ -1257,12 +1260,6 @@ function App() {
     playerData
   );
   const [rarities, setRarities] = useState([]);
-  const [newRarityData, setNewRarityData] = useState({
-    nombre: '',
-    color: '#7c3aed',
-  });
-  const [editingRarity, setEditingRarity] = useState(null);
-  const [rarityError, setRarityError] = useState('');
   const [newWeaponData, setNewWeaponData] = useState(createEmptyWeaponCatalogItem);
   const [editingWeapon, setEditingWeapon] = useState(null); // Now stores the ID instead of the name
   const [newWeaponError, setNewWeaponError] = useState('');
@@ -1334,34 +1331,49 @@ function App() {
   const [loginPassword, setLoginPassword] = useState('');
   const [playerLoginError, setPlayerLoginError] = useState(null);
   const [playerLoginTransition, setPlayerLoginTransition] = useState(false);
+  const [playerLibraryPreload, setPlayerLibraryPreload] = useState(null);
 
   const handlePlayerLogin = async () => {
-    if (!loginTarget) return;
+    if (!loginTarget || playerLoginTransition) return;
     try {
+      setPlayerLoginTransition(true);
       const docRef = doc(db, 'players', loginTarget);
-      const docSnap = await getDoc(docRef);
+      const [docSnap, ownedCharacterCount] = await Promise.all([
+        getDoc(docRef),
+        getDocs(query(collection(db, 'characters'), where('owner', '==', loginTarget)))
+          .then((snapshot) => snapshot.docs.length)
+          .catch((error) => {
+            console.error('Error checking personal character library:', error);
+            return -1;
+          }),
+      ]);
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.passcode && data.passcode !== loginPassword) {
+        if (!isPlayerPasscodeAccepted(data.passcode, loginPassword)) {
           setPlayerLoginError('Contraseña incorrecta');
+          setPlayerLoginTransition(false);
           return;
         }
 
         setPlayerLoginError(null);
-        setPlayerLoginTransition(true);
-        setTimeout(() => {
-          setPlayerName(loginTarget);
-          setNameEntered(true);
-          setLoginTarget(null);
-          setLoginPassword('');
-          setPlayerLoginTransition(false);
-        }, 600);
+        setPlayerLibraryPreload({
+          playerName: loginTarget,
+          playerRecord: data,
+          ownedCharacterCount,
+        });
+        setPlayerName(loginTarget);
+        setNameEntered(true);
+        setLoginTarget(null);
+        setLoginPassword('');
+        setPlayerLoginTransition(false);
       } else {
         setPlayerLoginError('Error: El usuario no existe');
+        setPlayerLoginTransition(false);
       }
     } catch (e) {
       console.error("Login Error", e);
       setPlayerLoginError('Error al conectar con la base de datos');
+      setPlayerLoginTransition(false);
     }
   };
 
@@ -1945,15 +1957,7 @@ function App() {
   // Glosario de términos destacados
   const {
     glossary,
-    newTerm,
-    setNewTerm,
-    editingTerm,
-    setEditingTerm,
-    newTermError,
-    setNewTermError,
-    saveTerm,
-    startEditTerm,
-    deleteTerm,
+    fetchGlossary,
   } = useGlossary();
 
   // Calculadora de dados
@@ -2862,50 +2866,6 @@ function App() {
     newList[index + 1] = temp;
     setResourcesList(newList);
     savePlayer(playerData, newList);
-  };
-  const agregarRareza = async () => {
-    const nombre = newRarityData.nombre.trim();
-    if (!nombre) {
-      setRarityError('Nombre requerido');
-      return;
-    }
-    const color = normalizeHexColor(newRarityData.color, '#7c3aed');
-    try {
-      if (editingRarity && editingRarity !== nombre) {
-        await deleteDoc(doc(db, 'rarities', editingRarity));
-      }
-      await setDoc(doc(db, 'rarities', nombre), {
-        nombre,
-        color,
-      });
-      setEditingRarity(null);
-      setNewRarityData({ nombre: '', color: '#7c3aed' });
-      setRarityError('');
-      fetchRarities();
-    } catch (e) {
-      setRarityError('Error al guardar');
-    }
-  };
-  const startEditRarity = (rarity) => {
-    if (!rarity) return;
-    setEditingRarity(rarity.nombre);
-    setNewRarityData({
-      nombre: rarity.nombre || '',
-      color: normalizeHexColor(rarity.color, '#7c3aed'),
-    });
-    setRarityError('');
-  };
-  const deleteRarity = async (name) => {
-    try {
-      await deleteDoc(doc(db, 'rarities', name));
-      if (editingRarity === name) {
-        setEditingRarity(null);
-        setNewRarityData({ nombre: '', color: '#7c3aed' });
-      }
-      fetchRarities();
-    } catch (e) {
-      // Error al eliminar rareza
-    }
   };
   const agregarArma = async () => {
     const { id, nombre } = newWeaponData;
@@ -4098,27 +4058,20 @@ function App() {
           </div>
 
           <div
-            className={`w-full max-w-md relative z-10 p-8 rounded-2xl border shadow-2xl flex flex-col gap-6 transition-all duration-500 ${playerLoginTransition
-              ? 'scale-105 opacity-0 border-emerald-400/60'
-              : 'animate-in fade-in zoom-in-95 duration-700 border-emerald-500/20'
-              }`}
+            className="w-full max-w-md relative z-10 p-8 rounded-2xl border border-emerald-500/20 shadow-2xl flex flex-col gap-6"
             style={{
               background: 'rgba(11, 17, 32, 0.88)',
               backdropFilter: 'blur(16px)',
-              boxShadow: playerLoginTransition
-                ? '0 0 80px rgba(16, 185, 129, 0.4)'
-                : '0 0 50px rgba(16, 185, 129, 0.08)',
+              boxShadow: '0 0 50px rgba(16, 185, 129, 0.08)',
             }}
           >
             {/* Header decorativo */}
-            <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent transition-opacity duration-300 ${playerLoginTransition ? 'opacity-0' : ''}`}></div>
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent"></div>
 
             <div className="text-center space-y-4">
-              <div className={`w-20 h-20 bg-gradient-to-br from-gray-800 to-gray-900 rounded-full flex items-center justify-center mx-auto mb-2 border-2 border-emerald-500/30 shadow-lg group relative overflow-hidden transition-all duration-500 ${playerLoginTransition ? 'shadow-emerald-500/50 scale-110' : 'shadow-emerald-900/20'}`}>
+              <div className="w-20 h-20 bg-gradient-to-br from-gray-800 to-gray-900 rounded-full flex items-center justify-center mx-auto mb-2 border-2 border-emerald-500/30 shadow-lg shadow-emerald-900/20 group relative overflow-hidden">
                 <div className="absolute inset-0 bg-emerald-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
-                {playerLoginTransition ? (
-                  <Unlock className="w-10 h-10 text-emerald-300 scale-110 transition-all duration-500" strokeWidth={1.5} />
-                ) : loginPassword.length > 0 ? (
+                {loginPassword.length > 0 ? (
                   <Unlock className="w-10 h-10 text-emerald-400 group-hover:scale-110 transition-transform duration-500" strokeWidth={1.5} />
                 ) : (
                   <Lock className="w-10 h-10 text-emerald-400/60 group-hover:scale-110 transition-transform duration-500" strokeWidth={1.5} />
@@ -4126,16 +4079,15 @@ function App() {
               </div>
               <div>
                 <h2 className="text-3xl font-bold text-[#f0e6d2] font-['Cinzel'] tracking-wide">
-                  {playerLoginTransition ? 'Bienvenido' : loginTarget}
+                  {loginTarget}
                 </h2>
                 <p className="mt-2 text-emerald-400/60 text-xs uppercase tracking-[0.2em] font-medium">
-                  {playerLoginTransition ? 'Cargando ficha...' : 'Contraseña de Ficha'}
+                  Contraseña de Ficha
                 </p>
               </div>
             </div>
 
-            {!playerLoginTransition && (
-              <div className="space-y-5 mt-2">
+            <div className="space-y-5 mt-2">
                 <div className="relative group">
                   <input
                     type="password"
@@ -4165,13 +4117,13 @@ function App() {
                   </button>
                   <button
                     onClick={handlePlayerLogin}
+                    disabled={playerLoginTransition}
                     className="w-full py-3 rounded-xl border border-emerald-500/30 bg-emerald-900/30 text-emerald-100 font-semibold text-sm tracking-wide hover:bg-emerald-800/40 hover:border-emerald-400/50 active:scale-[0.98] transition-all duration-300"
                   >
                     Confirmar
                   </button>
                 </div>
-              </div>
-            )}
+            </div>
           </div>
         </div>
       );
@@ -4393,6 +4345,8 @@ function App() {
                 habilidades={habilidades}
                 glossary={glossary}
                 rarityColorMap={rarityColorMap}
+                initialPlayerRecord={playerLibraryPreload?.playerName === playerName ? playerLibraryPreload.playerRecord : null}
+                initialOwnedCharacterCount={playerLibraryPreload?.playerName === playerName ? playerLibraryPreload.ownedCharacterCount : null}
                 onLaunchMinigame={handleLaunchMinigame}
                 onLaunchDiceCalculator={handleLaunchDiceCalculator}
                 onLaunchSpeedSystem={handleLaunchSpeedSystem}
@@ -4432,6 +4386,8 @@ function App() {
             habilidades={habilidades}
             glossary={glossary}
             rarityColorMap={rarityColorMap}
+            initialPlayerRecord={playerLibraryPreload?.playerName === playerName ? playerLibraryPreload.playerRecord : null}
+            initialOwnedCharacterCount={playerLibraryPreload?.playerName === playerName ? playerLibraryPreload.ownedCharacterCount : null}
             onLaunchMinigame={handleLaunchMinigame}
             onLaunchDiceCalculator={handleLaunchDiceCalculator}
             onLaunchSpeedSystem={handleLaunchSpeedSystem}
@@ -4441,6 +4397,7 @@ function App() {
             onBack={() => {
               setNameEntered(false);
               setPlayerName('');
+              setPlayerLibraryPreload(null);
               setAuthenticated(false);
             }}
           />
@@ -7106,6 +7063,8 @@ function App() {
         rarities={rarities}
         glossary={glossary}
         rarityColorMap={rarityColorMap}
+        onRaritiesChanged={fetchRarities}
+        onGlossaryChanged={fetchGlossary}
         onBack={() => setChosenView(null)}
         onCatalogChanged={async (category) => {
           if (category === 'weapons') await fetchArmas();
@@ -7251,249 +7210,6 @@ function App() {
           <div className="mt-6 space-y-4">
             <Collapsible title="Objetos de inventario personalizados" defaultOpen={false} variant="premium">
               <CustomItemManager />
-            </Collapsible>
-            <Collapsible
-              title={
-                editingTerm
-                  ? `Editar término: ${editingTerm}`
-                  : 'Añadir término destacado'
-              }
-              defaultOpen={false}
-              variant="premium"
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <Input
-                  placeholder="Palabra"
-                  value={newTerm.word}
-                  onChange={(e) => {
-                    setNewTermError('');
-                    setNewTerm((t) => ({ ...t, word: e.target.value }));
-                  }}
-                />
-                <input
-                  type="color"
-                  value={newTerm.color}
-                  onChange={(e) => {
-                    setNewTermError('');
-                    setNewTerm((t) => ({
-                      ...t,
-                      color: e.target.value,
-                      colorInput: e.target.value,
-                    }));
-                  }}
-                  className="w-10 h-8 border-none p-0 rounded"
-                />
-                <Input
-                  placeholder="#RRGGBB"
-                  value={newTerm.colorInput ?? newTerm.color}
-                  onChange={(e) => {
-                    const { value } = e.target;
-                    setNewTermError('');
-                    setNewTerm((t) => {
-                      const normalized = normalizeGlossaryHexColor(value);
-                      if (isValidGlossaryHexColor(normalized)) {
-                        return { ...t, color: normalized, colorInput: normalized };
-                      }
-                      return { ...t, colorInput: value };
-                    });
-                  }}
-                  className="sm:col-span-1"
-                />
-                <textarea
-                  className="bg-gray-700 text-white rounded px-2 py-1 sm:col-span-2"
-                  placeholder="Descripción"
-                  value={newTerm.info}
-                  onChange={(e) => {
-                    setNewTermError('');
-                    setNewTerm((t) => ({ ...t, info: e.target.value }));
-                  }}
-                />
-                <div className="sm:col-span-2 flex justify-between items-center">
-                  {editingTerm && (
-                    <Boton
-                      color="gray"
-                      onClick={() => {
-                        setEditingTerm(null);
-                        setNewTerm({
-                          word: '',
-                          color: '#ffff00',
-                          colorInput: '#ffff00',
-                          info: '',
-                        });
-                        setNewTermError('');
-                      }}
-                    >
-                      Cancelar
-                    </Boton>
-                  )}
-                  <Boton color="green" onClick={saveTerm}>
-                    {editingTerm ? 'Actualizar' : 'Guardar'} término
-                  </Boton>
-                </div>
-                {newTermError && (
-                  <p className="text-red-400 text-center sm:col-span-2">
-                    {newTermError}
-                  </p>
-                )}
-              </div>
-            </Collapsible>
-            <Collapsible title="Glosario" defaultOpen={false} variant="premium">
-              {glossary.length === 0 ? (
-                <p className="text-gray-400">No hay términos.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {glossary.map((t, i) => (
-                    <li key={i} className="flex justify-between items-center">
-                      <span className="mr-2">
-                        <span style={{ color: t.color }} className="font-bold">
-                          {t.word}
-                        </span>{' '}
-                        - {t.info}
-                      </span>
-                      <div className="flex gap-2">
-                        <Boton
-                          color="blue"
-                          onClick={() => startEditTerm(t)}
-                          className="px-2 py-1 text-sm"
-                        >
-                          Editar
-                        </Boton>
-                        <Boton
-                          color="red"
-                          onClick={() => deleteTerm(t.word)}
-                          className="px-2 py-1 text-sm"
-                        >
-                          Borrar
-                        </Boton>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Collapsible>
-            <Collapsible
-              title={
-                editingRarity
-                  ? `Editar rareza: ${editingRarity}`
-                  : 'Gestionar rarezas'
-              }
-              defaultOpen={false}
-              variant="premium"
-            >
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-1">
-                      Nombre
-                    </label>
-                    <Input
-                      placeholder="Nombre"
-                      value={newRarityData.nombre}
-                      onChange={(e) =>
-                        setNewRarityData((data) => ({
-                          ...data,
-                          nombre: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-300 mb-1">
-                      Color
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={normalizeHexColor(newRarityData.color, '#7c3aed')}
-                        onChange={(e) =>
-                          setNewRarityData((data) => ({
-                            ...data,
-                            color: e.target.value,
-                          }))
-                        }
-                        className="w-12 h-10 border-0 rounded cursor-pointer"
-                      />
-                      <Input
-                        value={newRarityData.color}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          if (value === '' || /^#([0-9a-fA-F]{0,6})$/.test(value)) {
-                            setNewRarityData((data) => ({ ...data, color: value }));
-                          }
-                        }}
-                        placeholder="#7c3aed"
-                      />
-                    </div>
-                  </div>
-                </div>
-                {rarityError && (
-                  <p className="text-red-400 text-center text-sm">{rarityError}</p>
-                )}
-                <div className="flex flex-col sm:flex-row justify-end gap-2">
-                  {editingRarity && (
-                    <Boton
-                      color="gray"
-                      onClick={() => {
-                        setEditingRarity(null);
-                        setNewRarityData({ nombre: '', color: '#7c3aed' });
-                        setRarityError('');
-                      }}
-                    >
-                      Cancelar
-                    </Boton>
-                  )}
-                  <Boton color="green" onClick={agregarRareza}>
-                    {editingRarity ? 'Actualizar' : 'Guardar'} rareza
-                  </Boton>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-gray-200 mb-2">
-                    Rarezas creadas
-                  </h4>
-                  {rarities.length === 0 ? (
-                    <p className="text-gray-400 text-sm">
-                      Aún no has definido rarezas personalizadas.
-                    </p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {rarities.map((rarity) => (
-                        <li
-                          key={`rarity-${rarity.nombre}`}
-                          className="flex items-center justify-between bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2"
-                        >
-                          <div className="flex items-center gap-3">
-                            <span
-                              className="w-6 h-6 rounded-full border border-white/20 shadow"
-                              style={{ background: rarity.color }}
-                            />
-                            <span className="font-semibold text-white">
-                              {rarity.nombre}
-                            </span>
-                          </div>
-                          <div className="flex gap-2">
-                            <Boton
-                              color="blue"
-                              size="sm"
-                              onClick={() => startEditRarity(rarity)}
-                              className="px-2 py-1 text-xs"
-                            >
-                              Editar
-                            </Boton>
-                            <Boton
-                              color="red"
-                              size="sm"
-                              onClick={() => deleteRarity(rarity.nombre)}
-                              className="px-2 py-1 text-xs"
-                            >
-                              Borrar
-                            </Boton>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </div>
             </Collapsible>
             <Collapsible
               title={

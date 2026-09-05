@@ -5,6 +5,19 @@
 Fichas Rol App es una aplicación web desarrollada en React para crear y gestionar fichas de personaje de rol. Toda la información se almacena en Firebase y el catálogo de equipo proviene de Google Sheets, actualizándose automáticamente. Incluye un sistema de inventario con grid 10×8, drag & drop fluido y rotación de objetos.
 
 ## ✨ Características principales
+- **Ataques automatizados en el Canvas**: la primera fase valida objetivo enemigo, alcance, Duelo, coste y perfil completo del arma; compromete dados de acción, encadena cada Crítico, calcula Presión y Perforación, permite gastar únicamente dados reservados en Defensa activa y aplica bloques de Vida por múltiplos completos de CD.
+- La acción Atacar también dispone de una prueba libre fuera del modo combate: genera dados temporales de acción y defensa, omite iniciativa y restricciones de turno y aplica el resultado sin crear una ronda.
+- La resolución contra enemigos ofrece Defensa activa antes de aplicar la CD: el máster puede recibir el ataque o gastar la acción principal, elegir equipo defensivo, tirar su perfil completo y añadir como máximo una Amenaza disponible o un dado personalizado. Los empates anulan el ataque y el Excedente se dedica íntegramente a reposicionamiento o contraataque.
+- Las ventanas de ataque y defensa comparten un interior sobrio: dados agrupados por origen, equipo ilustrado, Amenaza mediante opciones compactas y presión restante como resultado principal. Conservan el marco y los botones de confirmación; el contenido tiene scroll independiente y las acciones de excedente se apilan en móviles estrechos.
+- Durante la preparación del ataque de un enemigo, el máster puede conservar la Amenaza, gastar la reserva actual o añadir un dado puntual d4–d20. El dado personalizado se tira para ese ataque sin consumir ni crear una reserva permanente.
+- El selector de ataque resume cada arma con su ilustración, el icono de dados de acción usado por el inventario, daño en rojo hierro y una línea de rasgos con recorte automático. Se retiraron los antiguos cuadrados de iniciales de atributo y el panel aprovecha más anchura en móvil.
+
+- **Acceso opcional por contraseña**: una ficha puede guardarse sin contraseña; en ese caso acepta cualquier valor en el acceso. También se puede eliminar una contraseña existente guardando el campo vacío.
+- **Entrada fluida a Mis clases**: el perfil y el recuento de personajes se preparan antes del cambio de pantalla, eliminando la espera artificial y el mensaje intermedio de carga.
+
+- **Fondos de la forja sin ilustración**: hierro ennegrecido mate, grano sutil y un yunque grabado tenue, con sombras que preservan la legibilidad del nombre.
+- **Acciones de cabecera de la forja**: botones con altura y tipografía comunes; creación en bronce oscuro y regreso al menú como acción secundaria.
+- **Mochila y vista previa de la forja**: comparten el formato de tarjeta del inventario, con filas uniformes de 350 px en PC y scroll interno para descripciones largas. En escritorio amplio, la vista previa reproduce el ancho de una columna de la mochila.
 
 ### Biblioteca de personajes y clases sin saltos de carga
 
@@ -1579,6 +1592,7 @@ Fichas Rol App es una aplicación web desarrollada en React para crear y gestion
 - **Persistencia en Firebase** - Almacenamiento seguro y sincronización en tiempo real
 - **Tooltips informativos** - Información detallada editables en tiempo real
 - **Glosario configurable** - Términos destacados con descripciones personalizadas y ajuste de color por código hex
+- **Glosario integrado en la Forja Roguelite** - Gestión táctil de términos, descripciones y colores desde un panel lateral en escritorio o una hoja inferior en móvil, con búsqueda, edición y borrado directo.
 - **Editor de notas con Tiptap** - Edición de texto con negrita, cursiva, subrayado, listas, colores y alineación
   - Ahora las listas numeradas y con viñetas se muestran con sangría adecuada dentro del editor
 - **Pruebas automáticas** - Suite de pruebas con React Testing Library
@@ -2975,6 +2989,8 @@ Guía rápida: ver `docs/Minimapa.md`.
 
 ## Novedades: Catálogo de equipamiento Roguelite
 
+- La Forja Roguelite concentra ahora la gestión del catálogo y de sus rarezas. Sus categorías se presentan como pestañas tipográficas sin pictogramas ni cajas doradas; botones y estados activos recuperan el acento dorado contenido de NOMA mediante líneas y bordes finos, sin grandes rellenos amarillos.
+- El gestor de rarezas se abre como panel lateral en escritorio y hoja inferior en móvil. Permite crear, renombrar, recolorear y eliminar rarezas con controles táctiles; la primera apertura incorpora una sola vez la escala Común, Poco común, Rara, Épica, Legendaria y Mítica, sin volver a crear ninguna que el máster elimine después.
 - Los editores del máster para armas, armaduras, accesorios y habilidades utilizan ahora el modelo del Roguelite en lugar de las cargas física/mental del sistema anterior.
 - Las armas definen perfil de daño, alcance, competencia, coste de 1 a 3 dados de acción y empuñadura explícita de una o dos manos. `Dos manos` y `Pesada` permanecen como conceptos independientes.
 - Las armaduras definen directamente su CD y competencia; los accesorios conservan rasgos, descripción, rareza y precio/valor; las habilidades admiten alcance, perfil o efecto y coste de 0 a 3 dados.
@@ -3048,3 +3064,10 @@ Guía rápida: ver `docs/Minimapa.md`.
 - Equipamiento y habilidades disponen de una a cuatro ranuras. El equipo se busca en el catálogo general; las habilidades pueden escribirse para una criatura o guardarse en `rogueliteEnemyAbilities` para reutilizarlas.
 - `Añadir al encuentro` escribe un token `rogueliteEnemy` exclusivamente en el encuentro emitido por `gameSettings/canvasVisibility` dentro de `canvas_scenarios`. No utiliza ni modifica `BoardSection`.
 - El inspector del Canvas reconoce el nuevo perfil, presenta sus cinco estadísticas con barras editables y conserva equipo y habilidades mediante las tarjetas compactas del inventario Roguelite.
+- **Catálogo visual de la Forja**: entradas compactas con arte integrado, acento de rareza, valores de combate y rasgos del glosario. Las opciones de duplicar y eliminar se agrupan en un menú táctil; el editor móvil permite alternar entre campos y carta.
+- El catálogo de la Forja utiliza la distribución compacta de la previsualización: identidad a la izquierda, arte integrado a la derecha y reglas debajo. Las entradas alinean su contenido arriba para evitar huecos sobre la imagen.
+- Los objetos de la Forja sin ilustración muestran un fondo mineral con vetas diagonales y un degradado tenue del color de su rareza.
+- El d20 compartido adopta una silueta triangular construida con diez facetas separadas, coherente con la referencia visual tanto en las tiradas de combate como en los selectores de Amenaza.
+- La defensa del jugador presenta la CD como valor principal sobre una tarjeta con el arte y nombre de la armadura equipada. La reserva de dados queda centrada, distingue con claridad los estados disponible/seleccionado y la Presión restante conserva visible la CD efectiva.
+- La tarjeta defensiva adopta la proporción horizontal de la Presión entrante y separa la CD mediante una columna lateral. El resolvedor de imágenes reconoce también las armaduras locales por nombre, incluida Armadura acolchada.
+- Los ataques sin Amenaza omiten `threatDieSides` al crear el evento pendiente y la cola descarta propiedades indefinidas antes de persistirlo, evitando el rechazo de Firestore al sincronizar un ataque normal.

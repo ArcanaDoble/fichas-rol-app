@@ -1,13 +1,15 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sword, ArrowUp, Shield, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X, Zap, RotateCw, Footprints } from 'lucide-react';
-import { parseAttrBonuses, getSpeedConsumption } from '../utils/combatSystem';
+import { Sword, ArrowUp, Shield, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X, Zap, RotateCw, Footprints, Dices } from 'lucide-react';
+import { getSpeedConsumption } from '../utils/combatSystem';
+import { getItemTraits } from '../utils/armorSystem';
 import CombatModifiersPanel, { applyModifiersToWeapon } from './CombatModifiersPanel';
 import { getCustomImage, useCustomEquipmentImages } from '../hooks/useCustomEquipmentImages';
 import { PRONE_STATUS_IDS } from '../utils/statusEffects';
 import { getCardDisplayImage } from '../utils/cardImages';
 import { reorderCardItems } from '../utils/cardBoard';
 import ActionDieSvg from './ActionDieSvg';
+import { resolveRogueliteEquippedItems } from '../features/canvas/rogueliteTokenSheetSync';
 
 const RANGE_MAP = {
     toque: 0,
@@ -354,7 +356,12 @@ const CombatHUD = ({
     if (!token && !isBoardMode) return null;
 
     // Obtener opciones de ataque (Armas + Habilidades Ofensivas)
-    const items = Array.isArray(token?.equippedItems) ? token.equippedItems : [];
+    const items = Array.isArray(token?.equippedItems) && token.equippedItems.length > 0
+        ? token.equippedItems
+        : resolveRogueliteEquippedItems(
+            token?.equipmentLoadout
+            || (token?.equippedItems && !Array.isArray(token.equippedItems) ? token.equippedItems : {})
+        ).items;
     let attackOptions = items.filter(i =>
         i.type === 'weapon' ||
         i.type === 'ability' ||
@@ -427,6 +434,13 @@ const CombatHUD = ({
             onAction(actionId);
             setSelectedActionId(null);
         }
+    };
+
+    const cancelAttackPreparation = () => {
+        setSelectedActionId(null);
+        setSelectedAttackItemIdx(null);
+        setAttackModifiersExpanded(false);
+        onAction?.('cancel_targeting');
     };
 
     const categories = [
@@ -832,7 +846,7 @@ const CombatHUD = ({
                                         exit="exit"
                                         className="relative pointer-events-auto translate-y-[12px] md:translate-y-[1px] focus:outline-none overflow-hidden"
                                     >
-                                        <div className="w-[200px] md:w-80 bg-[#0b1120]/98 border-t-2 border-x-2 border-[#c8aa6e] border-b-0 rounded-t-2xl overflow-hidden flex flex-col shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
+                                        <div className="w-[min(92vw,360px)] md:w-80 bg-[#0b1120]/98 border-t-2 border-x-2 border-[#c8aa6e] border-b-0 rounded-t-2xl overflow-hidden flex flex-col shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
                                             <div className="bg-[#c8aa6e] px-3 py-2 md:px-4 md:py-3 flex justify-between items-center shrink-0 shadow-lg">
                                                 <div className="flex items-center gap-2">
                                                     <Sword size={14} className="text-[#0b1120]" />
@@ -840,7 +854,13 @@ const CombatHUD = ({
                                                         Selecciona Ataque
                                                     </span>
                                                 </div>
-                                                <button onClick={() => setSelectedActionId(null)} className="text-[#0b1120]/60 hover:text-[#0b1120] p-1 transition-colors">
+                                                <button
+                                                    type="button"
+                                                    onClick={cancelAttackPreparation}
+                                                    className="text-[#0b1120]/60 hover:text-[#0b1120] p-1 transition-colors"
+                                                    aria-label="Cancelar preparación del ataque"
+                                                    title="Cancelar ataque"
+                                                >
                                                     <X size={16} className="md:w-[18px] md:h-[18px]" />
                                                 </button>
                                             </div>
@@ -862,16 +882,9 @@ const CombatHUD = ({
                                                     const itemImg = resolveCombatItemImage(item, customEquipmentImages);
                                                     const nameColorClass = getRarityHeaderColor(item.rareza || '');
 
-                                                    // Parse traits for attribute dice visualization
-                                                    const traits = item.rasgos || item.traits || item.properties || [];
-                                                    const attrBonuses = parseAttrBonuses(traits);
-
-                                                    const attrColorMap = {
-                                                        destreza: '#4ade80',
-                                                        intelecto: '#60a5fa',
-                                                        voluntad: '#c084fc',
-                                                        vigor: '#f87171'
-                                                    };
+                                                    const traits = getItemTraits(item).filter((trait) => trait !== '-');
+                                                    const damage = item.damage || item.dano;
+                                                    const actionCost = getSpeedConsumption(item);
 
                                                     return (
                                                         <div key={idx} className="flex flex-col mb-2">
@@ -885,57 +898,36 @@ const CombatHUD = ({
                                                                         setAttackModifiersExpanded(false);
                                                                     }
                                                                 }}
-                                                                className={`flex items-center gap-3 md:gap-4 p-2 md:p-3 rounded-xl hover:bg-[#c8aa6e]/10 transition-all text-left group/item border shadow-lg ${selectedAttackItemIdx === idx ? 'border-[#c8aa6e] bg-[#c8aa6e]/10' : 'border-white/5 hover:border-[#c8aa6e]/30'
+                                                                data-testid="attack-option"
+                                                                className={`relative flex min-h-[76px] items-stretch gap-3 overflow-hidden rounded-lg border p-2 text-left transition-colors group/item ${selectedAttackItemIdx === idx ? 'border-[#c8aa6e] bg-[#171710]' : 'border-[#3b372f] bg-[#0e0e0c] hover:border-[#8b754d] hover:bg-[#14130f]'
                                                                     }`}
                                                             >
-                                                                <div className={`w-10 h-10 md:w-12 md:h-12 rounded-lg border ${item.type === 'ability' ? 'border-purple-500/50 bg-purple-900/40' : 'border-slate-700 bg-black/60'} flex items-center justify-center shrink-0 overflow-hidden relative shadow-inner`}>
+                                                                <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-[2px] transition-colors ${selectedAttackItemIdx === idx ? 'bg-[#c8aa6e]' : 'bg-transparent'}`} />
+                                                                <div className={`h-[58px] w-[58px] self-center rounded border ${item.type === 'ability' ? 'border-purple-500/35 bg-purple-950/30' : 'border-[#504735] bg-black/60'} flex items-center justify-center shrink-0 overflow-hidden relative shadow-inner`}>
                                                                     <ItemImage src={itemImg} type={item.type} name={item.name || item.nombre} />
+                                                                    <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 to-transparent" />
                                                                 </div>
-                                                                <div className="flex flex-col flex-1 min-w-0">
-                                                                    <span className={`text-xs md:text-[13px] font-bold truncate mb-0.5 md:mb-1 ${nameColorClass}`}>
+                                                                <div className="flex min-w-0 flex-1 flex-col justify-center py-0.5">
+                                                                    <span className={`truncate font-fantasy text-[13px] font-bold leading-5 md:text-sm ${nameColorClass}`}>
                                                                         {item.name || item.nombre}
                                                                     </span>
-                                                                    <div className="flex items-center gap-1.5 md:gap-2">
-                                                                        <span className="text-[8px] whitespace-nowrap md:text-[10px] text-yellow-500 bg-black/40 px-1.5 py-0.5 rounded border border-white/5 font-bold">
-                                                                            {getSpeedConsumption(item)}🟡
+                                                                    <div className="mt-1 flex min-w-0 items-center gap-2">
+                                                                        <span className="inline-flex shrink-0 items-center gap-1 border-r border-[#514936] pr-2 text-[10px] font-bold text-[#d8c28d]" aria-label={`Coste: ${actionCost} ${actionCost === 1 ? 'dado' : 'dados'} de acción`}>
+                                                                            <Dices aria-hidden="true" className="h-3.5 w-3.5 text-[#b99a5b]" strokeWidth={1.7} />
+                                                                            {actionCost}
                                                                         </span>
-                                                                        {(item.damage || item.dano) && (
-                                                                            <span className="text-[8px] whitespace-nowrap md:text-[10px] text-red-400 font-bold bg-red-950/30 px-1.5 py-0.5 rounded border border-red-500/10">
-                                                                                {item.damage || item.dano}
+                                                                        {damage && (
+                                                                            <span className="shrink-0 whitespace-nowrap font-fantasy text-[10px] font-bold tracking-[0.025em] text-[#d6948c]" aria-label={`Daño: ${damage}`}>
+                                                                                {damage}
                                                                             </span>
                                                                         )}
-
-                                                                        {/* Attribute Dice Icons */}
-                                                                        <div className="flex gap-1 ml-1 overflow-x-auto scrollbar-hide">
-                                                                            {attrBonuses.map((bonus, bIdx) => (
-                                                                                <div
-                                                                                    key={bIdx}
-                                                                                    className="flex items-center gap-0.5"
-                                                                                >
-                                                                                    {Array.from({ length: bonus.mult }).map((_, mIdx) => (
-                                                                                        <div
-                                                                                            key={mIdx}
-                                                                                            className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-[1px] border flex items-center justify-center shrink-0 overflow-visible"
-                                                                                            style={{
-                                                                                                borderColor: attrColorMap[bonus.attr] || '#94a3b8',
-                                                                                                color: attrColorMap[bonus.attr] || '#94a3b8',
-                                                                                                backgroundColor: `${attrColorMap[bonus.attr]}10` || 'transparent'
-                                                                                            }}
-                                                                                        >
-                                                                                            <span
-                                                                                                className="block text-[6px] md:text-[7px] font-black leading-none select-none"
-                                                                                                style={{ lineHeight: 1, transform: 'translateY(0.25px)' }}
-                                                                                            >
-                                                                                                {bonus.attr.charAt(0).toUpperCase()}
-                                                                                            </span>
-                                                                                        </div>
-                                                                                    ))}
-                                                                                </div>
-                                                                            ))}
-                                                                        </div>
                                                                     </div>
+                                                                    <span className="mt-1.5 flex min-w-0 items-center gap-1 truncate text-[8px] font-bold uppercase tracking-[0.09em] text-[#a99569]" aria-label={traits.length ? `Rasgos: ${traits.join(', ')}` : 'Sin rasgos'}>
+                                                                        <span aria-hidden="true" className="text-[#c8aa6e]">◆</span>
+                                                                        <span className="truncate">{traits.length ? traits.join(' · ') : 'Sin rasgos'}</span>
+                                                                    </span>
                                                                 </div>
-                                                                <ChevronUp className={`text-[#c8aa6e]/40 group-hover/item:text-[#c8aa6e] transition-all w-3 h-3 md:w-4 md:h-4 ${selectedAttackItemIdx === idx ? 'rotate-180' : 'rotate-90'}`} />
+                                                                <ChevronUp className={`my-auto h-4 w-4 shrink-0 text-[#8d7a51] transition-transform group-hover/item:text-[#d4b873] ${selectedAttackItemIdx === idx ? 'rotate-180' : 'rotate-90'}`} />
                                                             </button>
 
                                                             {/* Panel Expandible de Modificadores para el arma seleccionada */}

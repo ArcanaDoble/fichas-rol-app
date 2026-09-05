@@ -105,6 +105,8 @@ export const getMovementAllowance = (participant) => {
 };
 
 export const getAvailableMovement = (participant) => {
+  const defensiveRemaining = Number(participant?.defensiveReposition?.remaining);
+  if (Number.isFinite(defensiveRemaining) && defensiveRemaining > 0) return defensiveRemaining;
   const runtime = participant?.movementRuntime;
   if (!runtime) return 0;
   const spent = Number(runtime.spent) || 0;
@@ -265,12 +267,15 @@ export const queueCanvasAttack = (state, attack, options = {}) => {
       },
   };
   const now = options.now || Date.now();
+  const serializableAttack = Object.fromEntries(
+    Object.entries(attack).filter(([, value]) => value !== undefined),
+  );
 
   return {
     ...state,
     participants,
     pendingAttack: {
-      ...attack,
+      ...serializableAttack,
       status: 'awaiting-defense',
       createdAt: attack.createdAt || now,
     },
@@ -335,7 +340,7 @@ export const resolveQueuedCanvasAttack = (state, resolution, options = {}) => {
   const selectedDice = (target.actionDice || []).filter((die) => selectedIds.has(die.id));
   if (target.side === 'players' && (
     selectedDice.length !== selectedIds.size
-    || selectedDice.some((die) => die.status === 'spent')
+    || selectedDice.some((die) => die.status !== 'committed')
   )) return state;
 
   return {
@@ -748,18 +753,23 @@ export const recordParticipantMovement = (state, tokenId, { from, to, cost = 0, 
   };
   const numericCost = Math.max(0, asInteger(cost, 0));
   const effectiveCost = isExceptional ? 0 : numericCost;
+  const defensiveRemaining = Math.max(0, Number(participant.defensiveReposition?.remaining) || 0);
+  const usesDefensiveReposition = defensiveRemaining > 0 && !isExceptional;
   const entry = {
     id: `move-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     from: { x: Number(from?.x) || 0, y: Number(from?.y) || 0 },
     to: { x: Number(to?.x) || 0, y: Number(to?.y) || 0 },
     cost: effectiveCost,
     isExceptional: Boolean(isExceptional),
+    defensiveReposition: usesDefensiveReposition,
     actor: actor || participant.name || 'Desconocido',
     timestamp: options.now || Date.now(),
   };
 
   const nextHistory = [...(runtime.history || []), entry];
-  const nextSpent = Math.max(0, (Number(runtime.spent) || 0) + effectiveCost);
+  const nextSpent = usesDefensiveReposition
+    ? Math.max(0, Number(runtime.spent) || 0)
+    : Math.max(0, (Number(runtime.spent) || 0) + effectiveCost);
 
   return {
     ...state,
@@ -767,7 +777,10 @@ export const recordParticipantMovement = (state, tokenId, { from, to, cost = 0, 
       ...state.participants,
       [tokenId]: {
         ...participant,
-        enemyActions: participant.side === 'enemies' && effectiveCost > 0
+        defensiveReposition: usesDefensiveReposition
+          ? { ...participant.defensiveReposition, remaining: Math.max(0, defensiveRemaining - effectiveCost) }
+          : participant.defensiveReposition,
+        enemyActions: participant.side === 'enemies' && effectiveCost > 0 && !usesDefensiveReposition
           ? (participant.enemyActions || defaultEnemyActions()).map((action) => (
             action.id === 'movement' ? { ...action, status: 'spent' } : action
           ))
@@ -806,7 +819,9 @@ export const undoParticipantMovement = (state, tokenId, options = {}) => {
 
   const lastEntry = runtime.history[runtime.history.length - 1];
   const nextHistory = runtime.history.slice(0, -1);
-  const nextSpent = Math.max(0, (Number(runtime.spent) || 0) - (Number(lastEntry.cost) || 0));
+  const nextSpent = lastEntry.defensiveReposition
+    ? Math.max(0, Number(runtime.spent) || 0)
+    : Math.max(0, (Number(runtime.spent) || 0) - (Number(lastEntry.cost) || 0));
 
   const nextState = {
     ...state,
@@ -814,6 +829,13 @@ export const undoParticipantMovement = (state, tokenId, options = {}) => {
       ...state.participants,
       [tokenId]: {
         ...participant,
+        defensiveReposition: lastEntry.defensiveReposition
+          ? {
+            ...(participant.defensiveReposition || {}),
+            remaining: Math.max(0, Number(participant.defensiveReposition?.remaining) || 0) + (Number(lastEntry.cost) || 0),
+            ignoresDuelExit: true,
+          }
+          : participant.defensiveReposition,
         enemyActions: participant.side === 'enemies' && nextHistory.length === 0
           ? (participant.enemyActions || defaultEnemyActions()).map((action) => (
             action.id === 'movement' ? { ...action, status: 'available' } : action

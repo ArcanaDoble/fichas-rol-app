@@ -575,3 +575,81 @@ Original prompt: Perfecto. Ahora necesito que vayas implementando cada cambio qu
 - Los resultados se publican en `combat_log` para reutilizar el historial y las animaciones ya existentes.
 - Cobertura añadida para costes, perfiles, alcance, Duelo, críticos, CD, excedente y transición sincronizada ataque-defensa.
 - Validación final: 87 suites correctas, 385 tests superados y 1 omitido; `npm run build` compila y `git diff --check` queda limpio.
+
+## 2026-09-04 — Lenguaje visual y rarezas de la Forja Roguelite
+
+- Retirada la chispa decorativa de `Vista en inventario` y eliminados los pictogramas de Armas, Armaduras, Habilidades, Objetos y Accesorios en la navegación principal.
+- Sustituidas las cajas doradas de categoría por pestañas tipográficas con separador activo. Tras la revisión visual, volver, crear, cargar y guardar recuperan el dorado característico mediante texto, líneas, bordes finos y fondos oscuros, evitando el anterior aspecto de bloque amarillo; cancelar permanece neutro y eliminar conserva su rojo semántico.
+- Trasladada la gestión de rarezas a la propia Forja mediante un panel lateral en escritorio y una hoja inferior táctil en móvil, con creación, edición, color y borrado directo.
+- El gestor de rarezas comparte el dorado contenido de la Forja en bordes, foco, edición y confirmación, mientras cada muestra conserva su color semántico propio.
+- Trasladado el gestor del glosario a la Forja con buscador, alta, edición y borrado en una hoja inferior móvil o panel lateral de escritorio; el antiguo formulario duplicado de ajustes generales queda retirado.
+- Añadida una inicialización persistente de una sola ejecución para Común, Poco común, Rara, Épica, Legendaria y Mítica. El marcador de inicialización evita que una rareza eliminada voluntariamente vuelva a aparecer.
+- Añadida cobertura focal para la navegación sin pictogramas y la creación de rarezas desde la Forja.
+- Validación final: 95 suites correctas, 444 tests superados y 1 omitido; la cobertura específica de Forja añade 3 pruebas correctas, `npm run build` compila y `git diff --check` queda limpio. El cliente visual arranca sin errores, aunque la ruta autenticada de la Forja permanece detrás de la selección de rol para la sesión automatizada.
+## 2026-09-05 — Catálogo visual de la Forja
+
+- Entradas ilustradas compactas con reglas y rasgos visibles, menú de acciones de 48 px y eliminación de la marca Arcana Vault de las cabeceras.
+- Editor móvil con alternancia entre campos y previsualización; escritorio mantiene ambas regiones.
+- Pruebas específicas de Forja: 4 correctas.
+- Revisión del catálogo tras feedback: sustituida la miniatura cuadrada por cabecera ilustrada 4:3 a todo el ancho, con identidad sobre degradado inferior. Requiere revisión visual en sesión autenticada.
+- Ajuste posterior: cabecera compacta de 116 px con la distribución lateral del arte de la previsualización. El botón de entrada usa flex con alineación superior para evitar centrado vertical y huecos sobre el arte entre entradas de distinta altura.
+
+## 2026-09-05 — Defensa activa de enemigos en Canvas
+
+- La ventana de ataque inminente ya no permite descartar el ataque; «Recibir ataque» ocupa la acción principal cuando no se defiende.
+- Un enemigo puede defenderse fuera de su turno si conserva Ataque y empuña un arma o equipo con perfil defensivo válido. Defender gasta Ataque inmediatamente.
+- La defensa tira el perfil completo del equipo sin sumar Base ofensiva y admite una sola Amenaza: la disponible de la ronda o un dado personalizado d4–d20 para esa resolución.
+- Empate anula el ataque; una defensa superior exige dedicar todo el Excedente a reposicionarse o contraatacar. El reposicionamiento usa una reserva separada y no gasta Movimiento.
+- Rediseñada la ventana para móvil y escritorio: la Presión entrante desglosa visualmente dados de acción, arma, críticos, Amenaza y Base; el equipo defensivo usa tarjetas con imagen, perfil y rasgos; la Amenaza emplea opciones táctiles y dados d4–d20, sin mostrar valores `null`.
+- Sustituida la tabla plana de resultados por tres indicadores temáticos y responsive: Defensa en azul acero, Presión restante en rojo y Excedente en dorado, con iconos ambientales, acento superior y números de mayor jerarquía.
+- Rediseñada la tarjeta de arma de «Preparar ataque»: usa el arte real del catálogo o su recurso clásico, integra nombre, coste, perfil, alcance y rasgos sobre degradados legibles, y sustituye «contra» por un separador `VS`.
+
+## 2026-09-05 — Revisión completa del interior de los modales de combate
+
+- Se conserva el marco exterior y los botones principales aprobados por el usuario. El interior sustituye insignias, iconos decorativos y paneles azules/morados por tipografía contenida, separadores y dorado de selección.
+- `CanvasCombatDetails.jsx` y su CSS comparten el desglose de presión, dados seleccionables, cartas de equipo, Amenaza y resultado entre preparación y las dos defensas. El arma atacante aparece ilustrada detrás de sus dados; las armas defensivas usan el mismo tratamiento panorámico de la carta aprobada.
+- La Amenaza distingue sin amenaza, reserva y dado puntual; sus tamaños solo aparecen al elegir la opción personalizada. La preparación enemiga reutiliza el selector de reserva, sin introducir Amenaza personalizada ofensiva.
+- La presión restante ocupa la primera jerarquía del resultado, con Defensa total y Excedente en una línea secundaria. Se mantienen las acciones y cálculos existentes. El desglose compartido incluye críticos legacy, Amenaza y penalización Arrojadiza; la forma del dado de Amenaza utiliza el perfil del atacante cuando está disponible.
+- Corregida la superposición del título sobre el botón X y ampliada su zona táctil. Las acciones de Excedente se apilan por debajo de 380 px para evitar textos superpuestos.
+- Validación: 36 pruebas de modal/reglas/estado superadas y compilación de producción correcta. Revisión de 21 escenarios de los componentes reales en 1440×1000, 390×844 y 320×640, con selección de dados, reserva/puntual, recepción, defensa, excedente y cancelación; sin errores de navegador ni desbordamiento horizontal del contenido.
+- Capturas abiertas e inspeccionadas, incluida la resolución completa a 1280×720 con el cliente de la skill. Harness y evidencias en `output/combat-ui-review`; usa datos locales y sustituye únicamente el hook de imágenes de Firebase. Esta comprobación visual no verifica sincronización multicliente ni escrituras reales de combate.
+
+## 2026-09-05 — Opciones de arma del selector de ataque
+
+- Sustituidos los tres microcomponentes anteriores de cada opción: el coste usa ahora `Dices`, igual que la tarjeta del inventario; el daño adopta un rojo hierro más contenido; la antigua inicial del atributo desaparece y se muestra la lista real de rasgos.
+- Los rasgos comparten una sola línea y se recortan con elipsis cuando el ancho se agota. Así siempre queda visible al menos el primero sin crear scroll horizontal ni desplazar el control de selección.
+- Las opciones usan un borde más sobrio, imagen de 58 px, franja lateral en selección y una jerarquía tipográfica compacta. El selector móvil pasa de 200 px a un ancho máximo de 360 px limitado al 92 % del viewport.
+- Añadida cobertura de render para coste, daño y rasgos. El harness de `output/attack-selector-review` verificó las tres opciones a 1280×720, 390×844 y 320×640, incluida selección, expansión y cancelación, sin errores de navegador ni desbordamiento horizontal.
+
+## 2026-09-05 — Amenaza personalizada en ataques enemigos
+
+- La preparación de un ataque enemigo reutiliza el selector completo de Amenaza: sin Amenaza, reserva actual cuando existe, o dado puntual d4, d6, d8, d10, d12 o d20 aunque la criatura no tenga una reserva configurada.
+- `rollCanvasThreatDie` centraliza la elección para ataque y defensa. La reserva aporta su valor ya obtenido y queda consumida; la opción personalizada tira el dado elegido para esa resolución y conserva intacta cualquier reserva.
+- El ataque pendiente guarda el dado y su número de caras para que la ventana defensiva explique correctamente de dónde proviene la Presión.
+- Añadidas pruebas del cálculo de Amenaza vacía, almacenada y personalizada, además del flujo del modal sin reserva. Resultado focal: 38 pruebas superadas.
+- La revisión visual cubre reserva y dado puntual a 1440×1000, 390×844 y 320×640. El harness confirma selección, d20 personalizado, confirmación y cancelación en 27 escenarios, sin errores de navegador ni desbordamientos.
+
+## 2026-09-05 — Nueva geometría del d20
+
+- Sustituida la antigua silueta hexagonal por las diez facetas triangulares separadas de la referencia, conservando el número centrado y las paletas de estado del combate.
+- La misma construcción se aplica al dado ornamentado de acciones y al componente genérico para evitar representaciones distintas del d20 dentro de la aplicación.
+- Validación: 16 pruebas focales correctas, incluidas geometría y modal de combate; 27 escenarios responsive sin errores ni desbordamiento y revisión visual del selector de Amenaza en móvil y escritorio.
+
+## 2026-09-05 — Jerarquía visual de la defensa del jugador
+
+- La antigua mención secundaria `CD N` se sustituye por una tarjeta de protección con el arte y nombre de la armadura equipada, un sello de CD dominante y una explicación breve de su efecto sobre la Vida.
+- Cuando `Perforante` altera el valor, la tarjeta diferencia la CD base de la CD efectiva. El resultado mantiene visible `CD N` junto a la Presión restante, incluso al desplazarse por el contenido en móvil.
+- Los dados de defensa se centran y pasan a controles con borde completo, acento superior, iluminación contenida y estados textuales `Disponible`/`En defensa`. El mismo componente usa `Seleccionado` cuando aparece en la preparación ofensiva.
+- Validación focal: 16 pruebas correctas. El harness recorrió 27 combinaciones en 1440×1000, 390×844 y 320×640 sin errores de navegador ni desbordamiento horizontal; las capturas finales se inspeccionaron con y sin selección.
+
+## 2026-09-05 — Serialización de ataques sin Amenaza
+
+- Corregido el rechazo de Firestore provocado por `pendingAttack.threatDieSides: undefined`: el campo solo se crea cuando el ataque utiliza realmente un dado de Amenaza.
+- La cola de ataques elimina además cualquier propiedad superior indefinida antes de incorporar el ataque al estado persistente.
+- Añadida una regresión que encola un ataque normal con el campo indefinido y comprueba que no llegue a `pendingAttack`. Validación focal: 38 pruebas correctas.
+
+## 2026-09-05 — Arte y proporción de la armadura defensiva
+
+- El resolvedor compartido incorpora las armaduras locales del catálogo por nombre, por lo que `Armadura acolchada` y el resto de piezas clásicas muestran su arte aunque no guarden una URL explícita.
+- La tarjeta de defensa reduce su altura y adopta la estructura horizontal de Presión entrante: datos y regla a la izquierda, imagen panorámica de fondo y CD en una columna derecha con divisor vertical.
+- Validación: 16 pruebas focales correctas, incluida la resolución automática del arte. Revisión de 27 escenarios en 1440×1000, 390×844 y 320×640 sin errores de navegador ni desbordamiento horizontal.

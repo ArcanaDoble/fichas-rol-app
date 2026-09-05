@@ -136,4 +136,36 @@ describe('CombatHUD movement flow', () => {
     expect(onEnemySprint).toHaveBeenCalledTimes(1);
     expect(screen.queryByText('Dado para correr')).not.toBeInTheDocument();
   });
+
+  test('summarizes attack options with action dice cost, damage and weapon traits', () => {
+    render(
+      <CombatHUD
+        token={{
+          id: 'rogue-1',
+          name: 'Pícaro',
+          status: [],
+          equippedItems: [{
+            id: 'stiletto',
+            name: 'Estilete',
+            type: 'weapon',
+            consumo: 1,
+            dano: '1d4 Físico',
+            rasgos: 'Crítico, Destreza, Perforante',
+          }],
+        }}
+        onAction={jest.fn()}
+        mode="canvas"
+        forceWeaponMenu
+        isActive
+      />,
+    );
+
+    const option = screen.getByTestId('attack-option');
+    expect(option).toHaveTextContent('Estilete');
+    expect(option).toHaveTextContent('1d4 Físico');
+    expect(option).toHaveTextContent('Crítico · Destreza · Perforante');
+    expect(screen.getByLabelText('Coste: 1 dado de acción')).toBeInTheDocument();
+    expect(screen.getByLabelText('Daño: 1d4 Físico')).toBeInTheDocument();
+    expect(screen.getByLabelText('Rasgos: Crítico, Destreza, Perforante')).toBeInTheDocument();
+  });
 });

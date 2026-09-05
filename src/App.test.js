@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import App, { evaluatePendingTokenChange } from './App';
+import App, { evaluatePendingTokenChange, isPlayerPasscodeAccepted } from './App';
 import { ConfirmProvider } from './components/Confirm';
 jest.mock('react-dnd', () => ({ useDrag: () => [{}, () => {}], useDrop: () => [{}, () => {}] }));
 jest.mock('./components/inventory/Inventory', () => () => <div>Inventory</div>);
@@ -23,6 +23,14 @@ test('renders main menu', () => {
   expect(screen.getByText(/selecciona tu rol para continuar/i)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /soy jugador/i })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /soy máster/i })).toBeInTheDocument();
+});
+
+test('a player without a configured password can enter with any value', () => {
+  expect(isPlayerPasscodeAccepted('', '')).toBe(true);
+  expect(isPlayerPasscodeAccepted('', 'cualquier cosa')).toBe(true);
+  expect(isPlayerPasscodeAccepted('   ', 'también sirve')).toBe(true);
+  expect(isPlayerPasscodeAccepted('secreto', 'incorrecta')).toBe(false);
+  expect(isPlayerPasscodeAccepted('secreto', 'secreto')).toBe(true);
 });
 
 test.skip('master login shows master menu', async () => {

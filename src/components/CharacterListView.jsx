@@ -32,9 +32,11 @@ export const CharacterListView = ({
     onLaunchMinigame,
     initialCharacterName = null,
     initialRogueliteClassId = null,
+    initialPlayerRecord = null,
+    initialOwnedCharacterCount = null,
 }) => {
-    const [playerRecord, setPlayerRecord] = useState(null);
-    const [ownedCharacterCount, setOwnedCharacterCount] = useState(null);
+    const [playerRecord, setPlayerRecord] = useState(initialPlayerRecord);
+    const [ownedCharacterCount, setOwnedCharacterCount] = useState(initialOwnedCharacterCount);
 
     useEffect(() => {
         if (!playerName) {
@@ -62,7 +64,7 @@ export const CharacterListView = ({
             return undefined;
         }
 
-        setOwnedCharacterCount(null);
+        if (initialOwnedCharacterCount === null) setOwnedCharacterCount(null);
         getDocs(query(
             collection(db, 'characters'),
             where('owner', '==', playerName),
@@ -79,7 +81,7 @@ export const CharacterListView = ({
         return () => {
             active = false;
         };
-    }, [playerName]);
+    }, [initialOwnedCharacterCount, playerName]);
 
     if (!playerRecord || ownedCharacterCount === null) {
         return (

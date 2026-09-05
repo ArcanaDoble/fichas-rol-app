@@ -146,6 +146,8 @@ export const canCombatTokenActNow = (token, items = [], scenarioOrCombat = null)
     // 1. Soporte para el sistema de iniciativa por rondas y bloques (Canvas Combat)
     const combatState = scenarioOrCombat?.canvasCombat || scenarioOrCombat;
     if (combatState && combatState.status === 'active') {
+        const participant = combatState.participants?.[token.id];
+        if (Number(participant?.defensiveReposition?.remaining) > 0) return true;
         if (combatState.roundPhase === 'rolling') {
             return true; // En fase de preparación todos pueden interactuar y tirar dados
         }

@@ -1,0 +1,185 @@
+.combat-details {
+  --combat-gold: #c8aa6e;
+  --combat-ink: #efe5d1;
+  --combat-muted: #a5a4af;
+  --combat-rule: rgba(200, 170, 110, 0.2);
+  color: var(--combat-ink);
+}
+
+.combat-details button:focus-visible {
+  outline: 2px solid var(--combat-gold);
+  outline-offset: 3px;
+}
+
+.combat-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-bottom: 12px;
+}
+.combat-section-heading h3, .combat-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--combat-gold);
+}
+.combat-section-heading > span, .combat-help {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--combat-muted);
+}
+.combat-help { margin-top: 9px; }
+.combat-incoming { position: relative; overflow: hidden; border: 1px solid var(--combat-rule); border-radius: 4px; padding: 12px; background: #090d15; }
+.combat-incoming-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.combat-incoming-shade { position: absolute; inset: 0; background: linear-gradient(90deg, #080c14 0%, rgba(8,12,20,.94) 38%, rgba(8,12,20,.58)), linear-gradient(0deg, #080c14, transparent 80%); }
+.combat-incoming > .combat-section-heading, .combat-incoming > .combat-pressure-line { position: relative; }
+.combat-incoming .combat-section-heading { margin-bottom: 10px; }
+.combat-incoming .combat-source-name { color: #ded0b7; font: 13px/1.4 Cinzel, Georgia, serif; text-transform: uppercase; }
+.combat-pressure-line { display: flex; align-items: center; gap: 14px; }
+.combat-roll-groups { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px 24px; }
+.combat-pressure-line > .combat-roll-groups { flex: 1; min-width: 0; }
+.combat-roll-group { position: relative; text-align: center; }
+.combat-roll-group + .combat-roll-group::before {
+  content: '+'; position: absolute; left: -16px; top: 16px;
+  font-family: Georgia, serif; font-size: 16px; color: #78747b;
+}
+.combat-roll-values { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; min-height: 60px; gap: 4px; }
+.combat-roll-label { display: block; margin-top: 4px; font-size: 10px; color: var(--combat-muted); }
+.combat-roll-die { display: flex; flex-direction: column; align-items: center; }
+.combat-roll-die > span { color: #a49a83; font-size: 10px; line-height: 16px; }
+.combat-flat-roll { display: flex; align-items: center; height: 60px; font: 28px Georgia, serif; }
+.combat-pressure-total { min-width: 68px; padding-left: 16px; border-left: 1px solid var(--combat-rule); text-align: center; }
+.combat-pressure-total > strong { display: block; font: 44px/1 Georgia, serif; color: #ee8b82; }
+.combat-pressure-total > span { display: block; margin-top: 10px; color: var(--combat-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .12em; }
+.combat-defense-roll { padding: 0; }
+
+.combat-dice-tray { display: flex; flex-wrap: wrap; gap: 9px; padding: 2px 0; }
+.combat-defense-dice-tray { justify-content: center; }
+.combat-die-choice {
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  width: 76px; min-height: 100px; padding: 8px 7px 6px;
+  border: 1px solid rgba(148, 144, 134, .24); border-radius: 4px;
+  color: var(--combat-muted);
+  background: linear-gradient(180deg, rgba(22, 25, 35, .88), rgba(8, 11, 18, .7));
+  box-shadow: inset 0 1px rgba(255,255,255,.025), 0 8px 18px rgba(0,0,0,.12);
+  transition: transform .15s, color .15s, background-color .15s, border-color .15s, box-shadow .15s;
+}
+.combat-die-choice::before {
+  content: ''; position: absolute; inset: 0 16px auto; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(200,170,110,.7), transparent);
+  opacity: .45;
+}
+.combat-die-choice:hover:not(:disabled) {
+  transform: translateY(-1px); color: #d7c49a; border-color: rgba(200,170,110,.42);
+  background: linear-gradient(180deg, rgba(37, 35, 35, .9), rgba(12, 13, 19, .76));
+}
+.combat-die-choice[aria-pressed='true'] {
+  border-color: rgba(218,184,105,.75); color: #f0d99f;
+  background: radial-gradient(circle at 50% 30%, rgba(200,170,110,.14), transparent 58%), #11131b;
+  box-shadow: inset 0 0 0 1px rgba(245,217,151,.08), 0 0 22px rgba(200,170,110,.12);
+}
+.combat-die-choice[aria-pressed='true']::before { inset-inline: 8px; opacity: 1; }
+.combat-die-choice:disabled { opacity: .35; cursor: not-allowed; }
+.combat-die-type { color: #b6afa2; font: 11px/16px Georgia, serif; }
+.combat-die-status { margin-top: 3px; color: #777986; font-size: 7px; font-weight: 800; line-height: 13px; letter-spacing: .11em; text-transform: uppercase; }
+.combat-die-choice[aria-pressed='true'] .combat-die-status { color: #d7bd7d; }
+
+.combat-defense-panel {
+  position: relative; overflow: hidden; min-height: 126px;
+  border: 1px solid rgba(200,170,110,.32); border-radius: 5px;
+  background: radial-gradient(circle at 78% 20%, rgba(200,170,110,.11), transparent 38%), #090d15;
+  box-shadow: 0 14px 28px rgba(0,0,0,.18);
+}
+.combat-defense-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 42%; }
+.combat-defense-shade {
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, #080c14 0%, rgba(8,12,20,.92) 40%, rgba(8,12,20,.2)), linear-gradient(0deg, rgba(8,12,20,.86), transparent 78%);
+}
+.combat-defense-card-content { position: relative; display: flex; min-height: 126px; align-items: stretch; gap: 14px; padding: 12px; }
+.combat-defense-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; justify-content: space-between; }
+.combat-defense-identity { min-width: 0; padding-top: 2px; }
+.combat-defense-identity h3 {
+  margin-top: 5px; overflow-wrap: anywhere;
+  color: #f0e6d2; font: 18px/1.25 Cinzel, Georgia, serif; letter-spacing: .07em; text-transform: uppercase;
+  text-shadow: 0 2px 12px #000;
+}
+.combat-defense-identity > span:last-child { display: block; margin-top: 4px; color: #a5a1a7; font-size: 8px; letter-spacing: .12em; text-transform: uppercase; }
+.combat-cd-seal {
+  display: grid; flex: 0 0 78px; place-content: center;
+  border-left: 1px solid rgba(200,170,110,.24);
+  background: linear-gradient(90deg, rgba(5,8,14,.18), rgba(5,8,14,.54));
+  text-align: center;
+}
+.combat-cd-seal > span { color: #c2a968; font-size: 9px; font-weight: 800; letter-spacing: .2em; }
+.combat-cd-seal > strong { color: #f2dfb5; font: 42px/.95 Georgia, serif; text-shadow: 0 0 14px rgba(222,183,97,.2); }
+.combat-cd-seal > small { margin-top: 5px; color: #9899a2; font-size: 8px; letter-spacing: .14em; text-transform: uppercase; }
+.combat-cd-seal[data-modified='true'] { border-left-color: rgba(222,108,96,.58); }
+.combat-cd-seal[data-modified='true'] > strong { color: #ef968b; }
+.combat-defense-rule {
+  display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 3px 12px;
+  margin-top: 9px; padding-top: 7px; border-top: 1px solid rgba(200,170,110,.18);
+}
+.combat-defense-rule p { color: #b7b2af; font-size: 10px; line-height: 1.5; }
+.combat-defense-rule > span { color: #df8a80; font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.combat-defense-pool { padding-top: 1px; }
+
+.combat-equipment-choice { display: block; position: relative; overflow: hidden; width: 100%; border: 1px solid #45414a; border-radius: 4px; background: #090d15; text-align: left; }
+.combat-equipment-choice[aria-pressed='true'] { border-color: rgba(200,170,110,.65); }
+.combat-equipment-choice:hover { border-color: var(--combat-gold); }
+.combat-equipment-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.combat-equipment-shade { position: absolute; inset: 0; background: linear-gradient(90deg, #080c14 4%, rgba(8,12,20,.9) 38%, rgba(8,12,20,.35)), linear-gradient(0deg,rgba(8,12,20,.85),transparent); }
+.combat-equipment-content { position: relative; display: block; padding: 14px 16px; min-height: 112px; }
+.combat-equipment-topline { display: flex; justify-content: space-between; gap: 12px; color: var(--combat-gold); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+.combat-equipment-topline > :last-child { color: #beb6a5; }
+.combat-equipment-title { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: 7px; }
+.combat-equipment-title > strong { font: 18px/1.35 Cinzel, Georgia, serif; text-transform: uppercase; overflow-wrap: anywhere; }
+.combat-equipment-title > span { flex-shrink: 0; color: #eed8a8; font: 17px Georgia, serif; }
+.combat-equipment-traits { display: flex; flex-wrap: wrap; gap: 5px 12px; margin-top: 12px; color: #bda574; font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
+
+.combat-threat { border-top: 1px solid var(--combat-rule); padding-top: 16px; }
+.combat-threat-options { display: flex; background: rgba(0,0,0,.16); border-bottom: 1px solid var(--combat-rule); }
+.combat-threat-options > button { flex: 1; min-height: 44px; padding: 8px 5px; border-bottom: 2px solid transparent; font-size: 11px; color: var(--combat-muted); }
+.combat-threat-options > button:hover { color: var(--combat-ink); background: rgba(200,170,110,.04); }
+.combat-threat-options > button[aria-pressed='true'] { border-bottom-color: var(--combat-gold); color: #ead19b; background: rgba(200,170,110,.07); }
+.combat-threat-options strong { margin-left: 4px; font: 16px Georgia, serif; }
+.combat-threat-dice { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; margin-top: 10px; }
+.combat-threat-dice > button { min-width: 0; min-height: 64px; padding: 5px 0; display: flex; align-items: center; flex-direction: column; border-bottom: 1px solid transparent; color: #a7a6ae; font-size: 11px; }
+.combat-threat-dice > button[aria-pressed='true'] { color: #ead19b; border-bottom-color: var(--combat-gold); background: rgba(200,170,110,.07); }
+.combat-threat-shape { height: 36px; width: 36px; }
+
+.combat-resolution { border-top: 1px solid var(--combat-rule); padding-top: 14px; }
+.combat-resolution-main { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-left: 13px; border-left: 2px solid #b86760; }
+.combat-resolution-main .combat-eyebrow { color: #d4b0a6; }
+.combat-resolution-main p { margin-top: 4px; font: 16px/1.4 Cinzel, Georgia, serif; color: #ede1cd; }
+.combat-resolution-cd { color: #e2c77f; white-space: nowrap; }
+.combat-resolution-main > strong { padding-right: 4px; font: 40px/1 Georgia, serif; color: #ee8b82; }
+.combat-resolution-main[data-blocked='true'] { border-left-color: var(--combat-gold); }
+.combat-resolution-main[data-blocked='true'] > strong { color: var(--combat-gold); }
+.combat-resolution-ledger { display: flex; gap: 24px; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(200,170,110,.1); }
+.combat-resolution-ledger > div { display: flex; flex: 1; align-items: baseline; justify-content: space-between; gap: 8px; }
+.combat-resolution-ledger dt { font-size: 11px; color: var(--combat-muted); }
+.combat-resolution-ledger dd { font: 20px Georgia, serif; }
+.combat-resolution-ledger > div[data-active='true'] { color: var(--combat-gold); }
+
+@media (max-width: 380px) {
+  .combat-section-heading > span { font-size: 10px; }
+  .combat-pressure-line { gap: 8px; }
+  .combat-pressure-total { min-width: 52px; padding-left: 10px; }
+  .combat-pressure-total > strong { font-size: 36px; }
+  .combat-equipment-content { padding: 12px; }
+  .combat-equipment-title > strong { font-size: 16px; }
+  .combat-die-choice { width: 72px; min-height: 96px; }
+  .combat-defense-card-content { gap: 9px; padding: 11px; }
+  .combat-defense-identity h3 { font-size: 16px; }
+  .combat-cd-seal { flex-basis: 62px; }
+  .combat-cd-seal > strong { font-size: 36px; }
+  .combat-resolution-ledger { gap: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .combat-die-choice { transition: none; }
+  .combat-die-choice:hover:not(:disabled) { transform: none; }
+}

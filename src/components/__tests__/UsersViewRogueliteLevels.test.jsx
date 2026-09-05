@@ -34,6 +34,7 @@ beforeEach(() => {
       return snapshot([{
         id: 'Ada',
         name: 'Ada',
+        passcode: 'secreto',
         gameAccess: { roguelite: { enabled: true, unlockedClassIds: ['barbarian'] } },
       }]);
     }
@@ -144,6 +145,39 @@ test('creates a classes-only player without enabling personal character creation
           roguelite: { enabled: true, unlockedClassIds: [] },
         },
       }),
+    );
+  });
+});
+
+test('creates a player without a password', async () => {
+  render(<UsersView onBack={jest.fn()} />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Crear Jugador' }));
+  fireEvent.change(screen.getByPlaceholderText('Ej. Arthas'), { target: { value: 'Lina' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Crear Usuario' }));
+
+  await waitFor(() => {
+    expect(require('firebase/firestore').setDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'players/Lina' }),
+      expect.objectContaining({ passcode: '' }),
+    );
+  });
+});
+
+test('removes an existing password when the field is saved empty', async () => {
+  render(<UsersView onBack={jest.fn()} />);
+
+  fireEvent.click(await screen.findByTitle('Cambiar contraseña de acceso'));
+  const password = screen.getByPlaceholderText('Nueva contraseña');
+  expect(password).toHaveValue('secreto');
+  fireEvent.change(password, { target: { value: '' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+  await waitFor(() => {
+    expect(require('firebase/firestore').setDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'players/Ada' }),
+      { passcode: '' },
+      { merge: true },
     );
   });
 });

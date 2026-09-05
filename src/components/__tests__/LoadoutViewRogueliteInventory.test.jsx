@@ -64,7 +64,7 @@ const createClass = (overrides = {}) => ({
 });
 
 const renderInventory = (props = {}) => {
-  render(
+  const result = render(
     <LoadoutView
       dndClass={createClass()}
       equipmentCatalog={{ weapons: [], armor: [], abilities: [] }}
@@ -74,6 +74,7 @@ const renderInventory = (props = {}) => {
     />,
   );
   fireEvent.click(screen.getByRole('button', { name: 'Inventario' }));
+  return result;
 };
 
 test('the roguelite player can only search and filter the master pool', () => {

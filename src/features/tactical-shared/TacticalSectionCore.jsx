@@ -1067,11 +1067,14 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                     const combatStateChanged = mode === 'canvas' && (
                         JSON.stringify(remoteData.canvasCombat || null) !== JSON.stringify(current.canvasCombat || null)
                     );
+                    const practiceCombatChanged = mode === 'canvas' && (
+                        JSON.stringify(remoteData.canvasPracticeCombat || null) !== JSON.stringify(current.canvasPracticeCombat || null)
+                    );
                     const rollsChanged = mode === 'canvas' && (
                         JSON.stringify(remoteData.canvasRolls || []) !== JSON.stringify(current.canvasRolls || [])
                     );
 
-                    if (itemsChanged || lastModifiedChanged || configChanged || scenarioFieldsChanged || combatStateChanged || rollsChanged) {
+                    if (itemsChanged || lastModifiedChanged || configChanged || scenarioFieldsChanged || combatStateChanged || practiceCombatChanged || rollsChanged) {
                         console.log("Sincronizando tablero con datos remotos (Merging local locks)...");
                         return {
                             ...current,
@@ -1081,6 +1084,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                             allowedPlayers: nextAllowedPlayers,
                             ...(mode === 'canvas' ? {
                                 canvasCombat: remoteData.canvasCombat || null,
+                                canvasPracticeCombat: remoteData.canvasPracticeCombat || null,
                                 canvasRolls: remoteData.canvasRolls || current.canvasRolls || [],
                             } : {}),
                             ...(synchronizedConfig ? { config: synchronizedConfig } : {}),

@@ -186,7 +186,6 @@ const UsersView = ({ onBack }) => {
 
     const handleCreateUser = async () => {
         if (!formData.name.trim()) return alert("El nombre es obligatorio");
-        if (!formData.passcode.trim()) return alert("La contraseña es obligatoria");
 
         const exists = players.some(p => p.name.toLowerCase() === formData.name.trim().toLowerCase());
         if (exists) return alert("Ya existe un jugador con este nombre");
@@ -262,7 +261,6 @@ const UsersView = ({ onBack }) => {
 
     const handleUpdatePassword = async () => {
         if (!editingPasswordFor) return;
-        if (!formData.passcode.trim()) return alert("La contraseña no puede estar vacía");
 
         try {
             await setDoc(doc(db, 'players', editingPasswordFor.id), {
@@ -1018,7 +1016,7 @@ const UsersView = ({ onBack }) => {
                             value={formData.passcode}
                             onChange={e => setFormData({ ...formData, passcode: e.target.value })}
                         />
-                        <p className="text-[11px] text-slate-500 mt-1">Esta será la contraseña que usará el jugador para entrar.</p>
+                        <p className="text-[11px] text-slate-500 mt-1">Déjala vacía para permitir el acceso con cualquier contraseña.</p>
                     </div>
                     <div>
                         <span className="block text-xs font-['Cinzel'] font-bold uppercase tracking-wider text-slate-400 mb-2">
@@ -1090,6 +1088,7 @@ const UsersView = ({ onBack }) => {
                             value={formData.passcode}
                             onChange={e => setFormData({ ...formData, passcode: e.target.value })}
                         />
+                        <p className="mt-1 text-[11px] text-slate-500">Si la guardas vacía, el jugador podrá entrar escribiendo cualquier cosa.</p>
                     </div>
                 </div>
             </Modal>

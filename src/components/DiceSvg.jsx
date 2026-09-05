@@ -70,18 +70,19 @@ const DiceSvg = ({ faces, value, className = "", style = {}, title }) => {
             break;
         case 20:
         default:
-            // Icosahedron (Hexagon with internal triangles)
+            // Icosahedron built from the separated triangular facets used by the game.
             paths = (
                 <>
-                    <polygon points="50,5 90,25 90,75 50,95 10,75 10,25" fill={fillProperty} stroke="currentColor" strokeWidth="4" strokeLinejoin="round" />
-                    <polygon points="50,20 80,75 20,75" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.5" strokeLinejoin="round" />
-                    <polyline points="50,5 50,20" stroke="currentColor" strokeWidth="1.5" opacity="0.5" />
-                    <polyline points="10,25 50,20" stroke="currentColor" strokeWidth="1.5" opacity="0.5" />
-                    <polyline points="90,25 50,20" stroke="currentColor" strokeWidth="1.5" opacity="0.5" />
-                    <polyline points="10,75 20,75" stroke="currentColor" strokeWidth="1.5" opacity="0.5" />
-                    <polyline points="90,75 80,75" stroke="currentColor" strokeWidth="1.5" opacity="0.5" />
-                    <polyline points="50,95 80,75" stroke="currentColor" strokeWidth="1.5" opacity="0.5" />
-                    <polyline points="50,95 20,75" stroke="currentColor" strokeWidth="1.5" opacity="0.5" />
+                    <polygon points="7,23 37,3 23,34" fill={fillProperty} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                    <polygon points="50,2 28,36 72,36" fill={fillProperty} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                    <polygon points="63,3 93,23 77,34" fill={fillProperty} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                    <polygon points="4,30 20,40 4,63" fill={fillProperty} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                    <polygon points="96,30 80,40 96,63" fill={fillProperty} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                    <polygon points="29,42 71,42 50,76" fill={fillProperty} stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" />
+                    <polygon points="24,44 45,80 4,76" fill={fillProperty} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                    <polygon points="76,44 55,80 96,76" fill={fillProperty} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                    <polygon points="7,84 47,88 47,98" fill={fillProperty} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                    <polygon points="53,88 93,84 53,98" fill={fillProperty} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
                 </>
             );
             textY = "55";

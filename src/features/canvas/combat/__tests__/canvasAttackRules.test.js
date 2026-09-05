@@ -1,10 +1,15 @@
 import {
   calculateCanvasAttackPressure,
   evaluateCanvasAttackRange,
+  getCanvasDefensiveEquipment,
+  getEnemyActiveDefenseEligibility,
+  getUsableDefenseDice,
   getCanvasWeaponActionCost,
-  getCriticalDieSides,
   parseWeaponDiceProfile,
   resolveCanvasAttackDamage,
+  rollCanvasEnemyDefense,
+  rollCanvasThreatDie,
+  rollCriticalWeaponDice,
 } from '../canvasAttackRules';
 
 const gridConfig = { x: 0, y: 0, cellWidth: 50, cellHeight: 50 };
@@ -20,6 +25,51 @@ const token = (id, x, y, extra = {}) => ({
 });
 
 describe('Canvas Roguelite attack rules', () => {
+  test('enemy active defense requires an available main action and defensive equipment', () => {
+    const club = { id: 'club', type: 'weapon', dano: '2d8' };
+    const enemy = { profileType: 'rogueliteEnemy', equippedItems: [club] };
+    const participant = { side: 'enemies', enemyActions: [{ id: 'attack', status: 'available' }] };
+
+    expect(getCanvasDefensiveEquipment(enemy)).toEqual([club]);
+    expect(getEnemyActiveDefenseEligibility({ token: enemy, participant })).toMatchObject({ eligible: true });
+    expect(getEnemyActiveDefenseEligibility({
+      token: enemy,
+      participant: { ...participant, enemyActions: [{ id: 'attack', status: 'spent' }] },
+    })).toMatchObject({ eligible: false });
+  });
+
+  test('enemy defense rolls the full equipment profile and at most one custom threat die', () => {
+    const rolls = [0, 0.99, 0.5];
+    const result = rollCanvasEnemyDefense({
+      equipment: { dano: '2d8', offenseBase: 99 },
+      threatMode: 'custom',
+      customThreatSides: 6,
+      random: () => rolls.shift(),
+    });
+
+    expect(result.defenseDice.map((die) => die.value)).toEqual([1, 8]);
+    expect(result.threatUsed).toMatchObject({ die: 'd6', value: 4, source: 'custom' });
+    expect(result.totalDefense).toBe(13);
+  });
+
+  test('resolves stored or custom Threat without treating an empty reserve as zero', () => {
+    expect(rollCanvasThreatDie({
+      threatMode: 'stored',
+      storedThreatValue: null,
+      storedThreatDie: 'd8',
+    })).toBeNull();
+    expect(rollCanvasThreatDie({
+      threatMode: 'stored',
+      storedThreatValue: 6,
+      storedThreatDie: 'd8',
+    })).toEqual({ die: 'd8', sides: 8, value: 6, source: 'stored' });
+    expect(rollCanvasThreatDie({
+      threatMode: 'custom',
+      customThreatSides: 12,
+      random: () => 0.5,
+    })).toEqual({ die: 'd12', sides: 12, value: 7, source: 'custom' });
+  });
+
   test('reads the complete weapon profile and Heavy requires two action dice', () => {
     const weapon = { dano: '2d8 Físico', actionCost: 1, rasgos: ['Pesada'] };
     expect(parseWeaponDiceProfile(weapon).map((die) => die.sides)).toEqual([8, 8]);
@@ -66,10 +116,41 @@ describe('Canvas Roguelite attack rules', () => {
     expect(result.reason).toMatch(/Duelo/);
   });
 
-  test('critical only adds one extra die when the trait is active', () => {
+  test('an allied token is not a legal attack target', () => {
+    const attacker = token('a', 0, 0, { teamId: 'heroes' });
+    const target = token('b', 50, 0, { teamId: 'heroes' });
+    expect(evaluateCanvasAttackRange({
+      attacker,
+      target,
+      weapon: { alcance: 'Cercano' },
+      items: [attacker, target],
+      gridConfig,
+    })).toEqual(expect.objectContaining({ legal: false, reason: expect.stringMatching(/enemiga/) }));
+  });
+
+  test('each natural maximum starts its own chained critical roll', () => {
     const profile = parseWeaponDiceProfile({ dano: '2d8' });
-    expect(getCriticalDieSides(profile, [8, 8], { rasgos: ['Crítico'] }, false)).toBe(8);
-    expect(getCriticalDieSides(profile, [8, 8], { rasgos: ['Crítico'] }, true)).toBeNull();
+    const rolls = [0.999, 0.25, 0.5];
+    expect(rollCriticalWeaponDice(
+      profile,
+      [8, 8],
+      { rasgos: ['Crítico'] },
+      false,
+      () => rolls.shift(),
+    )).toEqual([
+      { sides: 8, value: 8, sourceIndex: 0 },
+      { sides: 8, value: 3, sourceIndex: 0 },
+      { sides: 8, value: 5, sourceIndex: 1 },
+    ]);
+    expect(rollCriticalWeaponDice(profile, [8, 8], { rasgos: ['Crítico'] }, true)).toEqual([]);
+  });
+
+  test('only reserved action dice can be spent on active defense', () => {
+    expect(getUsableDefenseDice({ actionDice: [
+      { id: 'a', status: 'available' },
+      { id: 'b', status: 'committed' },
+      { id: 'c', status: 'spent' },
+    ] })).toEqual([{ id: 'b', status: 'committed' }]);
   });
 
   test('action dice, weapon dice and defense resolve exact CD multiples', () => {

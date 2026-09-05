@@ -16,6 +16,7 @@ import {
   recordParticipantMovement,
   resolveQueuedCanvasAttack,
   rollDiceProfile,
+  rollParticipantActionDice,
   setActionDieStatus,
   setEnemyActionStatus,
   setParticipantMovementModifier,
@@ -30,12 +31,16 @@ import {
 import {
   calculateCanvasAttackPressure,
   evaluateCanvasAttackRange,
+  getEnemyActiveDefenseEligibility,
+  hasCanvasWeaponTrait,
   getCanvasWeaponActionCost,
   getCanvasWeaponAvailability,
-  getCriticalDieSides,
   getUsableDefenseDice,
   parseWeaponDiceProfile,
   resolveCanvasAttackDamage,
+  rollCanvasEnemyDefense,
+  rollCanvasThreatDie,
+  rollCriticalWeaponDice,
   rollWeaponDice,
 } from './canvasAttackRules';
 
@@ -61,6 +66,18 @@ const saveCombatDoc = async (scenarioRef, nextCombat) => {
       canvasCombat: nextCombat,
       combatModifiedAt: Date.now(),
     }, { merge: true });
+  }
+};
+
+const savePracticeCombatDoc = async (scenarioRef, nextCombat) => {
+  const payload = {
+    canvasPracticeCombat: nextCombat,
+    practiceCombatModifiedAt: Date.now(),
+  };
+  try {
+    await updateDoc(scenarioRef, payload);
+  } catch (_error) {
+    await setDoc(scenarioRef, payload, { merge: true });
   }
 };
 
@@ -124,6 +141,7 @@ export const useCanvasCombatRuntime = ({
   triggerToast,
 }) => {
   const [attackDraft, setAttackDraft] = useState(null);
+  const [practiceCombat, setPracticeCombat] = useState(null);
   const localCombatRef = useRef(activeScenario?.canvasCombat || null);
   const localItemsRef = useRef(activeScenario?.items || []);
   const writeQueueRef = useRef(Promise.resolve());
@@ -141,6 +159,13 @@ export const useCanvasCombatRuntime = ({
     const pruned = pruneCombatState(remoteCombat, activeScenario?.items || []);
     localCombatRef.current = pruned;
   }, [activeScenario?.canvasCombat, activeScenario?.items]);
+
+  useEffect(() => {
+    const remotePractice = activeScenario?.canvasPracticeCombat;
+    setPracticeCombat(remotePractice
+      ? pruneCombatState(remotePractice, activeScenario?.items || [])
+      : null);
+  }, [activeScenario?.canvasPracticeCombat, activeScenario?.items]);
 
   const rawCombatState = activeScenario?.canvasCombat || null;
   const combatState = useMemo(() => {
@@ -173,6 +198,23 @@ export const useCanvasCombatRuntime = ({
     setActiveScenario,
     triggerToast,
   ]);
+
+  const persistPracticeCombat = useCallback((nextCombat) => {
+    const scenario = activeScenarioRef.current || activeScenario;
+    if (!scenario?.id) return false;
+
+    setPracticeCombat(nextCombat);
+    setActiveScenario((current) => (
+      current?.id === scenario.id ? { ...current, canvasPracticeCombat: nextCombat } : current
+    ));
+    writeQueueRef.current = writeQueueRef.current.then(async () => {
+      await savePracticeCombatDoc(doc(db, scenarioCollectionName, scenario.id), nextCombat);
+    }).catch((error) => {
+      console.error('No se pudo sincronizar el ataque de prueba:', error);
+      triggerToast('No se pudo sincronizar el ataque', error?.message || 'Reinténtalo', 'error');
+    });
+    return true;
+  }, [activeScenario, activeScenarioRef, scenarioCollectionName, setActiveScenario, triggerToast]);
 
   const updateCombat = useCallback((updater) => {
     const scenario = activeScenarioRef.current || activeScenario;
@@ -600,13 +642,32 @@ export const useCanvasCombatRuntime = ({
     const scenario = activeScenarioRef.current || activeScenario;
     const attacker = (scenario?.items || []).find((item) => item.id === attackerId);
     const target = (scenario?.items || []).find((item) => item.id === targetId);
-    const currentCombat = localCombatRef.current || scenario?.canvasCombat;
+    const liveCombat = localCombatRef.current || scenario?.canvasCombat;
+    const isPractice = !liveCombat || liveCombat.status !== 'active';
+    let currentCombat = liveCombat;
+    if (isPractice) {
+      currentCombat = createCanvasCombatState(scenario?.items || [], { now: Date.now() });
+      Object.values(currentCombat.participants || {}).forEach((candidate) => {
+        if (candidate.side !== 'players' || !candidate.awaitingRoll) return;
+        currentCombat = rollParticipantActionDice(currentCombat, candidate.tokenId);
+      });
+      const targetParticipant = currentCombat.participants?.[targetId];
+      if (targetParticipant?.side === 'players') {
+        currentCombat = {
+          ...currentCombat,
+          participants: {
+            ...currentCombat.participants,
+            [targetId]: {
+              ...targetParticipant,
+              actionDice: (targetParticipant.actionDice || []).map((die) => ({ ...die, status: 'committed' })),
+            },
+          },
+        };
+      }
+      setPracticeCombat(currentCombat);
+    }
     const participant = currentCombat?.participants?.[attackerId];
 
-    if (!currentCombat || currentCombat.status !== 'active') {
-      triggerToast('Combate no preparado', 'Inicia la ronda y resuelve las tiradas de acción antes de atacar.', 'warning');
-      return false;
-    }
     if (currentCombat.pendingAttack) {
       triggerToast('Ataque pendiente', 'Resuelve la defensa anterior antes de iniciar otro ataque.', 'warning');
       return false;
@@ -647,6 +708,7 @@ export const useCanvasCombatRuntime = ({
       range,
       actionCost: getCanvasWeaponActionCost(weapon, attacker),
       weaponDiceProfile,
+      practice: isPractice,
     });
     return true;
   }, [activeScenario, activeScenarioRef, gridConfig, isPlayerView, playerName, triggerToast]);
@@ -657,14 +719,26 @@ export const useCanvasCombatRuntime = ({
     const scenario = activeScenarioRef.current || activeScenario;
     const participant = (localCombatRef.current || scenario?.canvasCombat)?.participants?.[token?.id];
     if (!participant) {
-      return { available: false, reason: 'Prepara la ronda antes de atacar.' };
+      if (token?.profileType === 'rogueliteEnemy') return { available: true, cost: 0, reason: '' };
+      const cost = getCanvasWeaponActionCost(weapon, token);
+      const profileSize = Array.isArray(token?.actionDice) ? token.actionDice.length : 0;
+      return profileSize >= cost
+        ? { available: true, cost, reason: '' }
+        : { available: false, cost, reason: `Necesitas ${cost} dados de acción en el perfil de la clase.` };
     }
     return getCanvasWeaponAvailability({ token, participant, weapon });
   }, [activeScenario, activeScenarioRef]);
 
-  const confirmAttack = useCallback(({ actionDieIds = [], useThreat = false } = {}) => {
+  const confirmAttack = useCallback(({
+    actionDieIds = [],
+    threatMode = 'none',
+    customThreatSides = 6,
+    useThreat = false,
+  } = {}) => {
     const scenario = activeScenarioRef.current || activeScenario;
-    const currentCombat = localCombatRef.current || scenario?.canvasCombat;
+    const currentCombat = attackDraft?.practice
+      ? practiceCombat
+      : (localCombatRef.current || scenario?.canvasCombat);
     if (!attackDraft || !currentCombat || currentCombat.pendingAttack) return false;
 
     const attacker = (scenario?.items || []).find((item) => item.id === attackDraft.attackerId);
@@ -682,23 +756,29 @@ export const useCanvasCombatRuntime = ({
       return false;
     }
     const weaponResults = rollWeaponDice(attackDraft.weaponDiceProfile);
+    const resolvedThreatMode = threatMode === 'none' && useThreat ? 'stored' : threatMode;
+    const threatUsed = attacker.profileType === 'rogueliteEnemy'
+      ? rollCanvasThreatDie({
+        threatMode: resolvedThreatMode,
+        storedThreatValue: participant.threatValue,
+        storedThreatDie: participant.threatDie,
+        customThreatSides,
+      })
+      : null;
 
-    const criticalDieSides = getCriticalDieSides(
+    const criticalResults = rollCriticalWeaponDice(
       attackDraft.weaponDiceProfile,
       weaponResults,
       attackDraft.weapon,
       attackDraft.range.suppressTraits,
     );
-    const criticalResult = criticalDieSides
-      ? rollWeaponDice([{ sides: criticalDieSides }])[0]
-      : 0;
 
     const pressure = calculateCanvasAttackPressure({
       attacker,
       actionDice: selectedDice,
       weaponResults,
-      criticalResult,
-      threatValue: useThreat ? participant.threatValue : 0,
+      criticalResults,
+      threatValue: threatUsed?.value || 0,
       distance: attackDraft.range.distance,
       weapon: attackDraft.weapon,
       suppressTraits: attackDraft.range.suppressTraits,
@@ -714,14 +794,12 @@ export const useCanvasCombatRuntime = ({
       weaponName: attackDraft.weapon.name || attackDraft.weapon.nombre || 'Arma',
       weaponDiceProfile: attackDraft.weaponDiceProfile,
       weaponResults: weaponResults.map(Number),
-      criticalDieSides,
-      criticalResult,
+      criticalResults,
       actionDieIds: [...selectedIds],
       actionDice: selectedDice,
-      usedThreat: attacker.profileType === 'rogueliteEnemy'
-        && useThreat
-        && participant.threatValue !== null
-        && participant.threatValue !== undefined,
+      usedThreat: threatUsed?.source === 'stored',
+      threatUsed,
+      ...(threatUsed ? { threatDieSides: threatUsed.sides } : {}),
       pressure,
       range: attackDraft.range,
       source: 'digital',
@@ -729,30 +807,103 @@ export const useCanvasCombatRuntime = ({
     };
     const next = queueCanvasAttack(currentCombat, attack, { now });
     if (next === currentCombat) return false;
-    updateCombat(() => next);
+    if (attackDraft.practice) persistPracticeCombat(next);
+    else updateCombat(() => next);
     setAttackDraft(null);
     triggerToast('Ataque lanzado', `${attack.weaponName}: ${pressure.total} de Presión`, 'success');
     return true;
-  }, [activeScenario, activeScenarioRef, attackDraft, triggerToast, updateCombat]);
+  }, [activeScenario, activeScenarioRef, attackDraft, persistPracticeCombat, practiceCombat, triggerToast, updateCombat]);
+
+  const rollEnemyDefense = useCallback(({ equipmentId, threatMode = 'none', customThreatSides = 6 } = {}) => {
+    const scenario = activeScenarioRef.current || activeScenario;
+    const isPractice = Boolean(practiceCombat?.pendingAttack);
+    const currentCombat = isPractice
+      ? practiceCombat
+      : (localCombatRef.current || scenario?.canvasCombat);
+    const pending = currentCombat?.pendingAttack;
+    const target = (scenario?.items || []).find((item) => item.id === pending?.targetId);
+    const participant = currentCombat?.participants?.[pending?.targetId];
+    if (!pending || !target || pending.status === 'defense-rolled') return false;
+
+    const eligibility = getEnemyActiveDefenseEligibility({ token: target, participant });
+    if (!eligibility.eligible) {
+      triggerToast('Defensa no disponible', eligibility.reason, 'warning');
+      return false;
+    }
+    const equipment = eligibility.equipment.find((item, index) => (
+      String(item.id || item.catalogId || item.name || item.nombre || index) === String(equipmentId)
+    ));
+    if (!equipment) return false;
+
+    const rolledDefense = rollCanvasEnemyDefense({
+      equipment,
+      threatMode,
+      storedThreatValue: participant.threatValue,
+      storedThreatDie: participant.threatDie,
+      customThreatSides,
+    });
+    const defenseDice = rolledDefense.defenseDice.map((die, index) => ({ ...die, id: `enemy-defense-${pending.id}-${index}` }));
+    const threatDie = rolledDefense.threatUsed
+      ? { ...rolledDefense.threatUsed, id: `enemy-threat-${pending.id}` }
+      : null;
+    const totalDefense = rolledDefense.totalDefense;
+    const incomingPressure = Math.max(0, Number(pending.pressure?.total) || 0);
+    const nextCombat = {
+      ...currentCombat,
+      participants: {
+        ...currentCombat.participants,
+        [pending.targetId]: {
+          ...participant,
+          threatValue: rolledDefense.consumedStoredThreat ? null : participant.threatValue,
+          enemyActions: (participant.enemyActions || []).map((action) => (
+            action.id === 'attack' ? { ...action, status: 'spent' } : action
+          )),
+        },
+      },
+      pendingAttack: {
+        ...pending,
+        status: 'defense-rolled',
+        defenseItem: equipment,
+        defenseDice,
+        threatUsed: threatDie,
+        totalDefense,
+        remainingPressure: Math.max(0, incomingPressure - totalDefense),
+        defensiveExcess: Math.max(0, totalDefense - incomingPressure),
+      },
+      updatedAt: Date.now(),
+    };
+    if (isPractice) persistPracticeCombat(nextCombat);
+    else updateCombat(() => nextCombat);
+    return true;
+  }, [activeScenario, activeScenarioRef, persistPracticeCombat, practiceCombat, triggerToast, updateCombat]);
 
   const cancelPendingAttack = useCallback(async () => {
     const scenario = activeScenarioRef.current || activeScenario;
-    const currentCombat = localCombatRef.current || scenario?.canvasCombat;
+    const isPractice = Boolean(practiceCombat?.pendingAttack);
+    const currentCombat = isPractice
+      ? practiceCombat
+      : (localCombatRef.current || scenario?.canvasCombat);
     if (!currentCombat?.pendingAttack || !scenario?.id) return false;
 
     const nextCombat = cancelQueuedCanvasAttack(currentCombat);
-    localCombatRef.current = nextCombat;
-    setActiveScenario((current) => (
-      current?.id === scenario.id ? { ...current, canvasCombat: nextCombat } : current
-    ));
-    updateCombat(() => nextCombat);
+    if (isPractice) persistPracticeCombat(null);
+    else localCombatRef.current = nextCombat;
+    if (!isPractice) {
+      setActiveScenario((current) => (
+        current?.id === scenario.id ? { ...current, canvasCombat: nextCombat } : current
+      ));
+      updateCombat(() => nextCombat);
+    }
     triggerToast('Ataque descartado', 'Se ha cancelado el ataque pendiente.', 'info');
     return true;
-  }, [activeScenario, activeScenarioRef, setActiveScenario, triggerToast, updateCombat]);
+  }, [activeScenario, activeScenarioRef, persistPracticeCombat, practiceCombat, setActiveScenario, triggerToast, updateCombat]);
 
-  const resolvePendingAttack = useCallback(async (defenseDieIds = []) => {
+  const resolvePendingAttack = useCallback(async (defenseDieIds = [], options = {}) => {
     const scenario = activeScenarioRef.current || activeScenario;
-    const currentCombat = localCombatRef.current || scenario?.canvasCombat;
+    const isPractice = Boolean(practiceCombat?.pendingAttack);
+    const currentCombat = isPractice
+      ? practiceCombat
+      : (localCombatRef.current || scenario?.canvasCombat);
     const pending = currentCombat?.pendingAttack;
     if (!pending || !scenario?.id) return false;
 
@@ -761,11 +912,14 @@ export const useCanvasCombatRuntime = ({
     if (!target) {
       // Si el objetivo ya no existe en la escena, limpiamos el ataque pendiente de forma limpia
       const nextCombat = cancelQueuedCanvasAttack(currentCombat);
-      localCombatRef.current = nextCombat;
-      setActiveScenario((current) => (
-        current?.id === scenario.id ? { ...current, canvasCombat: nextCombat } : current
-      ));
-      updateCombat(() => nextCombat);
+      if (isPractice) persistPracticeCombat(null);
+      else {
+        localCombatRef.current = nextCombat;
+        setActiveScenario((current) => (
+          current?.id === scenario.id ? { ...current, canvasCombat: nextCombat } : current
+        ));
+        updateCombat(() => nextCombat);
+      }
       triggerToast('Ataque descartado', 'El objetivo del ataque ya no está en la escena.', 'info');
       return true;
     }
@@ -778,8 +932,11 @@ export const useCanvasCombatRuntime = ({
     const targetParticipant = currentCombat.participants?.[pending.targetId];
     const usableDefenseDice = getUsableDefenseDice(targetParticipant);
     const selectedIds = new Set(defenseDieIds);
-    const defenseDice = usableDefenseDice.filter((die) => selectedIds.has(die.id));
-    if (defenseDice.length !== selectedIds.size) {
+    const isEnemyDefense = target.profileType === 'rogueliteEnemy' && pending.status === 'defense-rolled';
+    const defenseDice = isEnemyDefense
+      ? [...(pending.defenseDice || []), ...(pending.threatUsed ? [pending.threatUsed] : [])]
+      : usableDefenseDice.filter((die) => selectedIds.has(die.id));
+    if (!isEnemyDefense && defenseDice.length !== selectedIds.size) {
       triggerToast('Defensa no válida', 'Alguno de esos dados ya no está disponible.', 'warning');
       return false;
     }
@@ -791,6 +948,10 @@ export const useCanvasCombatRuntime = ({
       weapon: pending.weapon,
       suppressTraits: pending.range?.suppressTraits,
     });
+    if (isEnemyDefense && resolution.surplus > 0 && !options.excessChoice) {
+      triggerToast('Elige el Excedente', 'Usa todo el Excedente para reposicionarte o contraatacar.', 'warning');
+      return false;
+    }
     const now = Date.now();
     const nextCombat = resolveQueuedCanvasAttack(currentCombat, {
       attackId: pending.id,
@@ -798,6 +959,45 @@ export const useCanvasCombatRuntime = ({
       ...resolution,
     }, { now });
     if (nextCombat === currentCombat) return false;
+
+    let resolvedCombat = nextCombat;
+    if (isEnemyDefense && options.excessChoice === 'reposition' && resolution.surplus > 0) {
+      const resolvedParticipant = nextCombat.participants?.[target.id];
+      if (resolvedParticipant?.movementRuntime) {
+        resolvedCombat = {
+          ...nextCombat,
+          participants: {
+            ...nextCombat.participants,
+            [target.id]: {
+              ...resolvedParticipant,
+              defensiveReposition: { remaining: resolution.surplus, ignoresDuelExit: true },
+            },
+          },
+        };
+      }
+    }
+
+    let counterResolution = null;
+    if (isEnemyDefense && options.excessChoice === 'counterattack' && resolution.surplus > 0 && attacker) {
+      const counterWeapon = options.counterWeapon || pending.defenseItem;
+      const counterRange = evaluateCanvasAttackRange({
+        attacker: target,
+        target: attacker,
+        weapon: counterWeapon,
+        items: scenario.items || [],
+        gridConfig,
+      });
+      if (!counterWeapon || hasCanvasWeaponTrait(counterWeapon, 'arrojadiza') || !counterRange.legal) {
+        triggerToast('Contraataque no válido', 'El arma debe poder alcanzar legalmente y no puede lanzarse.', 'warning');
+        return false;
+      }
+      counterResolution = resolveCanvasAttackDamage({
+        attackPressure: resolution.surplus,
+        defenseDice: [],
+        target: attacker,
+        weapon: counterWeapon,
+      });
+    }
 
     const nextTarget = {
       ...target,
@@ -810,17 +1010,35 @@ export const useCanvasCombatRuntime = ({
       },
       runtimeDirty: target.profileType === 'rogueliteClass',
     };
-    const nextItems = (scenario.items || []).map((item) => (item.id === target.id ? nextTarget : item));
+    const nextItems = (scenario.items || []).map((item) => {
+      if (item.id === target.id) return nextTarget;
+      if (counterResolution && item.id === attacker.id) {
+        return {
+          ...attacker,
+          stats: {
+            ...(attacker.stats || {}),
+            vida: { ...(attacker.stats?.vida || {}), current: counterResolution.nextLife },
+          },
+          runtimeDirty: attacker.profileType === 'rogueliteClass',
+        };
+      }
+      return item;
+    });
     setActiveScenario((current) => (
-      current?.id === scenario.id ? { ...current, items: nextItems, canvasCombat: nextCombat } : current
+      current?.id === scenario.id
+        ? { ...current, items: nextItems, ...(isPractice ? {} : { canvasCombat: resolvedCombat }) }
+        : current
     ));
-    localCombatRef.current = nextCombat;
-    updateCombat(() => nextCombat);
+    if (isPractice) persistPracticeCombat(null);
+    else {
+      localCombatRef.current = nextCombat;
+      updateCombat(() => resolvedCombat);
+    }
     await safePersistItems?.(
       scenario.id,
       nextItems,
       scenario.items || [],
-      [target.id],
+      counterResolution ? [target.id, attacker.id] : [target.id],
       { persistRuntime: true },
     );
 
@@ -861,8 +1079,11 @@ export const useCanvasCombatRuntime = ({
   }, [
     activeScenario,
     activeScenarioRef,
+    gridConfig,
     isPlayerView,
     playerName,
+    persistPracticeCombat,
+    practiceCombat,
     safePersistItems,
     setActiveScenario,
     triggerToast,
@@ -1014,9 +1235,9 @@ export const useCanvasCombatRuntime = ({
   }, [activeScenario?.items, combatState?.participants]);
 
   return {
-    combatState,
+    combatState: practiceCombat?.pendingAttack || attackDraft?.practice ? practiceCombat : combatState,
     attackDraft,
-    pendingAttack: combatState?.pendingAttack || null,
+    pendingAttack: practiceCombat?.pendingAttack || combatState?.pendingAttack || null,
     canvasRolls,
     controlledTokenIds,
     startCombat,
@@ -1045,6 +1266,7 @@ export const useCanvasCombatRuntime = ({
     cancelPendingAttack,
     getWeaponAvailability,
     confirmAttack,
+    rollEnemyDefense,
     resolvePendingAttack,
   };
 };
