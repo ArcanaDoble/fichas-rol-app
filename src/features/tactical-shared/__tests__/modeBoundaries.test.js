@@ -109,6 +109,19 @@ test('board initiative is based on cards held by each token seat', () => {
         ]);
 });
 
+test('board initiative omits opted-out tokens without removing their hand cards', () => {
+    const items = [
+        { id: 'included', type: 'token', isCircular: true, controlledBy: [] },
+        { id: 'excluded', type: 'token', isCircular: true, controlledBy: [], includeInBoardInitiative: false },
+        { id: 'i1', type: 'card', zone: 'hand', handTokenId: 'included', ownerName: 'Master' },
+        { id: 'e1', type: 'card', zone: 'hand', handTokenId: 'excluded', ownerName: 'Master' },
+    ];
+
+    expect(buildBoardTimelineTokens(items).map(({ id, initiative }) => ({ id, initiative })))
+        .toEqual([{ id: 'included', initiative: 1 }]);
+    expect(items).toContainEqual(expect.objectContaining({ id: 'e1', handTokenId: 'excluded' }));
+});
+
 test('production modules cannot cross the Canvas and Board boundaries', () => {
     const featuresDirectory = path.resolve(__dirname, '../..');
     const canvasDirectory = path.join(featuresDirectory, 'canvas');

@@ -1,4 +1,4 @@
-import { applyModifiersToWeapon } from '../CombatModifiersPanel';
+import { applyModifiersToWeapon, CANVAS_ATTACK_MODIFIER_TRAITS } from '../CombatModifiersPanel';
 
 test('serializes manual extra dice as individual dice terms', () => {
   const weapon = { type: 'weapon', nombre: 'Estoque', dano: '1d8', rasgos: [] };
@@ -105,4 +105,19 @@ test('serializes Guardia as a manual combat trait', () => {
 
   expect(modifiedWeapon.rasgos).toContain('Guardia');
   expect(modifiedWeapon.manualCombatTraits).toEqual(['guardia']);
+});
+
+test('Canvas retains an explicit manual trait already native to one weapon and rejects other manual traits', () => {
+  const weapon = { dano: '1d8 + 1d4', rasgos: ['Crítico'], attackWeapons: [{ dano: '1d8', rasgos: ['Crítico'] }, { dano: '1d4' }] };
+  const modified = applyModifiersToWeapon(weapon, {
+    extraDice: { d6: 2 }, activeTraits: ['crítico', 'critico', 'perforante', 'sangrado', 'derribo'],
+  }, { allowedTraitIds: CANVAS_ATTACK_MODIFIER_TRAITS });
+  expect(modified.manualCombatTraits).toEqual(['critico', 'perforante', 'sangrado']);
+  expect(modified.rasgos).toEqual(['Crítico', 'Perforante', 'Sangrado']);
+  expect(modified.extraDamageString).toBe('1d6 + 1d6');
+  expect(weapon.rasgos).toEqual(['Crítico']);
+  expect(weapon).not.toHaveProperty('extraDamageString');
+  expect(applyModifiersToWeapon({ rasgos: 'Crítico, Agudeza' }, {
+    extraDice: {}, activeTraits: [],
+  }, { allowedTraitIds: CANVAS_ATTACK_MODIFIER_TRAITS }).rasgos).toBe('Crítico, Agudeza');
 });

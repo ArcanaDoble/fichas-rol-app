@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { db } from '../firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { ICON_MAP, DEFAULT_STATUS_EFFECTS, NON_SELECTABLE_STATUS_EFFECT_IDS } from '../utils/statusEffects';
+import {
+  ICON_MAP, DEFAULT_STATUS_EFFECTS, NON_SELECTABLE_STATUS_EFFECT_IDS, mergeStatusEffectsConfig,
+} from '../utils/statusEffects';
 
-function EstadoSelector({ selected = [], onToggle }) {
+function EstadoSelector({ selected = [], onToggle, roguelite = false }) {
   const [effects, setEffects] = useState(DEFAULT_STATUS_EFFECTS);
   const hasConmocionadoSelected = selected.includes('conmocionado') || selected.includes(DEFAULT_STATUS_EFFECTS.conmocionado?.label);
 
@@ -14,9 +16,7 @@ function EstadoSelector({ selected = [], onToggle }) {
       snapshot.forEach(docSnap => {
         data[docSnap.id] = docSnap.data();
       });
-      if (Object.keys(data).length > 0) {
-        setEffects(data);
-      }
+      setEffects(mergeStatusEffectsConfig(data));
     });
 
     return () => unsub();
@@ -76,7 +76,9 @@ function EstadoSelector({ selected = [], onToggle }) {
                 bg-[#0b1120] hover:bg-[#111827]
                 ${active ? 'bg-opacity-100' : 'bg-opacity-50'}
             `}
-            title={e.desc}
+            title={roguelite && id === 'sangrado'
+              ? 'Al comenzar tu activación, pierde 1 Vida o renuncia al Movimiento básico de ese turno. Puedes usar Sprint. No se acumula; termina con un Vendaje o al finalizar el combate.'
+              : e.desc}
           >
             <Icon
               size={24}
@@ -95,6 +97,7 @@ function EstadoSelector({ selected = [], onToggle }) {
 }
 
 EstadoSelector.propTypes = {
+  roguelite: PropTypes.bool,
   selected: PropTypes.arrayOf(PropTypes.string),
   onToggle: PropTypes.func.isRequired,
 };

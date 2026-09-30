@@ -191,6 +191,21 @@ test('a confirmed queued write clears only the fields Firebase accepted', async 
   }));
 });
 
+test('an acknowledged write is not re-protected after its transaction resolves', async () => {
+  const recentLocalWritesRef = { current: {} };
+  const controller = createCanvasScenarioController({
+    localUnsavedEditsRef: { current: {} }, recentLocalWritesRef,
+    persistQueueRef: { current: async () => {
+      expect(recentLocalWritesRef.current.hero.fields).toEqual({ inventory: ['potion'] });
+      // The listener acknowledges the write before the promise resumes.
+      delete recentLocalWritesRef.current.hero;
+      return true;
+    } },
+  });
+  expect(await controller.safePersistItems('room', [{ id: 'hero', inventory: ['potion'] }], [{ id: 'hero', inventory: [] }])).toBe(true);
+  expect(recentLocalWritesRef.current).toEqual({});
+});
+
 test('confirms a new Canvas token even when the secondary run update is rejected', async () => {
   const firestore = require('firebase/firestore');
   const transactionUpdate = jest.fn();

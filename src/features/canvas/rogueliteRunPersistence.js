@@ -98,7 +98,11 @@ export const syncCanvasTokenWithRuntimeProfile = (
     return token;
   }
 
-  return syncCanvasTokenWithSheet(token, {
+  // A scene transaction also updates the personal run. Its profile listener
+  // may arrive first; wait for the scene's matching runtime/effect snapshot
+  // before exposing that health or inventory change.
+  const waitingForScene = Number(activeRun.sourceCanvasRuntimeRevision || 0) > Number(token.canvasRuntimeRevision || 0);
+  const synced = syncCanvasTokenWithSheet(token, {
     ...storedProfile,
     id: token.linkedClassId,
     templateId: token.linkedClassId,
@@ -107,11 +111,13 @@ export const syncCanvasTokenWithRuntimeProfile = (
     activeRun,
   }, {}, {
     scenarioId,
-    preserveTokenState: !hasNewerRevision,
+    preserveTokenState: !hasNewerRevision || waitingForScene,
   });
+  return waitingForScene ? { ...synced, runRevision: token.runRevision || 0 } : synced;
 };
 
 const persistTokenRun = async (token, scenarioId) => {
+  const scenarioRef = doc(db, 'canvas_scenarios', scenarioId);
   const profileRef = doc(
     db,
     'players',
@@ -121,19 +127,23 @@ const persistTokenRun = async (token, scenarioId) => {
   );
 
   return runTransaction(db, async (transaction) => {
+    const sceneSnapshot = await transaction.get(scenarioRef);
     const profileSnapshot = await transaction.get(profileRef);
+    const scene = sceneSnapshot.exists() ? sceneSnapshot.data() : null;
+    const committedToken = scene?.items?.find(item => item.id === token.id);
+    if (!committedToken || !isRunToken(committedToken)) return { persisted: false, reason: 'stale-scenario' };
     const profileData = profileSnapshot.exists() ? profileSnapshot.data() : {};
     const currentRun = profileData.activeRun || null;
 
-    if (currentRun && !canRogueliteTokenClaimRun(token, currentRun, scenarioId)) {
+    if (currentRun && !canRogueliteTokenClaimRun(committedToken, currentRun, scenarioId)) {
       return { persisted: false, reason: 'stale-scenario' };
     }
 
     const nextRevision = Math.max(
       Number(currentRun?.revision) || 0,
-      Number(token.runRevision) || 0,
+      Number(committedToken.runRevision) || 0,
     ) + 1;
-    const nextRun = createRogueliteActiveRunFromToken(token, currentRun, {
+    const nextRun = createRogueliteActiveRunFromToken(committedToken, currentRun, {
       scenarioId,
       revision: nextRevision,
       now: Date.now(),
@@ -144,8 +154,15 @@ const persistTokenRun = async (token, scenarioId) => {
       templateId: token.linkedClassId,
       owner: token.linkedClassOwner,
       profileType: 'rogueliteClass',
-      activeRun: nextRun,
+      activeRun: { ...nextRun, sourceCanvasRuntimeRevision: Number(committedToken.canvasRuntimeRevision || 0) },
     }), { merge: true });
+
+    // Link the profile revision to the same authoritative scene in this transaction.
+    // A delayed pickup save must never publish its captured, pre-potion health.
+    transaction.update(scenarioRef, sanitizeForFirestore({
+      items: scene.items.map(item => item.id === committedToken.id ? { ...item, runRevision: nextRevision } : item),
+      lastModified: Math.max(Date.now(), Number(scene.lastModified || 0) + 1),
+    }));
 
     return { persisted: true, activeRun: nextRun };
   });

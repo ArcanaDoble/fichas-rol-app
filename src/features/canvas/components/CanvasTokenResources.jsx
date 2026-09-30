@@ -82,6 +82,12 @@ const CanvasTokenResources = ({ token, onUpdate, movementRuntime = null }) => {
     else onUpdate(updates);
   };
 
+  const removeTemporaryLife = () => {
+    const stats = { ...token.stats };
+    delete stats.vidaTemporal;
+    onUpdate({ stats });
+  };
+
   return (
     <section className="space-y-3" data-testid="roguelite-token-resources">
       <div className="flex items-center justify-between border-b border-slate-800/70 pb-2">
@@ -104,6 +110,8 @@ const CanvasTokenResources = ({ token, onUpdate, movementRuntime = null }) => {
           const maximum = normalizeValue(stat.max);
           const color = stat.color || fallbackColor;
           const label = stat.label || fallbackLabel;
+          const temporary = id === 'vida' ? normalizeValue(token.stats?.vidaTemporal?.current) : 0;
+          const temporaryMax = id === 'vida' ? normalizeValue(token.stats?.vidaTemporal?.max) : 0;
           const movementBaseMaximum = id === 'movimiento' && movementRuntime
             ? Math.max(
               normalizeValue(movementRuntime.statMax ?? movementRuntime.base),
@@ -127,6 +135,11 @@ const CanvasTokenResources = ({ token, onUpdate, movementRuntime = null }) => {
                     {label}
                   </span>
                   <span className="font-mono text-[9px]" style={{ color }}>{current} / {maximum}</span>
+                  {temporaryMax > 0 && <button type="button" onClick={removeTemporaryLife}
+                    className="-m-2 p-2 font-mono text-[9px] text-[#dfc885] transition-colors hover:text-[#fff0bd] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[#dfc885]"
+                    aria-label="Retirar toda la Vida temporal" title="Retirar Vida temporal">
+                    <span aria-label={`Vida temporal: ${temporary}`}>+{temporary}</span>
+                  </button>}
                 </div>
 
                 <div className="flex shrink-0 items-center gap-1 border border-slate-700/70 bg-[#080d16]">
@@ -152,7 +165,7 @@ const CanvasTokenResources = ({ token, onUpdate, movementRuntime = null }) => {
                 </div>
               </div>
 
-              {maximum === 0 ? (
+              {maximum === 0 && temporaryMax === 0 ? (
                 <div className="flex h-6 items-center justify-center border border-dashed border-slate-800/80 bg-black/15 text-[8px] font-bold uppercase tracking-[0.15em] text-slate-700">
                   Sin {label.toLowerCase()}
                 </div>
@@ -187,6 +200,15 @@ const CanvasTokenResources = ({ token, onUpdate, movementRuntime = null }) => {
                       />
                     );
                   })}
+                  {Array.from({ length: temporaryMax }, (_, index) => <button key={`temporary-${index}`}
+                    type="button"
+                    onClick={() => setCurrentStat('vidaTemporal', index < temporary ? temporary - 1 : index + 1)}
+                    className="min-w-0 flex-1 border transition-colors duration-150 hover:brightness-110 active:scale-y-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#dfc885]"
+                    data-life-temporary="true" data-filled={index < temporary}
+                    aria-pressed={index < temporary}
+                    aria-label={`Bloque temporal ${index + 1}: ${index < temporary ? 'quitar 1 Vida temporal' : `restaurar Vida temporal a ${index + 1}`}`}
+                    title={index < temporary ? 'Quitar 1 bloque de Vida temporal' : `Corrección manual: fijar Vida temporal en ${index + 1}`}
+                    style={{ backgroundColor: index < temporary ? '#dfc885' : '#dfc88515', borderColor: index < temporary ? '#dfc885' : '#dfc88555' }} />)}
                 </div>
               )}
             </div>

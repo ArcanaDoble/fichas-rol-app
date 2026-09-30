@@ -78,4 +78,23 @@ describe('roguelite catalog item migration', () => {
     expect(stored).not.toHaveProperty('cuerpo');
     expect(stored).not.toHaveProperty('mente');
   });
+
+  test('preserves the old description as rules and stores lore separately', () => {
+    const form = weaponCatalogItemToForm({
+      nombre: 'Hoja juramentada',
+      description: 'Al impactar, aplica Sangrado.',
+      descripcionLore: 'Fue templada con las cenizas de un rey sin tumba.',
+    });
+
+    expect(form.descripcion).toBe('Al impactar, aplica Sangrado.');
+    expect(form.lore).toBe('Fue templada con las cenizas de un rey sin tumba.');
+
+    const stored = weaponCatalogItemToStorage(form);
+    expect(stored).toEqual(expect.objectContaining({
+      description: 'Al impactar, aplica Sangrado.',
+      descripcion: 'Al impactar, aplica Sangrado.',
+      lore: 'Fue templada con las cenizas de un rey sin tumba.',
+      descripcionLore: 'Fue templada con las cenizas de un rey sin tumba.',
+    }));
+  });
 });

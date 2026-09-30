@@ -1,4 +1,5 @@
-import { useRef } from 'react';
+import { getTerrainMovementCost } from './tarTerrain';
+import { useRef, useState } from 'react';
 import { getBoardDieLaunchGesture } from '../../utils/boardDicePhysics';
 import {
     detachCardFromContainer, getCardStackIds, isCardContainerItem,
@@ -13,6 +14,12 @@ import {
 } from './legacyCombatRules';
 import { WORLD_SIZE, lineRectIntersect, linesIntersect, snapWorldPositionToGrid } from './spatial';
 import { canControlToken, isCanvasCombatRoundActive } from './tokenControlUtils';
+import {
+    getHiddenSafeMovementPreviewItems,
+    isCanvasTokenHiddenFromViewer,
+    removeHiddenStatusFromToken,
+    resolveHiddenDetectionAlongMovement,
+} from './tokenVisibilityAccess';
 
 /** Handles rule-neutral pointer, touch, selection and drag transactions. */
 export const useCanvasInteractionController = ({
@@ -83,11 +90,13 @@ export const useCanvasInteractionController = ({
     tokenDragStart,
     tokenOriginalPos,
     tokenOriginalPosRef,
+    triggerToast,
     wallDrawingCurrent,
     wallDrawingStart,
     zoom,
 }) => {
 const lastPinchDist = useRef(null);
+    const [pickupPointer, setPickupPointer] = useState(null);
     const lastTouchPos = useRef({ x: 0, y: 0 });
     const isCanvasCombatActive = !isBoardMode && isCanvasCombatRoundActive(activeScenario);
 
@@ -344,6 +353,9 @@ const handleMouseMove = (e) => {
             const selectedContainers = currentScenario.items
                 .filter(item => selectedContainerIds.has(item.id) && isCardContainerItem(item));
             const draggedItemForMove = currentScenario.items.find(item => item.id === draggedTokenId);
+            if (isScenePickupItem?.(draggedItemForMove)) {
+                setPickupPointer({ itemId: draggedTokenId, worldPoint: divToWorld(curX, curY) });
+            }
             const isLaunchingBoardDieDrag = isBoardMode && isBoardDieItem(draggedItemForMove) && draggedItemForMove.dieLaunchMode;
 
             let nextCombatOccupancyFeedback = null;
@@ -394,7 +406,7 @@ const handleMouseMove = (e) => {
                             movingToken: item,
                             nextX: newX,
                             nextY: newY,
-                            items: currentScenario.items,
+                            items: getHiddenSafeMovementPreviewItems(item, currentScenario.items),
                             config: gridConfig,
                             excludeIds: selectedTokenIds.filter((id) => id !== item.id),
                         });
@@ -449,11 +461,7 @@ const handleMouseMove = (e) => {
                             ? prev.startY
                             : (Number.isFinite(Number(original.turnStartY)) ? Number(original.turnStartY) : original.y);
 
-                        const dx = Math.abs(draggedItem.x - turnStartX);
-                        const dy = Math.abs(draggedItem.y - turnStartY);
-                        const cellW = gridConfig.cellWidth || 50;
-                        const cellH = gridConfig.cellHeight || 50;
-                        const distance = Math.max(Math.round(dx / cellW), Math.round(dy / cellH));
+                        const distance = getTerrainMovementCost({ token: draggedItem, from: { x: turnStartX, y: turnStartY }, to: draggedItem, items: activeScenario.items, config: gridConfig });
                         const actionCost = isSameToken ? (Number(prev.actionCost) || 0) : 0;
                         const hasActions = isSameToken && Array.isArray(prev.actions) && prev.actions.length > 0;
 
@@ -597,6 +605,7 @@ const handleMouseMove = (e) => {
     };
 
     const handleMouseUp = async (e) => {
+        setPickupPointer(null);
         if (cardPreviewSuppressTouchEndRef.current) {
             setDraggedTokenId(null);
             setRotatingTokenId(null);
@@ -682,6 +691,7 @@ const handleMouseMove = (e) => {
                 const newSelected = activeScenario.items.filter(item => {
                     if (isStackedCardItem(item)) return false;
                     if (isCardHiddenByContainerForPlayer(item, activeScenario.items, isPlayerView)) return false;
+                    if (isCanvasTokenHiddenFromViewer(item, activeScenario.items, { isPlayerView, playerName, selectedTokenIds })) return false;
 
                     const isLight = item.type === 'light';
                     const isWall = item.type === 'wall';
@@ -754,6 +764,7 @@ const handleMouseMove = (e) => {
             const currentScenario = activeScenarioRef.current;
             let finalItems = currentScenario.items;
             let didReorderBoardMarkerStack = false;
+            let hiddenMovementResolution = null;
             const interactionOriginalItems = currentScenario.items.map(item => {
                 const original = tokenOriginalPos[item.id];
                 return applyItemInteractionSnapshot(item, original);
@@ -820,7 +831,8 @@ const handleMouseMove = (e) => {
                 const selectedContainers = currentScenario.items
                     .filter(item => selectedContainerIds.has(item.id) && isCardContainerItem(item));
 
-                if (isBoardMode && isCardItem(draggedItem) && isPointInsideBoardHand({ x: releaseX, y: releaseY })) {
+                if (isBoardMode && isCardItem(draggedItem) && !(isPlayerView && draggedItem.hideStackContentsForPlayers)
+                    && isPointInsideBoardHand({ x: releaseX, y: releaseY })) {
                     if (boardCardHandTransferRef.current !== draggedTokenId) {
                         boardCardHandTransferRef.current = draggedTokenId;
                         draggedTokenIdRef.current = null;
@@ -876,6 +888,7 @@ const handleMouseMove = (e) => {
 
                 if (handleModeItemDrop?.({
                     draggedItemId: draggedTokenId,
+                    worldPoint: divToWorld(releaseX, releaseY),
                     finalItems,
                     interactionOriginalItems,
                     scenarioId: currentScenario.id,
@@ -986,6 +999,50 @@ const handleMouseMove = (e) => {
                         didReorderBoardMarkerStack = true;
                     }
                 }
+                if (isCombatTokenItem(draggedItem) && activeLayer === 'TABLETOP') {
+                    const original = tokenOriginalPos[draggedTokenId];
+                    const requestedToken = finalItems.find((item) => item.id === draggedTokenId);
+                    if (original && requestedToken) {
+                        hiddenMovementResolution = resolveHiddenDetectionAlongMovement({
+                            movingToken: { ...draggedItem, x: original.x, y: original.y },
+                            from: { x: original.x, y: original.y },
+                            to: { x: requestedToken.x, y: requestedToken.y },
+                            items: interactionOriginalItems,
+                            config: gridConfig,
+                        });
+
+                        if (hiddenMovementResolution.detected) {
+                            const revealedIds = new globalThis.Set(hiddenMovementResolution.revealedTokenIds);
+                            finalItems = finalItems.map((item) => {
+                                const revealedItem = revealedIds.has(item.id) ? removeHiddenStatusFromToken(item) : item;
+                                return item.id === draggedTokenId
+                                    ? {
+                                        ...revealedItem,
+                                        x: hiddenMovementResolution.finalPosition.x,
+                                        y: hiddenMovementResolution.finalPosition.y,
+                                    }
+                                    : revealedItem;
+                            });
+
+                            const revealOnlyItems = interactionOriginalItems.map((item) => (
+                                revealedIds.has(item.id) ? removeHiddenStatusFromToken(item) : item
+                            ));
+                            await safePersistItems(
+                                currentScenario.id,
+                                revealOnlyItems,
+                                interactionOriginalItems,
+                                hiddenMovementResolution.revealedTokenIds,
+                            );
+                            triggerToast?.(
+                                'Oculto descubierto',
+                                hiddenMovementResolution.blocked
+                                    ? 'La formación ocupa toda la casilla: el paso no se consume y la ruta se detiene.'
+                                    : 'El contacto a alcance Toque revela al token y detiene la ruta.',
+                                'warning',
+                            );
+                        }
+                    }
+                }
             }
 
             // Si estábamos arrastrando tokens en la capa de mesa, comprobar colisiones
@@ -1006,7 +1063,7 @@ const handleMouseMove = (e) => {
                                     movingToken: item,
                                     nextX: item.x,
                                     nextY: item.y,
-                                    items: currentScenario.items,
+                                    items: hiddenMovementResolution?.detected ? finalItems : interactionOriginalItems,
                                     config: gridConfig,
                                     excludeIds: selectedTokenIds.filter((id) => id !== item.id),
                                 });
@@ -1045,18 +1102,14 @@ const handleMouseMove = (e) => {
                             setPendingTurnState(prev => {
                                 if (!prev || prev.tokenId !== draggedTokenId) return prev;
 
-                                const cellW = gridConfig.cellWidth || 50;
-                                const cellH = gridConfig.cellHeight || 50;
                                 const turnStartX = Number.isFinite(Number(prev.startX))
                                     ? Number(prev.startX)
                                     : (Number.isFinite(Number(original.turnStartX)) ? Number(original.turnStartX) : original.x);
                                 const turnStartY = Number.isFinite(Number(prev.startY))
                                     ? Number(prev.startY)
                                     : (Number.isFinite(Number(original.turnStartY)) ? Number(original.turnStartY) : original.y);
-                                const distance = Math.max(
-                                    Math.round(Math.abs(original.x - turnStartX) / cellW),
-                                    Math.round(Math.abs(original.y - turnStartY) / cellH)
-                                );
+                                const distance = getTerrainMovementCost({ token,
+                                    from: { x: turnStartX, y: turnStartY }, to: original, items: finalItems, config: gridConfig });
                                 const hasActions = Array.isArray(prev.actions) && prev.actions.length > 0;
                                 const actionCost = Number(prev.actionCost) || 0;
 
@@ -1080,7 +1133,11 @@ const handleMouseMove = (e) => {
                 if (isCanvasCombatActive && isPlayerView) {
                     const token = finalItems.find(i => i.id === draggedTokenId);
                     const original = tokenOriginalPos[draggedTokenId];
-                    if (token && isCombatTokenItem(token) && original && (token.x !== original.x || token.y !== original.y)) {
+                    if (token && isCombatTokenItem(token) && original && (
+                        token.x !== original.x
+                        || token.y !== original.y
+                        || hiddenMovementResolution?.detected
+                    )) {
                         setPendingTurnState(prev => {
                             // Si ya hay un movimiento pendiente, el inicio real del turno se conserva aunque este drag empiece desde la previsualización.
                             const isSameToken = prev && prev.tokenId === draggedTokenId;
@@ -1091,11 +1148,14 @@ const handleMouseMove = (e) => {
                                 ? prev.startY
                                 : (Number.isFinite(Number(original.turnStartY)) ? Number(original.turnStartY) : original.y);
 
-                            const dx = Math.abs(token.x - turnStartX);
-                            const dy = Math.abs(token.y - turnStartY);
-                            const cellW = gridConfig.cellWidth || 50;
-                            const cellH = gridConfig.cellHeight || 50;
-                            const distance = Math.max(Math.round(dx / cellW), Math.round(dy / cellH));
+                            const geometricDistance = getTerrainMovementCost({ token, from: { x: turnStartX, y: turnStartY }, to: token, items: finalItems, config: gridConfig });
+                            const distance = hiddenMovementResolution?.detected
+                                ? Math.max(
+                                    geometricDistance,
+                                    (isSameToken ? Math.max(0, Number(prev.moveCost) || 0) : 0)
+                                        + hiddenMovementResolution.spentCost,
+                                )
+                                : geometricDistance;
                             const actionCost = isSameToken ? (Number(prev.actionCost) || 0) : 0;
                             const hasActions = isSameToken && Array.isArray(prev.actions) && prev.actions.length > 0;
 
@@ -1134,17 +1194,24 @@ const handleMouseMove = (e) => {
                 ) {
                     const movedToken = finalItems.find((item) => item.id === draggedTokenId);
                     const original = tokenOriginalPos[draggedTokenId];
-                    if (movedToken && original && (movedToken.x !== original.x || movedToken.y !== original.y)) {
+                    if (movedToken && original && (
+                        movedToken.x !== original.x
+                        || movedToken.y !== original.y
+                        || hiddenMovementResolution?.detected
+                    )) {
                         const cellW = gridConfig.cellWidth || 50;
                         const cellH = gridConfig.cellHeight || 50;
-                        const cost = Math.max(
-                            Math.round(Math.abs(movedToken.x - original.x) / cellW),
-                            Math.round(Math.abs(movedToken.y - original.y) / cellH),
-                        );
+                        const cost = hiddenMovementResolution?.detected
+                            ? hiddenMovementResolution.spentCost
+                            : Math.max(
+                                Math.round(Math.abs(movedToken.x - original.x) / cellW),
+                                Math.round(Math.abs(movedToken.y - original.y) / cellH),
+                            );
                         const confirmed = await combatRuntime.confirmMovement(draggedTokenId, {
                             from: { x: original.x, y: original.y },
                             to: { x: movedToken.x, y: movedToken.y },
                             cost,
+                            itemsOverride: hiddenMovementResolution?.detected ? finalItems : null,
                         });
 
                         if (!confirmed) {
@@ -1274,6 +1341,7 @@ const handleMouseMove = (e) => {
     };
 
     return {
+        pickupPointer,
         handleTouchStart,
         handleTouchMove,
         handleTouchEnd,

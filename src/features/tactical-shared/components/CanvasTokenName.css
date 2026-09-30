@@ -1,0 +1,7 @@
+.noma-token-life { position: absolute; inset: 0; pointer-events: none; z-index: 35; transform-origin: center; }
+.noma-token-life-readout, .noma-token-pickup { padding: 2px 9px 3px; max-width: 220px; white-space: nowrap; background: #0b0d14eb; border: 1px solid #c8aa6e3d; border-radius: 12px; color: #ede1cd; }
+.noma-token-life-readout { display: flex; align-items: baseline; justify-content: center; gap: 7px; position: absolute; left: 50%; transform-origin: top center; opacity: 0; transition: opacity .16s ease; }
+.noma-token-life-name { max-width: 138px; overflow: hidden; text-overflow: ellipsis; font: 14px/1.2 Alegreya, Georgia, serif; }
+.noma-token-life[data-selected='true'] .noma-token-life-readout { opacity: 1; }
+@media (hover: hover) { .group:hover > div > .noma-token-life .noma-token-life-readout { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .noma-token-life-readout { transition: none !important; } }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import LoadoutView from '../LoadoutView';
 
 jest.mock('../../firebase', () => ({ db: {} }));
@@ -18,12 +18,23 @@ jest.mock('firebase/firestore', () => ({
 }));
 
 beforeEach(() => {
-  require('firebase/firestore').getDocs.mockReturnValue(new Promise(() => {}));
+  const firestore = require('firebase/firestore');
+  firestore.collection.mockImplementation((...parts) => ({
+    path: parts.filter((part) => typeof part === 'string').join('/'),
+  }));
+  firestore.getDocs.mockReturnValue(new Promise(() => {}));
+  firestore.onSnapshot.mockImplementation((reference, onNext) => {
+    if (['customItems', 'accessories'].includes(reference.path)) {
+      firestore.getDocs(reference).then(onNext);
+    } else onNext({ forEach: () => {}, docs: [] });
+    return jest.fn();
+  });
 });
 
 const equipment = {
   weapons: [{
     templateId: 'great-axe',
+    instanceId: 'great-axe::1',
     name: 'Gran hacha',
     category: 'Marcial',
     itemType: 'weapon',
@@ -229,6 +240,41 @@ test('the inventory card integrates the item image and configured rarity color',
   );
 });
 
+test('an existing inventory copy recovers its lore from the current object catalog', async () => {
+  require('firebase/firestore').getDocs.mockImplementation((reference) => Promise.resolve({
+    docs: reference.path === 'customItems' ? [{
+      data: () => ({
+        id: 'healing-potion',
+        name: 'Poción de curación',
+        lore: 'Un tónico oscuro preparado con médula animal.',
+      }),
+    }] : [],
+  }));
+
+  renderInventory({
+    rogueliteRole: 'master',
+    dndClass: createClass({
+      equipment: {
+        weapons: [],
+        armor: [],
+        abilities: [],
+        accessories: [],
+        objects: [{
+          templateId: 'healing-potion',
+          name: 'Poción de curación',
+          itemType: 'object',
+          description: 'Recupera 1d4 de salud.',
+        }],
+      },
+    }),
+  });
+
+  const lore = await screen.findByText('Un tónico oscuro preparado con médula animal.');
+  const card = lore.closest('[data-testid="inventory-item-card"]');
+  expect(within(card).getByText('Efecto')).toBeInTheDocument();
+  expect(within(card).getByText('Lore')).toBeInTheDocument();
+});
+
 test('an item without class proficiency stays visible but cannot be equipped', () => {
   const onUpdateEquipped = jest.fn();
   render(
@@ -270,7 +316,7 @@ test('an item without class proficiency stays visible but cannot be equipped', (
   expect(onUpdateEquipped).not.toHaveBeenCalled();
 });
 
-test('a two-handed weapon visually occupies and blocks the opposite hand', () => {
+test('a two-handed weapon keeps both slots visible and blocks the supporting hand', () => {
   const onUpdateEquipped = jest.fn();
   const greatAxe = equipment.weapons[0];
 
@@ -290,20 +336,223 @@ test('a two-handed weapon visually occupies and blocks the opposite hand', () =>
   const occupiedSlot = screen.getByRole('status', {
     name: 'Mano Torpe ocupada por Gran hacha',
   });
-  expect(within(occupiedSlot).getByText('Arma a dos manos')).toBeInTheDocument();
-  expect(within(occupiedSlot).getByText('Ocupada por Gran hacha')).toBeInTheDocument();
+  expect(within(occupiedSlot).getByText('A dos manos')).toBeInTheDocument();
+  expect(within(occupiedSlot).getByText('Gran hacha')).toBeInTheDocument();
+  expect(screen.getByText('OCUPADA')).toBeInTheDocument();
+  expect(screen.getByTestId('two-handed-connector')).toHaveAttribute('data-connector-direction', 'right');
+  expect(screen.getByRole('button', { name: 'Desequipar Gran hacha' }))
+    .toHaveClass('noma-loadout-slot-remove');
+  expect(document.querySelectorAll('.noma-loadout-hand-slot')).toHaveLength(2);
 
   fireEvent.click(occupiedSlot);
   expect(onUpdateEquipped).not.toHaveBeenCalled();
   expect(screen.queryByText('Seleccionar arma del inventario')).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Inventario' }));
+  const greatAxeCard = screen.getAllByTestId('inventory-item-card')
+    .find((card) => within(card).queryByText('Gran hacha'));
+  const bothHands = within(greatAxeCard).getByRole('img', {
+    name: 'Conjunto I: equipada a dos manos',
+  });
+  expect(bothHands.querySelectorAll('.is-active')).toHaveLength(2);
 });
 
-test('the same two hand slots edit two independent weapon sets', () => {
+test('unequipping a two-handed weapon in the off hand releases the visible supporting slot', () => {
+  const greatAxe = equipment.weapons[0];
   const onUpdateEquipped = jest.fn();
+  function Fixture() {
+    const [items, setItems] = React.useState({ mainHand: null, offHand: greatAxe, body: null });
+    return <LoadoutView
+      dndClass={createClass({ equippedItems: items })}
+      equipmentCatalog={{ weapons: [], armor: [], abilities: [] }}
+      glossary={[]}
+      rarityColorMap={{}}
+      rogueliteRole="player"
+      onUpdateEquipped={(slot, item, options) => {
+        onUpdateEquipped(slot, item, options);
+        setItems((previous) => ({ ...previous, [slot]: item }));
+      }}
+    />;
+  }
+  render(<Fixture />);
+
+  expect(screen.getByRole('status', {
+    name: 'Mano Hábil ocupada por Gran hacha',
+  })).toBeInTheDocument();
+  expect(document.querySelectorAll('.noma-loadout-hand-slot')).toHaveLength(2);
+  fireEvent.click(screen.getByRole('button', { name: 'Desequipar Gran hacha' }));
+  expect(onUpdateEquipped).toHaveBeenCalledWith('offHand', null, { weaponSetIndex: 0 });
+  expect(screen.queryByText('A dos manos')).not.toBeInTheDocument();
+  expect(screen.getByText('Mano Torpe')).toBeInTheDocument();
+  expect(screen.getByText('Mano Hábil')).toBeInTheDocument();
+  expect(document.querySelectorAll('.noma-loadout-hand-slot')).toHaveLength(2);
+
+});
+
+test('equipped armor explains its passive CD threshold and exposes up to three glossary traits', () => {
+  const paddedArmor = {
+    templateId: 'armor:padded',
+    instanceId: 'armor:padded::1',
+    name: 'Armadura acolchada',
+    category: 'Ligera',
+    itemType: 'armor',
+    defenseClass: '6',
+    traits: 'Conmocionante, Crítico, Empuje, Oculto',
+  };
 
   render(
     <LoadoutView
       dndClass={createClass({
+        equipment: {
+          weapons: [],
+          armor: [paddedArmor],
+          abilities: [],
+          objects: [],
+          accessories: [],
+        },
+        equippedItems: { mainHand: null, offHand: null, body: paddedArmor },
+      })}
+      equipmentCatalog={{ weapons: [], armor: [], abilities: [] }}
+      glossary={[
+        { word: 'Conmocionante', info: 'Neutraliza Conmoción.', color: '#e3bf65' },
+        { word: 'Crítico', info: 'Neutraliza Crítico.', color: '#e96a62' },
+        { word: 'Empuje', info: 'Neutraliza Empuje.', color: '#72b7df' },
+      ]}
+      rarityColorMap={{}}
+      rogueliteRole="player"
+      onUpdateEquipped={jest.fn()}
+    />,
+  );
+
+  expect(screen.getByRole('img', {
+    name: 'CD 6: pierdes un bloque de Vida por cada 6 de Presión',
+  })).toBeInTheDocument();
+  expect(screen.getByText('Defensa pasiva')).toBeInTheDocument();
+  expect(screen.getByText('1 bloque')).toBeInTheDocument();
+  expect(screen.getByText('cada 6 de Presión')).toBeInTheDocument();
+  const concussionTrait = screen.getByText('Conmocionante');
+  expect(concussionTrait).toHaveAttribute('data-tooltip-content', 'Neutraliza Conmoción.');
+  expect(concussionTrait).toHaveStyle({ color: '#e3bf65' });
+  expect(screen.getByText('Crítico')).toHaveAttribute('data-tooltip-content', 'Neutraliza Crítico.');
+  expect(screen.getByText('Empuje')).toHaveAttribute('data-tooltip-content', 'Neutraliza Empuje.');
+  expect(screen.queryByText('Oculto')).not.toBeInTheDocument();
+  expect(screen.queryByText('Neutraliza')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Desequipar Armadura acolchada' }))
+    .toHaveClass('noma-loadout-slot-remove');
+
+  fireEvent.click(screen.getByText('Armadura acolchada'));
+  const armorSelector = screen.getByText('Seleccionar armadura del inventario')
+    .parentElement.parentElement;
+  expect(within(armorSelector).getByText('CD 6')).toBeInTheDocument();
+  expect(within(armorSelector).queryByText('Defensa: 6')).not.toBeInTheDocument();
+});
+
+test('two owned daggers are separate copies and expose their exact hand usage', () => {
+  const onUpdateEquipped = jest.fn();
+  const daggerOne = {
+    templateId: 'weapon:dagger',
+    instanceId: 'weapon:dagger::1',
+    name: 'Daga',
+    category: 'Simple',
+    itemType: 'weapon',
+    handsRequired: 1,
+  };
+  const daggerTwo = {
+    ...daggerOne,
+    instanceId: 'weapon:dagger::2',
+  };
+
+  render(
+    <LoadoutView
+      dndClass={createClass({
+        equipment: {
+          weapons: [daggerOne, daggerTwo],
+          armor: [],
+          abilities: [],
+          objects: [],
+          accessories: [],
+        },
+        equippedItems: {
+          weaponSets: [
+            { mainHand: daggerOne, offHand: null },
+            { mainHand: null, offHand: null },
+          ],
+          activeWeaponSet: 0,
+        },
+        summary: {
+          proficiencies: {
+            weapons: { simple: true, martial: false, special: false },
+            armor: { light: true, medium: false, heavy: false },
+          },
+        },
+      })}
+      equipmentCatalog={{ weapons: [], armor: [], abilities: [] }}
+      glossary={[]}
+      rarityColorMap={{}}
+      rogueliteRole="player"
+      onUpdateEquipped={onUpdateEquipped}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: 'Inventario' }));
+  const daggerCards = screen.getAllByTestId('inventory-item-card');
+  const inventoryHands = within(daggerCards[0]).getByRole('img', {
+    name: 'Conjunto I: equipada en mano hábil',
+  });
+  const equippedCopyIndicator = within(daggerCards[0]).getByRole('img', {
+    name: '2 copias físicas',
+  });
+  expect(equippedCopyIndicator).toHaveClass('noma-equipment-copy');
+  expect(equippedCopyIndicator.closest('.noma-inventory-card__equipment-state')).not.toBeNull();
+  expect(equippedCopyIndicator.closest('.noma-inventory-card__actions')).toBeNull();
+  expect(inventoryHands.closest('.noma-inventory-card__equipment-state')).not.toBeNull();
+  expect(inventoryHands.querySelector('.is-right')).toHaveClass('is-active');
+  expect(inventoryHands.querySelector('.is-left')).not.toHaveClass('is-active');
+  const freeCopyIndicator = within(daggerCards[1]).getByRole('img', {
+    name: '2 copias físicas',
+  });
+  expect(freeCopyIndicator).toHaveClass('noma-equipment-copy');
+  expect(freeCopyIndicator.closest('.noma-inventory-card__equipment-state')).not.toBeNull();
+  expect(within(daggerCards[1]).queryByRole('img', {
+    name: /equipada|libre/i,
+  })).not.toBeInTheDocument();
+  expect(within(daggerCards[1]).queryByText(/Copia \d+ de \d+|Libre/i)).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Equipables' }));
+  fireEvent.click(screen.getByText('Mano Torpe'));
+  const selector = screen.getByText('Seleccionar arma del inventario').parentElement.parentElement;
+  const daggerOptions = within(selector).getAllByRole('button', { name: /Daga/i });
+  expect(daggerOptions[0]).toBeDisabled();
+  expect(daggerOptions[1]).toBeEnabled();
+  expect(within(daggerOptions[0]).getByRole('img', {
+    name: 'Conjunto I: equipada en mano hábil',
+  }).querySelector('.is-right')).toHaveClass('is-active');
+  expect(within(daggerOptions[1]).getByRole('img', {
+    name: 'Libre: ninguna mano ocupada',
+  }).querySelector('.is-active')).toBeNull();
+
+  fireEvent.click(daggerOptions[1]);
+  expect(onUpdateEquipped).toHaveBeenCalledWith(
+    'offHand',
+    expect.objectContaining({ instanceId: 'weapon:dagger::2', name: 'Daga' }),
+    { weaponSetIndex: 0 },
+  );
+});
+
+test('the same two hand slots edit two independent weapon sets', () => {
+  const onUpdateEquipped = jest.fn();
+  const secondGreatAxe = {
+    ...equipment.weapons[0],
+    instanceId: 'great-axe::2',
+  };
+
+  render(
+    <LoadoutView
+      dndClass={createClass({
+        equipment: {
+          ...equipment,
+          weapons: [equipment.weapons[0], secondGreatAxe],
+        },
         equippedItems: {
           mainHand: equipment.weapons[0],
           offHand: null,
@@ -332,10 +581,38 @@ test('the same two hand slots edit two independent weapon sets', () => {
   expect(screen.getByText('Mano Torpe')).toBeInTheDocument();
 
   fireEvent.click(screen.getByText('Mano Hábil'));
-  fireEvent.click(screen.getByRole('button', { name: /Gran hacha/i }));
+  const selector = screen.getByText('Seleccionar arma del inventario').parentElement.parentElement;
+  const axeOptions = within(selector).getAllByRole('button', { name: /Gran hacha/i });
+  expect(axeOptions[0]).toBeDisabled();
+  expect(axeOptions[1]).toBeEnabled();
+  fireEvent.click(axeOptions[1]);
   expect(onUpdateEquipped).toHaveBeenCalledWith(
     'mainHand',
-    expect.objectContaining({ templateId: 'great-axe', name: 'Gran hacha' }),
+    expect.objectContaining({
+      templateId: 'great-axe',
+      instanceId: 'great-axe::2',
+      name: 'Gran hacha',
+    }),
     { weaponSetIndex: 1 },
   );
+});
+
+
+test('role-playing inventory receives new and edited Forge objects live', () => {
+  const firestore = require('firebase/firestore');
+  const listeners = {};
+  firestore.onSnapshot.mockImplementation((ref, callback) => {
+    listeners[ref.path] = callback;
+    callback({ docs: [], forEach: () => {} });
+    return jest.fn();
+  });
+  const onAddEquipment = jest.fn();
+  renderInventory({ rogueliteRole: 'legacy', onAddEquipment });
+  fireEvent.click(screen.getByRole('button', { name: 'Objetos' }));
+  const send = description => act(() => listeners.customItems({ docs: [{ id: 'new-item', data: () => ({ name: 'Test tonic', description }) }] }));
+  send('Original');
+  expect(screen.getByText('Test tonic')).toBeInTheDocument();
+  send('Updated');
+  fireEvent.click(screen.getByRole('button', { name: 'Agregar' }));
+  expect(onAddEquipment).toHaveBeenCalledWith(expect.objectContaining({ id: 'new-item', description: 'Updated' }), 'objects');
 });

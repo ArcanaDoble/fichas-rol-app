@@ -1,12 +1,35 @@
 import { resolveRogueliteEquippedItems } from './rogueliteTokenSheetSync';
+import { resolveBeltSlotCount } from '../roguelite/equipmentPool';
+import { resolveItemCategory } from '../roguelite/activeRun';
 import { getGridWorldRect } from '../tactical-shared/spatial';
 import { getCombatRenderPlacement } from '../tactical-shared/legacyCombatRules';
 
 export const CANVAS_INVENTORY_DROP_EVENT = 'noma:canvas-inventory-drop';
 export const CANVAS_INVENTORY_DRAG_PREVIEW_EVENT = 'noma:canvas-inventory-drag-preview';
 export const CANVAS_INVENTORY_DRAG_END_EVENT = 'noma:canvas-inventory-drag-end';
+export const CANVAS_CATALOG_ITEM_DROP_EVENT = 'noma:canvas-catalog-item-drop';
+export const CANVAS_CATALOG_ITEM_DRAG_PREVIEW_EVENT = 'noma:canvas-catalog-item-drag-preview';
+export const CANVAS_CATALOG_ITEM_DRAG_END_EVENT = 'noma:canvas-catalog-item-drag-end';
+export const CANVAS_CATALOG_ITEM_ARM_EVENT = 'noma:canvas-catalog-item-arm';
 
 export const isCanvasLootItem = (item) => item?.sceneItemKind === 'canvasLoot';
+let inventoryInstanceSequence = 0;
+export const createCanvasInventoryInstanceId = () => globalThis.crypto?.randomUUID?.()
+    || `canvas-item-${Date.now()}-${++inventoryInstanceSequence}`;
+
+const withoutPhysicalIdentity = item => {
+    const copy = { ...item };
+    delete copy.runItemId;
+    delete copy.instanceId;
+    ['payload', 'details', 'detalles', 'raw'].forEach(key => {
+        if (copy[key] && typeof copy[key] === 'object') copy[key] = withoutPhysicalIdentity(copy[key]);
+    });
+    return copy;
+};
+
+export const copyCanvasInventoryItem = (item, instanceId = createCanvasInventoryInstanceId()) => ({
+    ...withoutPhysicalIdentity(normalizeCanvasInventoryItem(item)), instanceId,
+});
 
 const firstMeaningfulValue = (...values) => values.find((value) => (
     value !== undefined
@@ -83,6 +106,7 @@ export const normalizeCanvasInventoryItem = (candidate = {}, fallbackImage = nul
 
     return {
         ...merged,
+        ...(merged.instanceId && merged.runItemId ? { runItemId: merged.instanceId } : {}),
         ...(name ? { name, nombre: firstMeaningfulValue(candidate.nombre, payload.nombre, name) } : {}),
         ...(rarity ? { rareza: rarity, rarity } : {}),
         ...(image ? { image, imageUrl: firstMeaningfulValue(candidate.imageUrl, payload.imageUrl, image) } : {}),
@@ -125,8 +149,10 @@ const resolveCanvasInventoryIdentityKeys = (item) => {
 
 export const canvasInventoryItemsMatch = (left, right) => {
     if (!left || !right) return false;
-    const leftInstance = typeof left === 'object' ? left.runItemId || left.instanceId : null;
-    const rightInstance = typeof right === 'object' ? right.runItemId || right.instanceId : null;
+    const normalizedLeft = typeof left === 'object' ? normalizeCanvasInventoryItem(left) : null;
+    const normalizedRight = typeof right === 'object' ? normalizeCanvasInventoryItem(right) : null;
+    const leftInstance = normalizedLeft?.runItemId || normalizedLeft?.instanceId;
+    const rightInstance = normalizedRight?.runItemId || normalizedRight?.instanceId;
     if (leftInstance && rightInstance) return String(leftInstance) === String(rightInstance);
 
     const rightKeys = new Set(resolveCanvasInventoryIdentityKeys(right));
@@ -510,6 +536,11 @@ export const resolveCanvasLootRecipient = ({
                 y: rect.y + (rect.height / 2),
             };
             const dist = Math.hypot(lootCenter.x - itemCenter.x, lootCenter.y - itemCenter.y);
+            // Aim at the visible portrait, not the footprint of the carried item.
+            // In a duel/formation the two portraits share a cell, not a drop zone.
+            const pointerDistance = item.isCircular === false
+                ? Math.max(Math.abs(lootCenter.x - itemCenter.x) / (rect.width / 2), Math.abs(lootCenter.y - itemCenter.y) / (rect.height / 2))
+                : Math.hypot((lootCenter.x - itemCenter.x) / (rect.width / 2), (lootCenter.y - itemCenter.y) / (rect.height / 2));
             const containsCenter = (
                 lootCenter.x >= rect.x
                 && lootCenter.x <= rect.x + rect.width
@@ -521,12 +552,18 @@ export const resolveCanvasLootRecipient = ({
                 overlap: getOverlapArea(lootRect, rect),
                 containsCenter,
                 dist,
+                pointerDistance,
             };
         })
-        .filter(({ overlap, containsCenter, dist, item }) => (
-            overlap > 0 || containsCenter || dist <= (Math.max(Number(item.width) || 50, Number(item.height) || 50) * 0.65)
+        .filter(({ overlap, containsCenter, dist, item, pointerDistance }) => (
+            worldPoint ? pointerDistance <= 1.12
+                : overlap > 0 || containsCenter || dist <= (Math.max(Number(item.width) || 50, Number(item.height) || 50) * 0.65)
         ))
-        .sort((left, right) => (
+        .sort((left, right) => worldPoint ? (
+            Number(right.pointerDistance <= 1) - Number(left.pointerDistance <= 1)
+            || left.dist - right.dist
+            || items.indexOf(right.item) - items.indexOf(left.item)
+        ) : (
             Number(right.containsCenter) - Number(left.containsCenter)
             || right.overlap - left.overlap
             || left.dist - right.dist
@@ -565,6 +602,7 @@ export const createCanvasLootSceneItem = ({ item, image, sourceToken, position }
         isCircular: false,
         lootItem: {
             ...normalizedItem,
+            ...(!normalizedItem?.runItemId && !normalizedItem?.instanceId ? { instanceId: createCanvasInventoryInstanceId() } : {}),
             isEquipped: false,
             isPrepared: false,
         },
@@ -575,19 +613,56 @@ export const createCanvasLootSceneItem = ({ item, image, sourceToken, position }
 };
 
 export const addCanvasLootToInventory = (token, lootItem, fallbackImage = null) => {
-    const normalizedItem = normalizeCanvasInventoryItem(lootItem, fallbackImage);
-    return ({
+    let normalizedItem = normalizeCanvasInventoryItem(lootItem, fallbackImage);
+    const inventory = Array.isArray(token?.inventory) ? token.inventory : [];
+    const incomingId = normalizedItem?.runItemId || normalizedItem?.instanceId;
+    // Pasted ground objects are new physical units, not more references to the
+    // original item. Preserve ids for transfers unless that copy is present.
+    if (incomingId && inventory.some(candidate => {
+        const existing = normalizeCanvasInventoryItem(candidate);
+        return String(existing?.runItemId || existing?.instanceId || '') === String(incomingId);
+    })) normalizedItem = copyCanvasInventoryItem(normalizedItem);
+    const acquiredItem = {
+        ...normalizedItem,
+        ...(!normalizedItem?.runItemId && !normalizedItem?.instanceId ? { instanceId: createCanvasInventoryInstanceId() } : {}),
+        isEquipped: false,
+        isPrepared: false,
+        equippedSlots: [],
+    };
+    delete acquiredItem.canvasSlot;
+    const nextToken = {
         ...token,
         inventory: [
             ...(Array.isArray(token?.inventory) ? token.inventory : []),
-            {
-                ...normalizedItem,
-                isEquipped: false,
-                isPrepared: false,
-            },
+            acquiredItem,
         ],
         runtimeDirty: true,
-    });
+    };
+    // Enemies use a flat equipment list, without the character belt loadout.
+    if (token?.profileType === 'rogueliteEnemy' || resolveItemCategory(acquiredItem) !== 'objects') {
+        return nextToken;
+    }
+
+    const loadout = token?.equipmentLoadout || {};
+    const slotCount = resolveBeltSlotCount(loadout);
+    const slot = Array.from({ length: slotCount }, (_, index) => `belt_${index}`)
+        .find((candidate) => !loadout[candidate]);
+    if (!slot) return nextToken;
+
+    const equippedItem = {
+        ...acquiredItem,
+        quantity: acquiredItem.quantity || 1,
+        isEquipped: true,
+        equippedSlots: [slot],
+    };
+    const equipped = resolveRogueliteEquippedItems({ ...loadout, [slot]: equippedItem });
+    return {
+        ...nextToken,
+        inventory: [...nextToken.inventory.slice(0, -1), equippedItem],
+        equipmentLoadout: equipped.loadout,
+        equippedItems: equipped.items,
+        activeWeaponSet: equipped.activeWeaponSet,
+    };
 };
 
 export const pickUpCanvasLootForToken = ({

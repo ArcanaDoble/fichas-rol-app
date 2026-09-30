@@ -147,7 +147,8 @@ const TokenResources = ({ token, onUpdate }) => {
                 </h4>
 
                 <div className="space-y-3">
-                    {RESOURCES.map(res => {
+                    {RESOURCES.map(resource => resource.id === 'postura' && token.stats?.hambre
+                        ? { ...resource, id: 'hambre', label: 'Hambre' } : resource).map(res => {
                         const stat = token.stats?.[res.id] || { current: 0, max: 5 }; // Default 5 max
                         const linkedAttrId =
                             res.id === 'armadura'

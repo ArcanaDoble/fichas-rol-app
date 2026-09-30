@@ -68,6 +68,57 @@ describe('Roguelite active run', () => {
       .toEqual(['Mandoble', 'Mallas', 'Bola de fuego']);
   });
 
+  test('materializes only the selected physical copy of a repeated weapon template', () => {
+    const daggerOne = {
+      name: 'Daga',
+      templateId: 'weapon:daga',
+      instanceId: 'weapon:daga::1',
+    };
+    const daggerTwo = {
+      ...daggerOne,
+      instanceId: 'weapon:daga::2',
+    };
+    const prepared = createPreparedRogueliteRunInventory({
+      ...makeSheet(),
+      equipment: { weapons: [daggerOne, daggerTwo] },
+      equippedItems: {
+        weaponSets: [
+          { mainHand: daggerTwo, offHand: null },
+          { mainHand: null, offHand: null },
+        ],
+      },
+    });
+
+    expect(prepared.weapons).toEqual([
+      expect.objectContaining({ instanceId: 'weapon:daga::2', name: 'Daga' }),
+    ]);
+  });
+
+  test('keeps two loot copies with the same template when their runtime ids differ', () => {
+    const run = createRogueliteActiveRunFromToken({
+      id: 'token-1',
+      inventory: [
+        {
+          name: 'Daga',
+          templateId: 'weapon:daga',
+          runItemId: 'loot-dagger-1',
+          _category: 'weapons',
+        },
+        {
+          name: 'Daga',
+          templateId: 'weapon:daga',
+          runItemId: 'loot-dagger-2',
+          _category: 'weapons',
+        },
+      ],
+    }, {}, { now: 100 });
+
+    expect(run.inventory.weapons).toEqual([
+      expect.objectContaining({ instanceId: 'loot-dagger-1' }),
+      expect.objectContaining({ instanceId: 'loot-dagger-2' }),
+    ]);
+  });
+
   test('keeps a prepared legacy ability whose catalog identity is nested in payload', () => {
     const run = createRogueliteActiveRun({
       ...makeSheet(),

@@ -103,6 +103,26 @@ beforeEach(() => {
   });
 });
 
+test('opens the class image editor from the portrait button in the library', async () => {
+  render(
+    <ClassList
+      onBack={jest.fn()}
+      armas={[]}
+      armaduras={[]}
+      habilidades={[]}
+      glossary={[]}
+      rarityColorMap={{}}
+    />,
+  );
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Cambiar imagen de Bárbaro' }));
+
+  expect(await screen.findByRole('button', { name: 'Seleccionar imagen' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Portada/i })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Avatar/i })).toBeInTheDocument();
+  expect(screen.getAllByRole('button', { name: 'Guardar' }).some((button) => !button.disabled)).toBe(true);
+});
+
 test('uses the editable roguelite summary for the master class sheet', async () => {
   render(
     <ClassList

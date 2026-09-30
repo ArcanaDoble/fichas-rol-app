@@ -1,6 +1,7 @@
 import {
   calculateCanvasAttackPressure,
   evaluateCanvasAttackRange,
+  evaluateCanvasThrownRange,
   getCanvasDefensiveEquipment,
   getEnemyActiveDefenseEligibility,
   getUsableDefenseDice,
@@ -9,6 +10,10 @@ import {
   resolveCanvasAttackDamage,
   rollCanvasEnemyDefense,
   rollCanvasThreatDie,
+  rollCanvasThreatDice,
+  normalizeCanvasThreatSelection,
+  getCanvasAttackThreatDice,
+  getCanvasDefenseThreatDice,
   rollCriticalWeaponDice,
 } from '../canvasAttackRules';
 
@@ -38,7 +43,7 @@ describe('Canvas Roguelite attack rules', () => {
     })).toMatchObject({ eligible: false });
   });
 
-  test('enemy defense rolls the full equipment profile and at most one custom threat die', () => {
+  test('enemy defense preserves the legacy single custom Threat call', () => {
     const rolls = [0, 0.99, 0.5];
     const result = rollCanvasEnemyDefense({
       equipment: { dano: '2d8', offenseBase: 99 },
@@ -50,6 +55,60 @@ describe('Canvas Roguelite attack rules', () => {
     expect(result.defenseDice.map((die) => die.value)).toEqual([1, 8]);
     expect(result.threatUsed).toMatchObject({ die: 'd6', value: 4, source: 'custom' });
     expect(result.totalDefense).toBe(13);
+  });
+
+  test('Threat selection preserves repeated valid dice and explicit none overrides legacy options', () => {
+    expect(normalizeCanvasThreatSelection({ threatSelection: { useStored: true, customDice: [6, 6, '12', 7, null] } }))
+      .toEqual({ useStored: true, customDice: [6, 6, 12] });
+    expect(normalizeCanvasThreatSelection({ threatSelection: { useStored: false, customDice: [] }, threatMode: 'custom', useThreat: true }))
+      .toEqual({ useStored: false, customDice: [] });
+    expect(normalizeCanvasThreatSelection({ useThreat: true })).toEqual({ useStored: true, customDice: [] });
+    expect(normalizeCanvasThreatSelection({ threatMode: 'custom', customThreatSides: 7 })).toEqual({ useStored: false, customDice: [6] });
+  });
+
+  test('multiple Threat rolls preserve the reserve once, including zero, and distinguish repeated dice', () => {
+    const random = jest.fn().mockReturnValueOnce(0).mockReturnValueOnce(0.99).mockReturnValueOnce(0.5);
+    const dice = rollCanvasThreatDice({
+      threatSelection: { useStored: true, customDice: [6, 6, 12] },
+      storedThreatValue: 0, storedThreatDie: 'd8', random,
+    });
+    expect(dice.map(({ sides, value, source }) => ({ sides, value, source }))).toEqual([
+      { sides: 8, value: 0, source: 'stored' },
+      { sides: 6, value: 1, source: 'custom' },
+      { sides: 6, value: 6, source: 'custom' },
+      { sides: 12, value: 7, source: 'custom' },
+    ]);
+    expect(new Set(dice.map(die => die.id)).size).toBe(4);
+    expect(random).toHaveBeenCalledTimes(3);
+    expect(rollCanvasThreatDice({ threatSelection: { useStored: true, customDice: [] }, storedThreatValue: null })).toEqual([]);
+  });
+
+  test('enemy defense sums every Threat die separately from equipment and consumes only selected reserve', () => {
+    const result = rollCanvasEnemyDefense({ equipment: { dano: '1d4' },
+      threatSelection: { useStored: true, customDice: [6, 6] }, storedThreatValue: 0, storedThreatDie: 'd8', random: () => 0.5 });
+    expect(result.defenseDice.map(die => die.value)).toEqual([3]);
+    expect(result.defenseThreatDice.map(die => die.value)).toEqual([0, 4, 4]);
+    expect(result).toMatchObject({ totalDefense: 11, consumedStoredThreat: true, threatUsed: null });
+    expect(rollCanvasEnemyDefense({ equipment: { dano: '1d4' },
+      threatSelection: { useStored: false, customDice: [6, 6] }, storedThreatValue: 6, random: () => 0.5 }))
+      .toMatchObject({ totalDefense: 11, consumedStoredThreat: false });
+    expect(calculateCanvasAttackPressure({ attacker: { profileType: 'rogueliteEnemy', offenseBase: 3 },
+      weaponResults: [3], threatDice: result.defenseThreatDice, threatValue: 99 }).total).toBe(14);
+    expect(calculateCanvasAttackPressure({ attacker: { profileType: 'rogueliteClass' },
+      weaponResults: [3], threatDice: result.defenseThreatDice }).threatPressure).toBe(0);
+  });
+
+  test('Threat readers preserve authoritative arrays and separate both legacy single dice without inventing aggregate rolls', () => {
+    const attack = { die: 'd8', value: 6, source: 'stored' };
+    const defense = { die: 'd6', value: 4, source: 'custom' };
+    expect(getCanvasAttackThreatDice({ id: 'old', threatUsed: attack })).toEqual([{ ...attack, id: 'attack-threat-old' }]);
+    const legacy = { id: 'old', status: 'defense-rolled', attackThreatUsed: attack, threatUsed: defense };
+    expect(getCanvasAttackThreatDice(legacy)).toEqual([{ ...attack, id: 'attack-threat-old' }]);
+    expect(getCanvasDefenseThreatDice(legacy)).toEqual([{ ...defense, id: 'defense-threat-old' }]);
+    expect(getCanvasAttackThreatDice({ ...legacy, attackThreatDice: [] })).toEqual([]);
+    expect(getCanvasDefenseThreatDice({ ...legacy, defenseThreatDice: [] })).toEqual([]);
+    expect(getCanvasAttackThreatDice({ pressure: { threatPressure: 12 } })).toEqual([]);
+    expect(getCanvasDefenseThreatDice({ threatUsed: attack, status: 'awaiting-defense' })).toEqual([]);
   });
 
   test('resolves stored or custom Threat without treating an empty reserve as zero', () => {
@@ -126,6 +185,22 @@ describe('Canvas Roguelite attack rules', () => {
       items: [attacker, target],
       gridConfig,
     })).toEqual(expect.objectContaining({ legal: false, reason: expect.stringMatching(/enemiga/) }));
+  });
+
+  test('Arrojadiza reaches by the highest committed die or enemy Base ofensiva, then subtracts distance once', () => {
+    const attacker = token('a', 0, 0);
+    const target = token('b', 150, 0, { controlledBy: ['b'] });
+    const thrownWeapon = { alcance: 'Cercano', rasgos: ['Arrojadiza'], dano: 'd4' };
+    expect(evaluateCanvasAttackRange({ attacker, target, weapon: thrownWeapon, items: [attacker, target], gridConfig }))
+      .toMatchObject({ legal: true, distance: 3 });
+    expect(evaluateCanvasThrownRange({ attacker, weapon: thrownWeapon, actionDice: [{ value: 2 }, { value: 3 }], distance: 3 }))
+      .toMatchObject({ legal: true, maxRange: 3 });
+    expect(evaluateCanvasThrownRange({ attacker, weapon: thrownWeapon, actionDice: [{ value: 1 }, { value: 2 }], distance: 3 }))
+      .toMatchObject({ legal: false, maxRange: 2 });
+    expect(evaluateCanvasThrownRange({ attacker: { profileType: 'rogueliteEnemy', offenseBase: 4 },
+      weapon: thrownWeapon, distance: 5 })).toMatchObject({ legal: false, maxRange: 4 });
+    expect(calculateCanvasAttackPressure({ attacker, actionDice: [{ value: 2 }, { value: 3 }],
+      weaponResults: [4], distance: 3, weapon: thrownWeapon }).total).toBe(6);
   });
 
   test('each natural maximum starts its own chained critical roll', () => {

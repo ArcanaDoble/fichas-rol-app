@@ -1,0 +1,20 @@
+.noma-token-pickup-anchor {
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    z-index: 80;
+    transform-origin: top center;
+    pointer-events: none;
+}
+
+/* Shares its surface with the token nameplate in CanvasTokenName.css. */
+.noma-token-pickup {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: max-content;
+    font: 14px/1.2 Alegreya, Georgia, serif;
+}
+
+.noma-token-pickup svg { flex-shrink: 0; color: #c8aa6e; }
+.noma-token-pickup__action { color: #c8aa6e; font-style: italic; }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { motion } from 'framer-motion';
 import {
@@ -34,6 +34,10 @@ import {
     describeRogueliteLevelEffect,
     getRogueliteLevelEffects,
 } from '../features/roguelite/progression';
+import {
+    clearPlayerLocalData,
+    deletePlayerData,
+} from '../features/players/playerDataLifecycle';
 
 const getProfileClassKey = (playerId, classId) => `${playerId}::${classId}`;
 
@@ -191,10 +195,16 @@ const UsersView = ({ onBack }) => {
         if (exists) return alert("Ya existe un jugador con este nombre");
 
         const isRogueliteOnly = formData.profileMode === 'roguelite-only';
+        const playerId = formData.name.trim();
 
         try {
-            await setDoc(doc(db, 'players', formData.name.trim()), {
-                name: formData.name.trim(),
+            // A previous version only removed the parent document. Purge any
+            // orphaned personal data before reusing the same player id.
+            await deletePlayerData(playerId, { deletePlayerDocument: false });
+            clearPlayerLocalData(playerId);
+
+            await setDoc(doc(db, 'players', playerId), {
+                name: playerId,
                 passcode: formData.passcode.trim(),
                 createdAt: new Date(),
                 permissions: {},
@@ -235,8 +245,8 @@ const UsersView = ({ onBack }) => {
             });
 
             const newPlayer = {
-                id: formData.name.trim(),
-                name: formData.name.trim(),
+                id: playerId,
+                name: playerId,
                 passcode: formData.passcode.trim(),
                 permissions: {},
                 gameAccess: {
@@ -282,7 +292,8 @@ const UsersView = ({ onBack }) => {
     const handleDeleteUser = async (playerId) => {
         if (!window.confirm("¿Seguro que quieres eliminar este usuario? Se perderán todos sus datos.")) return;
         try {
-            await deleteDoc(doc(db, 'players', playerId));
+            await deletePlayerData(playerId);
+            clearPlayerLocalData(playerId);
             setPlayers(players.filter(p => p.id !== playerId));
         } catch (error) {
             console.error("Error deleting user:", error);

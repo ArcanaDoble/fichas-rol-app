@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const mockFirestore = {
   collection: jest.fn(),
@@ -63,6 +63,23 @@ describe('RogueliteForge', () => {
     expect(screen.getByRole('button', { name: 'Habilidades' }).querySelector('svg')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Crear nueva arma' }));
     expect(screen.getByText('Vista en inventario').querySelector('svg')).toBeNull();
+  });
+
+  test('separa las reglas y el lore en el editor y en la vista del inventario', () => {
+    render(<RogueliteForge onBack={jest.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Crear nueva arma' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Reglas y efecto' }), {
+      target: { value: 'Gasta 1 acción y recupera 1d4 de salud.' },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Lore' }), {
+      target: { value: 'Un tónico oscuro preparado con médula animal.' },
+    });
+
+    const preview = within(screen.getByTestId('inventory-item-card'));
+    expect(preview.getByText('Efecto')).toBeInTheDocument();
+    expect(preview.getByText('Gasta 1 acción y recupera 1d4 de salud.')).toBeInTheDocument();
+    expect(preview.getByText('Un tónico oscuro preparado con médula animal.')).toBeInTheDocument();
   });
 
   test('permite agregar una rareza desde el gestor de la Forja', async () => {

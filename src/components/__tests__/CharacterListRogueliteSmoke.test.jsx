@@ -311,7 +311,7 @@ test('keeps a mixed-case Firebase ability in the run inventory after launching',
   fireEvent.click((await screen.findByText('MAZO INICIAL')).closest('button'));
   fireEvent.click(await screen.findByRole('button', { name: 'Seleccionar habilidad para ranura 1' }));
   const skillDialog = screen.getByRole('dialog', { name: 'Elegir habilidad para la ranura 1' });
-  fireEvent.click(within(skillDialog).getByRole('button', { name: /Barrera arcana Protege al arcanista/i }));
+  fireEvent.click(within(skillDialog).getByRole('button', { name: /^Barrera arcana$/i }));
 
   fireEvent.click(screen.getByText('RESUMEN').closest('button'));
   fireEvent.click(await screen.findByRole('button', { name: /Jugar Aventura/i }));
@@ -444,4 +444,95 @@ test('refreshes an open Roguelite sheet when its active run changes remotely', a
     expect(screen.getByTestId('roguelite-stat-vida')).toHaveTextContent('5 / 8');
     expect(screen.getByTestId('roguelite-stat-furia')).toHaveTextContent('1 / 3');
   });
+});
+
+test('streams master equipment changes into an open preparation without replacing the player loadout', async () => {
+  const firestore = require('firebase/firestore');
+  let classCatalogListener;
+  const sword = {
+    name: 'Espada base',
+    templateId: 'weapon:sword',
+    itemType: 'weapon',
+    category: 'Simple',
+    handsRequired: 1,
+  };
+  const bow = {
+    name: 'Arco maestro',
+    templateId: 'weapon:bow',
+    itemType: 'weapon',
+    category: 'Simple',
+    handsRequired: 2,
+  };
+  const classDocument = (weapons) => ({
+    id: 'barbarian',
+    data: () => ({
+      name: 'Bárbaro',
+      subtitle: 'Furia desatada',
+      description: 'Furia de prueba',
+      summary: {
+        proficiencies: {
+          weapons: { simple: true, martial: false, special: false },
+          armor: { light: false, medium: false, heavy: false },
+        },
+      },
+      equipment: { weapons, armor: [], abilities: [], objects: [], accessories: [] },
+      roguelite: {
+        actionDice: ['d8', 'd6', 'd4'],
+        maxLife: 8,
+        defenseClass: 7,
+        movement: 2,
+        initiativeBase: 2,
+        resource: { name: 'Furia', maximum: 3, initial: 0 },
+      },
+    }),
+  });
+
+  firestore.onSnapshot.mockImplementation((ref, onNext) => {
+    if (ref.path === 'players/Ada') {
+      onNext({
+        exists: () => true,
+        data: () => ({
+          gameAccess: {
+            roguelite: { enabled: true, unlockedClassIds: ['barbarian'] },
+          },
+        }),
+      });
+    } else if (ref.path === 'classes') {
+      classCatalogListener = onNext;
+      onNext({ ...emptySnapshot, empty: false, docs: [classDocument([sword])] });
+    } else {
+      onNext(emptySnapshot);
+    }
+    return jest.fn();
+  });
+
+  render(
+    <CharacterListView
+      playerName="Ada"
+      armas={[]}
+      armaduras={[]}
+      habilidades={[]}
+      glossary={[]}
+      rarityColorMap={{}}
+      onBack={jest.fn()}
+    />,
+  );
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Abrir clase Bárbaro' }));
+  fireEvent.click(await screen.findByText('MAZO INICIAL'));
+  fireEvent.click(await screen.findByText('Mano Hábil'));
+  fireEvent.click(await screen.findByText('Espada base'));
+  expect(await screen.findByRole('button', { name: 'Desequipar Espada base' })).toBeInTheDocument();
+
+  act(() => {
+    classCatalogListener({
+      ...emptySnapshot,
+      empty: false,
+      docs: [classDocument([sword, bow])],
+    });
+  });
+
+  expect(await screen.findByRole('button', { name: 'Desequipar Espada base' })).toBeInTheDocument();
+  fireEvent.click(screen.getByText('Mano Torpe'));
+  expect(await screen.findByText('Arco maestro')).toBeInTheDocument();
 });

@@ -1,0 +1,41 @@
+.noma-antidote-effect { position: absolute; inset: 0; pointer-events: none; z-index: 200; --potion-pulse-start: #93b773; --potion-mote: #a8c77f; }
+.noma-antidote-effect[data-effect='haste'] { --potion-pulse-start: #9cc6d5; --potion-mote: #c1dfed; }
+.noma-antidote-effect[data-effect='temporary-life'] { --potion-pulse-start: #dfc885; --potion-mote: #edd8a1; }
+.noma-antidote-effect__canvas { position: absolute; width: 1px; height: 1px; overflow: visible; }
+.noma-antidote-effect__silhouette { position: absolute; pointer-events: none; }
+.noma-antidote-effect .noma-antidote-effect__silhouette span { display: block; width: 100%; height: 100%; background: linear-gradient(0deg, #93b77333, #eee2b699, #93b77333); animation: noma-antidote-label 2.15s ease both; animation-delay: calc(var(--antidote-elapsed) + 1050ms); }
+.noma-antidote-effect__trail { stroke: #d8dca0; stroke-dasharray: 1; filter: drop-shadow(0 0 3px #bda56b); }
+.noma-antidote-effect__pulse { stroke: #d8dca0; animation: noma-antidote-cleanse 2.4s ease-out both; }
+.noma-antidote-effect__mote { fill: var(--potion-mote); animation: noma-antidote-mote 2.4s ease-out both; }
+.noma-antidote-effect__label { position: absolute; white-space: nowrap; transform-origin: bottom center; color: #e4dfb6; font-family: var(--font-fantasy, Georgia, serif); font-size: 18px; text-shadow: 0 2px 4px #000, 0 0 9px #526b39; animation: noma-antidote-label 3.2s ease both; }
+.noma-antidote-effect :is(path, circle, span) { animation-delay: var(--antidote-elapsed, 0ms); }
+@keyframes noma-antidote-trail { 0% { stroke-dashoffset: .18; opacity: 0; } 15% { opacity: .9; } 70% { stroke-dashoffset: -.82; opacity: .85; } 100% { stroke-dashoffset: -1; opacity: 0; } }
+@keyframes noma-antidote-cleanse { 0% { opacity: 0; transform: scale(.94); stroke: var(--potion-pulse-start); } 22% { opacity: .85; } 65% { opacity: .5; stroke: #eee2b6; } 100% { opacity: 0; transform: scale(1.16); } }
+@keyframes noma-antidote-mote { 0% { opacity: 0; } 25% { opacity: .8; } 100% { opacity: 0; transform: translateY(var(--mote-rise)); } }
+@keyframes noma-antidote-label { 0% { opacity: 0; } 18%, 72% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+    .noma-antidote-effect .noma-antidote-effect__silhouette span { animation-delay: var(--antidote-elapsed); }
+    .noma-antidote-effect__trail, .noma-antidote-effect__mote { display: none; }
+    .noma-antidote-effect__pulse { animation-name: noma-antidote-label; }
+}
+
+.noma-antidote-effect__guide { stroke: #c8aa6e; opacity: .2; }
+.noma-antidote-effect__arrow { stroke: #eee2b6; }
+.noma-antidote-effect__connection { animation: noma-antidote-connection 3.2s ease both; animation-delay: var(--antidote-elapsed); }
+.noma-antidote-effect__bottle-position { position: absolute; width: 88px; height: 100px; transform-origin: center; }
+.noma-antidote-effect__bottle { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; animation: noma-antidote-bottle 3.2s ease both; animation-delay: var(--antidote-elapsed); }
+.noma-antidote-effect__bottle img { width: 84px; height: 84px; object-fit: cover; mask-image: radial-gradient(ellipse, #000 40%, transparent 73%); filter: drop-shadow(0 0 6px #c8aa6e); }
+.noma-antidote-effect__bottle svg { width: 64px; height: 76px; color: #ded8a1; filter: drop-shadow(0 0 6px #526b39); }
+.noma-antidote-effect__bottle strong { font: 17px Georgia, serif; color: #eee2b6; text-shadow: 0 2px 4px #000; margin-top: -8px; }
+.noma-antidote-effect__pulse, .noma-antidote-effect__mote, .noma-antidote-effect__label { animation-delay: calc(var(--antidote-elapsed) + 1050ms) !important; animation-duration: 2.15s; }
+@keyframes noma-antidote-connection { 0% { opacity: 0; } 10%, 47% { opacity: 1; } 73%, 100% { opacity: 0; } }
+@keyframes noma-antidote-bottle { 0% { opacity: 0; scale: .7; } 12% { opacity: 1; scale: 1; } 40% { opacity: 1; scale: 1.15; } 60% { opacity: 1; scale: 1; } 85%, 100% { opacity: 0; scale: .9; } }
+@media (prefers-reduced-motion: reduce) {
+    .noma-antidote-effect__connection { display: none; }
+    .noma-antidote-effect__bottle { animation-name: noma-antidote-label; }
+    .noma-antidote-effect__pulse, .noma-antidote-effect__label { animation-delay: var(--antidote-elapsed) !important; }
+}
+.noma-antidote-effect[data-effect='remove-bleeding'] { --potion-pulse-start: #bf7d83; --potion-mote: #dfc9ab; }
+.noma-antidote-effect[data-effect='remove-bleeding'] .noma-antidote-effect__silhouette span { background: linear-gradient(0deg, #bf7d8333, #eee2b699, #bf7d8333); }
+.noma-antidote-effect[data-effect='remove-bleeding'] .noma-antidote-effect__trail { stroke: #e7d6b6; }
+.noma-antidote-effect[data-effect='remove-bleeding'] .noma-antidote-effect__label { color: #e7d6b6; text-shadow: 0 2px 4px #000; }

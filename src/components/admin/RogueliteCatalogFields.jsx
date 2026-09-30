@@ -118,16 +118,34 @@ const RarityField = ({ value, onChange, rarities }) => (
   />
 );
 
-const DescriptionField = ({ value, onChange }) => (
-  <Field label="Descripción" className="sm:col-span-2">
-    <textarea
-      className={`${controlClass} min-h-[88px] resize-y`}
-      value={value || ''}
-      placeholder="Regla, efecto o contexto del objeto"
-      onChange={(event) => onChange(event.target.value)}
-    />
-  </Field>
+const DescriptionFields = ({ value, setValue }) => (
+  <fieldset className="grid min-w-0 gap-3 border-t border-[#c8aa6e]/15 pt-4 sm:col-span-2 sm:grid-cols-2">
+    <legend className="mb-1 pr-3 font-['Cinzel'] text-[11px] font-semibold uppercase tracking-[0.16em] text-[#c8aa6e]">
+      Texto de la tarjeta
+    </legend>
+    <Field label="Reglas y efecto">
+      <textarea
+        className={`${controlClass} min-h-[112px] resize-y font-['Alegreya'] text-[15px] font-medium leading-[1.5]`}
+        value={value.descripcion || ''}
+        placeholder="Qué hace, qué cuesta y cómo se resuelve"
+        onChange={(event) => setValue((current) => ({ ...current, descripcion: event.target.value }))}
+      />
+    </Field>
+    <Field label="Lore">
+      <textarea
+        className={`${controlClass} min-h-[112px] resize-y font-['Alegreya'] text-[15px] italic leading-[1.5]`}
+        value={value.lore || ''}
+        placeholder="Origen, aspecto o historia del objeto"
+        onChange={(event) => setValue((current) => ({ ...current, lore: event.target.value }))}
+      />
+    </Field>
+  </fieldset>
 );
+
+DescriptionFields.propTypes = {
+  value: PropTypes.object.isRequired,
+  setValue: PropTypes.func.isRequired,
+};
 
 const TraitsField = ({ value, onChange, glossary }) => (
   <Field label="Rasgos" className="sm:col-span-2">
@@ -154,7 +172,7 @@ export const WeaponCatalogFields = ({ value, setValue, rarities, glossary }) => 
     <TraitsField value={value.rasgos} onChange={update(setValue, 'rasgos')} glossary={glossary} />
     <TextField label="Precio / valor" value={value.valor} onChange={update(setValue, 'valor')} placeholder="Pendiente de balance" type="number" min={0} step={1} />
     <RarityField value={value.rareza} onChange={update(setValue, 'rareza')} rarities={rarities} />
-    <DescriptionField value={value.descripcion} onChange={update(setValue, 'descripcion')} />
+    <DescriptionFields value={value} setValue={setValue} />
   </div>
 );
 
@@ -166,7 +184,7 @@ export const ArmorCatalogFields = ({ value, setValue, rarities, glossary }) => (
     <TextField label="Precio / valor" value={value.valor} onChange={update(setValue, 'valor')} placeholder="Pendiente de balance" type="number" min={0} step={1} />
     <TraitsField value={value.rasgos} onChange={update(setValue, 'rasgos')} glossary={glossary} />
     <RarityField value={value.rareza} onChange={update(setValue, 'rareza')} rarities={rarities} />
-    <DescriptionField value={value.descripcion} onChange={update(setValue, 'descripcion')} />
+    <DescriptionFields value={value} setValue={setValue} />
   </div>
 );
 
@@ -176,7 +194,7 @@ export const AccessoryCatalogFields = ({ value, setValue, rarities, glossary }) 
     <TextField label="Precio / valor" value={value.valor} onChange={update(setValue, 'valor')} placeholder="Pendiente de balance" type="number" min={0} step={1} />
     <TraitsField value={value.rasgos} onChange={update(setValue, 'rasgos')} glossary={glossary} />
     <RarityField value={value.rareza} onChange={update(setValue, 'rareza')} rarities={rarities} />
-    <DescriptionField value={value.descripcion} onChange={update(setValue, 'descripcion')} />
+    <DescriptionFields value={value} setValue={setValue} />
   </div>
 );
 
@@ -188,7 +206,7 @@ export const AbilityCatalogFields = ({ value, setValue, rarities, glossary }) =>
     <SegmentedField label="Dados de acción" value={value.actionCost} onChange={update(setValue, 'actionCost')} options={ACTION_DICE_COSTS} formatLabel={(cost) => (cost === 0 ? 'Sin coste' : `${cost}`)} />
     <TraitsField value={value.rasgos} onChange={update(setValue, 'rasgos')} glossary={glossary} />
     <RarityField value={value.rareza} onChange={update(setValue, 'rareza')} rarities={rarities} />
-    <DescriptionField value={value.descripcion} onChange={update(setValue, 'descripcion')} />
+    <DescriptionFields value={value} setValue={setValue} />
   </div>
 );
 

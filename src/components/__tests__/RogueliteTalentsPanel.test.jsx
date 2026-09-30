@@ -13,6 +13,23 @@ jest.mock(
 jest.mock('../../utils/storage', () => ({ uploadDataUrl: jest.fn() }));
 
 describe('RogueliteTalentsPanel overlays', () => {
+  test('reading full skill rules does not equip it and metadata stays outside the effect', () => {
+    const onChange = jest.fn();
+    const effect = 'Gasta un dado de acción para realizar un ataque mediante el Catalizador. ' + 'El objetivo no puede usar defensa activa. '.repeat(5);
+    render(<RogueliteTalentsPanel role="player" classId="mage" resource={{ name: 'Maná' }}
+      talentCatalog={[]} equippedTalentIds={[]} equippedSkillIds={[null, null, null]}
+      abilityCatalog={[{ id: 'bolt', name: 'Proyectil arcano', description: `${effect}Alcance: Catalizador • Rasgos: Conjuro, Distancia` }]}
+      onEquippedSkillIdsChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Seleccionar habilidad para ranura 1' }));
+    const expand = screen.getByRole('button', { name: 'Ver reglas completas de Proyectil arcano' });
+    fireEvent.click(expand);
+    expect(document.getElementById(expand.getAttribute('aria-controls')).textContent).toBe(effect.trim());
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Proyectil arcano Alcance/ }));
+    expect(onChange).toHaveBeenCalledWith(['bolt', null, null]);
+  });
+
   test('mounts the image editor directly under document.body above every sheet stacking context', () => {
     render(
       <div style={{ transform: 'translateZ(0)' }}>

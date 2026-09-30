@@ -1,3 +1,4 @@
+import { refreshForgeEquipment } from '../utils/forgeEquipmentSync';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { collection, doc, getDocs, setDoc, addDoc, deleteDoc } from 'firebase/firestore';
@@ -78,8 +79,10 @@ import {
   createEquipmentTemplateId,
   equipItemInSlot,
   equipItemInWeaponSet,
+  materializeEquipmentInstances,
   normalizeEquippedHandSlots,
   normalizeRogueliteEquipmentPool,
+  reconcileEquippedItemsWithInventory,
   resolveEquipmentHandsRequired,
 } from '../features/roguelite/equipmentPool';
 import { resolveRogueliteClassLevels } from '../features/roguelite/progression';
@@ -99,6 +102,22 @@ import {
 } from '../utils/tags';
 
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
+
+const releasePreparationEquipmentInstances = (value) => {
+  if (Array.isArray(value)) return value.map(releasePreparationEquipmentInstances);
+  if (!value || typeof value !== 'object') return value;
+
+  const released = Object.fromEntries(Object.entries(value).map(([key, entry]) => [
+    key,
+    releasePreparationEquipmentInstances(entry),
+  ]));
+  if (released.templateId || released.itemType || released._category) {
+    delete released.instanceId;
+    delete released.runItemId;
+    delete released.inventoryInstanceId;
+  }
+  return released;
+};
 
 // Utility to convert common tailwind colors to hex
 const TAILWIND_COLOR_MAP = {
@@ -489,7 +508,7 @@ const buildAbilityEntry = (ability) => {
       consumption,
       trait: trait || traits,
       rareza: rarity,
-      description: meta ? `${description}${description ? '\n' : ''}${meta}` : description,
+      description,
     },
   };
 
@@ -1629,15 +1648,40 @@ const ClassList = ({
     return JSON.stringify(editingClass) !== JSON.stringify(selectedClass);
   }, [editingClass, selectedClass]);
 
-  const equipmentCatalog = useMemo(
-    () => ({
-      weapons: (armas || []).map(buildWeaponEntry).filter(Boolean),
-      armor: (armaduras || []).map(buildArmorEntry).filter(Boolean),
-      abilities: (habilidades || []).map(buildAbilityEntry).filter(Boolean),
-      accessories: (accesorios || []).map(buildAccessoryEntry).filter(Boolean),
-    }),
-    [armas, armaduras, habilidades, accesorios],
-  );
+  const [forgeCatalog, setForgeCatalog] = useState({});
+  useEffect(() => {
+    const stops = Object.entries({ weapons: 'weapons', armor: 'armors', abilities: 'abilities', accessories: 'accessories', objects: 'customItems' })
+      .map(([category, path]) => onSnapshot(collection(db, path), snapshot => {
+        const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.data().id || doc.id }));
+        setForgeCatalog(previous => ({ ...previous, [category]: items }));
+      }, error => console.error(`Error loading Forge ${category}:`, error)));
+    return () => stops.forEach(stop => stop?.());
+  }, []);
+  const equipmentCatalog = useMemo(() => {
+    const merge = (base, updates = []) => {
+      const map = new globalThis.Map((base || []).map(item => [String(item.id || item.name || item.nombre), item]));
+      updates.forEach(item => map.set(String(item.id || item.name || item.nombre), item));
+      return [...map.values()].filter(item => !item.deleted);
+    };
+    const build = (items, builder) => items.map(item => {
+      const entry = builder(item);
+      return entry ? { ...entry, payload: { ...item, ...entry.payload } } : null;
+    }).filter(Boolean);
+    return {
+      weapons: build(merge(armas, forgeCatalog.weapons), buildWeaponEntry),
+      armor: build(merge(armaduras, forgeCatalog.armor), buildArmorEntry),
+      abilities: build(merge(habilidades, forgeCatalog.abilities), buildAbilityEntry),
+      accessories: build(merge(accesorios, forgeCatalog.accessories), buildAccessoryEntry),
+      objects: (forgeCatalog.objects || []).filter(item => !item.deleted).map(item => ({
+        id: item.id, name: item.name || item.nombre, payload: { ...item, templateId: item.id, itemType: 'object', category: 'objects' },
+      })),
+    };
+  }, [armas, armaduras, habilidades, accesorios, forgeCatalog]);
+
+  useEffect(() => {
+    if (!isPlayerMode || detailPersistence?.mode === 'roguelite') return;
+    setEditingClass(previous => refreshForgeEquipment(previous, equipmentCatalog));
+  }, [equipmentCatalog, isPlayerMode, detailPersistence?.mode, selectedClass?.id, editingClass?.id]);
 
   const totalPhysicalLoad = useMemo(() => {
     if (!editingClass || !editingClass.equippedItems) return 0;
@@ -1894,6 +1938,10 @@ const ClassList = ({
 
   useEffect(() => {
     if (selectedClass) {
+      // La sincronización de una plantilla en preparación ya fusiona el
+      // borrador personal de forma explícita. No lo sustituyas después con el
+      // efecto genérico que inicializa una ficha recién abierta.
+      if (hasLocalClassDraftRef.current) return;
       const sanitized = ensureClassDefaults(selectedClass);
       setEditingClass(deepClone(sanitized));
       const targetLimit = Math.max(12, (sanitized.classLevels?.length || 0) + 2);
@@ -2046,6 +2094,8 @@ const ClassList = ({
       traits: payload.traits || payload.rasgos || payload.trait || '',
       rareza: payload.rareza || payload.rarity || '',
       description: payload.description || payload.descripcion || '',
+      lore: payload.lore || payload.descripcionLore || payload.flavorText || payload.flavourText || '',
+      descripcionLore: payload.lore || payload.descripcionLore || payload.flavorText || payload.flavourText || '',
       body: payload.body || '',
       mind: payload.mind || '',
       icon: payload.icon || '',
@@ -2067,12 +2117,12 @@ const ClassList = ({
         draft.equipment[targetCategory] = [];
       }
 
-      const alreadyIncluded = draft.equipment[targetCategory].some(
-        (item) => createEquipmentTemplateId(item, targetCategory) === normalized.templateId,
-      );
-      if (!alreadyIncluded) {
-        draft.equipment[targetCategory].push(normalized);
-      }
+      // Cada alta representa una copia física. Dos dagas comparten plantilla,
+      // pero reciben identidades de instancia diferentes y pueden ocupar dos manos.
+      draft.equipment[targetCategory] = materializeEquipmentInstances([
+        ...draft.equipment[targetCategory],
+        normalized,
+      ], targetCategory);
     });
   };
 
@@ -2192,6 +2242,7 @@ const ClassList = ({
             traits: payload.traits || payload.properties || '',
             rareza: payload.rareza || '',
             description: payload.description || '',
+            lore: payload.lore || payload.descripcionLore || payload.flavorText || payload.flavourText || '',
           };
         case 'armor':
           return {
@@ -2203,6 +2254,7 @@ const ClassList = ({
             traits: payload.traits || '',
             rareza: payload.rareza || '',
             description: payload.description || '',
+            lore: payload.lore || payload.descripcionLore || payload.flavorText || payload.flavourText || '',
           };
         case 'abilities':
         default:
@@ -2217,6 +2269,7 @@ const ClassList = ({
             trait: payload.trait || payload.traits || '',
             rareza: payload.rareza || '',
             description: payload.description || '',
+            lore: payload.lore || payload.descripcionLore || payload.flavorText || payload.flavourText || '',
           };
       }
     })();
@@ -2631,12 +2684,43 @@ const ClassList = ({
     const nextClass = nextClasses.find((classItem) => classItem.id === selectedClass.id);
     if (!nextClass) return;
 
-    // La ficha abierta también es un borrador. Los cambios remotos se aplican
-    // cuando está limpia, pero nunca pisan una edición local sin confirmar.
-    if (hasLocalClassDraftRef.current) return;
-
     const sanitized = ensureClassDefaults(nextClass);
     if (JSON.stringify(sanitized) === JSON.stringify(selectedClass)) return;
+
+    // Antes de iniciar una aventura, la pool maestra sigue siendo viva. Si el
+    // jugador ya estaba preparando su equipo no descartamos ese borrador:
+    // incorporamos la nueva plantilla y conservamos únicamente su estado
+    // personal, reconciliando las manos contra la pool recién recibida.
+    if (hasLocalClassDraftRef.current && editingClass?.activeRun?.status !== 'active') {
+      setSelectedClass(sanitized);
+      setEditingClass((currentDraft) => {
+        if (!currentDraft || currentDraft.activeRun?.status === 'active') return currentDraft;
+        return ensureClassDefaults({
+          ...sanitized,
+          level: currentDraft.level,
+          rating: currentDraft.rating,
+          attributes: deepClone(currentDraft.attributes),
+          stats: deepClone(currentDraft.stats),
+          equippedItems: reconcileEquippedItemsWithInventory(
+            releasePreparationEquipmentInstances(currentDraft.equippedItems || {}),
+            sanitized.equipment || {},
+          ),
+          equippedTalentIds: deepClone(currentDraft.equippedTalentIds || []),
+          equippedSkillIds: deepClone(currentDraft.equippedSkillIds || []),
+          storeItems: deepClone(currentDraft.storeItems || []),
+          money: currentDraft.money,
+          personalStatusTags: deepClone(currentDraft.personalStatusTags || []),
+          inspiration: deepClone(currentDraft.inspiration || sanitized.inspiration || []),
+        });
+      });
+      const targetLimit = Math.max(12, (sanitized.classLevels?.length || 0) + 2);
+      setLevelSliderLimit(targetLimit);
+      return;
+    }
+
+    // Una run activa o un borrador ajeno a la preparación nunca se sobrescribe
+    // con la plantilla: sus cambios llegan por el documento personal de la run.
+    if (hasLocalClassDraftRef.current) return;
 
     setSelectedClass(sanitized);
     setEditingClass(deepClone(sanitized));
@@ -3688,6 +3772,9 @@ const ClassList = ({
   }, [classes, searchTerm, sortBy]);
 
   const handleStartPortraitEdit = (dndClass) => {
+    if (selectedClass?.id !== dndClass.id) {
+      openClassDetails(dndClass);
+    }
     setCropperState({
       classId: dndClass.id,
       imageSrc: dndClass.portraitSource || dndClass.image || dndClass.avatar || '',
@@ -4121,7 +4208,26 @@ const ClassList = ({
                                   </button>
                                 </div>
                               </div>
-                            ) : null}
+                            ) : (
+                              <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-[#0b1120] px-6 text-center">
+                                <FiImage className="h-12 w-12 text-slate-700" />
+                                <div>
+                                  <p className="font-['Cinzel'] text-xs font-bold uppercase tracking-[0.16em] text-slate-300">
+                                    Sin imagen de origen
+                                  </p>
+                                  <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+                                    Selecciona una imagen para ajustar por separado la portada y el avatar.
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => fileInputRef.current?.click()}
+                                  className="border border-[#c8aa6e]/45 bg-[#c8aa6e]/10 px-4 py-2 font-['Cinzel'] text-[10px] font-bold uppercase tracking-[0.14em] text-[#c8aa6e] transition-colors hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/15"
+                                >
+                                  Seleccionar imagen
+                                </button>
+                              </div>
+                            )}
                           </div>
 
                           {/* ZOOM & ACTIONS */}

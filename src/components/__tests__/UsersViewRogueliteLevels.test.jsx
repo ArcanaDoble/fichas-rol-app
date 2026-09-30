@@ -10,8 +10,10 @@ jest.mock('firebase/firestore', () => ({
   doc: jest.fn(),
   getDocs: jest.fn(),
   onSnapshot: jest.fn(),
+  query: jest.fn((ref) => ref),
   setDoc: jest.fn(),
   updateDoc: jest.fn(),
+  where: jest.fn(() => ({})),
 }));
 
 const snapshot = (documents = []) => ({
@@ -27,6 +29,9 @@ beforeEach(() => {
 
   firestore.collection.mockImplementation(reference);
   firestore.doc.mockImplementation(reference);
+  firestore.query.mockImplementation((ref) => ref);
+  firestore.where.mockImplementation(() => ({}));
+  firestore.deleteDoc.mockResolvedValue(undefined);
   firestore.setDoc.mockResolvedValue(undefined);
   firestore.updateDoc.mockResolvedValue(undefined);
   firestore.getDocs.mockImplementation(async (ref) => {

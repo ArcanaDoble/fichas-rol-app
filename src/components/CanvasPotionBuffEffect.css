@@ -1,0 +1,14 @@
+.noma-potion-buff { position: absolute; inset: 0; z-index: 200; pointer-events: none; }
+.noma-potion-buff-field { position: absolute; mix-blend-mode: screen; }
+.noma-bandage-transfer { position: absolute; width: 1px; height: 1px; overflow: visible; }
+.noma-bandage-transfer path { stroke-dasharray: 1; animation: noma-bandage-transfer 3.2s ease both; animation-delay: var(--potion-elapsed); }
+@keyframes noma-bandage-transfer { 0% { stroke-dashoffset: 1; opacity: 0; } 8% { opacity: .8; } 33% { stroke-dashoffset: 0; opacity: .8; } 55%, 100% { stroke-dashoffset: 0; opacity: 0; } }
+.noma-potion-buff-caption { position: absolute; transform-origin: top center; text-align: center; white-space: nowrap; text-shadow: 0 2px 5px #000, 0 0 10px #080b12; animation: noma-potion-buff-caption 3.2s both; animation-delay: var(--potion-elapsed); }
+.noma-potion-buff-caption strong { display: block; font: 600 17px/1.3 Cinzel, Georgia, serif; }
+.noma-potion-buff-caption span { display: block; font: italic 17px/1.4 Alegreya, Georgia, serif; }
+@keyframes noma-potion-buff-caption { 0%, 31% { opacity: 0; translate: 0 5px; } 43%, 80% { opacity: 1; translate: 0 0; } 100% { opacity: 0; translate: 0 -5px; } }
+@media (prefers-reduced-motion: reduce) {
+    .noma-bandage-transfer { display: none; }
+    .noma-potion-buff-field { opacity: .35; }
+    .noma-potion-buff-caption { animation: none; }
+}

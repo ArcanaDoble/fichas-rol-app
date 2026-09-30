@@ -230,7 +230,12 @@ describe('personal roguelite class configuration', () => {
   });
 
   test('repairs legacy loadouts that filled the second hand beside a two-handed weapon', () => {
-    const profileClass = createRogueliteProfileClass(definition, {
+    const profileClass = createRogueliteProfileClass({
+      ...definition,
+      equipment: {
+        weapons: [{ name: 'Mandoble', handsRequired: 2 }],
+      },
+    }, {
       equippedItems: {
         mainHand: { name: 'Mandoble', handsRequired: 2 },
         offHand: { name: 'Daga', handsRequired: 1 },
@@ -245,7 +250,13 @@ describe('personal roguelite class configuration', () => {
   test('keeps both personal weapon sets and resolves the active one for compatibility', () => {
     const dagger = { name: 'Daga', handsRequired: 1 };
     const bow = { name: 'Arco', handsRequired: 2 };
-    const profileClass = createRogueliteProfileClass(definition, {
+    const profileClass = createRogueliteProfileClass({
+      ...definition,
+      equipment: {
+        weapons: [dagger, bow],
+        armor: [{ name: 'Cuero' }],
+      },
+    }, {
       equippedItems: {
         activeWeaponSet: 1,
         weaponSets: [
@@ -256,12 +267,12 @@ describe('personal roguelite class configuration', () => {
       },
     }, 'Ada');
 
-    expect(profileClass.equippedItems.weaponSets).toEqual([
+    expect(profileClass.equippedItems.weaponSets).toMatchObject([
       { mainHand: dagger, offHand: null },
       { mainHand: bow, offHand: null },
     ]);
     expect(profileClass.equippedItems.activeWeaponSet).toBe(1);
-    expect(profileClass.equippedItems.mainHand).toEqual(bow);
+    expect(profileClass.equippedItems.mainHand).toMatchObject(bow);
     expect(profileClass.equippedItems.body.name).toBe('Cuero');
   });
 

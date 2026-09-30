@@ -1,0 +1,8 @@
+.canvas-token-poison { position: absolute; inset: 2px; z-index: 18; overflow: hidden; pointer-events: none; box-shadow: inset 0 0 12px #8da04935; }
+.canvas-token-poison canvas { display: block; width: 100%; height: 100%; }
+
+.canvas-token-poison { opacity: 0; transform: scale(1.015); transition: opacity 1.7s ease-in-out, transform 1.7s ease-in-out; }
+.canvas-token-poison[data-active='true'] { opacity: 1; transform: scale(1); }
+.canvas-token-poison[data-active='true'] canvas { animation: noma-poison-arrival 1.7s ease-out; }
+@keyframes noma-poison-arrival { from { opacity: 0; filter: brightness(1.6); } 45% { filter: brightness(1.25); } to { opacity: 1; filter: brightness(1); } }
+@media (prefers-reduced-motion: reduce) { .canvas-token-poison { transition-duration: .2s; transform: none; } .canvas-token-poison canvas { animation: none !important; } }

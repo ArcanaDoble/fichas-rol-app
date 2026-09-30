@@ -4,6 +4,9 @@ import { Dices, GripVertical } from 'lucide-react';
 import { FiX } from 'react-icons/fi';
 import { normalizeGlossaryWord } from '../utils/glossary';
 import LoadingImage from './LoadingImage';
+import EquipmentHandsIndicator from './EquipmentHandsIndicator';
+import EquipmentCopyIndicator from './EquipmentCopyIndicator';
+import { getItemRulesPresentation } from '../utils/itemRulesPresentation';
 
 const RogueliteInventoryCard = ({
     item,
@@ -18,6 +21,8 @@ const RogueliteInventoryCard = ({
     visibleTraits,
     glossary,
     proficiencyWarning,
+    equipmentUsages = [],
+    copyCount = 1,
     canDrag,
     onDragPointerDown,
     onDragKeyDown,
@@ -30,14 +35,19 @@ const RogueliteInventoryCard = ({
 }) => {
     const damage = item.damage || item.dano;
     const defense = item.defense || item.defensa;
-    const range = item.range || item.alcance;
-    const rawDescription = item.detail || item.description || item.descripcion || '';
-    const isBlankDescription = !rawDescription
-        || rawDescription.trim() === '-'
-        || rawDescription.trim() === '—'
-        || rawDescription.trim() === 'Sin descripción.'
-        || rawDescription.trim() === '';
-    const description = isBlankDescription ? null : rawDescription.trim();
+    const rules = getItemRulesPresentation(item);
+    const range = rules.range;
+    const displayedTraits = visibleTraits?.length ? visibleTraits : rules.traits;
+    const normalizeCardText = (value) => {
+        const text = String(value || '').trim();
+        return !text || text === '-' || text === '—' || text === 'Sin descripción.' ? null : text;
+    };
+    const description = normalizeCardText(
+        rules.description,
+    );
+    const lore = normalizeCardText(
+        item.lore || item.descripcionLore || item.flavorText || item.flavourText,
+    );
     const rarity = item.rareza || item.rarity || 'Sin rareza';
 
     const renderTrait = (trait, index) => {
@@ -177,16 +187,35 @@ const RogueliteInventoryCard = ({
                     <p className="noma-inventory-card__warning">{proficiencyWarning}</p>
                 )}
 
-                {visibleTraits.length > 0 && (
+                {displayedTraits.length > 0 && (
                     <div className="noma-inventory-card__traits">
-                        {visibleTraits.map(renderTrait)}
+                        {displayedTraits.map(renderTrait)}
                     </div>
                 )}
 
-                {description && (
+                {(description || lore) && (
                     <div className="noma-inventory-card__description">
-                        <span aria-hidden="true">◆</span>
-                        <p>{description}</p>
+                        {description && (
+                            <div className="noma-inventory-card__effect">
+                                <span className="noma-inventory-card__text-label">Efecto</span>
+                                <p>{description}</p>
+                            </div>
+                        )}
+                        {lore && (
+                            <div className="noma-inventory-card__lore">
+                                <span className="noma-inventory-card__text-label">Lore</span>
+                                <p>{lore}</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {(copyCount > 1 || equipmentUsages.length > 0) && (
+                    <div className="noma-inventory-card__equipment-state">
+                        <EquipmentCopyIndicator count={copyCount} />
+                        {equipmentUsages.length > 0 && (
+                            <EquipmentHandsIndicator usages={equipmentUsages} subtle />
+                        )}
                     </div>
                 )}
             </div>
@@ -209,6 +238,12 @@ RogueliteInventoryCard.propTypes = {
     visibleTraits: PropTypes.arrayOf(PropTypes.string),
     glossary: PropTypes.arrayOf(PropTypes.object),
     proficiencyWarning: PropTypes.string,
+    equipmentUsages: PropTypes.arrayOf(PropTypes.shape({
+        slot: PropTypes.oneOf(['mainHand', 'offHand']),
+        handsRequired: PropTypes.number,
+        weaponSetIndex: PropTypes.number,
+    })),
+    copyCount: PropTypes.number,
     canDrag: PropTypes.bool,
     onDragPointerDown: PropTypes.func,
     onDragKeyDown: PropTypes.func,
@@ -229,6 +264,8 @@ RogueliteInventoryCard.defaultProps = {
     visibleTraits: [],
     glossary: [],
     proficiencyWarning: null,
+    equipmentUsages: [],
+    copyCount: 1,
     canDrag: false,
     onDragPointerDown: undefined,
     onDragKeyDown: undefined,

@@ -1,0 +1,26 @@
+.cunning-body { padding-bottom: 20px; }
+.cunning-heading h2 { color: #9bd6c9; }
+.cunning-controls { position: relative; text-align: center; padding: 0 18px; }
+.cunning-reserve { color: #9bd6c9; font: 600 13px/1.5 Cinzel, Georgia, serif; }
+.cunning-instruction { margin: 10px 0 16px; color: #e1d8c8; font: italic 20px/1.35 Alegreya, Georgia, serif; }
+.cunning-dice, .cunning-comparison { display: flex; justify-content: center; flex-wrap: wrap; gap: 18px; }
+.cunning-dice > button { max-width: 150px; color: #dac9a6; font-family: Alegreya, Georgia, serif; }
+.cunning-dice .combat-roll-die, .cunning-result .combat-roll-die { pointer-events: none; }
+.cunning-dice .combat-roll-die > svg, .cunning-result .combat-roll-die > svg { width: 68px; height: 68px; }
+.cunning-dice > button[aria-pressed='true'] { border-color: #7bc7bb; background: #7bc7bb12; }
+.cunning-result { display: flex; flex: 1 1 120px; max-width: 210px; align-items: center; flex-direction: column; gap: 12px; padding: 18px 8px; border-block: 1px solid #c8aa6e55; background: #0c0f1633; color: #d9c694; transition: background 180ms, border-color 180ms; animation: cunning-reveal 300ms ease-out; }
+.cunning-result > span { font: 600 13px/1.3 Cinzel, Georgia, serif; }
+.cunning-result > small { font: italic 16px/1.3 Alegreya, Georgia, serif; color: #bab1b7; }
+.cunning-result > strong { display: flex; align-items: center; gap: 10px; min-height: 44px; font: 600 12px/1.3 Cinzel, Georgia, serif; }
+.cunning-result:hover:not(:disabled) { background: #7bc7bb15; border-color: #9bd6c9; }
+.cunning-result:focus-visible, .cunning-footer button:focus-visible { outline: 2px solid #9bd6c9; outline-offset: 3px; }
+.cunning-result:disabled { opacity: .55; cursor: wait; }
+.cunning-wait { margin-top: 18px; color: #bdb1b5; font: italic 16px/1.4 Alegreya, Georgia, serif; }
+.cunning-footer { display: flex; flex-direction: column; gap: 8px; }
+.cunning-footer .combat-confirm { display: flex; align-items: center; justify-content: center; gap: 12px; background: #a3cbbb; color: #152a24; }
+.cunning-footer .combat-confirm:hover:not(:disabled) { background: #b7ded0; color: #152a24; }
+.cunning-footer .defensive-excess-discard { min-height: 44px; color: #d4c4a5; font: italic 18px/1.4 Alegreya, Georgia, serif; }
+.cunning-footer .defensive-excess-discard:hover:not(:disabled) { color: #f0e6d2; }
+@keyframes cunning-reveal { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 600px) { .cunning-instruction { font-size: 18px; } .cunning-controls { padding-inline: 4px; } .cunning-comparison { gap: 10px; } }
+@media (prefers-reduced-motion: reduce) { .cunning-result { animation: none; transition: none; } }

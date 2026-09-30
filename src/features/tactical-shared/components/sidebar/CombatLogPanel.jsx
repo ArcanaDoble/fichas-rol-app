@@ -1,10 +1,53 @@
 import React from 'react';
-import { Activity, RotateCw, Sparkles, Swords, Trash2 } from 'lucide-react';
+import { getCombatDieAppearance } from '../../../../utils/combatDieAppearance';
+import { Activity, FlaskConical, RotateCw, Sparkles, Swords, Trash2 } from 'lucide-react';
 import { BsDice6 } from 'react-icons/bs';
 import { FiMinus, FiPlus } from 'react-icons/fi';
 import { AnimatePresence, motion } from 'framer-motion';
 import DiceSvg from '../../../../components/DiceSvg';
+import ActionDieSvg from '../../../../components/ActionDieSvg';
+import { getCanvasEffectTime } from '../../canvasItemEffects';
+import './HealingPotionLogEntry.css';
+import { CombatLogDetails } from './CombatLogDetails';
 import { CombatTraitLine, EMPUJE_EFFECT_LABEL, RALENTIZADO_EFFECT_LABEL, fixMojibakeText, isCombatDieEvaded } from '../../legacyCombatRules';
+
+const HealingPotionLogEntry = ({ entry }) => {
+    const bandage = entry.effect === 'remove-bleeding';
+    const antidote = entry.effect === 'remove-poison' || bandage;
+    const haste = entry.effect === 'haste';
+    const vitality = entry.effect === 'temporary-life';
+    const time = getCanvasEffectTime(entry);
+    const roll = entry.dice?.[0];
+    const recovered = Math.max(0, Number(entry.healed) || 0);
+    return <article style={{ '--potion-log-color': haste ? '#bdd5df' : vitality ? '#dfc885' : bandage ? '#dfc9ab' : antidote ? '#afc995' : '#e7a0a8' }} className={`healing-log-entry relative pl-6 py-1 space-y-4 group${entry.itemImage ? ' healing-log-entry--illustrated' : ''}`}>
+        <div className="healing-log-accent" />
+        {entry.itemImage && <img src={entry.itemImage} alt="" className="healing-log-art" loading="lazy" />}
+        <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em] mb-1">
+            <div className="flex items-center gap-2">
+                <time className="text-slate-600 opacity-60">{time ? new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</time>
+                <span className="w-1 h-1 rounded-full" style={{ background: 'var(--potion-log-color)' }} aria-hidden="true" />
+                <span style={{ color: 'var(--potion-log-color)' }} className="opacity-80">{bandage ? 'Vendaje' : antidote ? 'Antídoto' : haste ? 'Presteza' : vitality ? 'Vitalidad' : 'Curación'}</span>
+            </div>
+            <div className="p-1 rounded bg-slate-900/40 border border-slate-800/50 text-slate-500"><FlaskConical size={12} aria-hidden="true" /></div>
+        </div>
+        <div className="healing-log-identity">
+            <p style={{ color: 'var(--potion-log-color)' }} className="font-fantasy text-base uppercase tracking-widest">{fixMojibakeText(entry.actorName || 'Personaje')}</p>
+            <h5 className="font-fantasy text-xs text-[#dfcfaa]">{fixMojibakeText(entry.itemName || 'Poción de curación')}</h5>
+        </div>
+        <div className="healing-log-result">
+            {roll && <div className="healing-log-roll">
+                <ActionDieSvg faces={roll.faces || 4} value={roll.value} accent="gold" className="healing-log-die" title={`Tirada de curación: d${roll.faces || 4}, resultado ${roll.value}`} />
+                <span>Tirada</span>
+            </div>}
+            <div>
+                <p className="healing-log-recovered">{haste ? <span>+4 casillas este turno</span> : vitality ? <span>2 bloques de Vida temporal</span> : antidote ? <span style={{ color: '#afc995' }}>{bandage ? 'Sangrado detenido' : 'Veneno eliminado'}</span> : <><strong>+{recovered}</strong> Vida</>}</p>
+                <p className="healing-log-detail">{haste ? '+1 Movimiento básico hasta el final del combate.' : vitality ? 'Se pierden antes que la Vida normal. Duran hasta el final del combate.' : bandage ? `${entry.targetName || entry.actorName} deja de sangrar.` : antidote ? `${entry.targetName || entry.actorName} puede volver a recuperar Vida.` : recovered > 0 ? `Recupera ${recovered} ${recovered === 1 ? 'bloque' : 'bloques'} de Vida.` : 'Sin Vida recuperada.'}</p>
+                {roll && recovered < Number(roll.value) && <p className="healing-log-detail">Limitada por la Vida máxima.</p>}
+            </div>
+        </div>
+        <p className="text-xs text-slate-400">{(entry.resourcesSpent || []).map(resource => resource.label).join(' · ')}</p>
+    </article>;
+};
 
 export const CombatLogPanel = ({
     BOARD_DICE_ROLL_SIDES,
@@ -306,11 +349,26 @@ export const CombatLogPanel = ({
                                                     <p className="text-slate-500 text-[10px] uppercase font-bold tracking-[0.3em]">Sin registros</p>
                                                 </div>
                                             ) : (
-                                                combatLog.map((entry) => {
+                                                combatLog.map((record) => {
+                                                    if (record.bleedingChoice) return <article key={record.id || record.sourceEventId}
+                                                        className="border-l-2 border-[#b76a73] pl-6 py-2 font-['Alegreya'] text-[#eee5d3]">
+                                                        <p className="font-['Cinzel'] text-xs text-[#d9949b]">Sangrado · {record.targetName}</p>
+                                                        <p className="mt-2 text-lg">{record.bleedingChoice === 'movement'
+                                                            ? 'Renuncia al Movimiento básico este turno.'
+                                                            : record.blocksLost?.vidaTemporal ? 'Pierde 1 bloque de Vida temporal.' : 'Pierde 1 bloque de Vida.'}</p>
+                                                    </article>;
+                                                    if (record.eventType === 'item-use' && ['heal', 'remove-poison', 'remove-bleeding', 'haste', 'temporary-life'].includes(record.effect)) {
+                                                        return <HealingPotionLogEntry key={record.id || record.sourceEventId} entry={record} />;
+                                                    }
+                                                    const entry = {
+                                                        ...record,
+                                                        attackTotal: record.attackTotal ?? record.attackPressure,
+                                                        defenderTotal: record.defenderTotal ?? record.defense,
+                                                    };
                                                     const isCounter = entry.reactionType === 'parar' && entry.counterDamage > 0;
                                                     const isCounterPreventedByRange = entry.reactionType === 'parar' && entry.counterPreventedByRange;
                                                     const isPerfect = entry.reactionType === 'parar' && entry.damage === 0 && !isCounter && !isCounterPreventedByRange;
-                                                    const totalBlocks = (entry.blocksLost?.postura || 0) + (entry.blocksLost?.armadura || 0) + (entry.blocksLost?.vida || 0);
+                                                    const totalBlocks = (entry.blocksLost?.postura || 0) + (entry.blocksLost?.armadura || 0) + (entry.blocksLost?.vida || 0) + (entry.blocksLost?.vidaTemporal || 0);
                                                     const traitPosturaBonus = entry.traitBonuses?.postura?.blocks || 0;
                                                     const traitArmaduraBonus = entry.traitBonuses?.armadura?.blocks || 0;
                                                     const traitVidaBonus = entry.traitBonuses?.vida?.blocks || 0;
@@ -352,6 +410,9 @@ export const CombatLogPanel = ({
                                                             : [])
                                                     ];
 
+                                                    const entryTime = entry.timestamp?.toMillis?.()
+                                                        || (entry.timestamp?.seconds ? entry.timestamp.seconds * 1000 : 0)
+                                                        || Number(entry.clientTimestamp || entry.timestamp) || 0;
                                                     const accentColor = entry.reactionType === 'evadir' ? '#eab308' :
                                                         entry.reactionType === 'parar' ? '#3b82f6' : '#ef4444';
                                                     const attackerName = fixMojibakeText(entry.attackerName);
@@ -381,7 +442,7 @@ export const CombatLogPanel = ({
                                                             <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em] mb-1">
                                                                 <div className="flex items-center gap-2">
                                                                     <span className="text-slate-600 opacity-60">
-                                                                        {new Date(entry.timestamp?.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                        {entryTime ? new Date(entryTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
                                                                     </span>
                                                                     <div className="w-1 h-1 rounded-full" style={{ backgroundColor: accentColor }} />
                                                                     <span style={{ color: accentColor }} className="opacity-80">
@@ -423,8 +484,8 @@ export const CombatLogPanel = ({
 
                                                             {/* Results Section */}
                                                             <div className="space-y-3 border-y border-slate-900/50 py-3">
-                                                                <div className="flex items-center gap-4 px-1">
-                                                                    <div className="flex gap-1.5">
+                                                                <div className="flex flex-wrap items-center gap-4 px-1">
+                                                                    <div className="flex flex-wrap gap-1.5">
                                                                         {(entry.attackerDice || []).map((die, i) => {
                                                                             const wasEvaded = isCombatDieEvaded(die, entry.evadedDiceIds);
                                                                             const matchedAttr = typeof die.matchedAttr === 'string' ? die.matchedAttr.trim().toLowerCase() : null;
@@ -450,10 +511,14 @@ export const CombatLogPanel = ({
                                                                             }
 
                                                                             return (
-                                                                                <div key={i} className="flex-shrink-0 focus:outline-none" title={die.critical ? "Dado Crítico" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)}` : "Dado de Arma"}>
+                                                                                <div key={i} className="flex-shrink-0 focus:outline-none" title={die.critical ? "Dado Crítico" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)}` : die.source ? `Dado de ${die.source}` : "Dado de Arma"}>
                                                                                     <DiceSvg faces={die.faces} value={die.value}
                                                                                         className={`w-5 h-5 ${die.critical ? 'drop-shadow-[0_0_6px_rgba(234,88,12,0.3)]' : 'drop-shadow-sm'}`}
-                                                                                        style={die.critical ? {
+                                                                                        style={entry.canvasRoguelite ? {
+                                                                                            color: getCombatDieAppearance(die.source, die.critical).color,
+                                                                                            borderColor: getCombatDieAppearance(die.source, die.critical).color,
+                                                                                            backgroundColor: 'transparent',
+                                                                                        } : die.critical ? {
                                                                                             borderColor: '#ea580c',
                                                                                             color: '#ea580c',
                                                                                             backgroundColor: 'rgba(234, 88, 12, 0.1)'
@@ -473,14 +538,14 @@ export const CombatLogPanel = ({
                                                                     </div>
                                                                     <div className="h-4 w-[1px] bg-slate-800" />
                                                                     <div className="flex items-center gap-1.5">
-                                                                        <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest opacity-60">Poder</span>
+                                                                        <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest opacity-60">{entry.canvasRoguelite ? 'Presión' : 'Poder'}</span>
                                                                         <span className="text-[#f0e6d2] text-xs font-black">{entry.effectiveAttackTotal ?? entry.attackTotal}</span>
                                                                     </div>
                                                                 </div>
 
                                                                  {entry.reactionType === 'parar' && entry.defenderDice && (
-                                                                     <div className="flex items-center gap-4 px-1 border-t border-slate-900/30 pt-3">
-                                                                         <div className="flex gap-1.5">
+                                                                     <div className="flex flex-wrap items-center gap-4 px-1 border-t border-slate-900/30 pt-3">
+                                                                         <div className="flex flex-wrap gap-1.5">
                                                                              {entry.defenderDice.map((die, i) => {
                                                                                 const matchedAttr = typeof die.matchedAttr === 'string' ? die.matchedAttr.trim().toLowerCase() : null;
                                                                                 const wasEludedByElusion = !!die.eludedByElusion || !!die.elusionRemoved || entry.elusionEffect?.dieId === die.id;
@@ -496,7 +561,7 @@ export const CombatLogPanel = ({
                                                                                     <div
                                                                                         key={i}
                                                                                         className={`relative flex-shrink-0 ${wasEludedByElusion ? 'opacity-45 grayscale' : ''}`}
-                                                                                        title={wasEludedByElusion ? `Dado retirado por Elusión (${die.value})` : die.critical ? "Dado Crítico" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)}` : "Dado de Arma"}
+                                                                                        title={wasEludedByElusion ? `Dado retirado por Elusión (${die.value})` : die.critical ? "Dado Crítico" : matchedAttr ? `Dado de ${matchedAttr.charAt(0).toUpperCase() + matchedAttr.slice(1)}` : die.source ? `Dado de ${die.source}` : "Dado de Arma"}
                                                                                     >
                                                                                         <DiceSvg faces={die.faces} value={die.value}
                                                                                             className={`w-5 h-5 ${die.critical ? 'drop-shadow-[0_0_6px_rgba(234,88,12,0.3)]' : 'drop-shadow-sm'}`}
@@ -540,13 +605,13 @@ export const CombatLogPanel = ({
 
                                                             {/* Reaction Descriptive Text */}
                                                             <div className="px-1 text-[11px] leading-relaxed">
-                                                                {entry.reactionType === 'evadir' && (
+                                                                {!entry.canvasRoguelite && entry.reactionType === 'evadir' && (
                                                                     <p className="text-slate-300">
                                                                         <span className="text-yellow-500/80 mr-1.5 italic font-bold uppercase text-[9px] tracking-wider">Evasión</span>
                                                                         Evadió {(entry.evadedDiceIds || []).length} dados e impactó con <span className="text-white font-bold">{entry.finalDamage}</span> de daño.
                                                                     </p>
                                                                 )}
-                                                                {entry.reactionType === 'parar' && (
+                                                                {!entry.canvasRoguelite && entry.reactionType === 'parar' && (
                                                                     <p className="text-slate-300">
                                                                         <span className="text-blue-400/80 mr-1.5 italic font-bold uppercase text-[9px] tracking-wider">Parada</span>
                                                                         {entry.elusionEffect ? <span className="text-cyan-300 font-bold">Elusión retiró el dado {entry.elusionEffect.value}. </span> : null}
@@ -556,13 +621,22 @@ export const CombatLogPanel = ({
                                                                                 `Parada parcial con ${defenderWeapon}, recibió ${entry.finalDamage} de daño.`}
                                                                     </p>
                                                                 )}
-                                                                {entry.reactionType === 'recibir' && (
+                                                                {!entry.canvasRoguelite && entry.reactionType === 'recibir' && (
                                                                     <p className="text-slate-400">
                                                                         <span className="text-red-500/80 mr-1.5 italic font-bold uppercase text-[9px] tracking-wider">Impacto</span>
                                                                         Recibió el golpe de lleno por <span className="text-white font-bold">{entry.finalDamage}</span> de daño.
                                                                     </p>
                                                                 )}
                                                             </div>
+
+                                                            {entry.canvasRoguelite && <p className="px-1 text-[11px] leading-relaxed text-slate-300">
+                                                                {entry.reactionType === 'parar'
+                                                                    ? `${entry.defenderWeapon || 'Dados de defensa'}: ${entry.defenderTotal} de defensa. `
+                                                                    : 'Sin defensa activa. '}
+                                                                {entry.finalDamage > 0 ? `${entry.finalDamage} de Presión restante · ${entry.blocksLost?.vida || 0} bloque(s) de Vida perdidos.` : 'Ataque anulado.'}
+                                                                {entry.blocksLost?.vidaTemporal > 0 && ` Vitalidad absorbe ${entry.blocksLost.vidaTemporal} bloque(s).`}
+                                                            </p>}
+                                                            <CombatLogDetails entry={entry} />
 
                                                             {/* Damage Badges */}
                                                             {totalBlocks > 0 ? (
@@ -572,6 +646,7 @@ export const CombatLogPanel = ({
                                                                     {baseArmaduraLost > 0 && <span className="text-[9px] text-slate-400/80 border-b border-slate-800/40 pb-0.5">-{baseArmaduraLost} Armadura</span>}
                                                                     {traitArmaduraBonus > 0 && <span className="text-[9px] text-slate-300 border-b border-slate-400/50 pb-0.5">-{traitArmaduraBonus} Armadura</span>}
                                                                     {baseVidaLost > 0 && <span className="text-[9px] text-red-500/80 border-b border-red-900/40 pb-0.5">-{baseVidaLost} Vida</span>}
+                                                                    {entry.blocksLost?.vidaTemporal > 0 && <span className="text-[9px] text-[#dfc885] border-b border-[#dfc88560] pb-0.5">-{entry.blocksLost.vidaTemporal} Vida temporal</span>}
                                                                     {traitVidaBonus > 0 && <span className="text-[9px] text-amber-300 border-b border-amber-500/40 pb-0.5">-{traitVidaBonus} Vida</span>}
                                                                 </div>
                                                             ) : totalBlocks === 0 && entry.reactionType !== 'parar' && (

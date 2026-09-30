@@ -1,0 +1,79 @@
+.noma-area-overlay { position: absolute; inset: 0; z-index: 47; pointer-events: none; color: #d8bf88; }
+.noma-area-overlay[data-valid="false"] { color: #f87171; }
+.noma-area-template { position: absolute; border: solid currentColor; background: rgb(203 213 225 / 8%); }
+.noma-area-cell { position: absolute; border: 1px solid rgb(241 245 249 / 10%); }
+.noma-area-overlay[data-explosive="true"] { color: #e1ae86; }
+.noma-area-overlay[data-explosive="true"][data-valid="false"] { color: #f2a3a0; }
+.noma-area-overlay[data-explosive="true"] .noma-area-template { background: rgb(172 57 43 / 18%); box-shadow: inset 0 0 25px rgb(219 104 66 / 14%), 0 0 20px rgb(102 29 22 / 22%); }
+.noma-area-overlay[data-explosive="true"][data-valid="false"] .noma-area-template { background: rgb(105 41 45 / 19%); box-shadow: inset 0 0 20px rgb(154 47 58 / 17%); }
+.noma-area-overlay[data-explosive="true"] .noma-area-cell--impact { background: rgb(235 168 104 / 28%); box-shadow: inset 0 0 14px rgb(250 180 115 / 28%); }
+.noma-area-center, .noma-area-distance { position: absolute; display: flex; align-items: center; gap: 5px; white-space: nowrap; transform-origin: center; background: #0b1120; border: 1px solid rgb(200 170 110 / 40%); padding: 4px 7px; font-size: 11px; line-height: 16px; }
+.noma-area-center { left: 50%; top: 50%; z-index: 1; font-size: 10px; }
+.noma-area-distance { border-radius: 3px; font-variant-numeric: tabular-nums; }
+.noma-area-distance > span { color: #abb4c3; font-size: 10px; }
+.noma-area-trajectory { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.noma-area-trajectory path { fill: none; stroke-linecap: round; }
+.noma-area-trajectory__underlay { stroke: #080c14; stroke-width: 3.5px; stroke-opacity: 0.7; }
+.noma-area-trajectory__line { stroke: currentColor; stroke-width: 1.5px; }
+/* Match CombatHUD's central action panel, including its responsive footprint. */
+.noma-area-controls-dock { position: fixed; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); left: 0; right: 0; z-index: 70; display: flex; justify-content: center; pointer-events: none; }
+.noma-area-controls { width: calc(100% - 32px); color: #c8aa6e; pointer-events: auto; }
+.noma-area-controls__status { position: relative; z-index: 1; width: max-content; max-width: calc(100% - 16px); margin: 0 auto -1px; padding: 7px 10px; background: #0b1120; border: 1px solid rgb(200 170 110 / 30%); border-radius: 12px 12px 0 0; }
+.noma-area-controls__status-line { display: flex; align-items: center; gap: 7px; font-size: 10px; }
+.noma-area-controls__status-line > svg { flex-shrink: 0; }
+.noma-area-controls__status-line > strong { margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.noma-area-controls__actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 6px; background: rgb(11 17 32 / 95%); border: 1px solid rgb(200 170 110 / 50%); border-radius: 12px; }
+.noma-area-controls__actions[data-impact-committed="true"] { grid-template-columns: repeat(2, minmax(0, 1fr)); border-radius: 0 0 12px 12px; }
+.noma-area-controls__actions button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 0; height: 64px; padding: 6px; border: 1px solid rgb(51 65 85 / 50%); border-radius: 8px; background: #161f32; color: #cbd5e1; cursor: pointer; font: inherit; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; touch-action: manipulation; }
+.noma-area-controls__actions button > svg { width: 18px; height: 18px; }
+.noma-area-controls__actions .noma-area-controls__launch { color: #0b1120; background: #c8aa6e; border-color: #c8aa6e; }
+.noma-area-controls__actions button:disabled { opacity: 0.4; cursor: default; }
+.noma-area-controls__actions button:focus-visible { outline: 2px solid #f0dba9; outline-offset: -4px; }
+.noma-area-controls__actions button:not(:disabled):active { background: #383526; }
+.noma-area-controls__actions .noma-area-controls__launch:not(:disabled):active { background: #e0c48a; }
+.noma-area-controls[data-explosive="true"] .noma-area-controls__status { border-color: rgb(210 113 86 / 55%); }
+.noma-area-controls__explosion { display: grid; gap: 9px; padding: 11px 10px 9px; background: #11131f; border: 1px solid rgb(200 170 110 / 50%); border-bottom: 0; border-radius: 12px 12px 0 0; box-shadow: 0 -16px 32px rgb(47 12 14 / 22%); }
+.noma-area-controls__formula { display: flex; align-items: baseline; justify-content: center; gap: 8px; flex-wrap: wrap; color: #e7d0ab; text-align: center; font-family: Alegreya, Georgia, serif; }
+.noma-area-controls__formula > span { font-size: 15px; font-style: italic; }
+.noma-area-controls__formula > strong { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.noma-area-controls__formula i { padding: 0 2px; color: #bc9474; font-style: normal; }
+.noma-area-controls__formula em { color: #f0a5a0; font-style: normal; font-size: 23px; }
+.noma-area-controls__orientations { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.noma-area-controls__orientation { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; min-height: 46px; padding: 4px; border: 1px solid rgb(200 170 110 / 18%); background: #1a1b26; color: #c8bdb6; cursor: pointer; font: 700 10px Alegreya, Georgia, serif; touch-action: manipulation; }
+.noma-area-controls__orientation[aria-pressed="true"] { border-color: #d8bf88; color: #fff0cf; background: #332a28; box-shadow: inset 0 0 12px rgb(216 191 136 / 12%); }
+.noma-area-controls__orientation:focus-visible { outline: 2px solid #f0dba9; outline-offset: 1px; }
+.noma-area-controls__orientation:disabled { opacity: .5; cursor: default; }
+.noma-area-controls__orientation-grid { display: grid; grid-template-columns: repeat(2, 6px); grid-template-rows: repeat(2, 6px); gap: 1px; flex: 0 0 auto; }
+.noma-area-controls__orientation-grid > span { background: #5b4340; border: 1px solid #8e5c50; }
+.noma-area-controls__orientation-grid > span[data-impact="true"] { background: #e2c489; border-color: #f6dd9e; }
+.noma-area-controls__explosion-note { margin: 0; color: #b5a6a5; text-align: center; font: italic 12px Alegreya, Georgia, serif; }
+.noma-area-controls__resume { pointer-events: auto; min-height: 48px; padding: 10px 22px; border: 1px solid #c8aa6e; border-radius: 8px 8px 2px 2px; background: #1a1b26; color: #ead3a3; font: 700 15px Alegreya, Georgia, serif; cursor: pointer; box-shadow: 0 0 24px rgb(81 42 27 / 22%); }
+.noma-area-controls-dock--resume { top: calc(158px + env(safe-area-inset-top, 0px)); bottom: auto; }
+.noma-area-controls__resume:focus-visible { outline: 2px solid #f0dba9; outline-offset: 2px; }
+.noma-area-controls__hint { margin: 4px 0 0; font-size: 9px; line-height: 12px; color: #8b97a8; text-align: center; }
+.noma-area-controls__touch { display: none; }
+@media (min-width: 768px) {
+    .noma-area-controls-dock { bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
+    .noma-area-controls-dock--resume { top: calc(92px + env(safe-area-inset-top, 0px)); bottom: auto; }
+    .noma-area-controls { width: min(672px, calc(100% - 352px)); }
+    .noma-area-controls__status { padding: 9px 16px; }
+    .noma-area-controls__status-line { gap: 12px; font-size: 12px; }
+    .noma-area-controls__hint { font-size: 10px; }
+    .noma-area-controls__actions { gap: 16px; padding: 16px; border-radius: 16px; }
+    .noma-area-controls__actions button { height: 96px; gap: 8px; font-size: 12px; }
+    .noma-area-controls__actions button > svg { width: 32px; height: 32px; }
+    .noma-area-controls__explosion { gap: 12px; padding: 15px 18px 13px; }
+    .noma-area-controls__formula > span { font-size: 18px; }
+    .noma-area-controls__formula > strong { font-size: 22px; }
+    .noma-area-controls__formula em { font-size: 28px; }
+    .noma-area-controls__orientations { gap: 8px; }
+    .noma-area-controls__orientation { min-height: 52px; gap: 8px; font-size: 14px; }
+    .noma-area-controls__orientation-grid { grid-template-columns: repeat(2, 8px); grid-template-rows: repeat(2, 8px); }
+    .noma-area-controls__explosion-note { font-size: 14px; }
+}
+@media (max-width: 390px) {
+    .noma-area-controls__orientation { flex-direction: column; gap: 2px; font-size: 9px; }
+    .noma-area-controls__explosion-note { font-size: 11px; }
+}
+@media (hover: hover) { .noma-area-controls__actions button:not(:disabled):hover { background: #202a3d; border-color: #c8aa6e; color: #f0e6d2; } .noma-area-controls__actions .noma-area-controls__launch:not(:disabled):hover { background: #dfc58b; color: #0b1120; } }
+@media (pointer: coarse) { .noma-area-controls__touch { display: inline; } .noma-area-controls__mouse { display: none; } }

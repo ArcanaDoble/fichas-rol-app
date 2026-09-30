@@ -154,6 +154,7 @@ export const LibraryCharacterCard = ({
           }}
           className="absolute left-3 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-full border border-slate-500/30 bg-[#0b1120]/80 text-slate-300 opacity-0 backdrop-blur-md transition-all duration-300 hover:bg-slate-800 hover:text-white group-hover:opacity-100"
           title="Cambiar retrato"
+          aria-label={`Cambiar imagen de ${item.name}`}
         >
           <FiImage className="h-3.5 w-3.5" />
         </button>

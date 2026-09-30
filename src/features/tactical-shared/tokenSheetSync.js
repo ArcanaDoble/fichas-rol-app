@@ -1,10 +1,11 @@
 import { syncArmorState } from '../../utils/armorSystem';
+import { normalizeEquippedWeaponSets } from '../roguelite/equipmentPool';
 
 // Legacy sheet-to-token adapter. New Roguelite runtime state must use a Canvas-owned adapter.
 
 export const STATUS_EFFECT_IDS = [
     'acido', 'apresado', 'ardiendo', 'asfixiado', 'asustado', 'aturdido',
-    'cansado', 'cegado', 'congelado', 'derribado', 'conmocionado', 'enfermo', 'ensordecido',
+    'cansado', 'cegado', 'congelado', 'derribado', 'conmocionado', 'enfermo', 'oculto',
     'envenenado', 'herido', 'iluminado', 'regeneracion', 'sangrado', 'silenciado',
 ];
 
@@ -85,7 +86,7 @@ export const syncTokenWithSheet = (token, sheetData, catalogs = {}, options = {}
 
     // Helper to flatten item (extract from .payload if present)
     const flattenItem = (item) => {
-        if (!item) return null;
+        if (!item || Array.isArray(item) || !['object', 'string'].includes(typeof item)) return null;
         if (item.payload) {
             return { ...item.payload, ...item, payload: undefined };
         }
@@ -100,6 +101,7 @@ export const syncTokenWithSheet = (token, sheetData, catalogs = {}, options = {}
                 ? flattened
                 : flattened.nombre || flattened.name || '';
         const normalizedName = normalizeEquipmentName(rawName);
+        if (!normalizedName) return null;
         const fromCatalog =
             catalog.find(
                 (candidate) =>
@@ -150,8 +152,11 @@ export const syncTokenWithSheet = (token, sheetData, catalogs = {}, options = {}
             offHand: 'weapon',
             body: 'armor',
         };
-        Object.entries(sheetData.equippedItems).forEach(([slot, item]) => {
-            if (!item || slot === 'beltSlotCount') return; // skip non-item keys
+        const equippedSlots = Array.isArray(sheetData.equippedItems.weaponSets)
+            ? normalizeEquippedWeaponSets(sheetData.equippedItems)
+            : sheetData.equippedItems;
+        Object.entries(equippedSlots).forEach(([slot, item]) => {
+            if (!item || ['beltSlotCount', 'activeWeaponSet', 'weaponSets'].includes(slot)) return;
 
             const flattened = flattenItem(item);
             if (!flattened) return;

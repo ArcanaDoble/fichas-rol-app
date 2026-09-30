@@ -19,6 +19,26 @@ const splitTraits = (value) => {
 
 const joinTraits = (value) => splitTraits(value).join(', ');
 
+const resolveRulesDescription = (item = {}) => (
+  item.descripcion || item.rulesDescription || item.descripcionReglas || item.description || ''
+);
+
+const resolveLoreDescription = (item = {}) => (
+  item.lore || item.descripcionLore || item.flavorText || item.flavourText || ''
+);
+
+const normalizeDescriptionsForStorage = (item = {}) => {
+  const description = String(resolveRulesDescription(item) || '').trim();
+  const lore = String(resolveLoreDescription(item) || '').trim();
+
+  return {
+    description,
+    descripcion: description,
+    lore,
+    descripcionLore: lore,
+  };
+};
+
 export const ACTION_DICE_COSTS = Object.freeze([0, 1, 2, 3]);
 export const EQUIPMENT_RANGES = Object.freeze([
   'Toque',
@@ -90,6 +110,7 @@ export const createEmptyWeaponCatalogItem = () => ({
   competence: 'Simple',
   rasgos: '',
   descripcion: '',
+  lore: '',
   valor: '',
   rareza: '',
 });
@@ -101,6 +122,7 @@ export const createEmptyArmorCatalogItem = () => ({
   competence: 'Ligera',
   rasgos: '',
   descripcion: '',
+  lore: '',
   valor: '',
   rareza: '',
 });
@@ -110,6 +132,7 @@ export const createEmptyAccessoryCatalogItem = () => ({
   nombre: '',
   rasgos: '',
   descripcion: '',
+  lore: '',
   valor: '',
   rareza: '',
 });
@@ -122,6 +145,7 @@ export const createEmptyAbilityCatalogItem = () => ({
   poder: '',
   rasgos: '',
   descripcion: '',
+  lore: '',
   rareza: '',
 });
 
@@ -132,6 +156,8 @@ export const weaponCatalogItemToForm = (item = {}) => ({
   handsRequired: resolveEquipmentHandsRequired(item),
   competence: item.competence ?? item.competencia ?? item.weaponCompetence ?? item.tipo ?? 'Simple',
   rasgos: joinTraits(item.rasgos ?? item.traits),
+  descripcion: resolveRulesDescription(item),
+  lore: resolveLoreDescription(item),
 });
 
 export const armorCatalogItemToForm = (item = {}) => ({
@@ -140,12 +166,16 @@ export const armorCatalogItemToForm = (item = {}) => ({
   defenseClass: item.defenseClass ?? item.cd ?? item.defensa ?? item.defense ?? '',
   competence: item.competence ?? item.competencia ?? item.armorCompetence ?? item.tipo ?? 'Ligera',
   rasgos: joinTraits(item.rasgos ?? item.traits),
+  descripcion: resolveRulesDescription(item),
+  lore: resolveLoreDescription(item),
 });
 
 export const accessoryCatalogItemToForm = (item = {}) => ({
   ...createEmptyAccessoryCatalogItem(),
   ...omitLegacyFields(item, [...commonLegacyFields, 'defensa', 'defense']),
   rasgos: joinTraits(item.rasgos ?? item.traits),
+  descripcion: resolveRulesDescription(item),
+  lore: resolveLoreDescription(item),
 });
 
 export const abilityCatalogItemToForm = (item = {}) => ({
@@ -154,6 +184,8 @@ export const abilityCatalogItemToForm = (item = {}) => ({
   actionCost: parseActionDiceCost(item.actionCost ?? item.consumo ?? item.cost, 1),
   poder: item.poder ?? item.damage ?? item.dano ?? '',
   rasgos: joinTraits(item.rasgos ?? item.traits),
+  descripcion: resolveRulesDescription(item),
+  lore: resolveLoreDescription(item),
 });
 
 export const weaponCatalogItemToStorage = (item = {}) => {
@@ -177,6 +209,7 @@ export const weaponCatalogItemToStorage = (item = {}) => {
     competence: item.competence || 'Simple',
     rasgos: splitTraits(item.rasgos),
     rareza: String(item.rareza || '').trim(),
+    ...normalizeDescriptionsForStorage(item),
   };
 };
 
@@ -195,6 +228,7 @@ export const armorCatalogItemToStorage = (item = {}) => {
     competence: item.competence || 'Ligera',
     rasgos: splitTraits(item.rasgos),
     rareza: String(item.rareza || '').trim(),
+    ...normalizeDescriptionsForStorage(item),
   };
 };
 
@@ -202,6 +236,7 @@ export const accessoryCatalogItemToStorage = (item = {}) => ({
   ...omitLegacyFields(item, [...commonLegacyFields, 'defensa', 'defense']),
   rasgos: splitTraits(item.rasgos),
   rareza: String(item.rareza || '').trim(),
+  ...normalizeDescriptionsForStorage(item),
 });
 
 export const abilityCatalogItemToStorage = (item = {}) => {
@@ -215,5 +250,6 @@ export const abilityCatalogItemToStorage = (item = {}) => {
     poder: String(item.poder || '').trim(),
     rasgos: splitTraits(item.rasgos),
     rareza: String(item.rareza || '').trim(),
+    ...normalizeDescriptionsForStorage(item),
   };
 };

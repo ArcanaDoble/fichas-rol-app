@@ -625,6 +625,7 @@ const safePersistItems = async (
         options = {},
 ) => {
         if (!scenarioId || !finalItems) return false;
+        const pendingProtections = [];
 
         const registerRecentPersistedFields = (itemsToPersist, origItems, explicitIds) => {
             const { originalMap, modifiedOrAdded } = buildScenarioItemChanges(itemsToPersist, origItems, explicitIds);
@@ -635,6 +636,8 @@ const safePersistItems = async (
                 if (Object.keys(changedFields).length === 0) return;
 
                 const localDraft = localUnsavedEditsRef.current[item.id];
+                const previousDraft = localDraft ? { ...localDraft } : null;
+                const previousWrite = recentLocalWritesRef.current[item.id];
                 if (localDraft) {
                     Object.keys(changedFields).forEach(key => {
                         delete localDraft[key];
@@ -647,11 +650,13 @@ const safePersistItems = async (
                 const existingWrite = normalizeRecentLocalWrite(recentLocalWritesRef.current[item.id]);
                 recentLocalWritesRef.current[item.id] = {
                     time: writeTime,
+                    baseRuntimeRevision: Number(originalMap.get(item.id)?.canvasRuntimeRevision || 0),
                     fields: {
                         ...(existingWrite?.fields || {}),
                         ...changedFields
                     }
                 };
+                pendingProtections.push({ id: item.id, previousDraft, previousWrite, write: recentLocalWritesRef.current[item.id] });
             });
         };
 
@@ -696,7 +701,7 @@ const safePersistItems = async (
 
                         transaction.update(docRef, {
                             items: nextItems,
-                            lastModified: Date.now(),
+                            lastModified: Math.max(Date.now(), Number(currentData.lastModified || 0) + 1),
                             lastModifiedItemIds: modifiedItemIds,
                             lastModifiedBy: writerId,
                             lastModifiedByRole: writerRole
@@ -738,13 +743,22 @@ const safePersistItems = async (
             return true;
         };
 
+        // Install protection BEFORE the write. A confirmed snapshot acknowledges it;
+        // installing it after await would resurrect an already obsolete inventory/health.
+        registerRecentPersistedFields(finalItems, originalItems, explicitModifiedIds);
         // Cada delta conserva su turno: ninguna acción rápida reemplaza a otra pendiente.
         const didPersist = await persistQueueRef.current(() => (
             executePersist(scenarioId, finalItems, originalItems, explicitModifiedIds)
         ));
 
-        if (didPersist === true) {
-            registerRecentPersistedFields(finalItems, originalItems, explicitModifiedIds);
+        if (didPersist !== true) {
+            pendingProtections.forEach(({ id, previousDraft, previousWrite, write }) => {
+                // Never roll back a later write or an acknowledged server snapshot.
+                if (recentLocalWritesRef.current[id] !== write) return;
+                if (previousWrite) recentLocalWritesRef.current[id] = previousWrite;
+                else delete recentLocalWritesRef.current[id];
+                if (previousDraft) localUnsavedEditsRef.current[id] = { ...previousDraft, ...localUnsavedEditsRef.current[id] };
+            });
         }
 
         return didPersist === true;

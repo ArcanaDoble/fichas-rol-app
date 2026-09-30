@@ -166,7 +166,7 @@ test.each([
 
 test('creates a Roguelite class token in the active Canvas encounter', async () => {
     const firestore = require('firebase/firestore');
-    const scenario = {
+    let scenario = {
         ...makeScenario('canvas'),
         allowedPlayers: ['Ada'],
         items: [],
@@ -175,6 +175,7 @@ test('creates a Roguelite class token in the active Canvas encounter', async () 
     let persistedRun = null;
     let confirmScenarioWrite;
     let transactionCount = 0;
+    const sceneListeners = new Set();
     const scenarioWriteConfirmation = new Promise((resolve) => {
         confirmScenarioWrite = resolve;
     });
@@ -188,7 +189,8 @@ test('creates a Roguelite class token in the active Canvas encounter', async () 
         transactionCount += 1;
         if (transactionCount === 1) await scenarioWriteConfirmation;
 
-        return callback({
+        let committedPatch = null;
+        const result = await callback({
             get: jest.fn((reference) => Promise.resolve(
                 reference?.path === 'players/Ada/rogueliteClasses/barbarian'
                     ? { exists: () => false, data: () => ({}) }
@@ -196,23 +198,30 @@ test('creates a Roguelite class token in the active Canvas encounter', async () 
             )),
             update: jest.fn((_reference, payload) => {
                 persistedItems = payload.items;
+                committedPatch = { ...committedPatch, ...payload };
             }),
             set: jest.fn((_reference, payload) => {
                 persistedRun = payload.activeRun;
             }),
         });
+        if (committedPatch) {
+            scenario = { ...scenario, ...committedPatch };
+            sceneListeners.forEach(listener => listener({ id: scenario.id, exists: () => true, data: () => scenario }));
+        }
+        return result;
     });
     firestore.onSnapshot.mockImplementation((ref, onNext) => {
         if (ref?.path === 'gameSettings/canvasVisibility') {
             onNext({ exists: () => true, data: () => ({ activeScenarioId: scenario.id }) });
         } else if (ref?.path === `canvas_scenarios/${scenario.id}`) {
+            sceneListeners.add(onNext);
             onNext({ id: scenario.id, exists: () => true, data: () => scenario });
         } else if (ref?.path === 'canvas_scenarios') {
             onNext({ docs: [{ id: scenario.id, data: () => scenario }], forEach: () => {}, docChanges: () => [] });
         } else {
             onNext({ docs: [], forEach: () => {}, docChanges: () => [] });
         }
-        return () => {};
+        return () => sceneListeners.delete(onNext);
     });
 
     const { unmount } = render(

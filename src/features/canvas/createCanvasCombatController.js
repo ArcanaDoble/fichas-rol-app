@@ -2,5 +2,5 @@ import { createTacticalCombatController } from '../tactical-shared/createTactica
 
 /** Canvas-owned combat extension point. */
 export const createCanvasCombatController = (dependencies) => (
-    createTacticalCombatController(dependencies)
+    createTacticalCombatController({ ...dependencies, canvasBasicRules: true })
 );

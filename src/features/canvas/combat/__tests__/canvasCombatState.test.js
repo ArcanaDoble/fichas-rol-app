@@ -1,6 +1,7 @@
 import {
   buildInitiativeBlocks,
   createCanvasCombatState,
+  consumeItemUseResource,
   getAvailableMovement,
   getMovementBase,
   markParticipantActed,
@@ -52,6 +53,33 @@ const goblin = (id) => ({
 });
 
 describe('Canvas roguelite combat state', () => {
+  it('remembers only the confirmed attacker weapon instances and keeps them between rounds', () => {
+    const attacker = goblin('attacker');
+    const defender = goblin('defender');
+    const initial = createCanvasCombatState([attacker, defender], { random: () => 0 });
+    initial.participants.defender.lastAttackWeaponIds = ['defender-previous'];
+    const attack = { id: 'remembered-attack', attackerId: attacker.id, targetId: defender.id, actionDieIds: [],
+      attackParts: [{ weaponId: 'dagger-copy-two' }, { weaponId: 'sword-copy' }] };
+    const queued = queueCanvasAttack(initial, attack);
+    expect(queued.participants.attacker.lastAttackWeaponIds).toEqual(['dagger-copy-two', 'sword-copy']);
+    expect(queued.participants.defender.lastAttackWeaponIds).toEqual(['defender-previous']);
+    expect(initial.participants.attacker.lastAttackWeaponIds).toBeUndefined();
+    expect(queueCanvasAttack(queued, { ...attack, id: 'blocked', attackParts: [{ weaponId: 'wrong' }] })).toBe(queued);
+    const nextRound = startNextRound(queued, { random: () => 0 });
+    expect(nextRound.participants.attacker.lastAttackWeaponIds).toEqual(['dagger-copy-two', 'sword-copy']);
+  });
+
+  it('keeps ordinary movement and undo serializable without defensive reposition', () => {
+    const initial = createCanvasCombatState([barbarian, rogue]);
+    const moved = recordParticipantMovement(initial, barbarian.id, {
+      from: { x: 0, y: 0 }, to: { x: 1, y: 0 }, cost: 1,
+    });
+    expect(moved.participants[barbarian.id].defensiveReposition).toBeNull();
+    const { state: undone } = undoParticipantMovement(moved, barbarian.id);
+    expect(undone.participants[barbarian.id].defensiveReposition).toBeNull();
+    expect(undone.participants[rogue.id]).toEqual(initial.participants[rogue.id]);
+  });
+
   it('uses the class action dice as both initiative roll and round-one pool', () => {
     const setup = createCanvasCombatState([barbarian], { now: 10 });
     const active = submitActionDice(setup, barbarian.id, [7, 3, 2], {
@@ -503,6 +531,25 @@ describe('Canvas roguelite combat state', () => {
     state = startNextRound(state, { random: () => 0 });
     expect(state.participants[hero.id].movementRuntime.base).toBe(5);
     expect(getAvailableMovement(state.participants[hero.id])).toBe(5);
+  });
+
+  it('consumes either an action die or an enemy threat die for a generic item use', () => {
+    let playerState = createCanvasCombatState([barbarian]);
+    playerState = submitActionDice(playerState, barbarian.id, [5, 3, 1], { random: () => 0 });
+    const actionDie = playerState.participants[barbarian.id].actionDice[0];
+    playerState = consumeItemUseResource(playerState, barbarian.id, {
+      ...actionDie,
+      kind: 'action-die',
+    });
+    expect(playerState.participants[barbarian.id].actionDice[0].status).toBe('spent');
+
+    let enemyState = createCanvasCombatState([goblin('goblin-smoke')], { random: () => 0 });
+    enemyState = consumeItemUseResource(enemyState, 'goblin-smoke', {
+      kind: 'threat-die',
+      status: 'available',
+      value: 1,
+    });
+    expect(enemyState.participants['goblin-smoke'].threatValue).toBeNull();
   });
 
   it('spends defensive excess as a separate reposition allowance', () => {

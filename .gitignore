@@ -21,3 +21,10 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Local development, previews and deployment caches
+/output/
+/tmp/
+/.playwright-cli/
+/.firebase/
+/debug.log

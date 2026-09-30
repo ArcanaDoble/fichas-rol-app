@@ -5,7 +5,49 @@ import {
   mergeScenarioItemsForPersist,
   normalizeRecentLocalWrite,
   shouldTreatRemotePositionAsConflict,
+  reconcileScenarioItemSnapshot,
+  isStaleScenarioSnapshot,
 } from '../scenarioSync';
+
+test('a committed potion supersedes stale health/inventory locks on both clients', () => {
+  const before = { id: 'hero', stats: { vida: { current: 3, max: 8 } }, inventory: ['potion'] };
+  const healed = { ...before, canvasRuntimeRevision: 1, stats: { vida: { current: 7, max: 8 } }, inventory: [] };
+  const locks = { draft: { stats: before.stats }, recentWrite: { time: 100, fields: { inventory: before.inventory, stats: before.stats, x: 42 } }, now: 101 };
+  for (const local of [before, healed]) {
+    const result = reconcileScenarioItemSnapshot(healed, local, locks);
+    expect(result.item.stats.vida.current).toBe(7);
+    expect(result.item.inventory).toEqual([]);
+    expect(result.item.x).toBe(42);
+    expect(result.draft).toBeNull();
+    expect(result.recentWrite.fields).toEqual({ x: 42 });
+  }
+});
+
+test('a delayed snapshot cannot undo the second potion', () => {
+  expect(isStaleScenarioSnapshot({ lastModified: 103 }, { lastModified: 102 })).toBe(true);
+  expect(isStaleScenarioSnapshot({ lastModified: 103 }, { lastModified: 103 })).toBe(false);
+});
+
+test('editing another stat after a potion preserves the newly healed health', () => {
+  const original = { id: 'hero', stats: { vida: { current: 3, max: 8 }, iniciativa: { current: 2 } } };
+  const edited = { ...original, stats: { ...original.stats, iniciativa: { current: 4 } } };
+  const remote = { ...original, stats: { ...original.stats, vida: { current: 7, max: 8 } } };
+  expect(mergeScenarioItemsForPersist([remote], [edited], [], [original])[0].stats).toEqual({
+    vida: { current: 7, max: 8 }, iniciativa: { current: 4 },
+  });
+});
+
+test('a pickup queued before a potion commit cannot resurrect the consumed copy', () => {
+  const oldPotion = { instanceId: 'old', name: 'Poción' };
+  const newPotion = { instanceId: 'new', name: 'Poción' };
+  const otherPickup = { instanceId: 'other', name: 'Bomba' };
+  const original = { id: 'hero', inventory: [oldPotion], equippedItems: [oldPotion] };
+  const edited = { ...original, inventory: [oldPotion, newPotion], equippedItems: [oldPotion, newPotion] };
+  const remote = { ...original, inventory: [otherPickup], equippedItems: [otherPickup] };
+  const [saved] = mergeScenarioItemsForPersist([remote], [edited], [], [original]);
+  expect(saved.inventory).toEqual([otherPickup, newPotion]);
+  expect(saved.equippedItems).toEqual([otherPickup, newPotion]);
+});
 
 test('serial persist queue keeps every rapid request in order', async () => {
   const enqueuePersist = createSerialPersistQueue();

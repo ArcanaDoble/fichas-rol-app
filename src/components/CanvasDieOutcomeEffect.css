@@ -1,0 +1,15 @@
+.canvas-die-outcome { position: absolute; width: 0; height: 0; pointer-events: none; z-index: 200; animation: noma-outcome-fade 3.2s ease-out both; }
+.canvas-die-outcome-content { position: absolute; top: var(--outcome-top); left: var(--outcome-left); width: 96px; transform: translate(-50%, -50%) scale(var(--outcome-inverse-zoom)); transform-origin: center; text-align: center; }
+.canvas-die-outcome-die { width: 76px; height: 76px; margin: 0 auto; filter: drop-shadow(0 3px 5px #030609); transition: transform 180ms ease-out; }
+.canvas-die-outcome.is-resolved .canvas-die-outcome-die { transform: translateY(-3px); }
+.canvas-die-outcome-recovery { display: flex; align-items: baseline; justify-content: center; gap: 5px; color: #edb3bb; text-shadow: 0 2px 5px #030609, 0 1px 2px #030609; opacity: 0; transform: translateY(7px); transition: opacity 180ms ease-out, transform 300ms ease-out; }
+.canvas-die-outcome-recovery strong { font-family: 'Alegreya', serif; font-size: 32px; line-height: 1; }
+.canvas-die-outcome-recovery span { font-family: 'Cinzel', serif; font-size: 11px; letter-spacing: .08em; }
+.canvas-die-outcome.is-resolved .canvas-die-outcome-recovery { opacity: 1; transform: translateY(0); }
+.canvas-die-outcome-pulse { position: absolute; width: calc(var(--outcome-token-width) + 12px); height: calc(var(--outcome-token-height) + 12px); left: 0; top: 0; border-radius: 50%; opacity: 0; transform: translate(-50%, -50%); background: radial-gradient(ellipse, transparent 45%, #e7a0a84d 67%, transparent 73%); }
+.canvas-die-outcome.is-resolved .canvas-die-outcome-pulse { animation: noma-healing-pulse 1.25s ease-out both; }
+@keyframes noma-healing-pulse { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.9); } 28% { opacity: .95; } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.35); } }
+@keyframes noma-outcome-fade { 0% { opacity: 0; } 6%, 82% { opacity: 1; } 100% { opacity: 0; } }
+.canvas-die-outcome.is-reduced .canvas-die-outcome-die, .canvas-die-outcome.is-reduced .canvas-die-outcome-recovery { transform: none; transition: none; }
+.canvas-die-outcome.is-reduced .canvas-die-outcome-pulse { animation: none; }
+@media (prefers-reduced-motion: reduce) { .canvas-die-outcome { animation: none; } }

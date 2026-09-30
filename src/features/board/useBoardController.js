@@ -1,4 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { persistBoardStackAction } from './persistBoardStackAction';
+import { useReducedMotion } from 'framer-motion';
+import { useBoardDrawPresentation } from './useBoardDrawPresentation';
+import { BoardStackInspector } from './components/BoardStackInspector';
 import { nanoid } from 'nanoid';
 import {
     addDoc, collection, deleteDoc, doc, getDocs, limit, orderBy, query,
@@ -11,7 +15,7 @@ import {
     MASTER_HAND_SEAT_ID, getCardHandSeatId, getCardHandTokenId, getCardStackIds,
     getVisibleHandCards, isCardContainerItem, isCardItem, isHandCardItem,
     isLegacyTokenHandCard, moveBoardCardPileToHand, normalizeHandSeatId,
-    reorderHandCards, sanitizeCardStacks, spreadCardStack, takeCardFromStack,
+    reorderHandCards, sanitizeCardStacks, spreadCardStack,
     takeTopCardFromStack,
 } from '../../utils/cardBoard';
 import { RECENT_LOCAL_WRITE_PROTECTION_MS } from '../../utils/scenarioSync';
@@ -42,6 +46,7 @@ export const useBoardController = ({
     draggingHandCard,
     getBoardHandReorderTarget,
     getEventCoords,
+    getLocalSyncActorId,
     gridConfig,
     handDragFrameRef,
     handDragGeometryRef,
@@ -55,6 +60,7 @@ export const useBoardController = ({
     offset,
     pendingBoardHandTransferLocksRef,
     playerName,
+    recentLocalWritesRef,
     safePersistItems,
     scenarioCollectionName,
     selectedTokenIds,
@@ -76,6 +82,69 @@ export const useBoardController = ({
     updateItem,
     zoom,
 }) => {
+    const [boardCardMenu, setBoardCardMenu] = useState(null);
+    const boardDrawPresentation = useBoardDrawPresentation(activeScenario, isBoardMode);
+    const reducedBoardMotion = useReducedMotion();
+    const [boardCardActionBusy, setBoardCardActionBusy] = useState(false);
+    const stackActionPendingRef = useRef(false);
+    useEffect(() => { setBoardCardMenu(null); }, [activeScenario?.id, isPlayerView]);
+
+    const closeBoardCardMenu = () => setBoardCardMenu(null);
+    const openBoardCardMenu = (card, event) => {
+        if (!isBoardMode || !isCardItem(card) || card.stackParentId || card.zone === 'hand') return;
+        consumeCardStackQuickActionEvent(event);
+        const bounds = event.currentTarget?.getBoundingClientRect?.();
+        setBoardCardMenu({ cardId: card.id, stackKey: card.stackKey || null,
+            x: event.clientX || bounds?.right || 16, y: event.clientY || bounds?.bottom || 16 });
+        setSelectedTokenIds([card.id]);
+        lastSelectedIdRef.current = card.id;
+    };
+    const executeBoardCardAction = async (target, action, count, extra = {}) => {
+        const scenario = activeScenarioRef.current || activeScenario;
+        if (!isBoardMode || !scenario || !target || stackActionPendingRef.current) return false;
+        stackActionPendingRef.current = true;
+        setBoardCardActionBusy(true);
+        try {
+            const result = await persistBoardStackAction(scenario.id, {
+                ...target, action, count, ...extra,
+                newStackKey: `pile-${nanoid()}`,
+                presentationId: `draw-${nanoid()}`,
+                newIds: action === 'copies' && Number.isInteger(count) && count >= 1 && count <= 500
+                    ? Array.from({ length: count }, () => `card-${nanoid()}`) : undefined,
+            }, { isPlayerView, actorId: getLocalSyncActorId?.() || null });
+            if (activeScenarioRef.current?.id !== scenario.id) return;
+            result.changedIds.forEach(id => { if (recentLocalWritesRef?.current) delete recentLocalWritesRef.current[id]; });
+            setActiveScenario(previous => {
+                if (previous?.id !== scenario.id || Number(previous.lastModified || 0) > result.lastModified) return previous;
+                const changed = new Set(result.changedIds);
+                const replacements = new Map(result.items.filter(item => changed.has(item.id)).map(item => [item.id, item]));
+                const present = new Set(previous.items.map(item => item.id));
+                const drawn = new Set(result.drawnIds);
+                return { ...previous, lastModified: result.lastModified, items: [
+                    ...previous.items.filter(item => !drawn.has(item.id)).map(item => replacements.get(item.id) || item),
+                    ...result.items.filter(item => !present.has(item.id) || drawn.has(item.id)),
+                ] };
+            });
+            setSelectedTokenIds([result.selectedId]);
+            lastSelectedIdRef.current = result.selectedId;
+            setBoardCardMenu(null);
+            if (action === 'shuffle') triggerToast('Montón barajado', 'Boca abajo · contenido oculto a jugadores');
+            if (action === 'copies') triggerToast(`${count} copias apiladas`);
+            if (action === 'draw') triggerToast(`${count} ${count === 1 ? 'carta robada' : 'cartas robadas'}`, `${result.remainingCount} en el montón`);
+            return true;
+        } catch (error) {
+            triggerToast('No se pudo completar la acción', error.message, 'error');
+            return false;
+        } finally {
+            stackActionPendingRef.current = false;
+            setBoardCardActionBusy(false);
+        }
+    };
+    const runBoardCardAction = (action, count) => executeBoardCardAction(boardCardMenu, action, count);
+    const reorderBoardStack = (parent, movedCardId, beforeCardId) => executeBoardCardAction(
+        { cardId: parent.id, stackKey: parent.stackKey || null }, 'reorder', undefined, { movedCardId, beforeCardId }
+    );
+
 const handleBoardCardBackUpload = async (cardId, file) => {
         if (!cardId || !file) return;
 
@@ -625,6 +694,7 @@ const handleBoardCardBackUpload = async (cardId, file) => {
     const moveBoardCardToHand = (cardId) => {
         const currentScenario = activeScenarioRef.current || activeScenario;
         if (!currentScenario || !cardId) return;
+        if (isPlayerView && currentScenario.items?.find(item => item.id === cardId)?.hideStackContentsForPlayers) return;
 
         const handOwner = getBoardHandOwner();
         const handOwnerId = handOwner?.id || currentUserId;
@@ -744,6 +814,7 @@ const handleBoardCardBackUpload = async (cardId, file) => {
     };
 
     const openBoardCardPreview = (card) => {
+        if (isPlayerView && card.hideStackContentsForPlayers) return;
         const image = getBoardCardPreviewImage(card);
         if (image) {
             const preload = new globalThis.Image();
@@ -1030,17 +1101,21 @@ const handleBoardCardBackUpload = async (cardId, file) => {
     const unstackSpecificCard = (stackParentId, cardId) => {
         const currentScenario = activeScenarioRef.current || activeScenario;
         if (!currentScenario || !stackParentId || !cardId) return;
-
-        const result = takeCardFromStack(currentScenario.items || [], stackParentId, cardId);
-        if (!result.releasedCardId) return;
-
-        setActiveScenario(prev => prev ? { ...prev, items: result.items } : prev);
-        setSelectedTokenIds([cardId]);
-        lastSelectedIdRef.current = cardId;
-        safePersistItems(currentScenario.id, result.items, currentScenario.items, result.changedIds);
+        const parent = currentScenario.items?.find(item => item.id === stackParentId);
+        if (!parent || (isPlayerView && parent.hideStackContentsForPlayers)) return;
+        return executeBoardCardAction({ cardId: parent.id, stackKey: parent.stackKey || null }, 'extract', 1, { movedCardId: cardId });
     };
 
     return {
+        boardCardMenu,
+        boardCardActionBusy,
+        closeBoardCardMenu,
+        openBoardCardMenu,
+        runBoardCardAction,
+        reorderBoardStack,
+        boardStackControls: { reorder: reorderBoardStack, openMenu: openBoardCardMenu, busy: boardCardActionBusy, InspectorComponent: BoardStackInspector },
+        boardDrawPresentation,
+        reducedBoardMotion,
         handleBoardCardBackUpload,
         addCardToBoard,
         getHandCardsForToken,

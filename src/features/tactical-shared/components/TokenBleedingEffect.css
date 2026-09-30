@@ -1,0 +1,9 @@
+.canvas-token-bleeding { position: absolute; inset: 0; z-index: 19; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity 1.65s ease-in-out; }
+.canvas-token-bleeding[data-active='true'] { opacity: 1; }
+.canvas-token-bleeding canvas { display: block; width: 100%; height: 100%; }
+.canvas-token-bleeding[data-active='true'] canvas { animation: noma-bleeding-arrival 1.4s ease-out both; }
+@keyframes noma-bleeding-arrival { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+    .canvas-token-bleeding { transition-duration: .18s; }
+    .canvas-token-bleeding canvas { animation: none !important; }
+}

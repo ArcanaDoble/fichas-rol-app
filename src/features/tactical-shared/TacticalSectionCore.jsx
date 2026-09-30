@@ -8,13 +8,14 @@ import PropTypes from 'prop-types';
 
 
 import { getCombatEffectLifetimeMs } from '../../components/FloatingCombatEffects';
+import { isCanvasRestorativeEffect } from './canvasItemEffects';
 import { db } from '../../firebase';
 import { collection, doc, onSnapshot, setDoc, deleteDoc, query, where, orderBy, getDoc, serverTimestamp, limit } from 'firebase/firestore';
 
 import { getCombatQueueDisplayState, sortCombatQueueEntries } from '../../utils/combatQueue';
 
 import { getCardStackIds, isCardContainerItem, isCardHiddenByContainerForPlayer, isCardItem, isMasterLibraryDeck, preservePendingHandTransferState } from '../../utils/cardBoard';
-import { RECENT_LOCAL_WRITE_PROTECTION_MS, createSerialPersistQueue, getChangedItemFields, getRemoteModifiedItemIds, normalizeRecentLocalWrite, shouldTreatRemotePositionAsConflict } from '../../utils/scenarioSync';
+import { RECENT_LOCAL_WRITE_PROTECTION_MS, createSerialPersistQueue, getChangedItemFields, getRemoteModifiedItemIds, normalizeRecentLocalWrite, shouldTreatRemotePositionAsConflict, isStaleScenarioSnapshot, reconcileScenarioItemSnapshot } from '../../utils/scenarioSync';
 import { applyBoardDieRolls } from '../../utils/boardDicePhysics';
 import {
     ACTIVE_BOARD_DIE_ROLL_IDS, BOARD_DICE_ROLL_SIDES, BOARD_DIE_SIDES,
@@ -32,11 +33,17 @@ import { WORLD_SIZE, snapWorldPositionToGrid, getCenteredSpawnPosition } from '.
 import { syncTokenWithSheet } from './tokenSheetSync';
 import { canControlToken } from './tokenControlUtils';
 import { createSceneItemRenderer } from './components/createSceneItemRenderer';
+import { useCanvasHealingPresentationEvents } from './canvasHealingPresentation';
+import { useCanvasDamagePresentation } from './canvasDamagePresentation';
+import {
+    getCanvasCommittedVisionItems,
+    getPlayerCanvasVisionTokens,
+    isCanvasTokenHiddenFromViewer,
+} from './tokenVisibilityAccess';
 
 
 import { useCanvasGridController } from './useTacticalGridController';
 import { useCanvasInteractionController } from './useTacticalInteractionController';
-import { areScenarioFieldValuesEqual } from './scenarioState';
 import { createCanvasScenarioController } from './createTacticalScenarioController';
 import { createCanvasTokenController } from './createTacticalTokenController';
 
@@ -208,6 +215,9 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         syncTokenWithSheet: syncModeTokenWithSheet = syncTokenWithSheet,
         loadRuntimeSheet,
         persistRuntimeItems,
+        didGainPlayerSharedVision,
+        allowPlayerTokenHoverInspection = false,
+        SharedPointerOverlay,
         TokenResourcesComponent,
         EquipmentSectionComponent,
         isScenePickupItem,
@@ -479,6 +489,9 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
     const [combatEventQueue, setCombatEventQueue] = useState([]);
     const [activeCombatEventId, setActiveCombatEventId] = useState(null);
     const [activeCombatAnimations, setActiveCombatAnimations] = useState([]);
+    const healingPresentation = useCanvasHealingPresentationEvents(isBoardMode ? null : activeScenario);
+    const damagePresentationByToken = useCanvasDamagePresentation(isBoardMode ? null : activeScenario, activeCombatAnimations);
+    const presentedCombatAnimations = [...activeCombatAnimations, ...healingPresentation.events];
     const seenAnimIdsRef = useRef(new Set()); // Persistent dedup set across renders
     const seenSyncedEffectIdsRef = useRef(new Set()); // Dedup para efectos visuales compartidos
     const resolvingCombatEventsRef = useRef(new Set());
@@ -556,6 +569,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
 
     // --- MASTER COMBAT HUD TOGGLE ---
     const [showMasterCombatHUD, setShowMasterCombatHUD] = useState(false);
+    const [showHiddenTokens, setShowHiddenTokens] = useState(false);
     const lastMasterHudTokenIdRef = useRef(null); // Recuerda el último token para el HUD del master
 
     // Refs para acceder a estados actualizados dentro de onSnapshot sin re-suscripciones
@@ -825,6 +839,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         const unsub = onSnapshot(doc(db, scenarioCollectionName, activeScenario.id), (docSnap) => {
             if (docSnap.exists()) {
                 const remoteData = docSnap.data();
+                if (activeScenarioRef.current?.id === docSnap.id && isStaleScenarioSnapshot(activeScenarioRef.current, remoteData)) return;
                 const remoteItems = remoteData.items || [];
                 lastRemoteScenarioItemsRef.current = remoteItems;
                 const normalizedRemoteConfig = remoteData.config
@@ -944,7 +959,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
 
                 // --- Sincronización de Items (Tokens) ---
                 setActiveScenario(current => {
-                    if (!current || current.id !== docSnap.id) return current;
+                    if (!current || current.id !== docSnap.id || isStaleScenarioSnapshot(current, remoteData)) return current;
 
                     const localItems = Array.isArray(current.items) ? current.items : [];
                     const localItemMap = new Map(localItems.map(item => [item.id, item]));
@@ -970,16 +985,22 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                         if (!localItem) return remote;
 
                         // Caso A: Preservar ediciones no guardadas del inspector (Drafts)
-                        const localEdits = localUnsavedEditsRef.current[remote.id];
                         const transferProtectedItem = preservePendingHandTransferState(
                             remote,
                             localItem,
                             pendingBoardHandTransferLocksRef.current.get(remote.id),
                             mergeTime
                         );
-                        let itemWithEdits = localEdits
-                            ? { ...transferProtectedItem, ...localEdits }
-                            : transferProtectedItem;
+                        const reconciled = reconcileScenarioItemSnapshot(transferProtectedItem, localItem, {
+                            draft: localUnsavedEditsRef.current[remote.id],
+                            recentWrite: recentLocalWritesRef.current[remote.id],
+                            now: mergeTime,
+                        });
+                        if (reconciled.draft) localUnsavedEditsRef.current[remote.id] = reconciled.draft;
+                        else delete localUnsavedEditsRef.current[remote.id];
+                        if (reconciled.recentWrite) recentLocalWritesRef.current[remote.id] = reconciled.recentWrite;
+                        else delete recentLocalWritesRef.current[remote.id];
+                        const itemWithEdits = reconciled.item;
 
                         // Caso B: Preservar posición de fichas arrastradas activamente
                         if (draggedTokenIdRef.current && activeDragItemIds.has(remote.id)) {
@@ -989,40 +1010,6 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                                 y: localItem.y,
                                 rotation: localItem.rotation
                             };
-                        }
-
-                        // Caso C: Prevenir snapback/rubber-banding de campos de escritura persistente recientes
-                        const recentWrite = normalizeRecentLocalWrite(recentLocalWritesRef.current[remote.id]);
-                        if (recentWrite) {
-                            if (mergeTime - recentWrite.time < RECENT_LOCAL_WRITE_PROTECTION_MS) {
-                                // Limpiamos campos confirmados por el servidor
-                                const fieldsToProtect = {};
-                                let hasProtectedFields = false;
-
-                                Object.entries(recentWrite.fields || {}).forEach(([key, val]) => {
-                                    if (areScenarioFieldValuesEqual(remote[key], val)) {
-                                        // Confirmado por el servidor, ya no es necesario protegerlo
-                                    } else {
-                                        fieldsToProtect[key] = val;
-                                        hasProtectedFields = true;
-                                    }
-                                });
-
-                                if (hasProtectedFields) {
-                                    recentLocalWritesRef.current[remote.id] = {
-                                        time: recentWrite.time,
-                                        fields: fieldsToProtect
-                                    };
-                                    itemWithEdits = {
-                                        ...itemWithEdits,
-                                        ...fieldsToProtect
-                                    };
-                                } else {
-                                    delete recentLocalWritesRef.current[remote.id];
-                                }
-                            } else {
-                                delete recentLocalWritesRef.current[remote.id];
-                            }
                         }
 
                         // Caso D: Preservar posición en Turnos Pendientes (Combat Mode, solo Jugadores)
@@ -1215,21 +1202,30 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         };
     }, [isPlayerView, activeScenario?.id]);
 
-    // --- Listener de Combat Log (últimas 3 entradas) ---
+    // --- Combat history belongs to the current scene, including older resolutions. ---
     useEffect(() => {
         if (!activeScenario?.id) return;
 
         // Limpiar el set de IDs vistos al cambiar de escenario para no bloquear nuevas animaciones
         seenAnimIdsRef.current.clear();
+        setCombatLog([]);
+        setActiveCombatAnimations(previous => previous.filter(animation => !isCanvasRestorativeEffect(animation.effect)));
 
         const q = query(
             collection(db, 'combat_log'),
-            orderBy('timestamp', 'desc'),
-            limit(3)
+            where('scenarioId', '==', activeScenario.id)
         );
         const unsub = onSnapshot(q, (snapshot) => {
             const newAnims = [];
             snapshot.docChanges().forEach((change) => {
+                if (change.type !== 'removed') {
+                    const entry = { id: change.doc.id, ...change.doc.data() };
+                    if (isCanvasRestorativeEffect(entry)) {
+                        // Healing is presented from the atomic scene commit, together with
+                        // its health change. The independently delivered log is history only.
+                        return;
+                    }
+                }
                 if (change.type === 'added') {
                     const entry = { id: change.doc.id, ...change.doc.data() };
                     const animId = `anim_${entry.id}`;
@@ -1266,7 +1262,8 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
 
             // Actualizar logs visibles
             const entries = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            setCombatLog(entries);
+            const entryTime = entry => entry.timestamp?.toMillis?.() || Number(entry.clientTimestamp || entry.timestamp) || 0;
+            setCombatLog(entries.sort((a, b) => entryTime(b) - entryTime(a)));
         });
         return () => {
             if (typeof unsub === 'function') unsub();
@@ -1634,13 +1631,32 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
     };
     const mapLayerViewBox = `${mapLayerBounds.x} ${mapLayerBounds.y} ${mapLayerBounds.width} ${mapLayerBounds.height}`;
 
+    const visionItems = useMemo(() => {
+        const items = activeScenario?.items || [];
+        return getCanvasCommittedVisionItems(items, {
+            draggedTokenId,
+            tokenOriginalPos,
+            pendingTurnState: !isBoardMode && isUsablePendingTurnState(pendingTurnState) ? pendingTurnState : null,
+            isPlayerView,
+        });
+    }, [activeScenario?.items, draggedTokenId, tokenOriginalPos, pendingTurnState, isBoardMode, isPlayerView]);
+
     // Calculamos los "Observadores" activos (tokens seleccionados con visión)
     // Para jugadores: SOLO se activa cuando seleccionan tokens específicos (no hay fallback)
     // Ahora soporta múltiples tokens seleccionados para mostrar la unión de sus visiones
     const observerIds = isPlayerView
-        ? (activeScenario?.items || []).filter(s => s && selectedTokenIds.includes(s.id) && s.controlledBy?.includes(playerName) && s.hasVision).map(s => s.id)
-        : (activeScenario?.items || []).filter(s =>
-            s && selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision
+        ? (isBoardMode
+            ? (activeScenario?.items || []).filter(s => s && selectedTokenIds.includes(s.id) && s.controlledBy?.includes(playerName) && s.hasVision).map(s => s.id)
+            : getPlayerCanvasVisionTokens(visionItems, playerName)
+                .filter(s => selectedTokenIds.includes(s.id))
+                .map(s => s.id))
+        : visionItems.filter(s =>
+            s
+            && selectedTokenIds.includes(s.id)
+            && s.type !== 'light'
+            && s.type !== 'wall'
+            && s.hasVision
+            && (!isCanvasTokenHiddenFromViewer(s, visionItems, { isPlayerView, playerName, selectedTokenIds }))
         ).map(s => s.id);
 
     // Para compatibilidad: si hay un solo observer, usamos su ID directamente
@@ -1847,7 +1863,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                         habilidades,
                         accesorios,
                     }, isRogueliteClassLaunch
-                        ? { scenarioId, preserveTokenState: false }
+                        ? { scenarioId, preserveTokenState: Number(runtimeSheet.activeRun?.revision || 0) <= Number(existingToken.runRevision || 0) }
                         : { scenarioId });
 
                     if (JSON.stringify(syncedToken) !== JSON.stringify(existingToken)) {
@@ -1864,10 +1880,12 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                         if (!didPersist) {
                             throw new Error('Firebase no confirmó la sincronización del token.');
                         }
-                        setActiveScenario(prev => prev?.id === scenarioId ? { ...prev, items: updatedItems } : prev);
+                        // The scene subscription hydrates the committed result. Reapplying
+                        // this pre-transaction array here could undo a newer potion/pickup.
                     } else {
                         // Si no hay cambios, solo actualizar estado local con datos frescos
-                        setActiveScenario(prev => prev?.id === scenarioId ? { ...prev, items: freshItems } : prev);
+                        setActiveScenario(prev => prev?.id === scenarioId && !isStaleScenarioSnapshot(prev, freshData)
+                            ? { ...prev, items: freshItems, lastModified: freshData.lastModified } : prev);
                     }
                 } else {
                     // El token NO existe en el servidor → crearlo (spawn nuevo)
@@ -1915,7 +1933,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                     }
 
                     // Mostrar el token solo después de que Firestore haya confirmado la escritura.
-                    setActiveScenario(prev => prev?.id === scenarioId ? { ...prev, items: updatedItems } : prev);
+                    // The committed snapshot also contains concurrent inventory/health changes.
 
                     const playerZoom = 1.2;
                     setZoom(playerZoom);
@@ -1993,7 +2011,8 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                             accesorios,
                         }, {
                             scenarioId: currentScenario.id,
-                            preserveTokenState: sheet.profileType === 'rogueliteClass' ? false : undefined,
+                            preserveTokenState: sheet.profileType === 'rogueliteClass'
+                                ? Number(sheet.activeRun?.revision || 0) <= Number(item.runRevision || 0) : undefined,
                         });
                         if (JSON.stringify(synced) !== JSON.stringify(item)) {
                             hasChanges = true;
@@ -2009,7 +2028,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                     if (!didPersist) {
                         throw new Error('Firebase no confirmó la sincronización de la ficha.');
                     }
-                    setActiveScenario(prev => prev?.id === currentScenario.id ? { ...prev, items: updatedItems } : prev);
+                    // Hydrate through the scene subscription, never the old event payload.
                 }
             } catch (err) {
                 console.error(' [SafeSync] Error sincronizando ficha en tiempo real:', err);
@@ -2084,6 +2103,14 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
 
     const {
         handleBoardCardBackUpload,
+        boardCardMenu,
+        boardStackControls,
+        boardDrawPresentation,
+        reducedBoardMotion,
+        boardCardActionBusy,
+        closeBoardCardMenu,
+        openBoardCardMenu,
+        runBoardCardAction,
         addCardToBoard,
         getHandCardsForToken,
         addCardToHand,
@@ -2108,8 +2135,17 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         unstackSpecificCard,
         handleModeItemDrop,
         sceneDropPreview,
+        catalogPlacementItem,
+        cancelCatalogPlacement,
         combatRuntime,
+        itemUseSystem,
+        canvasPointers = [],
+        isCanvasPointerActive = false,
+        handleSharedPointerDown,
+        handleSharedPointerLeave,
+        handleSharedPointerMove,
     } = useFeatureController({
+        getLocalSyncActorId,
         activeBoardHandTokenId,
         activeScenario,
         activeScenarioRef,
@@ -2269,8 +2305,16 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         triggerToast,
     });
 
+    const handleHudCombatAction = useCallback((tokenId, actionId, data) => {
+        if (actionId === 'use_item' && itemUseSystem?.begin) {
+            return itemUseSystem.begin(tokenId, data);
+        }
+        return handleCombatAction(tokenId, actionId, data);
+    }, [handleCombatAction, itemUseSystem]);
+
     const {
         handleTouchStart,
+        pickupPointer,
         handleTouchMove,
         handleTouchEnd,
         handleMouseDown,
@@ -2346,6 +2390,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         tokenDragStart,
         tokenOriginalPos,
         tokenOriginalPosRef,
+        triggerToast,
         wallDrawingCurrent,
         wallDrawingStart,
         zoom,
@@ -2541,12 +2586,19 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
     const maskVersion = doorStateHash;
 
     const renderItemJSX = createSceneItemRenderer({
+        pickupPointer,
+        boardDrawPresentation,
+        reducedBoardMotion,
+        openBoardCardMenu,
+        healingPresentationByToken: healingPresentation.byToken,
+        damagePresentationByToken,
         BoardDieVisual,
         combatRuntime,
         BoardMarkerVisual,
         ScenePickupVisual,
         activeLayer,
         activeScenario,
+        visionItems,
         boardCardHandTransferRef,
         combatOccupancyFeedback,
         consumeCardStackQuickActionEvent,
@@ -2566,6 +2618,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         isScenePickupItem,
         getScenePickupRenderPlacement,
         resolveScenePickupRecipient,
+        allowPlayerTokenHoverInspection,
         isUsablePendingTurnState,
         lastFlipTimesRef,
         lastTokenTapTimesRef,
@@ -2578,6 +2631,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         rotateItem,
         rotatingTokenId,
         selectedTokenIds,
+        showHiddenTokens,
         setActiveTab,
         setSelectedTokenIds,
         setShowSettings,
@@ -2604,11 +2658,52 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
             height: Math.abs(selectionBox.current.y - selectionBox.start.y)
         }
         : null;
-    const timelineTokens = useMemo(
-        () => buildTimelineTokens(activeScenario?.items || [], { combatState: activeScenario?.canvasCombat }),
-        [activeScenario?.items, activeScenario?.canvasCombat, buildTimelineTokens]
-    );
     const activeScenarioItems = useMemo(() => activeScenario?.items || [], [activeScenario?.items]);
+    const viewerVisibleScenarioItems = useMemo(
+        () => activeScenarioItems.filter((item) => !isCanvasTokenHiddenFromViewer(
+                visionItems.find(visibleItem => visibleItem.id === item.id) || item,
+                visionItems,
+                { isPlayerView, playerName, selectedTokenIds },
+            )),
+        [activeScenarioItems, visionItems, isBoardMode, isPlayerView, playerName, selectedTokenIds]
+    );
+    const timelineTokens = useMemo(
+        () => buildTimelineTokens(viewerVisibleScenarioItems, { combatState: activeScenario?.canvasCombat }),
+        [viewerVisibleScenarioItems, activeScenario?.canvasCombat, buildTimelineTokens]
+    );
+    const previousPlayerVisionItemsRef = useRef({ scenarioId: null, items: [] });
+
+    useEffect(() => {
+        if (!isPlayerView || typeof didGainPlayerSharedVision !== 'function') return;
+
+        const scenarioId = activeScenario?.id || null;
+        const previousSnapshot = previousPlayerVisionItemsRef.current;
+        if (previousSnapshot.scenarioId !== scenarioId) {
+            previousPlayerVisionItemsRef.current = { scenarioId, items: activeScenarioItems };
+            return;
+        }
+
+        const gainedSharedVision = didGainPlayerSharedVision(
+            previousSnapshot.items,
+            activeScenarioItems,
+            playerName,
+        );
+        previousPlayerVisionItemsRef.current = { scenarioId, items: activeScenarioItems };
+
+        if (gainedSharedVision) {
+            // Una selección activa limita la niebla a ese token. Al recibir una nueva
+            // visión compartida volvemos a la perspectiva conjunta, igual que al entrar.
+            setSelectedTokenIds((currentSelection) => (
+                currentSelection.length > 0 ? [] : currentSelection
+            ));
+        }
+    }, [
+        activeScenario?.id,
+        activeScenarioItems,
+        didGainPlayerSharedVision,
+        isPlayerView,
+        playerName,
+    ]);
     const boardLights = useMemo(
         () => activeScenarioItems.filter(isBoardLightItem),
         [activeScenarioItems]
@@ -2619,15 +2714,23 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
     );
 
     useEffect(() => {
-        if (!isPlayerView || activeScenarioItems.length === 0) return;
+        if (activeScenarioItems.length === 0) return;
         setSelectedTokenIds(prev => {
             const visibleSelection = prev.filter((id) => {
-                const selectedItem = activeScenarioItems.find(item => item?.id === id);
-                return selectedItem && !isCardHiddenByContainerForPlayer(selectedItem, activeScenarioItems, true);
+                const selectedItem = visionItems.find(item => item?.id === id);
+                return selectedItem
+                    && !isCardHiddenByContainerForPlayer(selectedItem, activeScenarioItems, isPlayerView)
+                    && (
+                        !isCanvasTokenHiddenFromViewer(
+                            selectedItem,
+                            visionItems,
+                            { isPlayerView, playerName, selectedTokenIds: prev },
+                        )
+                    );
             });
             return visibleSelection.length === prev.length ? prev : visibleSelection;
         });
-    }, [activeScenarioItems, isPlayerView]);
+    }, [activeScenarioItems, visionItems, isBoardMode, isPlayerView, playerName]);
 
     const canvasRenderItemGroups = useMemo(() => {
         const livePendingTurnState = isUsablePendingTurnState(pendingTurnState) ? pendingTurnState : null;
@@ -2660,25 +2763,27 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
 
     return (
         <WorkspaceShell {...{
-            accesorios, activeBoardHandTokenId, activeCombatAnimations, activeCombatQueueEntry, activeLayer, activeScenario,
+            boardCardMenu, boardCardActionBusy, closeBoardCardMenu, openBoardCardMenu, runBoardCardAction, boardStackControls,
+            accesorios, activeBoardHandTokenId, activeCombatAnimations: presentedCombatAnimations, activeCombatQueueEntry, activeLayer, activeScenario,
             activeTab, addAreaToCanvas, addBoardDieToBoard, addBoardMarkerToBoard, addCardContainerToBoard, addCardToBoard,
             addCardToHand, addDeckToBoard, addLightToCanvas, addTokenToCanvas, adjustBoardDiceCount, animatedBoardLightIds,
             applyBackgroundGridPreset, armaduras, armas, availableCharacters, backgroundGridPresets, bleed,
             boardDecks, boardDiceExplosive, boardDicePool, boardDiceRollLog, boardLights, canUseBoardMobileTacticalMove,
             BOARD_DICE_ROLL_SIDES, BOARD_DIE_SIDES, BoardDieVisual, BoardMarkerVisual,
-            canvasRenderItemGroups, cards, clearBackgroundImage, clearBoardDicePool, closeBoardCardPreview, combatLog,
+            canvasPointers, canvasRenderItemGroups, cards, clearBackgroundImage, clearBoardDicePool, closeBoardCardPreview, combatLog,
+            visionItems,
             combatQueueDisplay, commitGridDraft, consumeMobileMoveTemplateEvent, consumeSweepTemplateEvent, containerRef, createNewScenario,
             currentBackgroundGridPresetIndex, deleteCard, deleteItem, deleteScenario, deleteToken, dragOverLibraryItemId,
             draggedLibraryItemId, draggedLibraryItemType, draggedTokenId, draggingHandCard, enrichTokenWithCharacterData, existingPlayers,
             fileInputRef, finiteGridHeight, finiteGridWidth, finiteMapHeight, finiteMapWidth, focusedTargetId,
             getBoardMobileTacticalMoveOptions, getCanvasMobileTacticalMoveOptions, getHandCardsForToken, globalActiveId, glossary, gridConfig, gridInputDrafts,
             habilidades, handDragGhostRef, handleBoardCardBackUpload, handleBoardMobileTacticalMoveCell, handleCancelAction, handleCancelMobileTacticalMove,
-            handleConfirmMobileTacticalMove,
-            handleCanvasBackgroundMouseDown, handleCardUpload, handleCombatAction, handleConfigChange, handleEndTurn, handleGridDraftChange,
+            handleConfirmMobileTacticalMove, handleSharedPointerDown, handleSharedPointerLeave, handleSharedPointerMove,
+            handleCanvasBackgroundMouseDown, handleCardUpload, handleCombatAction: handleHudCombatAction, handleConfigChange, handleEndTurn, handleGridDraftChange,
             handleGridDraftKeyDown, handleHandCardDragStart, handleImageUpload, handleMobileTacticalMoveCell, handleMouseMove, handleMouseUp,
             handleReaction, handleReorderLibraryItem, handleSelectCombatQueueIndex, handleSweepTemplateCancel, handleSweepTemplateClick, handleTokenUpload,
             handleTouchEnd, handleTouchMove, handleTouchStart, highlightText, isBoardHandHoverSuppressed, isBoardMode,
-            isDrawingWall, isMaster, isPlayerView, isRollingBoardDice, isSaving, isUsablePendingTurnState,
+            isCanvasPointerActive, isDrawingWall, isMaster, isPlayerView, isRollingBoardDice, isSaving, isUsablePendingTurnState,
             itemToDelete, lastFlipTimesRef, lastMasterHudTokenIdRef, lastSelectionTimeRef, linkCharacter, loadScenario,
             mapBounds, mapLayerBounds, mapLayerStyle, mapLayerViewBox, mapX, mapY,
             maskVersion, mobileMoveHoverCellKey, mobileMoveTouchStartRef, mode, observerIds, offset,
@@ -2687,15 +2792,18 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
             rollBoardDie, rotatingTokenId, saveCurrentScenario, scenarios, sectionTitle, selectedTokenIds,
             selectionBoxOverlayRect, setActiveLayer, setActiveScenario, setActiveTab, setDragOverLibraryItemId, setDraggedLibraryItemId,
             setDraggedLibraryItemType, setGlobalActiveScenario, setIsDrawingWall, setItemToDelete, setMobileMoveHoverCellKey, setSelectedTokenIds,
-            setShowMasterCombatHUD, setShowSettings, setSweepHoverSide, setViewMode, setZoom, shouldUseMobileTacticalMove,
-            showMasterCombatHUD, showSettings, showToast, sweepHoverSide, targetingState, timelineTokens,
+            setShowHiddenTokens, setShowMasterCombatHUD, setShowSettings, setSweepHoverSide, setViewMode, setZoom, shouldUseMobileTacticalMove,
+            showHiddenTokens, showMasterCombatHUD, showSettings, showToast, sweepHoverSide, targetingState, timelineTokens,
             toastMessage, toastSubMessage, toastType, toggleBoardDiceExplosive, toggleBoardDiceRollDie, toggleHandCardFace,
             tokenOriginalPos, tokens, triggerToast, unlinkCharacter, unstackSpecificCard, updateItem,
             uploadingCard, uploadingToken, viewMode, wallDrawingCurrent, wallDrawingStart, zoom,
-            TokenResourcesComponent, EquipmentSectionComponent,
+            TokenResourcesComponent, EquipmentSectionComponent, SharedPointerOverlay,
             isScenePickupItem,
             sceneDropPreview,
+            catalogPlacementItem,
+            cancelCatalogPlacement,
             combatRuntime,
+            itemUseSystem,
         }} />
     );
 };
@@ -2705,6 +2813,9 @@ TacticalSectionCore.propTypes = {
         id: PropTypes.oneOf(['canvas', 'board']).isRequired,
         isBoardMode: PropTypes.bool.isRequired,
         scenarioCollectionName: PropTypes.string.isRequired,
+        didGainPlayerSharedVision: PropTypes.func,
+        allowPlayerTokenHoverInspection: PropTypes.bool,
+        SharedPointerOverlay: PropTypes.elementType,
         visibilityDocName: PropTypes.string.isRequired,
         sectionTitle: PropTypes.string.isRequired,
         buildTimelineTokens: PropTypes.func.isRequired,

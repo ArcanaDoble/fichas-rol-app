@@ -2,6 +2,8 @@ import React from 'react';
 import { Footprints, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import FloatingCombatEffects from '../../../components/FloatingCombatEffects';
+import { getCanvasDieOutcomeOffset } from '../../../components/CanvasDieOutcomeEffect';
+import { canShowCanvasItemEffect, isCanvasHealingEffect, isCanvasRestorativeEffect } from '../canvasItemEffects';
 import { getBoardLightFlickerStyle, getBoardLightVisualProfile } from '../../../utils/boardLighting';
 import {
     getCombatRenderPlacement, getGridCellWorldRect,
@@ -9,15 +11,30 @@ import {
     isCombatTokenItem,
 } from '../legacyCombatRules';
 import { WORLD_SIZE, calculateShadowPoints } from '../spatial';
+import {
+    getCanvasSmokePerspective,
+    canPlayerAccessCanvasToken,
+    getPlayerCanvasVisionTokens,
+    getCanvasRenderItemsForViewer,
+    isCanvasTokenHiddenFromViewer,
+} from '../tokenVisibilityAccess';
+import AreaPlacementOverlay from './AreaPlacementOverlay';
+import SmokeVisionMask from './SmokeVisionMask';
+import SmokeOcclusion from './SmokeOcclusion';
+import { warmFogRenderer } from './FogShaderEffect';
+import { warmSmokePortraits } from '../smokePortraitPreload';
 
 /** Visual surface for map layers, tactical overlays and scene items. */
 export const CanvasViewport = ({
+    SharedPointerOverlay,
     activeCombatAnimations,
     activeScenario,
+    visionItems,
     animatedBoardLightIds,
     bleed,
     boardLights,
     canUseBoardMobileTacticalMove,
+    canvasPointers = [],
     canvasRenderItemGroups,
     consumeMobileMoveTemplateEvent,
     consumeSweepTemplateEvent,
@@ -34,6 +51,9 @@ export const CanvasViewport = ({
     handleBoardMobileTacticalMoveCell,
     handleCancelMobileTacticalMove,
     handleCanvasBackgroundMouseDown,
+    handleSharedPointerDown,
+    handleSharedPointerLeave,
+    handleSharedPointerMove,
     handleMobileTacticalMoveCell,
     handleMouseMove,
     handleMouseUp,
@@ -43,6 +63,8 @@ export const CanvasViewport = ({
     handleTouchMove,
     handleTouchStart,
     isDrawingWall,
+    isBoardMode,
+    isCanvasPointerActive,
     isPlayerView,
     isUsablePendingTurnState,
     lastSelectionTimeRef,
@@ -61,9 +83,11 @@ export const CanvasViewport = ({
     playerName,
     renderItemJSX,
     sceneDropPreview,
+    itemUseSystem,
     resizingTokenId,
     rotatingTokenId,
     selectedTokenIds,
+    showHiddenTokens = false,
     selectionBoxOverlayRect,
     setMobileMoveHoverCellKey,
     setSweepHoverSide,
@@ -74,15 +98,54 @@ export const CanvasViewport = ({
     wallDrawingCurrent,
     wallDrawingStart,
     zoom,
-}) => (
+}) => {
+    const sightItems = visionItems || activeScenario?.items || [];
+    const sightOrigins = isPlayerView && !isBoardMode && pendingTurnState?.tokenId
+        ? {
+            ...tokenOriginalPos,
+            [pendingTurnState.tokenId]: {
+                x: pendingTurnState.startX,
+                y: pendingTurnState.startY,
+            },
+        }
+        : tokenOriginalPos;
+    React.useEffect(() => warmFogRenderer(), []);
+    React.useEffect(() => {
+        warmSmokePortraits(activeScenario?.items || []);
+    }, [activeScenario?.items]);
+    const smokePerspective = getCanvasSmokePerspective(sightItems, {
+        isPlayerView, playerName, selectedTokenIds, showHiddenTokens,
+    });
+    const smokeBounds = { x: mapX - bleed, y: mapY - bleed,
+        width: mapBounds.width + bleed * 2, height: mapBounds.height + bleed * 2 };
+    return (
 <div
                             ref={containerRef}
                             data-tactical-viewport="true"
-                            className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing touch-none"
-                            onMouseDown={handleCanvasBackgroundMouseDown}
-                            onMouseMove={handleMouseMove}
+                            className={`absolute inset-0 w-full h-full touch-none ${(isCanvasPointerActive || itemUseSystem?.isPlacing) ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
+                            onMouseDownCapture={(event) => {
+                                if (itemUseSystem?.handlePointerDown?.(event)) return;
+                                if (!itemUseSystem?.isPlacing) handleSharedPointerDown?.(event);
+                            }}
+                            onMouseDown={(event) => {
+                                if (!itemUseSystem?.handlePointerDown?.(event)) handleCanvasBackgroundMouseDown(event);
+                            }}
+                            onMouseMove={(event) => {
+                                if (itemUseSystem?.handlePointerMove?.(event)) return;
+                                if (!handleSharedPointerMove?.(event)) handleMouseMove(event);
+                            }}
                             onMouseUp={handleMouseUp}
-                            onMouseLeave={handleMouseUp}
+                            onMouseLeave={(event) => {
+                                handleSharedPointerLeave?.();
+                                handleMouseUp(event);
+                            }}
+                            onTouchStartCapture={(event) => itemUseSystem?.handleTouchStart?.(event)}
+                            onTouchMoveCapture={(event) => itemUseSystem?.handleTouchMove?.(event)}
+                            onTouchEndCapture={(event) => itemUseSystem?.handleTouchEnd?.(event)}
+                            onTouchCancel={(event) => {
+                                itemUseSystem?.handleTouchCancel?.();
+                                handleTouchEnd(event);
+                            }}
                             onTouchStart={handleTouchStart}
                             onTouchMove={handleTouchMove}
                             onTouchEnd={handleTouchEnd}
@@ -210,6 +273,21 @@ export const CanvasViewport = ({
                                         </motion.div>
                                     )}
                                 </AnimatePresence>
+
+                                <AreaPlacementOverlay system={itemUseSystem} zoom={zoom}
+                                    source={itemUseSystem?.trajectorySource ? {
+                                        ...itemUseSystem.trajectorySource,
+                                        ...(itemUseSystem?.session?.context?.impactCommitted ? {}
+                                            : getCombatRenderPlacement(itemUseSystem.trajectorySource, activeScenario?.items || [], gridConfig)),
+                                    } : null} />
+
+                                {SharedPointerOverlay && (
+                                    <SharedPointerOverlay
+                                        pointers={canvasPointers}
+                                        now={Date.now()}
+                                        zoom={zoom}
+                                    />
+                                )}
 
                                 {!targetingState && (() => {
                                     const items = activeScenario?.items || [];
@@ -553,7 +631,7 @@ export const CanvasViewport = ({
                                                 style={{
                                                     opacity: isPlayerView
                                                         ? 1
-                                                        : ((activeScenario?.items || []).some(s => s && selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision) ? 1 : 0.8),
+                                                        : (sightItems.some(s => s && selectedTokenIds.includes(s.id) && s.type !== 'light' && s.type !== 'wall' && s.hasVision) ? 1 : 0.8),
                                                     transition: 'opacity 0.3s ease-in-out'
                                                 }}
                                             />
@@ -598,7 +676,9 @@ export const CanvasViewport = ({
                                                     // VISTA GLOBAL JUGADOR: Renderizado Simplificado (Estilo Master)
                                                     // Las luces deben "perforar" la oscuridad ambiental si están cerca de mis tokens.
                                                     (() => {
-                                                        const myTokens = (activeScenario?.items || []).filter(t => t && t.controlledBy?.includes(playerName) && t.hasVision);
+                                                        const myTokens = !isBoardMode
+                                                            ? getPlayerCanvasVisionTokens(sightItems, playerName)
+                                                            : sightItems.filter(t => t && t.controlledBy?.includes(playerName) && t.hasVision);
 
                                                         // Si no tengo tokens, no veo nada (todo oscuro)
                                                         if (myTokens.length === 0) return null;
@@ -612,7 +692,7 @@ export const CanvasViewport = ({
                                                             return myTokens.some(token => {
                                                                 // Copiamos lógica de interacción para render suave al arrastrar
                                                                 const isInteractingT = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
-                                                                const originalT = tokenOriginalPos[token.id];
+                                                                const originalT = sightOrigins[token.id];
                                                                 const tokenX = (isInteractingT && originalT) ? originalT.x : token.x;
                                                                 const tokenY = (isInteractingT && originalT) ? originalT.y : token.y;
 
@@ -628,7 +708,7 @@ export const CanvasViewport = ({
                                                                 {/* Renderizamos cada luz visible para que "agujeree" la oscuridad */}
                                                                 {visibleLights.map(light => {
                                                                     const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
-                                                                    const original = tokenOriginalPos[light.id];
+                                                                    const original = sightOrigins[light.id];
                                                                     const lx = (isInteracting && original) ? original.x : light.x;
                                                                     const ly = (isInteracting && original) ? original.y : light.y;
                                                                     const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
@@ -652,7 +732,7 @@ export const CanvasViewport = ({
                                                     (() => {
                                                         // Obtener todos los tokens seleccionados con visión
                                                         const selectedVisionTokens = observerIds.length > 0
-                                                            ? (activeScenario?.items || []).filter(t => t && observerIds.includes(t.id))
+                                                            ? sightItems.filter(t => t && observerIds.includes(t.id))
                                                             : [];
 
                                                         const allLights = boardLights;
@@ -663,7 +743,7 @@ export const CanvasViewport = ({
                                                                 <g>
                                                                     {allLights.map(light => {
                                                                         const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
-                                                                        const original = tokenOriginalPos[light.id];
+                                                                        const original = sightOrigins[light.id];
                                                                         const lx = (isInteracting && original) ? original.x : light.x;
                                                                         const ly = (isInteracting && original) ? original.y : light.y;
                                                                         const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
@@ -687,7 +767,7 @@ export const CanvasViewport = ({
                                                         // Calcular posiciones (usando original durante arrastre)
                                                         const tokenPositions = selectedVisionTokens.map(token => {
                                                             const isInteractingToken = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
-                                                            const originalToken = tokenOriginalPos[token.id];
+                                                            const originalToken = sightOrigins[token.id];
                                                             return {
                                                                 token,
                                                                 x: (isInteractingToken && originalToken) ? originalToken.x : token.x,
@@ -726,7 +806,7 @@ export const CanvasViewport = ({
                                                                 <g mask={`url(#multi-vision-mask-ambient-${token.id})`}>
                                                                     {visibleLights.map(light => {
                                                                         const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
-                                                                        const original = tokenOriginalPos[light.id];
+                                                                        const original = sightOrigins[light.id];
                                                                         const lx = (isInteracting && original) ? original.x : light.x;
                                                                         const ly = (isInteracting && original) ? original.y : light.y;
                                                                         const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
@@ -749,13 +829,21 @@ export const CanvasViewport = ({
                                                 )}
 
                                                 {/* VISIÓN EN LA OSCURIDAD: Substraemos las áreas que el observador ve en la oscuridad */}
-                                                {(activeScenario?.items || []).filter(i => {
+                                                {sightItems.filter(i => {
                                                     if (!i) return false;
                                                     const isToken = i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision;
                                                     if (!isToken) return false;
 
                                                     // Restricción de Jugador: Solo ve su propia visión en oscuridad
-                                                    const isControlled = !isPlayerView || i.controlledBy?.includes(playerName);
+                                                    const isControlled = isPlayerView
+                                                        ? (!isBoardMode
+                                                            ? canPlayerAccessCanvasToken(i, sightItems, playerName)
+                                                            : i.controlledBy?.includes(playerName))
+                                                        : (!isCanvasTokenHiddenFromViewer(
+                                                            i,
+                                                            sightItems,
+                                                            { isPlayerView, playerName, selectedTokenIds },
+                                                        ));
                                                     if (!isControlled) return false;
 
                                                     // Si hay algo seleccionado (Focus Mode), solo mostramos esa visión
@@ -765,7 +853,7 @@ export const CanvasViewport = ({
                                                     return true;
                                                 }).map(token => {
                                                     const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
-                                                    const original = tokenOriginalPos[token.id];
+                                                    const original = sightOrigins[token.id];
                                                     const tx = (isInteracting && original) ? original.x : token.x;
                                                     const ty = (isInteracting && original) ? original.y : token.y;
 
@@ -797,10 +885,22 @@ export const CanvasViewport = ({
                                                 {/* Visión de los Tokens: Filtrado por selección para el Master */}
                                                 {(() => {
                                                     // Determinar qué tokens otorgan visión al rol actual
-                                                    const perspectiveTokens = (activeScenario?.items || []).filter(i =>
-                                                        i && i.hasVision && i.type !== 'light' && i.type !== 'wall' &&
-                                                        (isPlayerView ? i.controlledBy?.includes(playerName) : true)
-                                                    );
+                                                    const perspectiveTokens = !isBoardMode
+                                                        ? (isPlayerView
+                                                            ? getPlayerCanvasVisionTokens(sightItems, playerName)
+                                                            : sightItems.filter(i => (
+                                                                i
+                                                                && i.hasVision
+                                                                && !isCanvasTokenHiddenFromViewer(
+                                                                    i,
+                                                                    sightItems,
+                                                                    { isPlayerView, playerName, selectedTokenIds },
+                                                                )
+                                                            )))
+                                                        : sightItems.filter(i =>
+                                                            i && i.hasVision && i.type !== 'light' && i.type !== 'wall' &&
+                                                            (isPlayerView ? i.controlledBy?.includes(playerName) : true)
+                                                        );
 
                                                     // ¿Hay una selección que deba forzar el enfoque (perspective focus)?
                                                     const selectedVisionTokens = perspectiveTokens.filter(i =>
@@ -814,7 +914,7 @@ export const CanvasViewport = ({
                                                         <AnimatePresence>
                                                             {visibleTokens.map(token => {
                                                                 const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
-                                                                const original = tokenOriginalPos[token.id];
+                                                                const original = sightOrigins[token.id];
                                                                 const tx = (isInteracting && original) ? original.x : token.x;
                                                                 const ty = (isInteracting && original) ? original.y : token.y;
 
@@ -843,9 +943,11 @@ export const CanvasViewport = ({
                                                 {/* Para jugadores: recortamos las luces al área de visión combinada de sus tokens */}
                                                 {isPlayerView && (() => {
                                                     // Calcular los tokens con visión que el jugador está usando actualmente
-                                                    const allMyTokens = (activeScenario?.items || []).filter(t =>
-                                                        t && t.controlledBy?.includes(playerName) && t.hasVision
-                                                    );
+                                                    const allMyTokens = !isBoardMode
+                                                        ? getPlayerCanvasVisionTokens(sightItems, playerName)
+                                                        : sightItems.filter(t =>
+                                                            t && t.controlledBy?.includes(playerName) && t.hasVision
+                                                        );
 
                                                     // Priorizar selección si existe
                                                     const selectedMyTokens = allMyTokens.filter(t => selectedTokenIds.includes(t.id));
@@ -860,7 +962,7 @@ export const CanvasViewport = ({
                                                         return myVisionTokens.some(token => {
                                                             if (!token) return false;
                                                             const isInteractingT = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
-                                                            const originalT = tokenOriginalPos[token.id];
+                                                            const originalT = sightOrigins[token.id];
                                                             const tokenX = (isInteractingT && originalT) ? originalT.x : token.x;
                                                             const tokenY = (isInteractingT && originalT) ? originalT.y : token.y;
                                                             const dist = Math.hypot(tokenX - i.x, tokenY - i.y);
@@ -883,7 +985,7 @@ export const CanvasViewport = ({
                                                                     <AnimatePresence>
                                                                         {myVisionTokens.map(token => {
                                                                             const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
-                                                                            const original = tokenOriginalPos[token.id];
+                                                                            const original = sightOrigins[token.id];
                                                                             const tx = (isInteracting && original) ? original.x : token.x;
                                                                             const ty = (isInteracting && original) ? original.y : token.y;
                                                                             return (
@@ -913,7 +1015,7 @@ export const CanvasViewport = ({
                                                                 <AnimatePresence>
                                                                     {visibleLights.map(light => {
                                                                         const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
-                                                                        const original = tokenOriginalPos[light.id];
+                                                                        const original = sightOrigins[light.id];
                                                                         const lx = (isInteracting && original) ? original.x : light.x;
                                                                         const ly = (isInteracting && original) ? original.y : light.y;
                                                                         const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
@@ -945,7 +1047,7 @@ export const CanvasViewport = ({
                                                 {!isPlayerView && (() => {
                                                     // Obtener todos los tokens seleccionados con visión
                                                     const selectedVisionTokens = observerIds.length > 0
-                                                        ? (activeScenario?.items || []).filter(t => t && observerIds.includes(t.id))
+                                                        ? sightItems.filter(t => t && observerIds.includes(t.id))
                                                         : [];
 
                                                     const allLights = boardLights;
@@ -956,7 +1058,7 @@ export const CanvasViewport = ({
                                                             <g>
                                                                 {allLights.map(light => {
                                                                     const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
-                                                                    const original = tokenOriginalPos[light.id];
+                                                                    const original = sightOrigins[light.id];
                                                                     const lx = (isInteracting && original) ? original.x : light.x;
                                                                     const ly = (isInteracting && original) ? original.y : light.y;
                                                                     const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
@@ -979,7 +1081,7 @@ export const CanvasViewport = ({
                                                     // Con tokens seleccionados: mostrar UNIÓN de sus visiones
                                                     const tokenPositions = selectedVisionTokens.map(token => {
                                                         const isInteractingToken = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
-                                                        const originalToken = tokenOriginalPos[token.id];
+                                                        const originalToken = sightOrigins[token.id];
                                                         return {
                                                             token,
                                                             x: (isInteractingToken && originalToken) ? originalToken.x : token.x,
@@ -1016,7 +1118,7 @@ export const CanvasViewport = ({
                                                             <g mask={`url(#multi-vision-mask-lights-${token.id})`}>
                                                                 {visibleLights.map(light => {
                                                                     const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
-                                                                    const original = tokenOriginalPos[light.id];
+                                                                    const original = sightOrigins[light.id];
                                                                     const lx = (isInteracting && original) ? original.x : light.x;
                                                                     const ly = (isInteracting && original) ? original.y : light.y;
                                                                     const lRadius = (light.type === 'light' ? light.radius : light.lightRadius) || 200;
@@ -1037,6 +1139,7 @@ export const CanvasViewport = ({
                                                     ));
                                                 })()}
 
+                                                <SmokeVisionMask perspective={smokePerspective} bounds={smokeBounds} />
                                             </mask>
 
                                             {/* Gradientes de Luz */}
@@ -1055,7 +1158,7 @@ export const CanvasViewport = ({
                                             })}
 
                                             {/* Gradientes de Visión */}
-                                            {(activeScenario?.items || []).filter(i => i && i.type !== 'light' && i.type !== 'wall' && i.hasVision).map(token => (
+                                            {sightItems.filter(i => i && i.type !== 'light' && i.type !== 'wall' && i.hasVision).map(token => (
                                                 <radialGradient id={`grad-vision-${token.id}`} key={`grad-vision-${token.id}`}>
                                                     <stop offset="0%" stopColor="black" stopOpacity="1" />
                                                     <stop offset="85%" stopColor="black" stopOpacity="0.8" />
@@ -1064,7 +1167,7 @@ export const CanvasViewport = ({
                                             ))}
 
                                             {/* Gradientes de Visión en la Oscuridad */}
-                                            {(activeScenario?.items || []).filter(i => i && i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision).map(token => (
+                                            {sightItems.filter(i => i && i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision).map(token => (
                                                 <radialGradient id={`grad-darkvision-${token.id}`} key={`grad-darkvision-${token.id}`}>
                                                     <stop offset="0%" stopColor="black" stopOpacity="1" />
                                                     <stop offset="80%" stopColor="black" stopOpacity="0.4" />
@@ -1073,12 +1176,12 @@ export const CanvasViewport = ({
                                             ))}
 
                                             {/* Máscaras de Sombra por Luz y por Token (Visión y Visión en Oscuridad) */}
-                                            {(activeScenario?.items || []).filter(i => i && (i.type === 'light' || i.emitsLight || ((i.hasVision || i.hasDarkvision) && i.type !== 'wall'))).map(source => {
+                                            {sightItems.filter(i => i && (i.type === 'light' || i.emitsLight || ((i.hasVision || i.hasDarkvision) && i.type !== 'wall'))).map(source => {
                                                 const isSourceInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(source.id);
-                                                const originalSource = tokenOriginalPos[source.id];
+                                                const originalSource = sightOrigins[source.id];
                                                 const lx = ((isSourceInteracting && originalSource) ? originalSource.x : source.x) + source.width / 2;
                                                 const ly = ((isSourceInteracting && originalSource) ? originalSource.y : source.y) + source.height / 2;
-                                                const walls = (activeScenario?.items || []).filter(i =>
+                                                const walls = sightItems.filter(i =>
                                                     i && i.type === 'wall' &&
                                                     !(i.wallType === 'door' && i.isOpen) &&
                                                     i.wallType !== 'window'
@@ -1086,10 +1189,12 @@ export const CanvasViewport = ({
 
                                                 return (
                                                     <mask id={`shadow-mask-${source.id}-${maskVersion}`} key={`shadow-mask-${source.id}-${maskVersion}`}>
-                                                        <rect x={mapX - bleed} y={mapY - bleed} width={mapBounds.width + bleed * 2} height={mapBounds.height + bleed * 2} fill="white" />
+                                                        <rect {...smokeBounds} fill="white" />
+                                                        <SmokeOcclusion source={source} x={lx} y={ly} items={sightItems}
+                                                            perspective={smokePerspective} bounds={smokeBounds} maskId={`smoke-shadow-${source.id}-${maskVersion}`} />
                                                         {walls.map(wall => {
                                                             const isWallInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(wall.id);
-                                                            const originalWall = tokenOriginalPos[wall.id];
+                                                            const originalWall = sightOrigins[wall.id];
 
                                                             let x1 = wall.x1, y1 = wall.y1, x2 = wall.x2, y2 = wall.y2;
                                                             if (isWallInteracting && originalWall) {
@@ -1137,7 +1242,10 @@ export const CanvasViewport = ({
                                             <defs>
                                                 <mask id="player-global-perspective-mask">
                                                     <rect x={mapLayerBounds.x} y={mapLayerBounds.y} width={mapLayerBounds.width} height={mapLayerBounds.height} fill="black" />
-                                                    {(activeScenario?.items || []).filter(t => t && t.controlledBy?.includes(playerName) && t.hasVision).map(token => (
+                                                    {(!isBoardMode
+                                                        ? getPlayerCanvasVisionTokens(sightItems, playerName)
+                                                        : sightItems.filter(t => t && t.controlledBy?.includes(playerName) && t.hasVision)
+                                                    ).map(token => (
                                                         <g key={`global-p-mask-${token.id}`} mask={`url(#shadow-mask-${token.id}-${maskVersion})`}>
                                                             <rect x={mapLayerBounds.x} y={mapLayerBounds.y} width={mapLayerBounds.width} height={mapLayerBounds.height} fill="white" />
                                                         </g>
@@ -1148,9 +1256,11 @@ export const CanvasViewport = ({
                                         <g mask={(isPlayerView && selectedTokenIds.length === 0) ? "url(#player-global-perspective-mask)" : undefined}>
                                             {/* Para jugadores: recortamos los glows a la visión */}
                                             {isPlayerView && (() => {
-                                                const allMyTokens = (activeScenario?.items || []).filter(t =>
-                                                    t && t.controlledBy?.includes(playerName) && t.hasVision
-                                                );
+                                                const allMyTokens = !isBoardMode
+                                                    ? getPlayerCanvasVisionTokens(sightItems, playerName)
+                                                    : sightItems.filter(t =>
+                                                        t && t.controlledBy?.includes(playerName) && t.hasVision
+                                                    );
 
                                                 // Priorizar selección si existe
                                                 const selectedMyTokens = allMyTokens.filter(t => selectedTokenIds.includes(t.id));
@@ -1165,7 +1275,7 @@ export const CanvasViewport = ({
                                                     return myVisionTokens.some(token => {
                                                         if (!token) return false;
                                                         const isInteractingT = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
-                                                        const originalT = tokenOriginalPos[token.id];
+                                                        const originalT = sightOrigins[token.id];
                                                         const tokenX = (isInteractingT && originalT) ? originalT.x : token.x;
                                                         const tokenY = (isInteractingT && originalT) ? originalT.y : token.y;
                                                         const dist = Math.hypot(tokenX - i.x, tokenY - i.y);
@@ -1181,7 +1291,7 @@ export const CanvasViewport = ({
                                                                 <rect x={mapLayerBounds.x} y={mapLayerBounds.y} width={mapLayerBounds.width} height={mapLayerBounds.height} fill="black" />
                                                                 {myVisionTokens.map(token => {
                                                                     const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
-                                                                    const original = tokenOriginalPos[token.id];
+                                                                    const original = sightOrigins[token.id];
                                                                     const tx = (isInteracting && original) ? original.x : token.x;
                                                                     const ty = (isInteracting && original) ? original.y : token.y;
                                                                     return (
@@ -1204,7 +1314,7 @@ export const CanvasViewport = ({
                                                             <AnimatePresence>
                                                                 {visibleLights.map(light => {
                                                                     const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
-                                                                    const original = tokenOriginalPos[light.id];
+                                                                    const original = sightOrigins[light.id];
                                                                     const lx = (isInteracting && original) ? original.x : light.x;
                                                                     const ly = (isInteracting && original) ? original.y : light.y;
                                                                     const profile = getBoardLightVisualProfile(light);
@@ -1240,7 +1350,7 @@ export const CanvasViewport = ({
                                             {!isPlayerView && (() => {
                                                 // Obtener todos los tokens seleccionados con visión
                                                 const selectedVisionTokens = observerIds.length > 0
-                                                    ? activeScenario?.items?.filter(t => observerIds.includes(t.id)) || []
+                                                    ? sightItems.filter(t => observerIds.includes(t.id)) || []
                                                     : [];
 
                                                 const allLights = boardLights;
@@ -1249,7 +1359,7 @@ export const CanvasViewport = ({
                                                     // Sin token seleccionado: master ve todos los glows sin recorte
                                                     return allLights.map(light => {
                                                         const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
-                                                        const original = tokenOriginalPos[light.id];
+                                                        const original = sightOrigins[light.id];
                                                         const lx = (isInteracting && original) ? original.x : light.x;
                                                         const ly = (isInteracting && original) ? original.y : light.y;
                                                         const profile = getBoardLightVisualProfile(light);
@@ -1274,7 +1384,7 @@ export const CanvasViewport = ({
                                                 // Con tokens seleccionados: mostrar UNIÓN de sus visiones
                                                 const tokenPositions = selectedVisionTokens.map(token => {
                                                     const isInteractingToken = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
-                                                    const originalToken = tokenOriginalPos[token.id];
+                                                    const originalToken = sightOrigins[token.id];
                                                     return {
                                                         token,
                                                         x: (isInteractingToken && originalToken) ? originalToken.x : token.x,
@@ -1311,7 +1421,7 @@ export const CanvasViewport = ({
                                                         <g mask={`url(#multi-vision-mask-glows-${token.id})`}>
                                                             {visibleLights.map(light => {
                                                                 const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(light.id);
-                                                                const original = tokenOriginalPos[light.id];
+                                                                const original = sightOrigins[light.id];
                                                                 const lx = (isInteracting && original) ? original.x : light.x;
                                                                 const ly = (isInteracting && original) ? original.y : light.y;
                                                                 const profile = getBoardLightVisualProfile(light);
@@ -1338,12 +1448,12 @@ export const CanvasViewport = ({
 
 
                                             {/* DARKVISION VISUAL TINT (Efecto sutil para diferenciar visión racial) */}
-                                            {(activeScenario?.items || []).filter(i => i && i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision).map(token => {
+                                            {sightItems.filter(i => i && i.type !== 'light' && i.type !== 'wall' && i.hasDarkvision).map(token => {
                                                 // Solo mostramos el tinte si está seleccionado (perspectiva activa)
                                                 if (selectedTokenIds.length > 0 && !selectedTokenIds.includes(token.id)) return null;
 
                                                 const isInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(token.id);
-                                                const original = tokenOriginalPos[token.id];
+                                                const original = sightOrigins[token.id];
                                                 const tx = (isInteracting && original) ? original.x : token.x;
                                                 const ty = (isInteracting && original) ? original.y : token.y;
 
@@ -1374,7 +1484,7 @@ export const CanvasViewport = ({
                                     {/* --- LNEAS TCTICAS DE ATAQUE --- */}
                                     <svg className="absolute inset-0 w-full h-full overflow-visible">
                                         {(() => {
-                                            const items = activeScenario?.items || [];
+                                            const items = sightItems;
                                             const attackPairs = [];
 
                                             // 1. Objetivo enfocado actualmente (Targeting Phase)
@@ -1408,7 +1518,10 @@ export const CanvasViewport = ({
                                                 }
                                             }
 
-                                            return attackPairs.map((pair, idx) => {
+                                            return attackPairs.filter(({ attacker, target }) => (
+                                                !isCanvasTokenHiddenFromViewer(attacker, items, { isPlayerView, playerName, selectedTokenIds })
+                                                && !isCanvasTokenHiddenFromViewer(target, items, { isPlayerView, playerName, selectedTokenIds })
+                                            )).map((pair, idx) => {
                                                 const { attacker, target, isFocused } = pair;
                                                 const attackerPlacement = !attacker.type || (attacker.type !== 'light' && attacker.type !== 'wall' && attacker.type !== 'geometry')
                                                     ? getCombatRenderPlacement(attacker, items, gridConfig)
@@ -1474,7 +1587,14 @@ export const CanvasViewport = ({
                                             });
                                         })()}
                                     </svg>
-                                    {(activeScenario?.items || []).filter(i => i && i.type !== 'light' && i.type !== 'wall').map(item => {
+                                    {sightItems.filter(i => (
+                                        i
+                                        && i.type !== 'light'
+                                        && i.type !== 'wall'
+                                        && (
+                                            !isCanvasTokenHiddenFromViewer(i, sightItems, { isPlayerView, playerName, selectedTokenIds })
+                                        )
+                                    )).map(item => {
                                         // Caso A: Estamos en fase de elegir objetivo (targeting)
                                         const isFocused = focusedTargetId === item.id;
                                         // Caso B: El objetivo ya está fijado en una acción pendiente de este turno
@@ -1483,7 +1603,7 @@ export const CanvasViewport = ({
                                         if (!isFocused && !isPendingTarget) return null;
 
                                         const itemPlacement = isCombatTokenItem(item)
-                                            ? getCombatRenderPlacement(item, activeScenario?.items || [], gridConfig)
+                                            ? getCombatRenderPlacement(item, sightItems, gridConfig)
                                             : { x: item.x, y: item.y };
 
                                         return (
@@ -1536,11 +1656,24 @@ export const CanvasViewport = ({
 
                                     {/* --- FLOATING COMBAT EFFECTS --- */}
                                     {activeCombatAnimations.map(({ id, effect }) => {
-                                        const items = activeScenario?.items || [];
-                                        const targetToken = items.find(i => i.id === effect.targetId);
-                                        const attackerToken = items.find(i => i.id === effect.attackerId);
+                                        const items = sightItems;
+                                        const healing = isCanvasHealingEffect(effect);
+                                        const restorative = isCanvasRestorativeEffect(effect);
+                                        const targetToken = items.find(i => (
+                                            i.id === (effect.targetId || (healing ? effect.actorId : null))
+                                            && (restorative ? canShowCanvasItemEffect({ token: i, items, gridConfig,
+                                                interaction: { active: Boolean(draggedTokenId || rotatingTokenId || resizingTokenId), originalPositions: tokenOriginalPos },
+                                                viewer: { isPlayerView, playerName, selectedTokenIds, showHiddenTokens } })
+                                                : (!isCanvasTokenHiddenFromViewer(i, items, { isPlayerView, playerName, selectedTokenIds })))
+                                        ));
+                                        const attackerToken = items.find(i => (
+                                            i.id === (effect.attackerId || (restorative ? effect.actorId : null))
+                                            && (restorative ? canShowCanvasItemEffect({ token: i, items, gridConfig, viewer: { isPlayerView, playerName, selectedTokenIds, showHiddenTokens } })
+                                                : (!isCanvasTokenHiddenFromViewer(i, items, { isPlayerView, playerName, selectedTokenIds })))
+                                        ));
                                         const targetPlacement = targetToken && isCombatTokenItem(targetToken)
-                                            ? getCombatRenderPlacement(targetToken, items, gridConfig)
+                                            ? getCombatRenderPlacement(targetToken, healing ? getCanvasRenderItemsForViewer(items,
+                                                { isPlayerView, playerName, selectedTokenIds, showHiddenTokens }) : items, gridConfig)
                                             : targetToken
                                                 ? { x: targetToken.x, y: targetToken.y }
                                                 : null;
@@ -1549,21 +1682,35 @@ export const CanvasViewport = ({
                                             : attackerToken
                                                 ? { x: attackerToken.x, y: attackerToken.y }
                                                 : null;
+                                        const viewport = healing ? containerRef.current?.getBoundingClientRect() : null;
+                                        const outcomeOffset = healing && targetToken && targetPlacement && viewport
+                                            ? getCanvasDieOutcomeOffset({
+                                                tokenRect: { left: viewport.width / 2 + offset.x + (targetPlacement.x - WORLD_SIZE / 2) * zoom,
+                                                    top: viewport.height / 2 + offset.y + (targetPlacement.y - WORLD_SIZE / 2) * zoom,
+                                                    width: targetToken.width * zoom, height: targetToken.height * zoom },
+                                                viewport, zoom,
+                                            }) : undefined;
                                         return (
                                             <FloatingCombatEffects
                                                 key={id}
                                                 effect={effect}
+                                                zoom={zoom}
+                                                outcomeOffset={outcomeOffset}
                                                 targetPos={targetToken && targetPlacement ? {
                                                     x: targetPlacement.x,
                                                     y: targetPlacement.y,
                                                     width: targetToken.width,
-                                                    height: targetToken.height
+                                                    height: targetToken.height,
+                                                    img: targetToken.img, isCircular: Boolean(targetToken.isCircular), rotation: targetToken.rotation || 0,
+                                                    cellSize: Math.min(Number(gridConfig.cellWidth) || 50, Number(gridConfig.cellHeight) || 50),
                                                 } : null}
                                                 attackerPos={attackerToken && attackerPlacement ? {
                                                     x: attackerPlacement.x,
                                                     y: attackerPlacement.y,
                                                     width: attackerToken.width,
-                                                    height: attackerToken.height
+                                                    height: attackerToken.height,
+                                                    img: attackerToken.img, isCircular: Boolean(attackerToken.isCircular), rotation: attackerToken.rotation || 0,
+                                                    cellSize: Math.min(Number(gridConfig.cellWidth) || 50, Number(gridConfig.cellHeight) || 50),
                                                 } : null}
                                             />
                                         );
@@ -1572,3 +1719,4 @@ export const CanvasViewport = ({
                             </div>
                         </div>
 );
+}

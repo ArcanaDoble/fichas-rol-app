@@ -5,8 +5,10 @@ import { createPortal } from 'react-dom';
 import { getCombatTraitIds, getSpeedConsumption, hasCombatTrait, normalizeCombatTraitId } from '../utils/combatSystem';
 
 const DICE_TYPES = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20'];
+export const CANVAS_ATTACK_MODIFIER_TRAITS = ['critico', 'perforante', 'venenosa', 'sangrado'];
 const formatTraitLabel = (trait = '') => {
     const normalized = trait.toString().trim().toLowerCase();
+    if (normalized === 'critico' || normalized === 'crítico') return 'Crítico';
     if (normalized === 'derribado' || normalized === 'derribar' || normalized === 'derribo') return 'Derribo';
     if (normalized === 'conmocionante') return 'Conmocionante';
     if (normalized === 'fluida') return 'Fluida';
@@ -40,6 +42,7 @@ const AVAILABLE_TRAITS = [
     { id: 'elusion', label: 'Elusión', icon: Wind, color: 'text-cyan-300', border: 'border-cyan-400/50', bg: 'bg-cyan-900/25' },
     { id: 'fluida', label: 'Fluida', icon: Wind, color: 'text-sky-300', border: 'border-sky-400/50', bg: 'bg-sky-900/30' },
     { id: 'sin guardia', label: 'Sin guardia', icon: Shield, color: 'text-rose-300', border: 'border-rose-500/50', bg: 'bg-rose-900/30' },
+    { id: 'venenosa', label: 'Venenosa', icon: Droplet, color: 'text-emerald-400', border: 'border-emerald-500/50', bg: 'bg-emerald-900/30' },
     // Más rasgos se pueden añadir aquí fácilmente
 ];
 
@@ -71,15 +74,19 @@ const CombatModifiersPanel = ({
     isExpanded,
     onToggleExpand,
     currentWeapon = null,
+    allowedTraitIds = null,
     disabledTraitIds = [],
     disabledTraitReasons = {}
 }) => {
     const [isTraitPickerOpen, setIsTraitPickerOpen] = useState(false);
 
-    const quickTraits = useMemo(
-        () => AVAILABLE_TRAITS.slice(0, QUICK_TRAIT_COUNT),
-        []
-    );
+    const allowedTraits = useMemo(() => allowedTraitIds
+        ? new Set(allowedTraitIds.map(normalizeCombatTraitId))
+        : null, [allowedTraitIds]);
+    const availableTraits = useMemo(() => AVAILABLE_TRAITS.filter(trait => (
+        !allowedTraits || allowedTraits.has(normalizeCombatTraitId(trait.id))
+    )), [allowedTraits]);
+    const quickTraits = useMemo(() => availableTraits.slice(0, allowedTraits ? allowedTraits.length : QUICK_TRAIT_COUNT), [availableTraits, allowedTraits]);
 
     const quickTraitIds = useMemo(
         () => quickTraits.map((trait) => trait.id),
@@ -125,14 +132,16 @@ const CombatModifiersPanel = ({
     }, [isExpanded]);
 
     useEffect(() => {
-        const allowedActiveTraits = modifiers.activeTraits.filter((traitId) => !disabledTraitMeta[traitId]);
+        const allowedActiveTraits = modifiers.activeTraits.filter((traitId) => (
+            !disabledTraitMeta[traitId] && (!allowedTraits || allowedTraits.has(normalizeCombatTraitId(traitId)))
+        ));
         if (allowedActiveTraits.length === modifiers.activeTraits.length) return;
 
         onChange({
             ...modifiers,
             activeTraits: allowedActiveTraits
         });
-    }, [disabledTraitMeta, modifiers, onChange]);
+    }, [disabledTraitMeta, allowedTraits, modifiers, onChange]);
 
     useEffect(() => {
         if (!isTraitPickerOpen) return undefined;
@@ -172,7 +181,7 @@ const CombatModifiersPanel = ({
     };
 
     const handleToggleTrait = (traitId) => {
-        if (disabledTraitMeta[traitId]) return;
+        if (disabledTraitMeta[traitId] || (allowedTraits && !allowedTraits.has(normalizeCombatTraitId(traitId)))) return;
 
         const isCurrentlyActive = modifiers.activeTraits.includes(traitId);
         let newTraits = [...modifiers.activeTraits];
@@ -202,6 +211,7 @@ const CombatModifiersPanel = ({
         ? createPortal(
             <AnimatePresence>
                 <motion.button
+                    key="trait-picker-backdrop"
                     type="button"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -210,7 +220,7 @@ const CombatModifiersPanel = ({
                     className="fixed inset-0 z-[300] bg-black/75 backdrop-blur-sm"
                 />
 
-                <div className="fixed inset-0 z-[301] flex items-end justify-center p-2 sm:items-center sm:p-4 pointer-events-none">
+                <div key="trait-picker-content" className="fixed inset-0 z-[301] flex items-end justify-center p-2 sm:items-center sm:p-4 pointer-events-none">
                     <motion.div
                         initial={{ opacity: 0, y: 24, scale: 0.97 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -236,7 +246,7 @@ const CombatModifiersPanel = ({
 
                         <div className="p-4 sm:p-5 space-y-4 max-h-[calc(78dvh-4.5rem)] overflow-y-auto custom-scrollbar sm:max-h-[calc(70vh-4.5rem)]">
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                {AVAILABLE_TRAITS.map((trait) => {
+                                {availableTraits.map((trait) => {
                                     const isActive = modifiers.activeTraits.includes(trait.id);
                                     const TraitIcon = trait.icon;
                                     const disabledReason = disabledTraitMeta[trait.id];
@@ -247,6 +257,7 @@ const CombatModifiersPanel = ({
                                             key={`picker-${trait.id}`}
                                             onClick={() => handleToggleTrait(trait.id)}
                                             disabled={isDisabled}
+                                            aria-pressed={isActive}
                                             title={disabledReason || trait.label}
                                             className={`rounded-xl border p-3 min-h-[6.25rem] flex flex-col items-center justify-center text-center gap-2 transition-all duration-200 ${isActive
                                                 ? `${trait.border} ${trait.bg} ${trait.color} shadow-[0_0_16px_rgba(200,170,110,0.18)]`
@@ -395,6 +406,7 @@ const CombatModifiersPanel = ({
                                                     key={trait.id}
                                                     onClick={() => handleToggleTrait(trait.id)}
                                                     disabled={isDisabled}
+                                                    aria-pressed={isActive}
                                                     title={disabledReason || trait.label}
                                                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-300 border ${isActive
                                                         ? `${trait.border} ${trait.bg} ${trait.color} shadow-[0_0_10px_rgba(250,204,21,0.2)]`
@@ -409,7 +421,7 @@ const CombatModifiersPanel = ({
                                             );
                                         })}
 
-                                        <button
+                                        {availableTraits.length > quickTraits.length && <button
                                             onClick={() => setIsTraitPickerOpen(true)}
                                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-300 border ${hiddenActiveTraits.length > 0
                                                 ? 'border-[#c8aa6e] bg-[#c8aa6e]/10 text-[#c8aa6e] shadow-[0_0_10px_rgba(200,170,110,0.18)]'
@@ -418,7 +430,7 @@ const CombatModifiersPanel = ({
                                         >
                                             <Plus className="w-3.5 h-3.5" />
                                             Ver más
-                                        </button>
+                                        </button>}
                                     </div>
 
                                     {hiddenActiveTraits.length > 0 && (
@@ -458,8 +470,12 @@ const CombatModifiersPanel = ({
 };
 
 // Helper utility to apply modifiers to a weapon object
-export const applyModifiersToWeapon = (weapon, customModifiers) => {
-    if (!weapon || (!Object.keys(customModifiers.extraDice).length && !customModifiers.activeTraits.length)) {
+export const applyModifiersToWeapon = (weapon, customModifiers, { allowedTraitIds = null } = {}) => {
+    if (!weapon) return weapon;
+    const allowedTraits = allowedTraitIds ? new Set(allowedTraitIds.map(normalizeCombatTraitId)) : null;
+    const activeTraits = [...new Set((customModifiers.activeTraits || []).map(normalizeCombatTraitId))]
+        .filter(traitId => traitId && (!allowedTraits || allowedTraits.has(traitId)));
+    if (!allowedTraits && !Object.keys(customModifiers.extraDice).length && !activeTraits.length) {
         return weapon;
     }
 
@@ -469,28 +485,26 @@ export const applyModifiersToWeapon = (weapon, customModifiers) => {
     // Apply Damage
     let addedDamage = [];
     Object.entries(customModifiers.extraDice).forEach(([die, count]) => {
-        const safeCount = Math.max(0, Number(count) || 0);
+        if (!DICE_TYPES.includes(die)) return;
+        const safeCount = Number.isFinite(Number(count)) ? Math.max(0, Math.floor(Number(count))) : 0;
         for (let i = 0; i < safeCount; i += 1) {
             addedDamage.push(`1${die}`);
         }
     });
 
-    if (addedDamage.length > 0) {
+    if (addedDamage.length > 0 || allowedTraits) {
         clonedWep.extraDamageString = addedDamage.join(' + ');
     }
 
     // Apply traits — preserve original type (array or string)
-    if (customModifiers.activeTraits.length > 0) {
+    if (activeTraits.length > 0 || allowedTraits) {
         const traitsField = clonedWep.rasgos ? 'rasgos' : clonedWep.traits ? 'traits' : 'rasgos';
         const original = clonedWep[traitsField];
         const nativeTraitIds = new Set(getCombatTraitIds(weapon));
-        const normalizedActiveTraitIds = customModifiers.activeTraits
-            .map((traitId) => normalizeCombatTraitId(traitId))
-            .filter(Boolean);
-        const newTraits = customModifiers.activeTraits.map((t) => formatTraitLabel(t));
-        const manualCombatTraitIds = normalizedActiveTraitIds.filter(
-            (traitId) => !nativeTraitIds.has(traitId)
-        );
+        const newTraits = activeTraits.filter(traitId => !nativeTraitIds.has(traitId)).map(formatTraitLabel);
+        // Canvas applies explicit modifiers to each participating weapon, even if
+        // another weapon already supplies the trait in the combined summary.
+        const manualCombatTraitIds = allowedTraits ? activeTraits : activeTraits.filter(traitId => !nativeTraitIds.has(traitId));
 
         if (manualCombatTraitIds.length > 0) {
             clonedWep.manualCombatTraits = manualCombatTraitIds;
@@ -502,9 +516,9 @@ export const applyModifiersToWeapon = (weapon, customModifiers) => {
             clonedWep[traitsField] = [...original, ...newTraits];
         } else {
             const originalStr = String(original || '');
-            clonedWep[traitsField] = originalStr
+            clonedWep[traitsField] = originalStr && newTraits.length
                 ? `${originalStr}, ${newTraits.join(', ')}`
-                : newTraits.join(', ');
+                : originalStr || newTraits.join(', ');
         }
     }
 

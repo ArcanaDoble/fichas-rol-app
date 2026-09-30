@@ -1,9 +1,16 @@
 import React, { useMemo } from 'react';
+import { DEFAULT_STATUS_EFFECTS } from '../utils/statusEffects';
 import { motion, AnimatePresence } from 'framer-motion';
+import CanvasDieOutcomeEffect, { CANVAS_DIE_OUTCOME_DURATION } from './CanvasDieOutcomeEffect';
+import CanvasAntidoteEffect from './CanvasAntidoteEffect';
+import { isCanvasHealingEffect, isCanvasNonHealingPotionEffect } from '../features/tactical-shared/canvasItemEffects';
+import CanvasPotionBuffEffect from './CanvasPotionBuffEffect';
+import { getTokenSilhouetteStyle } from '../features/tactical-shared/tokenSilhouette';
 
 const BLOCK_COLORS = {
     postura: '#34d399',
     vida: '#f87171',
+    vidaTemporal: '#dfc885',
     ingenio: '#60a5fa',
     voluntad: '#a78bfa',
     cordura: '#a78bfa',
@@ -13,13 +20,14 @@ const BLOCK_COLORS = {
 const BLOCK_LABELS = {
     postura: 'Postura',
     vida: 'Vida',
+    vidaTemporal: 'Vida temporal',
     ingenio: 'Ingenio',
     voluntad: 'Voluntad',
     cordura: 'Cordura',
     armadura: 'Armadura',
 };
 
-const BLOCK_RENDER_ORDER = ['postura', 'armadura', 'vida', 'ingenio', 'voluntad', 'cordura'];
+const BLOCK_RENDER_ORDER = ['postura', 'armadura', 'vidaTemporal', 'vida', 'ingenio', 'voluntad', 'cordura'];
 const DAMAGE_BLOCK_STAGGER_SECONDS = 1.5;
 const COMBAT_RESULT_INTRO_DELAY_SECONDS = 1.5;
 const DAMAGE_BLOCK_HORIZONTAL_OFFSET = 28;
@@ -91,7 +99,7 @@ const samePosition = (a, b) => (
     (a?.x ?? null) === (b?.x ?? null) &&
     (a?.y ?? null) === (b?.y ?? null) &&
     (a?.width ?? null) === (b?.width ?? null) &&
-    (a?.height ?? null) === (b?.height ?? null)
+    (a?.height ?? null) === (b?.height ?? null) && a?.img === b?.img && a?.isCircular === b?.isCircular && a?.rotation === b?.rotation && a?.cellSize === b?.cellSize
 );
 
 const getLostBlocks = (blocksLost) => {
@@ -104,6 +112,9 @@ const getLostBlocks = (blocksLost) => {
         return acc;
     }, []);
 };
+
+export const getCombatBlockStaggerMs = (blocksLost, resourceKey) => Math.max(0,
+    getLostBlocks(blocksLost).findIndex(block => block.tipo === resourceKey)) * DAMAGE_BLOCK_STAGGER_SECONDS * 1000;
 
 const getDamageFlyoffCount = ({ finalDamage, blocks, resistedTargetHit = false }) => {
     if (blocks.length > 0) return blocks.length;
@@ -128,6 +139,10 @@ const getStatusSequenceDelay = (lastSequenceStart = 0, hasSequence = false) => {
 
 const sortStatusEffects = (statusEffects = []) => (
     [...statusEffects]
+        .map(value => {
+            const status = typeof value === 'string' ? { id: value } : value;
+            return { ...DEFAULT_STATUS_EFFECTS[status?.id], ...status };
+        })
         .filter((statusEffect) => !NON_STATUS_COMBAT_EFFECT_IDS.has(statusEffect?.id))
         .sort((a, b) => {
             const priorityA = STATUS_EFFECT_PRIORITY[a?.id] ?? 10;
@@ -236,6 +251,8 @@ const getPushEffectColor = (pushEffect) => (
 
 export function getCombatEffectLifetimeMs(effect) {
     if (!effect) return 5500;
+    if (isCanvasNonHealingPotionEffect(effect)) return 3200;
+    if (isCanvasHealingEffect(effect)) return CANVAS_DIE_OUTCOME_DURATION;
 
     if (effect.reactionType === 'sprint') return 3500;
 
@@ -265,7 +282,7 @@ export function getCombatEffectLifetimeMs(effect) {
     );
     const attackerBlocks = getLostBlocks(
         reactionType === 'parar' && counterDamage > 0
-            ? getBlocksLostWithoutTraitEffects(blocksLost, attackerAppliedTraitEffects)
+            ? getBlocksLostWithoutTraitEffects(effect.canvasRoguelite ? effect.attackerBlocksLost : blocksLost, attackerAppliedTraitEffects)
             : null
     );
     const targetAppliedStatusEffects = sortStatusEffects(
@@ -515,7 +532,7 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
     );
     const attackerBlocks = getLostBlocks(
         reactionType === 'parar' && counterDamage > 0
-            ? getBlocksLostWithoutTraitEffects(blocksLost, attackerAppliedTraitEffects)
+            ? getBlocksLostWithoutTraitEffects(effect.canvasRoguelite ? effect.attackerBlocksLost : blocksLost, attackerAppliedTraitEffects)
             : null
     );
     const hasTargetBlocksLost = targetBlocks.length > 0;
@@ -550,6 +567,7 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
             y: position.y,
             width: position.width,
             height: position.height,
+            img: position.img, isCircular: position.isCircular, rotation: position.rotation,
             delay
         });
     };
@@ -569,6 +587,7 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
     if (reactionType === 'sprint' && targetPos) {
         const sprintMovement = Math.max(0, Number(effect.sprintMovement) || 0);
         sprints.push({
+            ...targetPos,
             id: `${effectKey}-sprint-burst`,
             x: targetPos.x,
             y: targetPos.y,
@@ -854,7 +873,7 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
 
     if ((finalDamage > 0 || hasTargetBlocksLost) && targetPos) {
         const targetDamageDelay = targetIntroDelay;
-        if (hasTargetBlocksLost) {
+        if (hasTargetBlocksLost && !effect.canvasRoguelite) {
             addHighlight('target-highlight', targetPos, targetDamageDelay);
         }
 
@@ -864,7 +883,11 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
     }
 
     if (reactionType === 'parar' && targetPos) {
-        if (counterDamage > 0) {
+        if (effect.canvasRoguelite && effect.excessChoice === 'reposition') {
+            sprints.push({ ...targetPos, id: `${effectKey}-reposition` });
+            addFlyoff('target-reposition', { x: targetPos.x + targetPos.width / 2, y: targetPos.y - 30,
+                text: '¡Reposicionamiento!', label: `Hasta ${effect.surplus} casillas · sin ataque de oportunidad`, color: '#c8aa6e', type: 'sprint' });
+        } else if (counterDamage > 0) {
             addFlyoff('target-counter', {
                 x: targetPos.x + targetPos.width / 2,
                 y: targetPos.y - 30,
@@ -928,11 +951,16 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
 
     if (counterDamage > 0 && attackerPos) {
         const counterDamageDelay = hasCounterIntro ? COMBAT_RESULT_INTRO_DELAY_SECONDS : 0;
-        if (attackerBlocks.length > 0) {
+        if (attackerBlocks.length > 0 && !effect.canvasRoguelite) {
             addHighlight('att-highlight', attackerPos, counterDamageDelay);
         }
 
-        addDamageFlyoff('att-dmg', attackerPos, counterDamage, counterDamageDelay, attackerBlocks);
+        if (effect.canvasRoguelite && attackerBlocks.length === 0) {
+            addFlyoff('att-counter-resist', { x: attackerPos.x + attackerPos.width / 2, y: attackerPos.y - 30,
+                text: '¡Resiste!', color: '#c8aa6e', type: 'info', delay: counterDamageDelay });
+        } else {
+            addDamageFlyoff('att-dmg', attackerPos, counterDamage, counterDamageDelay, attackerBlocks);
+        }
     }
 
     addTraitEffectFlyoffs('target-trait', targetPos, targetAppliedTraitEffects, targetTraitDelay);
@@ -974,6 +1002,7 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
         if (!targetPos) return;
 
         addFlyoff(`target-status-${statusEffect.id || idx}`, {
+            statusId: statusEffect.id, tokenId: effect.targetId,
             x: targetPos.x + targetPos.width / 2,
             y: targetPos.y - 40,
             text: `¡${statusEffect.label || 'Estado'}!`,
@@ -1002,6 +1031,7 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
         if (!attackerPos) return;
 
         addFlyoff(`attacker-status-${statusEffect.id || idx}`, {
+                statusId: statusEffect.id, tokenId: effect.attackerId,
                 x: attackerPos.x + attackerPos.width / 2,
                 y: attackerPos.y - 40,
                 text: `¡${statusEffect.label || 'Estado'}!`,
@@ -1021,7 +1051,7 @@ export function buildCombatEffectVisuals({ effect, targetPos, attackerPos }) {
     return { highlights, flyoffs, sprints };
 }
 
-function FloatingCombatEffectsComponent({ effect, targetPos, attackerPos }) {
+function FloatingCombatEffectsComponent({ effect, targetPos, attackerPos, zoom = 1, outcomeOffset }) {
     const visuals = useMemo(() => buildCombatEffectVisuals({ effect, targetPos, attackerPos }), [
         attackerPos?.height,
         attackerPos?.width,
@@ -1031,21 +1061,26 @@ function FloatingCombatEffectsComponent({ effect, targetPos, attackerPos }) {
         targetPos?.height,
         targetPos?.width,
         targetPos?.x,
-        targetPos?.y
+        targetPos?.y,
+        targetPos?.img, targetPos?.isCircular, targetPos?.rotation,
+        attackerPos?.img, attackerPos?.isCircular, attackerPos?.rotation,
     ]);
 
     if (!effect) return null;
+    if (effect.eventType === 'item-use' && ['haste', 'temporary-life', 'remove-bleeding'].includes(effect.effect)) return <CanvasPotionBuffEffect effect={effect} targetPos={targetPos} sourcePos={attackerPos} zoom={zoom} />;
+    if (isCanvasNonHealingPotionEffect(effect)) return <CanvasAntidoteEffect effect={effect} targetPos={targetPos} sourcePos={attackerPos} zoom={zoom} />;
+    if (isCanvasHealingEffect(effect)) return <CanvasDieOutcomeEffect effect={effect} targetPos={targetPos} zoom={zoom} outcomeOffset={outcomeOffset} />;
 
     return (
         <AnimatePresence>
             {(visuals.sprints || []).map((sprint) => (
                 <motion.div
                     key={sprint.id}
-                    initial={{ opacity: 0, scale: 0.55, x: -12 }}
+                    initial={{ opacity: 0, scale: sprint.isCircular === false ? 1 : 0.55, x: sprint.isCircular === false ? 0 : -12, rotate: sprint.rotation || 0 }}
                     animate={{
                         opacity: [0, 1, 0.9, 0],
-                        scale: [0.55, 1.05, 1.35, 1.65],
-                        x: [-12, 0, 12, 28],
+                        scale: sprint.isCircular === false ? 1 : [0.55, 1.05, 1.35, 1.65],
+                        x: sprint.isCircular === false ? 0 : [-12, 0, 12, 28],
                     }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 1.35, times: [0, 0.18, 0.62, 1], ease: 'easeOut' }}
@@ -1056,6 +1091,9 @@ function FloatingCombatEffectsComponent({ effect, targetPos, attackerPos }) {
                         width: sprint.width * 1.24,
                         height: sprint.height * 1.24,
                         boxShadow: '0 0 18px rgba(200,170,110,0.9), inset 0 0 18px rgba(200,170,110,0.45)',
+                        ...(sprint.isCircular === false ? { left: sprint.x, top: sprint.y, width: sprint.width, height: sprint.height,
+                            border: 0, borderRadius: 0, background: 'linear-gradient(110deg, #c8aa6e22, #f0d99faa, #c8aa6e22)',
+                            ...getTokenSilhouetteStyle(sprint.img, false) } : {}),
                     }}
                 >
                     {[0, 1, 2].map((index) => (
@@ -1073,10 +1111,10 @@ function FloatingCombatEffectsComponent({ effect, targetPos, attackerPos }) {
             {visuals.highlights.map((highlight) => (
                 <motion.div
                     key={highlight.id}
-                    initial={{ opacity: 0, scale: 0.8 }}
+                    initial={{ opacity: 0, scale: highlight.isCircular === false ? 1 : 0.8, rotate: highlight.rotation || 0 }}
                     animate={{
                         opacity: [0, 0.4, 0.6, 0.4, 0],
-                        scale: [0.8, 1, 1.05, 1, 0.9]
+                        scale: highlight.isCircular === false ? 1 : [0.8, 1, 1.05, 1, 0.9]
                     }}
                     exit={{ opacity: 0 }}
                     transition={{ delay: highlight.delay || 0, duration: 2.5, ease: 'easeInOut' }}
@@ -1086,7 +1124,8 @@ function FloatingCombatEffectsComponent({ effect, targetPos, attackerPos }) {
                         top: highlight.y,
                         width: highlight.width,
                         height: highlight.height,
-                        boxShadow: '0 0 40px rgba(220, 38, 38, 0.8)'
+                        boxShadow: '0 0 40px rgba(220, 38, 38, 0.8)',
+                        ...(highlight.isCircular === false ? { borderRadius: 0, filter: 'none', ...getTokenSilhouetteStyle(highlight.img, false) } : {})
                     }}
                 />
             ))}
@@ -1147,6 +1186,17 @@ function FloatingCombatEffectsComponent({ effect, targetPos, attackerPos }) {
 
 export default React.memo(FloatingCombatEffectsComponent, (prevProps, nextProps) => (
     prevProps.effect === nextProps.effect &&
+    prevProps.zoom === nextProps.zoom &&
+    prevProps.outcomeOffset?.x === nextProps.outcomeOffset?.x &&
+    prevProps.outcomeOffset?.y === nextProps.outcomeOffset?.y &&
     samePosition(prevProps.targetPos, nextProps.targetPos) &&
     samePosition(prevProps.attackerPos, nextProps.attackerPos)
 ));
+
+// Use the exact floating-result timeline for token state reveals as well.
+export function getCombatStatusRevealDelayMs(effect, tokenId, statusId) {
+    const position = { x: 0, y: 0, width: 1, height: 1 };
+    const { flyoffs } = buildCombatEffectVisuals({ effect, targetPos: position, attackerPos: position });
+    const status = flyoffs.find(entry => entry.tokenId === tokenId && entry.statusId === statusId);
+    return status ? (status.delay || 0) * 1000 : null;
+}

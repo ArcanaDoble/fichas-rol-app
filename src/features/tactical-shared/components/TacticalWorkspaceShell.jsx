@@ -2,12 +2,13 @@ import React from 'react';
 import { FiArrowLeft, FiMinus, FiMove, FiPlus } from 'react-icons/fi';
 import { BsDice6 } from 'react-icons/bs';
 import {
-    AlertTriangle, ChevronDown, ChevronUp, Circle, Eye, EyeOff, FolderOpen,
+    AlertTriangle, Circle, Cloud, Droplets, Eye, EyeOff, FolderOpen,
     Footprints, LayoutGrid, Lightbulb, Map as MapIcon, Package, PenTool, Plus, ShieldCheck,
     Square, Swords, Trash2, X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import CombatHUD from '../../../components/CombatHUD';
+import MasterCombatHUDLauncher, { MasterCombatHUDCollapse } from './MasterCombatHUDLauncher';
 import CombatReactionModal from '../../../components/CombatReactionModal';
 import { getCardDisplayImage } from '../../../utils/cardImages';
 import {
@@ -20,6 +21,7 @@ import { CardImageWithLoader } from './TacticalAssetImage';
 import { CanvasThumbnail, SaveToast, SpeedTimeline } from './TacticalFeedback';
 import { CanvasSidebar } from './TacticalSidebar';
 import { CanvasViewport } from './TacticalViewport';
+import { AreaPlacementControls } from './AreaPlacementOverlay';
 import { canControlToken, isCanvasCombatRoundActive } from '../tokenControlUtils';
 
 /** Stateless composition layer for the canvas workspace and its HUD overlays. */
@@ -28,6 +30,7 @@ export const TacticalWorkspaceShell = ({
     BOARD_DIE_SIDES,
     BoardDieVisual,
     BoardMarkerVisual,
+    SharedPointerOverlay,
     CombatPanelComponent,
     EquipmentSectionComponent,
     TokenResourcesComponent,
@@ -37,6 +40,7 @@ export const TacticalWorkspaceShell = ({
     activeCombatQueueEntry,
     activeLayer,
     activeScenario,
+    visionItems,
     activeTab,
     addAreaToCanvas,
     addBoardDieToBoard,
@@ -61,6 +65,7 @@ export const TacticalWorkspaceShell = ({
     boardDiceRollLog,
     boardLights,
     canUseBoardMobileTacticalMove,
+    canvasPointers,
     canvasRenderItemGroups,
     cards,
     clearBackgroundImage,
@@ -68,6 +73,7 @@ export const TacticalWorkspaceShell = ({
     closeBoardCardPreview,
     combatLog,
     combatRuntime,
+    itemUseSystem,
     combatQueueDisplay,
     commitGridDraft,
     consumeMobileMoveTemplateEvent,
@@ -106,6 +112,9 @@ export const TacticalWorkspaceShell = ({
     handleCancelAction,
     handleCancelMobileTacticalMove,
     handleConfirmMobileTacticalMove,
+    handleSharedPointerDown,
+    handleSharedPointerLeave,
+    handleSharedPointerMove,
     handleCanvasBackgroundMouseDown,
     handleCardUpload,
     handleCombatAction,
@@ -130,6 +139,7 @@ export const TacticalWorkspaceShell = ({
     highlightText,
     isBoardHandHoverSuppressed,
     isBoardMode,
+    isCanvasPointerActive,
     isDrawingWall,
     isMaster,
     isPlayerView,
@@ -186,12 +196,14 @@ export const TacticalWorkspaceShell = ({
     setItemToDelete,
     setMobileMoveHoverCellKey,
     setSelectedTokenIds,
+    setShowHiddenTokens,
     setShowMasterCombatHUD,
     setShowSettings,
     setSweepHoverSide,
     setViewMode,
     setZoom,
     shouldUseMobileTacticalMove,
+    showHiddenTokens,
     showMasterCombatHUD,
     showSettings,
     showToast,
@@ -212,6 +224,7 @@ export const TacticalWorkspaceShell = ({
     triggerToast,
     unlinkCharacter,
     unstackSpecificCard,
+    boardStackControls,
     updateItem,
     uploadingCard,
     uploadingToken,
@@ -540,6 +553,7 @@ export const TacticalWorkspaceShell = ({
                     tokens={tokens}
                     unlinkCharacter={unlinkCharacter}
                     unstackSpecificCard={unstackSpecificCard}
+                    boardStackControls={boardStackControls}
                     updateItem={updateItem}
                     uploadingCard={uploadingCard}
                     uploadingToken={uploadingToken}
@@ -547,6 +561,19 @@ export const TacticalWorkspaceShell = ({
 
                         {/* --- Controles de Capas y Zoom Flotantes --- */}
                         <div className="absolute bottom-56 md:bottom-8 right-4 md:right-8 z-50 flex flex-col gap-2 md:gap-3 pointer-events-auto items-end">
+
+                            {!isPlayerView && activeLayer === 'TABLETOP' && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowHiddenTokens((current) => !current)}
+                                    className={`w-10 h-10 md:w-12 md:h-12 border rounded-lg shadow-2xl flex items-center justify-center transition-all group active:scale-95 ${showHiddenTokens ? 'border-violet-300 bg-violet-400/15 text-violet-200 shadow-[0_0_18px_rgba(196,181,253,0.18)]' : 'border-[#c8aa6e]/30 bg-[#1a1b26] text-slate-500 hover:border-violet-300/70 hover:text-violet-200'}`}
+                                    title={showHiddenTokens ? 'Dejar de mostrar ocultos' : 'Mostrar ocultos'}
+                                    aria-pressed={showHiddenTokens}
+                                    aria-label={showHiddenTokens ? 'Dejar de mostrar ocultos' : 'Mostrar ocultos'}
+                                >
+                                    {showHiddenTokens ? <Eye size={20} /> : <EyeOff size={20} />}
+                                </button>
+                            )}
 
                             {/* Herramientas de Edición (Solo visibles en capa iluminación y para Master) */}
                             {!isPlayerView && (
@@ -598,6 +625,24 @@ export const TacticalWorkspaceShell = ({
                                         title="Añadir Terreno Peligroso"
                                     >
                                         <AlertTriangle className="w-5 h-5 md:w-6 md:h-6 group-hover:drop-shadow-[0_0_8px_#c8aa6e]" />
+                                    </button>
+
+                                    <button
+                                        onClick={() => addAreaToCanvas('smoke')}
+                                        className="w-10 h-10 md:w-12 md:h-12 bg-[#1a1b26] border border-slate-400/35 text-slate-300 rounded-lg shadow-2xl flex items-center justify-center hover:bg-slate-400/10 hover:border-slate-300 transition-all group active:scale-95"
+                                        title="Añadir Zona de Humo"
+                                        aria-label="Añadir Zona de Humo"
+                                    >
+                                        <Cloud className="w-5 h-5 md:w-6 md:h-6 group-hover:drop-shadow-[0_0_8px_rgba(203,213,225,0.7)]" />
+                                    </button>
+
+                                    <button
+                                        onClick={() => addAreaToCanvas('tar')}
+                                        className="w-10 h-10 md:w-12 md:h-12 bg-[#1a1b26] border border-[#c8aa6e]/30 text-[#c8aa6e] rounded-lg shadow-2xl flex items-center justify-center hover:bg-[#c8aa6e]/10 hover:border-[#c8aa6e] transition-all group active:scale-95"
+                                        title="Añadir Zona de Brea"
+                                        aria-label="Añadir Zona de Brea"
+                                    >
+                                        <Droplets className="w-5 h-5 md:w-6 md:h-6" />
                                     </button>
 
                                     <button
@@ -792,21 +837,29 @@ export const TacticalWorkspaceShell = ({
                         }
 
                         {/* --- Instrucciones Rápidas --- */}
-                        <div className="absolute bottom-8 left-8 z-50 hidden pointer-events-none opacity-50 md:block">
+                        <div className="absolute bottom-8 left-8 z-50 hidden pointer-events-none opacity-60 md:block">
                             <div className="flex items-center gap-2 text-xs text-slate-500 font-mono">
                                 <FiMove />
                                 <span>Click Central + Arrastrar para Mover</span>
                             </div>
+                            {mode === 'canvas' && (
+                                <div className="mt-1.5 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.1em] text-[#c8aa6e]/75">
+                                    <kbd className="border border-[#c8aa6e]/35 bg-black/60 px-1.5 py-0.5 font-mono text-[9px]">Ctrl</kbd>
+                                    <span>Mover para señalar · clic para ping</span>
+                                </div>
+                            )}
                         </div>
 
                         {/* --- VIEWPORT (Área visible) --- */}
                         <CanvasViewport
                     activeCombatAnimations={activeCombatAnimations}
                     activeScenario={activeScenario}
+                    visionItems={visionItems}
                     animatedBoardLightIds={animatedBoardLightIds}
                     bleed={bleed}
                     boardLights={boardLights}
                     canUseBoardMobileTacticalMove={canUseBoardMobileTacticalMove}
+                    canvasPointers={canvasPointers}
                     canvasRenderItemGroups={canvasRenderItemGroups}
                     consumeMobileMoveTemplateEvent={consumeMobileMoveTemplateEvent}
                     consumeSweepTemplateEvent={consumeSweepTemplateEvent}
@@ -823,6 +876,9 @@ export const TacticalWorkspaceShell = ({
                     handleBoardMobileTacticalMoveCell={handleBoardMobileTacticalMoveCell}
                     handleCancelMobileTacticalMove={handleCancelMobileTacticalMove}
                     handleCanvasBackgroundMouseDown={handleCanvasBackgroundMouseDown}
+                    handleSharedPointerDown={handleSharedPointerDown}
+                    handleSharedPointerLeave={handleSharedPointerLeave}
+                    handleSharedPointerMove={handleSharedPointerMove}
                     handleMobileTacticalMoveCell={handleMobileTacticalMoveCell}
                     handleMouseMove={handleMouseMove}
                     handleMouseUp={handleMouseUp}
@@ -832,6 +888,8 @@ export const TacticalWorkspaceShell = ({
                     handleTouchMove={handleTouchMove}
                     handleTouchStart={handleTouchStart}
                     isDrawingWall={isDrawingWall}
+                    isBoardMode={isBoardMode}
+                    isCanvasPointerActive={isCanvasPointerActive}
                     isPlayerView={isPlayerView}
                     isUsablePendingTurnState={isUsablePendingTurnState}
                     lastSelectionTimeRef={lastSelectionTimeRef}
@@ -850,9 +908,11 @@ export const TacticalWorkspaceShell = ({
                     playerName={playerName}
                     renderItemJSX={renderItemJSX}
                     sceneDropPreview={sceneDropPreview}
+                    itemUseSystem={itemUseSystem}
                     resizingTokenId={resizingTokenId}
                     rotatingTokenId={rotatingTokenId}
                     selectedTokenIds={selectedTokenIds}
+                    showHiddenTokens={showHiddenTokens}
                     selectionBoxOverlayRect={selectionBoxOverlayRect}
                     setMobileMoveHoverCellKey={setMobileMoveHoverCellKey}
                     setSweepHoverSide={setSweepHoverSide}
@@ -863,6 +923,7 @@ export const TacticalWorkspaceShell = ({
                     wallDrawingCurrent={wallDrawingCurrent}
                     wallDrawingStart={wallDrawingStart}
                     zoom={zoom}
+                    SharedPointerOverlay={SharedPointerOverlay}
                 />
                     </>
                 )
@@ -942,7 +1003,8 @@ export const TacticalWorkspaceShell = ({
             </AnimatePresence>
 
             {/* --- COMBAT HUD (PLAYER VIEW) --- */}
-            {isPlayerView && activeScenario && (() => {
+            <AreaPlacementControls system={itemUseSystem} />
+            {isPlayerView && activeScenario && !itemUseSystem?.isPlacing && (!itemUseSystem?.isConfirming || ['healing-potion', 'antidote', 'bandage', 'haste-potion', 'vitality-potion'].includes(itemUseSystem?.session?.definitionId)) && !itemUseSystem?.isShowingResult && (() => {
                 const myTokens = activeScenario.items?.filter(i =>
                     canControlToken(i, isPlayerView, playerName) && isCombatTokenItem(i)
                 ) || [];
@@ -1006,6 +1068,7 @@ export const TacticalWorkspaceShell = ({
                     return (
                         <CombatHUD
                             token={hudToken}
+                            canvasAttackOptions={combatRuntime?.getAttackOptions?.(hudToken, focusedTargetId)}
                             onAction={(actionId, data) => handleCombatAction(hudToken.id, actionId, data)}
                             onEndTurn={async () => {
                                 if (activeScenario?.canvasCombat?.status === 'active' && combatRuntime?.completeActivation) {
@@ -1024,6 +1087,14 @@ export const TacticalWorkspaceShell = ({
                             pendingActions={pendingTurnState?.tokenId === hudToken.id ? (pendingTurnState.actions || []) : []}
                             onCancelAction={(idx) => handleCancelAction(hudToken.id, idx)}
                             actionDice={hudCombatParticipant?.actionDice || []}
+                            itemUseSession={itemUseSystem?.session}
+                            itemUseResources={itemUseSystem?.resources || []}
+                            itemUseTargets={itemUseSystem?.antidoteTargets || []}
+                            onSelectItemUseTarget={itemUseSystem?.selectTarget}
+                            onSelectItemUseResource={itemUseSystem?.selectResource}
+                            onCancelItemUse={itemUseSystem?.cancel}
+                            onConfirmItemUse={itemUseSystem?.confirm}
+                            itemUseBusy={itemUseSystem?.isCommitting}
                             sprintBonus={hudCombatParticipant?.movementRuntime?.sprintBonus || 0}
                             onSprint={(dieId) => combatRuntime?.activateSprint?.(hudToken.id, dieId)}
                             forceWeaponMenu={targetingState?.phase === 'weapon_selection' && targetingState.attackerId === hudToken.id}
@@ -1055,7 +1126,7 @@ export const TacticalWorkspaceShell = ({
             })()}
 
             {/* --- MASTER COMBAT HUD (Optional Toggle) --- */}
-            {!isPlayerView && activeScenario && (() => {
+            {!isPlayerView && activeScenario && !itemUseSystem?.isPlacing && (!itemUseSystem?.isConfirming || ['healing-potion', 'antidote', 'bandage', 'haste-potion', 'vitality-potion'].includes(itemUseSystem?.session?.definitionId)) && !itemUseSystem?.isShowingResult && (() => {
                 // Determinar el token a mostrar: seleccionado actual O último seleccionado (como jugadores)
                 const allCombatTokens = (activeScenario.items || []).filter(i =>
                     isCombatTokenItem(i) && (i.isCircular || i.stats || i.name)
@@ -1080,6 +1151,7 @@ export const TacticalWorkspaceShell = ({
                     return (
                         <CombatHUD
                             token={hudToken}
+                            canvasAttackOptions={combatRuntime?.getAttackOptions?.(hudToken, focusedTargetId)}
                             mode={mode}
                             handCards={getHandCardsForToken(boardHudToken, activeScenario.items || [])}
                             onPlayCard={playHandCardToBoard}
@@ -1099,7 +1171,7 @@ export const TacticalWorkspaceShell = ({
 
                 return (
                     <>
-                        {/* Toggle Button  solo flecha, centro inferior */}
+                        {/* Pestaña de mando del máster, centro inferior */}
                         <AnimatePresence mode="wait">
                             {!showMasterCombatHUD && (
                                 <motion.div
@@ -1108,15 +1180,9 @@ export const TacticalWorkspaceShell = ({
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: 10 }}
                                     transition={{ duration: 0.15 }}
-                                    className="fixed bottom-4 left-0 right-0 z-50 flex justify-center pointer-events-none"
+                                    className="master-combat-launcher-dock"
                                 >
-                                    <button
-                                        onClick={() => setShowMasterCombatHUD(true)}
-                                        className="pointer-events-auto px-5 py-1.5 rounded-xl bg-[#0b1120]/90 backdrop-blur-md border border-[#c8aa6e]/30 hover:border-[#c8aa6e]/70 shadow-[0_0_20px_rgba(0,0,0,0.4)] transition-all duration-200 active:scale-95 group"
-                                        title="Abrir HUD de Combate"
-                                    >
-                                        <ChevronUp className="w-4 h-4 text-[#c8aa6e]/60 group-hover:text-[#f0e6d2] transition-all duration-200 group-hover:-translate-y-0.5" />
-                                    </button>
+                                    <MasterCombatHUDLauncher onOpen={() => setShowMasterCombatHUD(true)} />
                                 </motion.div>
                             )}
                         </AnimatePresence>
@@ -1136,12 +1202,9 @@ export const TacticalWorkspaceShell = ({
                                             className="fixed bottom-0 left-0 right-0 z-50 flex flex-col items-center pointer-events-none pb-6"
                                         >
                                             <div className="pointer-events-auto bg-[#0b1120]/95 backdrop-blur-xl border border-[#c8aa6e]/30 rounded-2xl px-8 py-5 shadow-[0_0_40px_rgba(0,0,0,0.6)] flex flex-col items-center gap-3 max-w-sm mx-auto relative">
-                                                <button
-                                                    onClick={() => setShowMasterCombatHUD(false)}
-                                                    className="absolute top-2 right-2 text-slate-500 hover:text-[#c8aa6e] transition-colors p-1"
-                                                >
-                                                    <X size={16} />
-                                                </button>
+                                                <div className="absolute top-0 right-0">
+                                                    <MasterCombatHUDCollapse onClose={() => setShowMasterCombatHUD(false)} />
+                                                </div>
                                                 <Swords className="w-8 h-8 text-[#c8aa6e]/50" />
                                                 <span className="text-slate-400 text-xs text-center uppercase tracking-widest">
                                                     Selecciona un token en el mapa<br />para usar el HUD de combate
@@ -1201,18 +1264,10 @@ export const TacticalWorkspaceShell = ({
                                         transition={{ duration: 0.15 }}
                                         className="relative"
                                     >
-                                        {/* Botón de plegar HUD  solo flecha */}
-                                        <div className="fixed bottom-0 left-0 right-0 z-[60] flex justify-center pointer-events-none pb-0.5">
-                                            <button
-                                                onClick={() => setShowMasterCombatHUD(false)}
-                                                className="pointer-events-auto px-4 py-0.5 rounded-t-lg bg-[#0b1120]/80 border-x border-t border-[#c8aa6e]/15 hover:border-[#c8aa6e]/40 transition-all duration-200 active:scale-95 group"
-                                                title="Cerrar HUD de Combate"
-                                            >
-                                                <ChevronDown className="w-3.5 h-3.5 text-[#c8aa6e]/40 group-hover:text-[#c8aa6e] transition-all duration-200 group-hover:translate-y-0.5" />
-                                            </button>
-                                        </div>
                                         <CombatHUD
+                                            collapseControl={<MasterCombatHUDCollapse onClose={() => setShowMasterCombatHUD(false)} />}
                                             token={hudToken}
+                            canvasAttackOptions={combatRuntime?.getAttackOptions?.(hudToken, focusedTargetId)}
                                             onAction={(actionId, data) => handleCombatAction(hudToken.id, actionId, data)}
                                             onEndTurn={() => {
                                                 if (activeScenario?.canvasCombat?.status === 'active' && combatRuntime?.completeActivation) {
@@ -1227,6 +1282,14 @@ export const TacticalWorkspaceShell = ({
                                             pendingActions={pendingTurnState && pendingTurnState.tokenId === hudToken.id ? (pendingTurnState.actions || []) : []}
                                             onCancelAction={(index) => handleCancelAction(hudToken.id, index)}
                                             actionDice={hudCombatParticipant?.actionDice || []}
+                                            itemUseSession={itemUseSystem?.session}
+                                            itemUseResources={itemUseSystem?.resources || []}
+                            itemUseTargets={itemUseSystem?.antidoteTargets || []}
+                            onSelectItemUseTarget={itemUseSystem?.selectTarget}
+                                            onSelectItemUseResource={itemUseSystem?.selectResource}
+                                            onCancelItemUse={itemUseSystem?.cancel}
+                                            onConfirmItemUse={itemUseSystem?.confirm}
+                                            itemUseBusy={itemUseSystem?.isCommitting}
                                             sprintBonus={hudCombatParticipant?.movementRuntime?.sprintBonus || 0}
                                             onSprint={(dieId) => combatRuntime?.activateSprint?.(hudToken.id, dieId)}
                                             enemyActions={hudCombatParticipant?.enemyActions || []}

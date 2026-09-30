@@ -1,14 +1,16 @@
+import { getCanvasCombatItems, getCanvasWeaponActionCost } from '../features/canvas/combat/canvasAttackRules';
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sword, ArrowUp, Shield, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X, Zap, RotateCw, Footprints, Dices } from 'lucide-react';
 import { getSpeedConsumption } from '../utils/combatSystem';
 import { getItemTraits } from '../utils/armorSystem';
-import CombatModifiersPanel, { applyModifiersToWeapon } from './CombatModifiersPanel';
+import CombatModifiersPanel, { applyModifiersToWeapon, CANVAS_ATTACK_MODIFIER_TRAITS } from './CombatModifiersPanel';
 import { getCustomImage, useCustomEquipmentImages } from '../hooks/useCustomEquipmentImages';
 import { PRONE_STATUS_IDS } from '../utils/statusEffects';
 import { getCardDisplayImage } from '../utils/cardImages';
 import { reorderCardItems } from '../utils/cardBoard';
 import ActionDieSvg from './ActionDieSvg';
+import CanvasPotionPreparation from '../features/canvas/components/CanvasPotionPreparation';
 import { resolveRogueliteEquippedItems } from '../features/canvas/rogueliteTokenSheetSync';
 
 const RANGE_MAP = {
@@ -56,8 +58,8 @@ const isSweepEligibleWeapon = (item) => {
 };
 
 const resolveCombatItemImage = (item, customEquipmentImages) => {
-    if (item?.img && (item.img.startsWith('data:') || item.img.startsWith('http') || item.img.startsWith('/'))) return item.img;
-    if (item?.icon && (item.icon.startsWith('data:') || item.icon.startsWith('http') || item.icon.startsWith('/'))) return item.icon;
+    const directImage = item?.image || item?.imagen || item?.imageUrl || item?.img || item?.icon;
+    if (typeof directImage === 'string' && (directImage.startsWith('data:') || directImage.startsWith('http') || directImage.startsWith('/'))) return directImage;
 
     if (customEquipmentImages && customEquipmentImages.size > 0) {
         const custom = getCustomImage(item, customEquipmentImages);
@@ -108,6 +110,90 @@ const resolveCombatItemImage = (item, customEquipmentImages) => {
     if (name.includes('espada')) return '/armas/espada_de_acero.webp';
 
     return null;
+};
+
+const getCombatHudItemIdentityKeys = (item) => {
+    if (!item || typeof item !== 'object') return [];
+    return [
+        item.runItemId,
+        item.instanceId,
+        item.templateId,
+        item.catalogId,
+        item.id,
+        item.name,
+        item.nombre,
+        item.payload?.runItemId,
+        item.payload?.instanceId,
+        item.payload?.templateId,
+        item.payload?.catalogId,
+        item.payload?.id,
+        item.payload?.name,
+        item.payload?.nombre,
+    ]
+        .map((value) => String(value || '').trim().toLowerCase())
+        .filter(Boolean);
+};
+
+const combatHudItemsMatch = (left, right) => {
+    const leftInstance = left?.runItemId || left?.instanceId || left?.payload?.runItemId || left?.payload?.instanceId;
+    const rightInstance = right?.runItemId || right?.instanceId || right?.payload?.runItemId || right?.payload?.instanceId;
+    if (leftInstance && rightInstance) return String(leftInstance) === String(rightInstance);
+    const rightKeys = new Set(getCombatHudItemIdentityKeys(right));
+    return getCombatHudItemIdentityKeys(left).some((key) => rightKeys.has(key));
+};
+
+const isCombatHudObject = (item) => {
+    const type = [
+        item?.type,
+        item?.tipo,
+        item?.itemType,
+        item?._category,
+        item?.category,
+        item?.payload?.type,
+        item?.payload?.itemType,
+    ].map((value) => String(value || '').toLowerCase()).join(' ');
+
+    return type.includes('object')
+        || type.includes('objeto')
+        || type.includes('consum')
+        || type.includes('pocion')
+        || type.includes('poción');
+};
+
+export const resolveCombatHudObjects = (token = {}) => {
+    const sourceToken = token || {};
+    const inventoryObjects = (Array.isArray(sourceToken.inventory) ? sourceToken.inventory : [])
+        .filter(isCombatHudObject);
+    const equippedArray = Array.isArray(sourceToken.equippedItems) ? sourceToken.equippedItems : [];
+    const loadoutEquipment = resolveRogueliteEquippedItems(
+        sourceToken.equipmentLoadout
+        || (sourceToken.equippedItems && !Array.isArray(sourceToken.equippedItems) ? sourceToken.equippedItems : {})
+    ).items;
+    const loadoutBeltObjects = loadoutEquipment.filter((item) => String(item?.canvasSlot || '').startsWith('belt_'));
+    const beltObjects = [
+        ...loadoutBeltObjects,
+        ...equippedArray.filter((item) => (
+            String(item?.canvasSlot || '').startsWith('belt_')
+            && !loadoutBeltObjects.some((loadoutItem) => (
+                loadoutItem.canvasSlot === item.canvasSlot || combatHudItemsMatch(loadoutItem, item)
+            ))
+        )),
+    ]
+        .sort((left, right) => String(left.canvasSlot).localeCompare(String(right.canvasSlot), undefined, { numeric: true }));
+    const usedInventoryIndexes = new Set();
+    const mergedBeltObjects = beltObjects.map((beltItem) => {
+        const inventoryIndex = inventoryObjects.findIndex((inventoryItem, index) => (
+            !usedInventoryIndexes.has(index) && combatHudItemsMatch(beltItem, inventoryItem)
+        ));
+        if (inventoryIndex < 0) return beltItem;
+        usedInventoryIndexes.add(inventoryIndex);
+        return { ...inventoryObjects[inventoryIndex], ...beltItem };
+    });
+
+    return [
+        ...mergedBeltObjects,
+        ...inventoryObjects.filter((_, index) => !usedInventoryIndexes.has(index)),
+    ];
 };
 
 const ItemImage = ({ src, type, name }) => {
@@ -227,10 +313,78 @@ const HudCardImage = ({ card }) => {
     );
 };
 
+// Only the mobile potion dock changes the tab width. Keep a numeric resting
+// width so opening and closing can interpolate without scaling their text.
+const CombatHudTabsAnchor = ({ potionOpen, children }) => {
+    const anchorRef = useRef(null);
+    React.useLayoutEffect(() => {
+        const anchor = anchorRef.current;
+        if (!anchor) return undefined;
+        let mounted = true;
+        const measureRestingWidth = () => {
+            if (!mounted) return;
+            if (window.innerWidth >= 768) {
+                anchor.style.removeProperty('--potion-tabs-rest-width');
+                anchor.style.removeProperty('--potion-panel-width');
+                return;
+            }
+            const tabs = anchor.querySelector('.combat-hud-tabs');
+            if (!tabs || !anchor.parentElement) return;
+            // Measure the resting tabs offscreen. Changing the live anchor's
+            // width during a font/resize callback would restart its transition.
+            const measurement = document.createElement('div');
+            measurement.className = 'combat-hud-tabs-anchor';
+            measurement.setAttribute('aria-hidden', 'true');
+            measurement.inert = true;
+            Object.assign(measurement.style, {
+                position: 'fixed', left: '-10000px', top: '0', visibility: 'hidden',
+                pointerEvents: 'none', width: 'max-content', maxWidth: 'none', transition: 'none'
+            });
+            measurement.appendChild(tabs.cloneNode(true));
+            anchor.parentElement.appendChild(measurement);
+            const width = measurement.getBoundingClientRect().width;
+            measurement.remove();
+            if (width > 0) anchor.style.setProperty('--potion-tabs-rest-width', `${width}px`);
+            const panelWidth = Math.min(320, anchor.parentElement.clientWidth);
+            if (panelWidth > 0) anchor.style.setProperty('--potion-panel-width', `${panelWidth}px`);
+        };
+        measureRestingWidth();
+        const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measureRestingWidth);
+        if (anchor.parentElement) observer?.observe(anchor.parentElement);
+        window.addEventListener('resize', measureRestingWidth);
+        document.fonts?.ready?.then(measureRestingWidth);
+        return () => {
+            mounted = false;
+            observer?.disconnect();
+            window.removeEventListener('resize', measureRestingWidth);
+        };
+    }, []);
+    return <div ref={anchorRef} className="combat-hud-tabs-anchor" data-potion-open={potionOpen}>{children}</div>;
+};
+
+const CombatHudPotionFold = ({ desktopVariants, children }) => {
+    const [mobile, setMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+    React.useEffect(() => {
+        const updateMobile = () => setMobile(window.innerWidth < 768);
+        window.addEventListener('resize', updateMobile);
+        return () => window.removeEventListener('resize', updateMobile);
+    }, []);
+    // The mobile fold grows out of the tabs. Translating/scaling this dock
+    // would separate its bottom edge while the tab width is changing.
+    const variants = mobile ? {
+        initial: { ...desktopVariants.initial, y: 0, scale: 1 },
+        animate: { ...desktopVariants.animate, y: 0, scale: 1 },
+        exit: { ...desktopVariants.exit, y: 0, scale: 1 }
+    } : desktopVariants;
+    return <motion.div className="potion-preparation-dock" variants={variants}
+        initial="initial" animate="animate" exit="exit">{children}</motion.div>;
+};
+
 const CombatHUD = ({
     token,
     onAction,
     onEndTurn,
+    collapseControl = null,
     onPortraitClick,
     canOpenSheet = true,
     isActive = true, // Si es el turno del jugador o no (visual)
@@ -248,6 +402,7 @@ const CombatHUD = ({
     targetDistance = null, // Distancia al objetivo actual (en casillas)
     allowAdjacentTouchTargeting = false,
     mode = 'canvas',
+    canvasAttackOptions = null,
     handCards = [],
     onPlayCard = null,
     onFlipHandCard = null,
@@ -255,6 +410,14 @@ const CombatHUD = ({
     onCardPreviewStart = null,
     handDragPreview = null,
     suppressHandHover = false,
+    itemUseSession = null,
+    itemUseResources = [],
+    itemUseTargets = [],
+    onSelectItemUseTarget = null,
+    onSelectItemUseResource = null,
+    onCancelItemUse = null,
+    onConfirmItemUse = null,
+    itemUseBusy = false,
 }) => {
     const customEquipmentImages = useCustomEquipmentImages();
     const isBoardMode = mode === 'board';
@@ -282,6 +445,16 @@ const CombatHUD = ({
             setActiveCategory('ACCIONES');
         }
     }, [forceWeaponMenu]);
+
+    React.useEffect(() => {
+        if (itemUseSession?.sourceTokenId !== token?.id || !['select-die', 'confirm'].includes(itemUseSession?.phase)) return;
+        setActiveCategory('OBJETOS');
+        setSelectedActionId('item-use');
+    }, [itemUseSession?.phase, itemUseSession?.sourceTokenId, token?.id]);
+
+    React.useEffect(() => {
+        if (!itemUseSession) setSelectedActionId(current => current === 'item-use' ? null : current);
+    }, [itemUseSession]);
 
     // Mobile end-turn: hold-to-confirm pattern
     // Press down → animation starts + timer begins
@@ -321,7 +494,8 @@ const CombatHUD = ({
         && enemyAttackAction?.status !== 'spent'
         && Number(movementAvailable) < Number(movementBase);
     const hasControllableStatus = tokenStatus.includes('sangrado');
-    const isProne = PRONE_STATUS_IDS.some((statusId) => tokenStatus.includes(statusId));
+    const isProne = (isBoardMode ? PRONE_STATUS_IDS : ['derribado']).some((statusId) => tokenStatus.includes(statusId));
+    const proneBlocksAction = actionId => isProne && (isBoardMode ? actionId !== 'stand_up' : actionId === 'dash');
     const cardsInHand = Array.isArray(handCards) ? handCards : [];
     const displayedActionDice = useMemo(() => (
         Array.isArray(actionDice) ? actionDice : []
@@ -335,12 +509,12 @@ const CombatHUD = ({
     }, [cardsInHand, handDragPreview?.cardId, handDragPreview?.dropIndex, handDragPreview?.overHand]);
 
     React.useEffect(() => {
-        if (!isProne) return;
+        if (!isProne || !isBoardMode) return;
         setActiveCategory('ACCIONES');
         setSelectedActionId(null);
         setSelectedAttackItemIdx(null);
         setAttackModifiersExpanded(false);
-    }, [isProne]);
+    }, [isProne, isBoardMode]);
 
     React.useEffect(() => {
         if (!isBoardMode) return;
@@ -356,20 +530,24 @@ const CombatHUD = ({
     if (!token && !isBoardMode) return null;
 
     // Obtener opciones de ataque (Armas + Habilidades Ofensivas)
-    const items = Array.isArray(token?.equippedItems) && token.equippedItems.length > 0
+    const items = token?.profileType === 'rogueliteEnemy' && !isBoardMode ? getCanvasCombatItems(token) : Array.isArray(token?.equippedItems) && token.equippedItems.length > 0
         ? token.equippedItems
         : resolveRogueliteEquippedItems(
             token?.equipmentLoadout
             || (token?.equippedItems && !Array.isArray(token.equippedItems) ? token.equippedItems : {})
         ).items;
-    let attackOptions = items.filter(i =>
+    const combatHudObjects = resolveCombatHudObjects(token);
+    // Older token snapshots may contain loadout metadata misclassified as weapons.
+    let attackOptions = items.filter(i => i && String(i.name || i.nombre || '').trim()).filter(i =>
         i.type === 'weapon' ||
         i.type === 'ability' ||
         (i._category === 'abilities' && (i.damage || i.dano))
     );
     const sweepWeapons = items.filter((item) => isSweepEligibleWeapon(item));
 
-    if (targetDistance !== null) {
+    if (canvasAttackOptions) attackOptions = canvasAttackOptions;
+
+    if (!canvasAttackOptions && targetDistance !== null) {
         attackOptions = attackOptions.filter(item => {
             const alcRaw = item.alc || item.alcance || item.range || item.Alcance || item.Range || item.payload?.range || item.payload?.alcance || item.payload?.alc;
             if (!alcRaw) {
@@ -410,7 +588,7 @@ const CombatHUD = ({
 
     const handleActionClick = (actionId) => {
         if (!isActive || !onAction) return;
-        if (isProne && actionId !== 'stand_up') return;
+        if (proneBlocksAction(actionId)) return;
         if (!isProne && actionId === 'stand_up') return;
 
         if (actionId === 'attack') {
@@ -422,6 +600,8 @@ const CombatHUD = ({
             }
             // Primer paso: informar al canvas que queremos iniciar un ataque (apuntar)
             onAction('attack');
+        } else if (actionId === 'stand_up' && !isBoardMode) {
+            setSelectedActionId(current => current === 'stand_up' ? null : 'stand_up');
         } else if (actionId === 'dash') {
             if (isRogueliteEnemy) {
                 if (canEnemySprint) onEnemySprint();
@@ -454,7 +634,7 @@ const CombatHUD = ({
             id: 'sweep',
             label: 'Barrido',
             icon: Zap,
-            disabled: !isActive || isProne
+            disabled: !isActive || (isBoardMode && isProne)
         }
     ];
 
@@ -882,9 +1062,9 @@ const CombatHUD = ({
                                                     const itemImg = resolveCombatItemImage(item, customEquipmentImages);
                                                     const nameColorClass = getRarityHeaderColor(item.rareza || '');
 
-                                                    const traits = getItemTraits(item).filter((trait) => trait !== '-');
+                                                    const traits = (mode === 'canvas' && item.displayTraits ? item.displayTraits : getItemTraits(item)).filter((trait) => trait !== '-');
                                                     const damage = item.damage || item.dano;
-                                                    const actionCost = getSpeedConsumption(item);
+                                                    const actionCost = isBoardMode ? getSpeedConsumption(item) : isRogueliteEnemy ? 1 : getCanvasWeaponActionCost(item, token);
 
                                                     return (
                                                         <div key={idx} className="flex flex-col mb-2">
@@ -904,15 +1084,20 @@ const CombatHUD = ({
                                                             >
                                                                 <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-[2px] transition-colors ${selectedAttackItemIdx === idx ? 'bg-[#c8aa6e]' : 'bg-transparent'}`} />
                                                                 <div className={`h-[58px] w-[58px] self-center rounded border ${item.type === 'ability' ? 'border-purple-500/35 bg-purple-950/30' : 'border-[#504735] bg-black/60'} flex items-center justify-center shrink-0 overflow-hidden relative shadow-inner`}>
-                                                                    <ItemImage src={itemImg} type={item.type} name={item.name || item.nombre} />
+                                                                    {item.attackWeapons?.length > 1 ? item.attackWeapons.map((part, hand) => (
+                                                                        <div key={hand} className="relative h-full min-w-0 flex-1 overflow-hidden" style={{ borderLeft: hand ? '1px solid #504735' : undefined }}>
+                                                                            <ItemImage src={resolveCombatItemImage(part, customEquipmentImages)} type={part.type} name={`${part.name || part.nombre}, ${hand ? 'mano secundaria' : 'mano principal'}`} />
+                                                                        </div>
+                                                                    )) : <ItemImage src={itemImg} type={item.type} name={item.name || item.nombre} />}
                                                                     <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 to-transparent" />
                                                                 </div>
                                                                 <div className="flex min-w-0 flex-1 flex-col justify-center py-0.5">
-                                                                    <span className={`truncate font-fantasy text-[13px] font-bold leading-5 md:text-sm ${nameColorClass}`}>
-                                                                        {item.name || item.nombre}
+                                                                    <span className={`${item.attackWeapons?.length > 1 ? '' : 'truncate'} font-fantasy text-[13px] font-bold leading-5 md:text-sm ${nameColorClass}`}>
+                                                                        {item.attackWeapons?.length > 1 ? 'Ataque dual' : item.name || item.nombre}
                                                                     </span>
+                                                                    {item.attackWeapons?.length > 1 && <span className="text-[10px] leading-4 text-[#c9bd9f]">{item.attackWeapons.map(part => part.name || part.nombre).join(' + ')}</span>}
                                                                     <div className="mt-1 flex min-w-0 items-center gap-2">
-                                                                        <span className="inline-flex shrink-0 items-center gap-1 border-r border-[#514936] pr-2 text-[10px] font-bold text-[#d8c28d]" aria-label={`Coste: ${actionCost} ${actionCost === 1 ? 'dado' : 'dados'} de acción`}>
+                                                                        <span className="inline-flex shrink-0 items-center gap-1 border-r border-[#514936] pr-2 text-[10px] font-bold text-[#d8c28d]" aria-label={isRogueliteEnemy && !isBoardMode ? 'Coste: 1 acción principal' : `Coste: ${actionCost} ${actionCost === 1 ? 'dado' : 'dados'} de acción`}>
                                                                             <Dices aria-hidden="true" className="h-3.5 w-3.5 text-[#b99a5b]" strokeWidth={1.7} />
                                                                             {actionCost}
                                                                         </span>
@@ -947,6 +1132,7 @@ const CombatHUD = ({
                                                                                 isExpanded={attackModifiersExpanded}
                                                                                 onToggleExpand={() => setAttackModifiersExpanded(!attackModifiersExpanded)}
                                                                                 currentWeapon={item}
+                                                                                allowedTraitIds={mode === 'canvas' ? CANVAS_ATTACK_MODIFIER_TRAITS : null}
                                                                                 disabledTraitIds={['guardia']}
                                                                                 disabledTraitReasons={{
                                                                                     guardia: 'Guardia solo se aplica al realizar paradas.',
@@ -955,14 +1141,16 @@ const CombatHUD = ({
 
                                                                             <button
                                                                                 onClick={() => {
-                                                                                    const modifiedItem = applyModifiersToWeapon(item, customAttackModifiers);
+                                                                                    const modifiedItem = applyModifiersToWeapon(item, customAttackModifiers, {
+                                                                                        allowedTraitIds: mode === 'canvas' ? CANVAS_ATTACK_MODIFIER_TRAITS : null,
+                                                                                    });
                                                                                     onAction('attack', modifiedItem);
                                                                                     setSelectedActionId(null);
                                                                                     setSelectedAttackItemIdx(null);
                                                                                 }}
                                                                                 className="w-full py-2 md:py-2.5 bg-gradient-to-r from-red-700 to-red-900 hover:from-red-600 hover:to-red-800 text-white text-[10px] md:text-xs font-fantasy uppercase tracking-[0.1em] md:tracking-[0.2em] font-bold rounded shadow-lg transition-colors flex items-center justify-center gap-1.5 md:gap-2"
                                                                             >
-                                                                                <Sword size={14} className="hidden md:block" /> Confirmar Ataque
+                                                                                <Sword size={14} className="hidden md:block" /> {mode === 'canvas' ? 'Preparar ataque' : 'Confirmar Ataque'}
                                                                             </button>
                                                                         </div>
                                                                     </motion.div>
@@ -1083,7 +1271,7 @@ const CombatHUD = ({
                             </AnimatePresence>
 
                             <AnimatePresence>
-                                {selectedActionId === 'dash' && (
+                                {(selectedActionId === 'dash' || selectedActionId === 'stand_up') && (
                                     <motion.div
                                         key="dash-selector"
                                         variants={panelVariants}
@@ -1097,16 +1285,19 @@ const CombatHUD = ({
                                                 <div className="flex items-center gap-2">
                                                     <Footprints size={14} className="text-[#0b1120]" />
                                                     <div className="flex flex-col">
-                                                        <span className="text-[#0b1120] text-[9px] md:text-[11px] font-black uppercase tracking-widest">Dado para correr</span>
+                                                        <span className="text-[#0b1120] text-[9px] md:text-[11px] font-black uppercase tracking-widest">{selectedActionId === 'stand_up' ? 'Levantarse' : 'Dado para correr'}</span>
                                                         <span className="hidden md:block text-[#0b1120]/65 text-[8px] uppercase tracking-wider">
-                                                            {availableActionDice.length > 0 ? 'El valor añade casillas' : 'Todos los dados están agotados'}
+                                                            {selectedActionId === 'stand_up' ? 'Movimiento o un dado, sin importar su valor' : availableActionDice.length > 0 ? 'El valor añade casillas' : 'Todos los dados están agotados'}
                                                         </span>
                                                     </div>
                                                 </div>
-                                                <button type="button" onClick={() => setSelectedActionId(null)} className="text-[#0b1120]/60 hover:text-[#0b1120] p-1 transition-colors" aria-label="Cerrar selector de Correr">
+                                                <button type="button" onClick={() => setSelectedActionId(null)} className="text-[#0b1120]/60 hover:text-[#0b1120] p-1 transition-colors" aria-label={selectedActionId === 'stand_up' ? 'Cerrar selector de Levantarse' : 'Cerrar selector de Correr'}>
                                                     <X size={16} />
                                                 </button>
                                             </div>
+                                            {selectedActionId === 'stand_up' && <button type="button" className="w-full min-h-[44px] border-b border-[#c8aa6e]/30 px-3 py-2 text-sm text-[#d8bf88]" onClick={() => {
+                                                if (onAction?.('stand_up') !== false) setSelectedActionId(null);
+                                            }}>Gastar todo el Movimiento básico</button>}
                                             <div className="p-1.5 md:p-2.5 grid grid-cols-3 gap-1.5 md:gap-2 bg-black/40 border-b border-[#c8aa6e]/20">
                                                 {displayedActionDice.map((die) => {
                                                     const isAvailableDie = die.status === 'available';
@@ -1115,12 +1306,12 @@ const CombatHUD = ({
                                                             key={die.id}
                                                             type="button"
                                                             aria-label={isAvailableDie
-                                                                ? `Correr con ${die.die} de valor ${die.value}`
+                                                                ? `${selectedActionId === 'stand_up' ? 'Levantarse' : 'Correr'} con ${die.die} de valor ${die.value}`
                                                                 : `${die.die} de valor ${die.value} agotado`}
                                                             disabled={!isAvailableDie}
                                                             onClick={() => {
                                                                 if (!isAvailableDie) return;
-                                                                const result = onSprint
+                                                                const result = selectedActionId === 'stand_up' ? onAction?.('stand_up', die) : onSprint
                                                                     ? onSprint(die.id)
                                                                     : onAction?.('dash', die);
                                                                 if (result !== false) setSelectedActionId(null);
@@ -1139,7 +1330,79 @@ const CombatHUD = ({
                                                                 title={`${die.die} · ${die.value}`}
                                                             />
                                                             <span className={`text-[7px] md:text-[8px] font-bold uppercase tracking-[0.08em] ${isAvailableDie ? 'text-[#d8bf88]' : 'text-red-400/80'}`}>
-                                                                {isAvailableDie ? `+${die.value} casillas` : 'Agotado'}
+                                                                {isAvailableDie ? selectedActionId === 'stand_up' ? 'Gastar dado' : `+${die.value} casillas` : 'Agotado'}
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+
+                            <AnimatePresence>
+                                {selectedActionId === 'item-use' && itemUseSession?.sourceTokenId === token?.id && !['healing-potion', 'antidote', 'bandage', 'haste-potion', 'vitality-potion'].includes(itemUseSession.definitionId) && (
+                                    <motion.div
+                                        key="item-use-resource-selector"
+                                        variants={panelVariants}
+                                        initial="initial"
+                                        animate="animate"
+                                        exit="exit"
+                                        className="relative pointer-events-auto translate-y-[12px] md:translate-y-[1px] overflow-hidden"
+                                    >
+                                        <div className="w-[220px] md:w-80 bg-[#0b1120]/98 border-t-2 border-x-2 border-[#c8aa6e] border-b-0 rounded-t-2xl overflow-hidden shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
+                                            <div className="bg-[#c8aa6e] px-2.5 py-2 md:px-4 md:py-3 flex justify-between items-center">
+                                                <div className="flex min-w-0 items-center gap-2">
+                                                    <Dices size={14} className="shrink-0 text-[#0b1120]" />
+                                                    <div className="min-w-0">
+                                                        <p className="truncate text-[9px] md:text-[10px] font-black uppercase tracking-[0.14em] text-[#0b1120]">{itemUseSession.item?.name || itemUseSession.item?.nombre || 'Usar objeto'}</p>
+                                                        <p className="text-[7px] md:text-[8px] font-bold uppercase tracking-[0.1em] text-[#0b1120]/65">{itemUseSession.definitionId === 'explosive-bomb'
+                                                            ? 'Dado + 2d8 · La distancia resta Presión'
+                                                            : itemUseSession.context?.practice ? 'Dados de prueba · Elige alcance' : 'Elige alcance'}</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedActionId(null);
+                                                        onCancelItemUse?.();
+                                                    }}
+                                                    className="p-1 text-[#0b1120]/70 hover:text-[#0b1120]"
+                                                    aria-label="Cancelar uso del objeto"
+                                                >
+                                                    <X size={15} />
+                                                </button>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-1.5 p-2 md:gap-2 md:p-3">
+                                                {(itemUseResources || []).map((die) => {
+                                                    const isAvailableDie = die.status === 'available';
+                                                    return (
+                                                        <button
+                                                            key={die.id}
+                                                            type="button"
+                                                            disabled={!isAvailableDie}
+                                                            aria-label={`${die.label || die.die} de valor ${die.value}${isAvailableDie ? '' : ' agotado'}`}
+                                                            onClick={() => {
+                                                                if (!isAvailableDie) return;
+                                                                onSelectItemUseResource?.(die);
+                                                                setSelectedActionId(null);
+                                                            }}
+                                                            className={`relative min-w-0 h-[72px] md:h-[92px] rounded border transition-all flex flex-col items-center justify-between px-0.5 py-1.5 md:py-2 ${isAvailableDie
+                                                                ? 'border-[#c8aa6e]/40 bg-[#c8aa6e]/[0.05] hover:border-[#c8aa6e]/80 hover:bg-[#c8aa6e]/[0.10] active:scale-[0.97]'
+                                                                : 'cursor-not-allowed border-slate-700/35 bg-slate-950/70 opacity-45 grayscale'
+                                                            }`}
+                                                        >
+                                                            <span className={`truncate max-w-full px-1 font-['Cinzel'] text-[7px] md:text-[9px] font-bold uppercase tracking-[0.1em] ${isAvailableDie ? 'text-slate-400' : 'text-slate-600'}`}>{die.label || die.die}</span>
+                                                            <ActionDieSvg
+                                                                faces={die.sides || Number(String(die.die).replace(/\D/g, '')) || 6}
+                                                                value={die.value}
+                                                                status={isAvailableDie ? 'available' : 'spent'}
+                                                                className="h-9 w-9 md:h-12 md:w-12"
+                                                                title={`${die.die} · ${die.value}`}
+                                                            />
+                                                            <span className={`text-[7px] md:text-[8px] font-bold uppercase tracking-[0.08em] ${isAvailableDie ? 'text-[#d8bf88]' : 'text-red-400/80'}`}>
+                                                                {isAvailableDie ? (itemUseSession.definitionId === 'explosive-bomb' ? `+${die.value} Presión` : `${die.value} casillas`) : 'Agotado'}
                                                             </span>
                                                         </button>
                                                     );
@@ -1183,21 +1446,40 @@ const CombatHUD = ({
 
 
 
-                        <div className="flex items-center bg-[#0b1120]/90 backdrop-blur-md border border-[#c8aa6e]/30 rounded-t-xl overflow-hidden shadow-lg transform translate-y-[1px]">
-                            {categories.map(cat => (
-                                <button
-                                    key={cat.id}
-                                    disabled={isProne && cat.id !== 'ACCIONES'}
-                                    onClick={() => setActiveCategory(cat.id)}
-                                    className={`px-3 md:px-8 py-2 md:py-3 text-[10px] md:text-xs font-bold uppercase tracking-widest transition-all ${activeCategory === cat.id
-                                        ? 'bg-[#c8aa6e] text-[#0b1120]'
-                                        : 'text-[#c8aa6e] hover:bg-[#c8aa6e]/10'
-                                        } ${(isProne && cat.id !== 'ACCIONES') ? 'opacity-35 cursor-not-allowed hover:bg-transparent' : ''}`}
-                                >
-                                    {cat.label}
-                                </button>
-                            ))}
-                        </div>
+                        <CombatHudTabsAnchor potionOpen={selectedActionId === 'item-use' && itemUseSession?.sourceTokenId === token?.id && ['healing-potion', 'antidote', 'bandage', 'haste-potion', 'vitality-potion'].includes(itemUseSession.definitionId)}>
+                            <AnimatePresence>
+                                {selectedActionId === 'item-use' && itemUseSession?.sourceTokenId === token?.id && ['healing-potion', 'antidote', 'bandage', 'haste-potion', 'vitality-potion'].includes(itemUseSession.definitionId) && (
+                                    <CombatHudPotionFold
+                                        key="potion-preparation-fold"
+                                        desktopVariants={panelVariants}
+                                    >
+                                        <CanvasPotionPreparation
+                                            session={itemUseSession} token={token} resources={itemUseResources}
+                                            targets={itemUseTargets} onSelectTarget={onSelectItemUseTarget}
+                                            onSelectResource={onSelectItemUseResource} onConfirm={onConfirmItemUse}
+                                            onCancel={onCancelItemUse} busy={itemUseBusy} customImages={customEquipmentImages}
+                                        />
+                                    </CombatHudPotionFold>
+                                )}
+                            </AnimatePresence>
+                            <div className="combat-hud-tabs flex items-center bg-[#0b1120]/90 backdrop-blur-md border border-[#c8aa6e]/30 rounded-t-xl overflow-hidden shadow-lg transform translate-y-[1px]"
+                                style={collapseControl ? { alignItems: 'stretch' } : undefined}>
+                                {categories.map(cat => (
+                                    <button
+                                        key={cat.id}
+                                        disabled={isBoardMode && isProne && cat.id !== 'ACCIONES'}
+                                        onClick={() => setActiveCategory(cat.id)}
+                                        className={`px-3 md:px-8 py-2 md:py-3 text-[10px] md:text-xs font-bold uppercase tracking-widest transition-all ${activeCategory === cat.id
+                                            ? 'bg-[#c8aa6e] text-[#0b1120]'
+                                            : 'text-[#c8aa6e] hover:bg-[#c8aa6e]/10'
+                                            } ${(isBoardMode && isProne && cat.id !== 'ACCIONES') ? 'opacity-35 cursor-not-allowed hover:bg-transparent' : ''}`}
+                                    >
+                                        {cat.label}
+                                    </button>
+                                ))}
+                                {collapseControl}
+                            </div>
+                        </CombatHudTabsAnchor>
                     </div>
 
                     {/* Contenedor de Botones - Sin overflow-hidden para evitar recortes */}
@@ -1207,7 +1489,7 @@ const CombatHUD = ({
 
                         <div
                             className="flex items-stretch gap-1.5 md:gap-4 md:justify-center overflow-x-auto overflow-y-visible scrollbar-hide h-16 md:h-24 max-w-0 min-w-full"
-                            style={{ msOverflowStyle: 'none', scrollbarWidth: 'none' }}
+                            style={{ msOverflowStyle: 'none', scrollbarWidth: 'none', justifyContent: activeCategory === 'OBJETOS' ? 'flex-start' : undefined }}
                         >
                             <style>{`
                                 .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -1218,7 +1500,7 @@ const CombatHUD = ({
 
                             {activeCategory === 'ACCIONES' && actions.map(action => {
                                 const actionDisabled = Boolean(action.disabled) || !isActive ||
-                                    (isProne ? action.id !== 'stand_up' : action.id === 'stand_up') ||
+                                    (proneBlocksAction(action.id) || (!isProne && action.id === 'stand_up')) ||
                                     (action.id === 'control_status' && !hasControllableStatus);
                                 const iconClass = actionDisabled
                                     ? 'text-slate-600'
@@ -1260,7 +1542,7 @@ const CombatHUD = ({
                             {activeCategory === 'CLASE' && (() => {
                                 const classSlots = [
                                     { id: 'placeholder-left', label: 'Habilidad 1', icon: Sparkles, disabled: true },
-                                    { id: 'sweep', label: 'Barrido', icon: Zap, disabled: !isActive || isProne, interactive: true },
+                                    { id: 'sweep', label: 'Barrido', icon: Zap, disabled: !isActive || (isBoardMode && isProne), interactive: true },
                                     { id: 'placeholder-right', label: 'Habilidad 3', icon: Sparkles, disabled: true }
                                 ];
 
@@ -1310,12 +1592,7 @@ const CombatHUD = ({
                             })()}
 
                             {activeCategory === 'OBJETOS' && (() => {
-                                const consumableObjects = (token.inventory || []).filter(item => {
-                                    const tipo = (item.type || item.tipo || '').toLowerCase();
-                                    return tipo.includes('consumible') || tipo.includes('pocion') || tipo.includes('poción') || tipo.includes('objeto');
-                                });
-
-                                if (consumableObjects.length === 0) {
+                                if (combatHudObjects.length === 0) {
                                     return (
                                         <div className="flex-1 flex flex-col items-center justify-center text-slate-500 opacity-60">
                                             <Backpack className="w-5 h-5 md:w-6 md:h-6 mb-1" />
@@ -1325,24 +1602,41 @@ const CombatHUD = ({
                                 }
 
                                 return (
-                                    <div className="flex items-center gap-2 overflow-x-auto w-full px-2 scrollbar-hide">
-                                        {consumableObjects.map((obj, idx) => (
-                                            <button
-                                                key={idx}
-                                                onClick={() => {
-                                                    onAction('use_item', obj);
-                                                }}
-                                                className="flex flex-col items-center justify-center min-w-[64px] md:min-w-[80px] h-16 md:h-20 bg-[#161f32] border border-slate-700/50 hover:border-[#c8aa6e] rounded-lg p-1 group transition-all"
-                                            >
-                                                <div className="w-8 h-8 md:w-10 md:h-10 rounded bg-black/40 border border-slate-700/40 mb-1 overflow-hidden flex items-center justify-center">
-                                                    <ItemImage src={resolveCombatItemImage(obj, customEquipmentImages)} type={obj.type} name={obj.name || obj.nombre} />
+                                    <>
+                                        {combatHudObjects.map((obj, idx) => {
+                                            const objectName = obj.name || obj.nombre || 'Objeto';
+                                            const objectKey = obj.runItemId || obj.instanceId || obj.canvasSlot || obj.id || `${objectName}-${idx}`;
+                                            return (
+                                                <div
+                                                    key={`${objectKey}-${idx}`}
+                                                    className="relative group flex-none w-[calc(33.333%_-_0.25rem)] md:w-[calc(33.333%_-_0.6667rem)] min-w-0"
+                                                    style={{ marginLeft: idx === 0 ? 'auto' : undefined, marginRight: idx === combatHudObjects.length - 1 ? 'auto' : undefined }}
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        aria-label={`Usar ${objectName}`}
+                                                        title={objectName}
+                                                        disabled={!isActive}
+                                                        onClick={() => {
+                                                            if (!isActive) return;
+                                                            const result = onAction?.('use_item', obj);
+                                                            if (result !== false) setSelectedActionId('item-use');
+                                                        }}
+                                                        className="relative flex w-full h-16 md:h-24 flex-col items-center justify-center overflow-hidden rounded-lg border border-slate-700/50 bg-[#161f32] transition-all hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 disabled:grayscale group/item"
+                                                    >
+                                                        <span aria-hidden="true" className="absolute inset-x-0 top-0 h-px bg-[#c8aa6e]/30 opacity-60" />
+                                                        <div className="relative w-8 h-8 md:w-12 md:h-12 mb-1 md:mb-1.5 overflow-hidden border border-[#c8aa6e]/30 bg-black/45 shadow-inner">
+                                                            <ItemImage src={resolveCombatItemImage(obj, customEquipmentImages)} type={obj.type || obj.itemType} name={objectName} />
+                                                            <span aria-hidden="true" className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-black/35" />
+                                                        </div>
+                                                        <span className="w-full truncate px-2 text-center text-[8px] md:text-[10px] font-bold uppercase tracking-wider text-slate-300 transition-colors group-hover/item:text-[#f0e6d2]">
+                                                            {objectName}
+                                                        </span>
+                                                    </button>
                                                 </div>
-                                                <span className="text-[8px] md:text-[9px] font-bold text-slate-300 uppercase tracking-tighter truncate w-full px-2 text-center">
-                                                    {obj.name || obj.nombre}
-                                                </span>
-                                            </button>
-                                        ))}
-                                    </div>
+                                            );
+                                        })}
+                                    </>
                                 );
                             })()}
                         </div>

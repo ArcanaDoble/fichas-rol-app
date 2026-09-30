@@ -3,9 +3,12 @@ import {
   createEquipmentTemplateId,
   equipItemInSlot,
   equipItemInWeaponSet,
+  materializeEquipmentInstances,
   normalizeRogueliteEquipmentPool,
   normalizeEquippedHandSlots,
   normalizeEquippedWeaponSets,
+  reconcileEquippedItemsWithInventory,
+  resolveEquippedItemUsages,
   resolveEquippedWeaponSet,
   resolveEquippedHandOccupancy,
   resolveEquipmentHandsRequired,
@@ -24,7 +27,7 @@ describe('roguelite starting equipment pool', () => {
     expect(resolveEquipmentHandsRequired(null)).toBe(1);
   });
 
-  test('normalizes each pool category and avoids duplicate master options', () => {
+  test('normalizes each pool category and preserves duplicate physical copies', () => {
     const pool = normalizeRogueliteEquipmentPool({
       weapons: [
         { id: 'great-axe', name: 'Gran hacha', traits: 'Dos manos' },
@@ -36,8 +39,14 @@ describe('roguelite starting equipment pool', () => {
     expect(pool.weapons).toEqual([
       expect.objectContaining({
         templateId: 'great-axe',
+        instanceId: 'great-axe::1',
         name: 'Gran hacha',
         handsRequired: 2,
+      }),
+      expect.objectContaining({
+        templateId: 'great-axe',
+        instanceId: 'great-axe::2',
+        name: 'Gran hacha duplicada',
       }),
     ]);
     expect(pool.armor[0]).toMatchObject({
@@ -118,6 +127,70 @@ describe('roguelite starting equipment pool', () => {
       offHand: null,
       body: null,
     });
+  });
+
+  test('does not equip the same physical weapon copy in two hands or weapon sets', () => {
+    const dagger = {
+      name: 'Daga',
+      templateId: 'weapon:daga',
+      instanceId: 'weapon:daga::1',
+      handsRequired: 1,
+    };
+    const firstHand = equipItemInWeaponSet({}, 0, 'mainHand', dagger);
+    const duplicateHand = equipItemInWeaponSet(firstHand, 0, 'offHand', dagger);
+    const duplicateSet = equipItemInWeaponSet(firstHand, 1, 'mainHand', dagger);
+
+    expect(resolveEquippedWeaponSet(duplicateHand, 0)).toEqual({
+      mainHand: dagger,
+      offHand: null,
+    });
+    expect(resolveEquippedWeaponSet(duplicateSet, 1)).toEqual({
+      mainHand: null,
+      offHand: null,
+    });
+  });
+
+  test('equips two distinct copies of the same weapon template', () => {
+    const [daggerOne, daggerTwo] = materializeEquipmentInstances([
+      { name: 'Daga', templateId: 'weapon:daga', handsRequired: 1 },
+      { name: 'Daga', templateId: 'weapon:daga', handsRequired: 1 },
+    ], 'weapons');
+    const firstHand = equipItemInWeaponSet({}, 0, 'mainHand', daggerOne);
+    const dualWield = equipItemInWeaponSet(firstHand, 0, 'offHand', daggerTwo);
+
+    expect(resolveEquippedWeaponSet(dualWield, 0)).toEqual({
+      mainHand: daggerOne,
+      offHand: daggerTwo,
+    });
+    expect(resolveEquippedItemUsages(dualWield, daggerOne)).toEqual([
+      expect.objectContaining({ weaponSetIndex: 0, slot: 'mainHand' }),
+    ]);
+    expect(resolveEquippedItemUsages(dualWield, daggerTwo)).toEqual([
+      expect.objectContaining({ weaponSetIndex: 0, slot: 'offHand' }),
+    ]);
+  });
+
+  test('migrates legacy loadouts by assigning each slot to an owned copy', () => {
+    const legacyDagger = { name: 'Daga', templateId: 'weapon:daga', handsRequired: 1 };
+    const oneCopy = reconcileEquippedItemsWithInventory({
+      mainHand: legacyDagger,
+      offHand: legacyDagger,
+    }, {
+      weapons: [legacyDagger],
+    });
+    const twoCopies = reconcileEquippedItemsWithInventory({
+      mainHand: legacyDagger,
+      offHand: legacyDagger,
+    }, {
+      weapons: [legacyDagger, legacyDagger],
+    });
+
+    expect(resolveEquippedWeaponSet(oneCopy, 0).mainHand).toMatchObject({
+      instanceId: 'weapon:daga::1',
+    });
+    expect(resolveEquippedWeaponSet(oneCopy, 0).offHand).toBeNull();
+    expect(resolveEquippedWeaponSet(twoCopies, 0).mainHand.instanceId)
+      .not.toBe(resolveEquippedWeaponSet(twoCopies, 0).offHand.instanceId);
   });
 
   test('migrates an old invalid combination by keeping the two-handed weapon', () => {

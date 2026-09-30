@@ -1,0 +1,129 @@
+.combat-hud-tabs-anchor { position: relative; max-width: 100%; }
+.potion-preparation-dock {
+  position: absolute;
+  bottom: calc(100% - 1px);
+  left: 16px;
+  right: 16px;
+  overflow: hidden;
+  pointer-events: auto;
+  transform-origin: bottom center;
+}
+.potion-preparation {
+  --potion-gold: #c8aa6e;
+  --potion-life: #e7a0a8;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: calc(100dvh - 205px);
+  overflow: hidden;
+  isolation: isolate;
+  color: #f0e6d2;
+  background: #1a1b26;
+  border: 1px solid #c8aa6e70;
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -12px 42px #0006;
+  pointer-events: auto;
+  text-align: center;
+  font-family: Alegreya, Georgia, serif;
+}
+.potion-preparation button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.potion-preparation button:focus-visible { outline: 2px solid #e7c88b; outline-offset: -3px; }
+.potion-preparation-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.potion-preparation-header { position: relative; isolation: isolate; padding: 28px 34px 12px; text-shadow: 0 2px 6px #000; }
+.potion-preparation-image { position: absolute !important; inset: 0; z-index: -1; pointer-events: none; mask-image: linear-gradient(#0009, #0007 35%, transparent); }
+.potion-preparation-art { width: 100%; height: 100%; object-fit: cover; object-position: 50% 46%; user-select: none; -webkit-user-drag: none; }
+.potion-preparation-close { position: absolute; right: 2px; top: 2px; width: 44px; height: 44px; display: grid; place-items: center; color: #d4c9c3; }
+.potion-preparation-close:hover { color: white; }
+.potion-preparation-eyebrow { display: block; color: #d0b681; font-size: 17px; font-style: italic; }
+.potion-preparation-header h2 { margin: 8px 0 4px; font: 600 22px/1.3 Cinzel, Georgia, serif; text-wrap: balance; }
+.potion-preparation-effect { margin: 0; color: #e7a0a8; font-size: 21px; }
+.potion-preparation-effect strong { font-size: 26px; font-weight: 500; }
+.potion-preparation-health { display: flex; justify-content: center; align-items: center; gap: 9px; color: var(--potion-life); padding: 4px 24px 12px; font-size: 18px; font-variant-numeric: tabular-nums; }
+.potion-preparation-max { color: #a9949c; }
+.potion-preparation-blocks { display: flex; flex-wrap: wrap; max-width: 160px; gap: 3px; }
+.potion-preparation-blocks i { display: block; width: 12px; height: 6px; background: #ffffff13; box-shadow: inset 0 0 0 1px #e7a0a831; transform: skewX(-18deg); }
+.potion-preparation-blocks i[data-filled='true'] { background: var(--potion-life); }
+.potion-preparation-prompt { margin: 2px 0 8px; color: #d7be8c; font-style: italic; font-size: 19px; }
+.potion-preparation-costs { padding: 0 14px 4px; }
+.potion-preparation-resources { display: grid; grid-template-columns: repeat(var(--potion-resource-columns, 3), minmax(0, 1fr)); gap: 6px; }
+.potion-preparation-resource { display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; min-width: 0; width: 100%; min-height: 118px; padding: 7px 2px; color: #b9b4c0; }
+.potion-preparation-resource > svg { width: min(70px, 100%); height: auto; aspect-ratio: 1; transition: transform .18s ease; }
+.potion-preparation-resource:hover:not(:disabled) > svg { transform: translateY(-4px); }
+.potion-preparation-resource-name { font: 18px/1.25 Alegreya, Georgia, serif; color: #d1b779; }
+.potion-preparation-resource-state { margin-top: 4px; font: 11px/1.4 Lato, Arial, sans-serif; }
+.potion-preparation-resource[aria-pressed='true'] .potion-preparation-resource-state { color: #f3d497; }
+.potion-preparation-resource:disabled { opacity: .32; cursor: not-allowed; }
+.potion-preparation-action-icon { display: grid; place-items: center; position: relative; width: 70px; height: 62px; color: #c8aa6e; }
+.potion-preparation-action-icon svg { width: 32px; height: 32px; stroke-width: 1.35; transition: transform .18s ease; }
+.potion-preparation-resource:hover .potion-preparation-action-icon svg { transform: translateY(-3px); }
+.potion-preparation-resource[aria-pressed='true'] .potion-preparation-action-icon::after { content: ''; position: absolute; width: 58px; height: 7px; bottom: 2px; background: radial-gradient(ellipse, #e9c5709c, transparent 70%); }
+.potion-preparation-disclosure { display: flex; align-items: center; justify-content: center; gap: 9px; margin: 2px auto; min-height: 44px; padding: 0 14px; color: #c8aa6e; font-size: 17px; }
+.potion-preparation-manual { display: grid; grid-template-columns: repeat(3, 1fr); justify-items: center; padding-bottom: 6px; }
+.potion-preparation-manual .potion-preparation-resource { min-height: 110px; width: 100%; }
+.potion-preparation-manual .potion-preparation-resource > svg { width: 62px; height: 62px; }
+.potion-preparation-footer { flex-shrink: 0; padding: 0 16px 15px; background: linear-gradient(#1a1b26e8, #1a1b26); }
+.potion-preparation-note { margin: 7px 0 11px; min-height: 21px; color: #c1b5bc; font-style: italic; font-size: 15px; line-height: 1.35; }
+.potion-preparation-confirm { display: flex; align-items: center; justify-content: center; gap: 23px; width: 100%; min-height: 48px; padding: 10px 18px; color: #10131c; background: #c8aa6e; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%); font: 700 17px/1.4 Cinzel, Georgia, serif; transition: background .18s ease; }
+.potion-preparation-confirm:hover:not(:disabled) { background: #dfc286; }
+.potion-preparation-confirm:disabled { background: #595157; color: #c3bdb5; cursor: not-allowed; }
+@media (max-width: 767px) {
+  .combat-hud-tabs-anchor { --potion-panel-width: min(320px, calc(100vw - 32px)); width: var(--potion-tabs-rest-width, max-content); transition: width .32s cubic-bezier(.22, 1, .36, 1); }
+  .combat-hud-tabs-anchor[data-potion-open='true'] { width: var(--potion-panel-width); }
+  .combat-hud-tabs-anchor .combat-hud-tabs > button { flex: 1 1 auto; }
+  .combat-hud-tabs-anchor .combat-hud-tabs { transition: border-radius .18s ease, background-color .18s ease; }
+  .combat-hud-tabs-anchor:has(.potion-preparation-dock) .combat-hud-tabs { border-top-left-radius: 0; border-top-right-radius: 0; border-top-color: #1a1b26; background-color: #0b1120; }
+  /* Cover fractional-pixel seams and merge the tabs' top edge with the panel. */
+  .potion-preparation-dock { left: 0; right: 0; bottom: calc(100% - 2px); }
+  /* Lay out the content at its final width before measuring the fold's height.
+     Only the outer dock reveals horizontally; the text never reflows mid-fold. */
+  .potion-preparation { width: var(--potion-panel-width); margin-left: calc((100% - var(--potion-panel-width)) / 2); max-height: calc(100dvh - 175px); }
+  .potion-preparation-header { padding: 24px 22px 8px; }
+  .potion-preparation-header h2 { font-size: 20px; }
+  .potion-preparation-effect { font-size: 18px; }
+  .potion-preparation-effect strong { font-size: 23px; }
+  .potion-preparation-health { padding-inline: 12px; gap: 7px; }
+  .potion-preparation-blocks { max-width: 110px; gap: 2px; }
+  .potion-preparation-blocks i { width: 10px; }
+  .potion-preparation-costs { padding-inline: 10px; }
+  .potion-preparation-resource { min-height: 110px; }
+  .potion-preparation-resource-name { font-size: 16px; }
+  .potion-preparation-action-icon { width: 54px; }
+  .potion-preparation-manual .potion-preparation-resource > svg { width: min(62px, 100%); height: auto; }
+  .potion-preparation-footer { padding-inline: 12px; }
+  .potion-preparation-confirm { gap: 12px; padding-inline: 10px; font-size: 15px; }
+}
+@media (max-height: 540px) {
+  .potion-preparation { max-height: calc(100dvh - 210px); }
+  .potion-preparation-header { padding-top: 14px; }
+  .potion-preparation-resource,
+  .potion-preparation-manual .potion-preparation-resource { min-height: 96px; padding-block: 2px; }
+  .potion-preparation-resource > svg,
+  .potion-preparation-manual .potion-preparation-resource > svg { width: min(56px, 100%); height: auto; }
+  .potion-preparation-action-icon { height: 56px; }
+  .potion-preparation-resource-name { font-size: 16px; }
+  .potion-preparation-footer { padding: 0 12px 8px; }
+  .potion-preparation-note { margin: 3px 0 5px; min-height: 0; font-size: 14px; line-height: 1.2; }
+  .potion-preparation-confirm { min-height: 44px; padding-block: 6px; font-size: 15px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .combat-hud-tabs-anchor, .combat-hud-tabs-anchor .combat-hud-tabs { transition: none !important; }
+  .potion-preparation * { transition: none !important; }
+}
+
+.potion-preparation--antidote .potion-preparation-effect { color: #afc995; }
+.potion-preparation--bandage .potion-preparation-effect { color: #dfc9ab; }
+.potion-preparation--bandage .potion-preparation-targets > button span { color: #e3989a; }
+.potion-preparation--bandage .potion-preparation-targets > button[aria-pressed='true'] { border-color: #c8aa6e; background: #c8aa6e18; }
+.potion-preparation[data-potion='haste-potion'] .potion-preparation-effect,
+.potion-preparation-movement { color: #bdd5df; }
+.potion-preparation[data-potion='vitality-potion'] .potion-preparation-effect { color: #dfc885; }
+.potion-preparation-duration { padding-inline: 18px; }
+.potion-preparation-temporary { display: flex; align-items: center; gap: 6px; color: #dfc885; --potion-life: #dfc885; }
+.potion-preparation-targets { margin: 0 20px 16px; }
+.potion-preparation-targets > button { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 9px 12px; color: #dfcfaa; border-bottom: 1px solid #c8aa6e33; }
+.potion-preparation-targets > button span { font-size: 12px; color: #afc995; }
+.potion-preparation-targets > button[aria-pressed="true"] { background: #91ad6320; border-color: #a5bc78; }
+.potion-preparation-targets > button:disabled { opacity: .45; }
+.potion-preparation-targets > button:focus-visible { outline: 2px solid #c8aa6e; outline-offset: 2px; }

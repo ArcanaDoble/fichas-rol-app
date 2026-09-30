@@ -14,6 +14,7 @@ export const buildBoardTimelineTokens = (items = []) => {
     const handTokenIds = new globalThis.Set(handCards.map(getCardHandTokenId).filter(Boolean));
     const combatTokens = items.filter((item) => (
         isCombatTokenItem(item)
+        && item.includeInBoardInitiative !== false
         && (item.isCircular || item.stats || item.name || handTokenIds.has(item.id))
     ));
 

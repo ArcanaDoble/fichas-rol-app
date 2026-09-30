@@ -441,6 +441,19 @@ const CanvasCombatPanel = ({ activeTab, combatRuntime = {}, isPlayerView, player
         </div>
       </header>
 
+      {subTab === 'COMBAT' && (combatRuntime.mutableArmorTokens || []).map(token => (
+        <div key={token.id} className="border-b border-[#c8aa6e]/25 pb-3">
+          <p className="font-['Cinzel'] text-xs text-[#d8bf88]">{token.name} · Protección mutable</p>
+          <p className="mt-1 text-[11px] text-slate-400">{token.armorProtectionChoice ? 'Protección fijada hasta el final del combate.' : 'Elige una protección para todo el combate.'}</p>
+          <div className="mt-2 grid grid-cols-2 gap-1">
+            {[['critico', 'Crítico'], ['perforante', 'Perforación'], ['conmocion', 'Conmoción'], ['empuje', 'Empuje']].map(([value, label]) => (
+              <button key={value} type="button" aria-pressed={token.armorProtectionChoice === value}
+                disabled={Boolean(token.armorProtectionChoice)} onClick={() => combatRuntime.chooseArmorProtection(token.id, value)}
+                className={`min-h-[44px] border px-2 text-xs ${token.armorProtectionChoice === value ? 'border-[#c8aa6e] text-[#eee5d3]' : 'border-slate-700 text-slate-400'}`}>{label}</button>
+            ))}
+          </div>
+        </div>
+      ))}
       {subTab === 'FREE_DICE' ? (
         <CanvasDiceTable
           combatRuntime={combatRuntime}

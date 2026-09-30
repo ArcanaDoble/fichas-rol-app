@@ -9,6 +9,17 @@ const EQUIPMENT_CATEGORIES = Object.freeze([
 const HAND_SLOTS = Object.freeze(['mainHand', 'offHand']);
 export const ROGUELITE_WEAPON_SET_COUNT = 2;
 
+export const resolveBeltSlotCount = (equippedItems = {}) => {
+  const storedCount = equippedItems.beltSlotCount;
+  if (storedCount != null && Number.isInteger(Number(storedCount)) && Number(storedCount) >= 0) {
+    return Math.min(9, Number(storedCount));
+  }
+  const occupiedIndices = Object.entries(equippedItems)
+    .filter(([slot, item]) => /^belt_\d+$/.test(slot) && item)
+    .map(([slot]) => Number(slot.slice(5)));
+  return Math.min(9, Math.max(3, ...occupiedIndices.map((index) => index + 1)));
+};
+
 const clampWeaponSetIndex = (value) => {
   const parsed = Number(value);
   if (!Number.isInteger(parsed)) return 0;
@@ -137,6 +148,14 @@ export const equipItemInWeaponSet = (
 ) => {
   const normalized = normalizeEquippedWeaponSets(equippedItems);
   const resolvedIndex = clampWeaponSetIndex(weaponSetIndex);
+  const alreadyUsedElsewhere = item && normalized.weaponSets.some((weaponSet, index) => (
+    ['mainHand', 'offHand'].some((candidateSlot) => (
+      !(index === resolvedIndex && candidateSlot === slot)
+      && equipmentItemsShareInstance(weaponSet[candidateSlot], item)
+    ))
+  ));
+  if (alreadyUsedElsewhere) return normalized;
+
   const nextSet = equipItemInSlot(
     normalized.weaponSets[resolvedIndex],
     slot,
@@ -187,6 +206,7 @@ export const equipItemInSlot = (equippedItems = {}, slot, item) => {
   if (!item) return { ...normalized, [slot]: null };
 
   const otherSlot = slot === 'mainHand' ? 'offHand' : 'mainHand';
+  if (equipmentItemsShareInstance(normalized[otherSlot], item)) return normalized;
   const next = { ...normalized, [slot]: item };
 
   if (
@@ -205,6 +225,70 @@ export const createEquipmentTemplateId = (item = {}, category = 'objects') => {
 
   const name = item.name ?? item.nombre ?? 'objeto';
   return `${category}:${slugify(name) || 'sin-nombre'}`;
+};
+
+export const resolveEquipmentInstanceId = (item = {}) => {
+  const explicitId = item?.instanceId ?? item?.runItemId ?? item?.inventoryInstanceId;
+  return String(explicitId || '').trim() || null;
+};
+
+export const equipmentItemsShareInstance = (left, right) => {
+  if (!left || !right) return false;
+
+  const leftInstanceId = resolveEquipmentInstanceId(left);
+  const rightInstanceId = resolveEquipmentInstanceId(right);
+  if (leftInstanceId && rightInstanceId) return leftInstanceId === rightInstanceId;
+
+  const leftIndex = Number(left?._index);
+  const rightIndex = Number(right?._index);
+  const leftCategory = left?._category || left?.itemType || left?.type;
+  const rightCategory = right?._category || right?.itemType || right?.type;
+  if (
+    Number.isInteger(leftIndex)
+    && Number.isInteger(rightIndex)
+    && leftIndex === rightIndex
+    && String(leftCategory || '') === String(rightCategory || '')
+  ) {
+    return true;
+  }
+
+  // Legacy loadouts did not store a physical instance id. Falling back to the
+  // template keeps one old item from being interpreted as infinite copies.
+  if (!leftInstanceId && !rightInstanceId) {
+    return createEquipmentTemplateId(left, left?._category)
+      === createEquipmentTemplateId(right, right?._category);
+  }
+
+  return false;
+};
+
+export const materializeEquipmentInstances = (items = [], fallbackCategory = 'objects') => {
+  const occurrences = new Map();
+  const assignedIds = new Set(
+    items.map(resolveEquipmentInstanceId).filter(Boolean),
+  );
+
+  return items.map((item) => {
+    const category = EQUIPMENT_CATEGORIES.includes(item?._category)
+      ? item._category
+      : fallbackCategory;
+    const templateId = createEquipmentTemplateId(item, category);
+    const explicitInstanceId = resolveEquipmentInstanceId(item);
+    if (explicitInstanceId) {
+      return { ...item, templateId, instanceId: explicitInstanceId };
+    }
+
+    let occurrence = (occurrences.get(`${category}:${templateId}`) || 0) + 1;
+    let instanceId = `${templateId}::${occurrence}`;
+    while (assignedIds.has(instanceId)) {
+      occurrence += 1;
+      instanceId = `${templateId}::${occurrence}`;
+    }
+    occurrences.set(`${category}:${templateId}`, occurrence);
+    assignedIds.add(instanceId);
+
+    return { ...item, templateId, instanceId };
+  });
 };
 
 export const normalizeEquipmentPoolItem = (item = {}, category = 'objects') => {
@@ -299,23 +383,138 @@ export const normalizeRogueliteEquipmentPool = (equipment) => {
         : 'objects';
       pool[category].push(normalizeEquipmentPoolItem(item, category));
     });
+    EQUIPMENT_CATEGORIES.forEach((category) => {
+      pool[category] = materializeEquipmentInstances(pool[category], category);
+    });
     return pool;
   }
 
   if (!equipment || typeof equipment !== 'object') return pool;
 
   EQUIPMENT_CATEGORIES.forEach((category) => {
-    const seenIds = new Set();
-    pool[category] = (Array.isArray(equipment[category]) ? equipment[category] : [])
-      .map((item) => normalizeEquipmentPoolItem(item, category))
-      .filter((item) => {
-        if (seenIds.has(item.templateId)) return false;
-        seenIds.add(item.templateId);
-        return true;
-      });
+    pool[category] = materializeEquipmentInstances(
+      (Array.isArray(equipment[category]) ? equipment[category] : [])
+        .map((item) => normalizeEquipmentPoolItem(item, category)),
+      category,
+    );
   });
 
   return pool;
+};
+
+const findInventoryCopy = (items, equippedItem, usedInstanceIds, category) => {
+  if (!equippedItem) return null;
+  const equippedInstanceId = resolveEquipmentInstanceId(equippedItem);
+  const templateId = createEquipmentTemplateId(equippedItem, category);
+  let match = equippedInstanceId
+    ? items.find((item) => (
+      resolveEquipmentInstanceId(item) === equippedInstanceId
+      && !usedInstanceIds.has(equippedInstanceId)
+    ))
+    : null;
+
+  const legacyIndex = Number(equippedItem?._index);
+  if (!match && !equippedInstanceId && Number.isInteger(legacyIndex)) {
+    const indexedItem = items[legacyIndex];
+    if (
+      indexedItem
+      && createEquipmentTemplateId(indexedItem, category) === templateId
+      && !usedInstanceIds.has(resolveEquipmentInstanceId(indexedItem))
+    ) {
+      match = indexedItem;
+    }
+  }
+
+  // An authoritative runtime instance that has disappeared was dropped or
+  // given away. Never silently replace it with another copy of the template.
+  if (!match && equippedInstanceId) return null;
+
+  if (!match) {
+    match = items.find((item) => (
+      createEquipmentTemplateId(item, category) === templateId
+      && !usedInstanceIds.has(resolveEquipmentInstanceId(item))
+    ));
+  }
+  if (!match) return null;
+
+  const instanceId = resolveEquipmentInstanceId(match);
+  if (instanceId) usedInstanceIds.add(instanceId);
+  return {
+    ...match,
+    ...equippedItem,
+    templateId: match.templateId,
+    instanceId,
+  };
+};
+
+export const reconcileEquippedItemsWithInventory = (equippedItems = {}, inventory = {}) => {
+  const pool = normalizeRogueliteEquipmentPool(inventory);
+  const normalized = normalizeEquippedWeaponSets(equippedItems);
+  const usedInstanceIds = new Set();
+  const weaponSets = normalized.weaponSets.map((weaponSet) => normalizeWeaponSet({
+    mainHand: findInventoryCopy(
+      pool.weapons,
+      weaponSet.mainHand,
+      usedInstanceIds,
+      'weapons',
+    ),
+    offHand: findInventoryCopy(
+      pool.weapons,
+      weaponSet.offHand,
+      usedInstanceIds,
+      'weapons',
+    ),
+  }));
+  const reconciled = {
+    ...normalized,
+    weaponSets,
+    body: findInventoryCopy(pool.armor, normalized.body, usedInstanceIds, 'armor'),
+    accessory_1: findInventoryCopy(
+      pool.accessories,
+      normalized.accessory_1,
+      usedInstanceIds,
+      'accessories',
+    ),
+    accessory_2: findInventoryCopy(
+      pool.accessories,
+      normalized.accessory_2,
+      usedInstanceIds,
+      'accessories',
+    ),
+  };
+
+  Object.keys(normalized).forEach((slot) => {
+    if (slot.startsWith('belt_')) {
+      reconciled[slot] = findInventoryCopy(
+        pool.objects,
+        normalized[slot],
+        usedInstanceIds,
+        'objects',
+      );
+    }
+  });
+
+  return normalizeEquippedWeaponSets(reconciled);
+};
+
+export const resolveEquippedItemUsages = (equippedItems = {}, item = null) => {
+  if (!item) return [];
+  const normalized = normalizeEquippedWeaponSets(equippedItems);
+  const usages = [];
+
+  normalized.weaponSets.forEach((weaponSet, weaponSetIndex) => {
+    ['offHand', 'mainHand'].forEach((slot) => {
+      const equippedItem = weaponSet[slot];
+      if (!equipmentItemsShareInstance(equippedItem, item)) return;
+      usages.push({
+        weaponSetIndex,
+        slot,
+        handsRequired: resolveEquipmentHandsRequired(equippedItem),
+      });
+    });
+  });
+
+  return usages;
 };
 
 export const resolveRogueliteEquipmentPool = (classDefinition = {}) => (

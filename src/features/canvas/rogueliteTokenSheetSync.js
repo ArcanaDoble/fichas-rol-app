@@ -3,6 +3,7 @@ import {
   resolveEquipmentHandsRequired,
   resolveEquippedWeaponSet,
 } from '../roguelite/equipmentPool';
+import { refreshForgeEquipment } from '../../utils/forgeEquipmentSync';
 import {
   STATUS_EFFECT_IDS,
   syncTokenWithSheet as syncLegacyTokenWithSheet,
@@ -36,6 +37,7 @@ const flattenItem = (item, type, slot) => {
 
   return {
     ...flattened,
+    ...(flattened.instanceId && flattened.runItemId ? { runItemId: flattened.instanceId } : {}),
     type: flattened.type || type,
     canvasSlot: slot,
     ...(handsRequired !== undefined ? { handsRequired } : {}),
@@ -129,11 +131,6 @@ export const syncCanvasTokenWithSheet = (token, sheetData, catalogs = {}, option
     && sheetData.activeRun.status !== 'finished'
     && (!sheetData.activeRun.id || sheetData.activeRun.id === activeRun.id)
   );
-  const equipped = resolveRogueliteEquippedItems(
-    hasStoredActiveRun
-      ? activeRun.equippedItems
-      : (sheetData.equippedItems || activeRun.equippedItems),
-  );
   const isExistingClassToken = Boolean(
     token?.profileType === 'rogueliteClass'
     && token?.linkedClassId
@@ -142,6 +139,14 @@ export const syncCanvasTokenWithSheet = (token, sheetData, catalogs = {}, option
   const preserveRuntimeState = options.preserveTokenState !== undefined
     ? options.preserveTokenState
     : isExistingClassToken;
+  const equipmentSource = preserveRuntimeState && token.equipmentLoadout
+      ? token.equipmentLoadout
+      : hasStoredActiveRun ? activeRun.equippedItems : (sheetData.equippedItems || activeRun.equippedItems);
+  // Live Forge definitions also apply to already equipped adventure copies.
+  // Keep runtime ownership, slots and stats; only refresh their definitions.
+  const equipped = resolveRogueliteEquippedItems(
+    refreshForgeEquipment({ equippedItems: equipmentSource }, catalogs).equippedItems,
+  );
   const portrait = sheetData.avatar
     || sheetData.portraitSource
     || sheetData.image
@@ -162,35 +167,36 @@ export const syncCanvasTokenWithSheet = (token, sheetData, catalogs = {}, option
       .filter(Boolean);
   };
 
-  const equippedSlotsByTemplate = equipped.items.reduce((slotsByTemplate, item) => {
-    const keys = resolveItemIdentityKeys(item);
-    keys.forEach((key) => {
-      slotsByTemplate.set(key, [...(slotsByTemplate.get(key) || []), item.canvasSlot]);
-    });
-    return slotsByTemplate;
-  }, new Map());
+  const physicalIdentity = item => item?.instanceId || item?.runItemId || item?.payload?.instanceId || item?.payload?.runItemId;
 
   const preparedSkillIds = new Set(
-    (activeRun.equippedSkillIds || sheetData.equippedSkillIds || [])
+    (preserveRuntimeState && Array.isArray(token.equippedSkillIds) ? token.equippedSkillIds : activeRun.equippedSkillIds || sheetData.equippedSkillIds || [])
       .flatMap((id) => resolveItemIdentityKeys({ id }))
   );
 
   const mapItemFlags = (item) => {
     const keys = resolveItemIdentityKeys(item);
-    const equippedSlots = keys.flatMap((key) => equippedSlotsByTemplate.get(key) || []);
+    const identity = physicalIdentity(item);
+    const equippedSlots = equipped.items.filter(candidate => {
+      const equippedIdentity = physicalIdentity(candidate);
+      return identity && equippedIdentity ? String(identity) === String(equippedIdentity)
+        : resolveItemIdentityKeys(candidate).some(key => keys.includes(key));
+    }).map(candidate => candidate.canvasSlot);
     const isPrepared = keys.some((key) => preparedSkillIds.has(key));
     return {
       ...item,
+      ...(item.instanceId && item.runItemId ? { runItemId: item.instanceId } : {}),
       isEquipped: equippedSlots.length > 0,
       isPrepared,
       equippedSlots: Array.from(new Set(equippedSlots)),
     };
   };
 
-  const baseInventory = preserveRuntimeState && Array.isArray(token.inventory) && token.inventory.length > 0
+  const baseInventory = preserveRuntimeState
+    && Array.isArray(token.inventory)
     ? token.inventory
     : flattenRogueliteRunInventory(activeRun.inventory);
-  const syncedInventory = baseInventory.map(mapItemFlags);
+  const syncedInventory = refreshForgeEquipment({ equipment: baseInventory }, catalogs).equipment.map(mapItemFlags);
   const storedTalentSlots = Array.isArray(sheetData.equippedTalentIds)
     ? sheetData.equippedTalentIds
     : (Array.isArray(sheetData.talents?.slots)
@@ -230,7 +236,9 @@ export const syncCanvasTokenWithSheet = (token, sheetData, catalogs = {}, option
     },
   );
   const equippedTalents = equippedTalentSlots.filter(Boolean);
-  const equippedSkillIds = Array.isArray(activeRun.equippedSkillIds)
+  const equippedSkillIds = preserveRuntimeState && Array.isArray(token.equippedSkillIds)
+    ? token.equippedSkillIds
+    : Array.isArray(activeRun.equippedSkillIds)
     ? activeRun.equippedSkillIds
     : (Array.isArray(sheetData.equippedSkillIds)
       ? sheetData.equippedSkillIds
@@ -261,12 +269,14 @@ export const syncCanvasTokenWithSheet = (token, sheetData, catalogs = {}, option
   return {
     ...token,
     profileType: 'rogueliteClass',
+    proficiencies: sheetData.summary?.proficiencies || sheetData.proficiencies || token.proficiencies || null,
+    classIdentity: sheetData.classIdentity || sheetData.name || sheetData.templateId || token.classIdentity || null,
     canvasRuntime: 'roguelite',
     linkedClassId: sheetData.id || sheetData.templateId || token.linkedClassId || null,
     linkedClassOwner: sheetData.owner || token.linkedClassOwner || null,
     linkedCharacterId: null,
     runId: activeRun.id,
-    runRevision: Math.max(0, Number(activeRun.revision) || 0),
+    runRevision: Math.max(0, Number(activeRun.revision) || 0, preserveRuntimeState ? Number(token.runRevision) || 0 : 0),
     runScenarioId: options.scenarioId || token.runScenarioId || activeRun.currentScenarioId || null,
     runtimeDirty: preserveRuntimeState ? Boolean(token.runtimeDirty) : false,
     level: clampNumber(sheetData.level, 1),

@@ -6,6 +6,7 @@ import { syncCanvasTokenWithSheet } from './rogueliteTokenSheetSync';
 import CanvasTokenResources from './components/CanvasTokenResources';
 import CanvasEquipmentSection from './components/CanvasEquipmentSection';
 import CanvasLootVisual from './components/CanvasLootVisual';
+import CanvasSharedPointers from './components/CanvasSharedPointers';
 import {
     getCanvasLootRenderPlacement,
     isCanvasLootItem,
@@ -15,6 +16,7 @@ import {
     loadCanvasRogueliteRuntimeSheet,
     persistCanvasRogueliteRuns,
 } from './rogueliteRunPersistence';
+import { didGainCanvasSharedVision } from './playerVisionAccess';
 
 export const CANVAS_MODE_DEFINITION = Object.freeze({
     id: 'canvas',
@@ -26,6 +28,9 @@ export const CANVAS_MODE_DEFINITION = Object.freeze({
     syncTokenWithSheet: syncCanvasTokenWithSheet,
     loadRuntimeSheet: loadCanvasRogueliteRuntimeSheet,
     persistRuntimeItems: persistCanvasRogueliteRuns,
+    didGainPlayerSharedVision: didGainCanvasSharedVision,
+    allowPlayerTokenHoverInspection: true,
+    SharedPointerOverlay: CanvasSharedPointers,
     TokenResourcesComponent: CanvasTokenResources,
     EquipmentSectionComponent: CanvasEquipmentSection,
     isScenePickupItem: isCanvasLootItem,

@@ -1,0 +1,13 @@
+.canvas-bleeding-choice { padding: 24px 20px; text-align: center; font-family: Alegreya, Georgia, serif; color: #eee5d3; }
+.canvas-bleeding-choice > svg { margin: 0 auto 8px; color: #d47980; }
+.canvas-bleeding-choice h2 { font-family: Cinzel, Georgia, serif; color: #e3989a; font-size: 26px; }
+.canvas-bleeding-choice p { margin: 8px 0 16px; font-size: 18px; }
+.canvas-bleeding-choice .canvas-bleeding-choice__name { color: #c8aa6e; font-size: 22px; }
+.canvas-bleeding-choice__options { display: flex; flex-wrap: wrap; gap: 12px; }
+.canvas-bleeding-choice__options button { flex: 1 1 190px; min-height: 100px; padding: 14px; border: 1px solid #c8aa6e66; background: #0d1019; color: #eee5d3; }
+.canvas-bleeding-choice__options svg { margin: 0 auto 8px; color: #c8aa6e; }
+.canvas-bleeding-choice__options strong, .canvas-bleeding-choice__options span { display: block; }
+.canvas-bleeding-choice__options strong { font-size: 18px; }
+.canvas-bleeding-choice__options span { margin-top: 5px; color: #bab3aa; font-size: 16px; }
+.canvas-bleeding-choice__options button:hover, .canvas-bleeding-choice__options button:focus-visible { border-color: #c8aa6e; background: #242129; outline: 1px solid #c8aa6e; }
+.canvas-bleeding-choice__options button:disabled { opacity: .5; cursor: wait; }

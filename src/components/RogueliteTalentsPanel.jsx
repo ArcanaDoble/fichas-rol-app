@@ -14,6 +14,8 @@ import {
 } from 'react-icons/fi';
 import HexIcon from './HexIcon';
 import LoadingImage from './LoadingImage';
+import ItemRulesText from './ItemRulesText';
+import { getItemRulesPresentation } from '../utils/itemRulesPresentation';
 import { uploadDataUrl } from '../utils/storage';
 import {
   ROGUELITE_SKILL_SLOT_COUNT,
@@ -561,7 +563,7 @@ const RogueliteTalentsPanel = ({
                       {equippedSkill?.name || equippedSkill?.nombre || 'Ranura vacía'}
                     </span>
                     <span className="noma-talent-entry__description block truncate">
-                      {equippedSkill?.description || equippedSkill?.descripcion || 'Pulsa para elegir una habilidad'}
+                      {equippedSkill ? getItemRulesPresentation(equippedSkill).description : 'Pulsa para elegir una habilidad'}
                     </span>
                   </span>
                 </button>
@@ -889,12 +891,13 @@ const RogueliteTalentsPanel = ({
                   const skillKey = String(skill.templateId || skill.id || skill.runItemId || skill.name || skill.nombre || '').trim();
                   const selected = equippedSkillIds[activeSkillSlot] === skillKey;
                   const image = skill.image || skill.imagen || skill.imageUrl || skill.icon || skill.avatar;
+                  const rules = getItemRulesPresentation(skill);
                   return (
+                    <div key={`${skillKey}-${sIdx}`} className="noma-skill-choice">
                     <button
-                      key={`${skillKey}-${sIdx}`}
                       type="button"
                       onClick={() => equipSkill(activeSkillSlot, skillKey)}
-                      className={`flex min-h-16 w-full items-center gap-3 border-b border-slate-800 px-2 py-2 text-left transition ${selected ? 'bg-[#c8aa6e]/10' : 'hover:bg-[#111827]'}`}
+                      className={`flex min-h-16 w-full items-center gap-3 px-2 py-2 text-left transition ${selected ? 'bg-[#c8aa6e]/10' : 'hover:bg-[#111827]'}`}
                     >
                       <HexIcon size="sm" active={Boolean(image)}>
                         {image ? (
@@ -913,14 +916,18 @@ const RogueliteTalentsPanel = ({
                         <span className="block text-xs font-bold uppercase tracking-wider text-[#f0e6d2]">
                           {skill.name || skill.nombre}
                         </span>
-                        <span className="mt-0.5 line-clamp-2 block text-[10px] leading-relaxed text-slate-500">
-                          {skill.description || skill.descripcion || 'Sin descripción'}
-                        </span>
+                        {(rules.range || rules.traits.length > 0) && <span className="noma-skill-choice__metadata">
+                          {[rules.range && `Alcance: ${rules.range}`, ...rules.traits].filter(Boolean).join(' · ')}
+                        </span>}
                       </span>
                       {selected && (
                         <FiCheck className="h-4 w-4 shrink-0 text-[#c8aa6e]" />
                       )}
                     </button>
+                    <div className="noma-skill-choice__rules">
+                      <ItemRulesText text={rules.description || 'Sin descripción'} name={skill.name || skill.nombre} previewLength={150} />
+                    </div>
+                    </div>
                   );
                 })}
                 {abilityCatalog.length === 0 && (

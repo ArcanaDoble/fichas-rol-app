@@ -1,3 +1,4 @@
+import { getTerrainMovementCost } from './tarTerrain';
 import { nanoid } from 'nanoid';
 import { getCardStackIds, isCardContainerItem, isCardItem } from '../../utils/cardBoard';
 import { syncTokenWithSheet } from './tokenSheetSync';
@@ -6,11 +7,17 @@ import {
     getCombatRenderPlacementAtPosition, getDefaultTokenDimensions,
     getMobileTacticalMoveOptions, getTokenProneStatusMeta, isBoardDieItem,
     isBoardMarkerItem, isCombatTokenItem, isMobileTacticalMoveToken,
-    isPointInsideExpandedItem, isTokenDerribado,
+    isPointInsideExpandedItem, isTokenDerribado, normalizeTokenStatusIds,
 } from './legacyCombatRules';
 import { WORLD_SIZE, snapWorldPositionToGrid } from './spatial';
 import { ACTIVE_BOARD_DIE_ROLL_IDS } from '../../utils/boardDiceRuntime';
 import { canControlToken, isCanvasCombatRoundActive } from './tokenControlUtils';
+import {
+    getHiddenSafeMovementPreviewItems,
+    removeHiddenStatusFromToken,
+    resolveHiddenDetectionAlongMovement,
+} from './tokenVisibilityAccess';
+import { createAreaSceneItem, getTerrainAreaDefinition } from './areaPlacementSystem';
 
 /** Frozen token and item commands shared by the legacy tactical host. */
 export const createCanvasTokenController = ({
@@ -125,6 +132,8 @@ const addTokenToCanvas = (tokenUrl) => {
         event?.nativeEvent?.stopImmediatePropagation?.();
     };
 
+    const blocksMovementWhileProne = token => isBoardMode ? isTokenDerribado(token) : normalizeTokenStatusIds(token?.status).some(status => (typeof status === 'string' ? status : status?.id) === 'derribado');
+
     const shouldUseMobileTacticalMove = (token, items = []) => {
         const currentScenario = activeScenarioRef.current || activeScenario;
         const isCombatActive = isCanvasCombatRoundActive(currentScenario);
@@ -134,7 +143,7 @@ const addTokenToCanvas = (tokenUrl) => {
             isCombatActive &&
             activeLayer === 'TABLETOP' &&
             isMobileTacticalMoveToken(token) &&
-            !isTokenDerribado(token) &&
+            !blocksMovementWhileProne(token) &&
             canCombatTokenActNow(token, items, currentScenario)
         );
     };
@@ -151,7 +160,7 @@ const addTokenToCanvas = (tokenUrl) => {
     );
 
     const getBoardMobileTacticalMoveOptions = (token, items = []) => (
-        getMobileTacticalMoveOptions(token, items, gridConfig, MOBILE_TACTICAL_MOVE_RANGE, {
+        getMobileTacticalMoveOptions(token, getHiddenSafeMovementPreviewItems(token, items), gridConfig, MOBILE_TACTICAL_MOVE_RANGE, {
             requireCombatActive: false,
             validateOccupancy: true,
             validateWalls: true,
@@ -169,7 +178,12 @@ const addTokenToCanvas = (tokenUrl) => {
             Number(combatRuntime?.getAvailableMovement?.(token?.id)) || 0,
         );
         const remaining = Math.max(0, available - (Number(pending?.moveCost) || 0));
-        return getMobileTacticalMoveOptions(token, items, gridConfig, remaining);
+        return getMobileTacticalMoveOptions(
+            token,
+            getHiddenSafeMovementPreviewItems(token, items),
+            gridConfig,
+            remaining,
+        );
     };
 
     const handleMobileTacticalMoveCell = (event, tokenId, targetCell) => {
@@ -188,7 +202,31 @@ const addTokenToCanvas = (tokenUrl) => {
             .find(candidate => candidate.cell.x === targetCell.x && candidate.cell.y === targetCell.y);
         if (!option) return;
 
-        const nextPosition = option.nextPosition;
+        let nextPosition = option.nextPosition;
+        let stepCost = Math.max(1, option.cost || 1);
+        const hiddenResolution = resolveHiddenDetectionAlongMovement({
+            movingToken: token,
+            from: { x: token.x, y: token.y },
+            to: nextPosition,
+            items: scenario.items,
+            config: gridConfig,
+        });
+        if (hiddenResolution.detected) {
+            nextPosition = hiddenResolution.finalPosition;
+            stepCost = hiddenResolution.spentCost;
+            const revealedIds = new globalThis.Set(hiddenResolution.revealedTokenIds);
+            const revealOnlyItems = scenario.items.map((item) => (
+                revealedIds.has(item.id) ? removeHiddenStatusFromToken(item) : item
+            ));
+            safePersistItems(scenario.id, revealOnlyItems, scenario.items, hiddenResolution.revealedTokenIds);
+            triggerToast(
+                'Oculto descubierto',
+                hiddenResolution.blocked
+                    ? 'El contacto revela la presencia, pero la casilla sigue ocupada y el paso no se consume.'
+                    : 'El contacto a alcance Toque revela al token y detiene la ruta.',
+                'warning',
+            );
+        }
 
         if (isPlayerView) {
             const pending = isUsablePendingTurnState(pendingTurnStateRef.current) && pendingTurnStateRef.current.tokenId === tokenId
@@ -196,18 +234,19 @@ const addTokenToCanvas = (tokenUrl) => {
                 : null;
             const turnStartX = pending ? pending.startX : token.x;
             const turnStartY = pending ? pending.startY : token.y;
-            const cellW = gridConfig.cellWidth || 50;
-            const cellH = gridConfig.cellHeight || 50;
-            const moveCost = Math.max(
-                Math.round(Math.abs(nextPosition.x - turnStartX) / cellW),
-                Math.round(Math.abs(nextPosition.y - turnStartY) / cellH)
-            );
+            const geometricMoveCost = getTerrainMovementCost({ token,
+                from: { x: turnStartX, y: turnStartY }, to: nextPosition, items: scenario.items, config: gridConfig });
+            const moveCost = hiddenResolution.detected
+                ? (Math.max(0, Number(pending?.moveCost) || 0) + stepCost)
+                : geometricMoveCost;
 
-            const nextItems = scenario.items.map(item => (
-                item.id === tokenId
-                    ? { ...item, x: nextPosition.x, y: nextPosition.y }
-                    : item
-            ));
+            const nextItems = hiddenResolution.detected
+                ? hiddenResolution.items
+                : scenario.items.map(item => (
+                    item.id === tokenId
+                        ? { ...item, x: nextPosition.x, y: nextPosition.y }
+                        : item
+                ));
 
             setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
             setSelectedTokenIds([tokenId]);
@@ -237,7 +276,6 @@ const addTokenToCanvas = (tokenUrl) => {
             return;
         }
 
-        const stepCost = Math.max(1, option.cost || 1);
         let movedToken = {
             ...token,
             x: nextPosition.x,
@@ -257,8 +295,8 @@ const addTokenToCanvas = (tokenUrl) => {
             }
         }
 
-        const nextItems = scenario.items.map(item => (
-            item.id === tokenId ? movedToken : item
+        const nextItems = (hiddenResolution.detected ? hiddenResolution.items : scenario.items).map(item => (
+            item.id === tokenId ? { ...movedToken, status: item.status } : item
         ));
 
         if (handleModeItemDrop?.({
@@ -305,9 +343,14 @@ const addTokenToCanvas = (tokenUrl) => {
             .find(candidate => candidate.cell.x === targetCell.x && candidate.cell.y === targetCell.y);
         if (!option) return;
 
-        const nextItems = scenario.items.map(item => (
+        const hiddenResolution = resolveHiddenDetectionAlongMovement({
+            movingToken: token, from: { x: token.x, y: token.y }, to: option.nextPosition,
+            items: scenario.items, config: gridConfig,
+        });
+        const destination = hiddenResolution.detected ? hiddenResolution.finalPosition : option.nextPosition;
+        const nextItems = hiddenResolution.items.map(item => (
             item.id === tokenId
-                ? { ...item, x: option.nextPosition.x, y: option.nextPosition.y }
+                ? { ...item, x: destination.x, y: destination.y }
                 : item
         ));
 
@@ -316,7 +359,12 @@ const addTokenToCanvas = (tokenUrl) => {
         setActiveBoardHandTokenId(tokenId);
         lastSelectedIdRef.current = tokenId;
         setMobileMoveHoverCellKey(null);
-        safePersistItems(scenario.id, nextItems, scenario.items, [tokenId]);
+        safePersistItems(scenario.id, nextItems, scenario.items, [...new Set([tokenId, ...hiddenResolution.revealedTokenIds])]);
+        if (hiddenResolution.detected) {
+            triggerToast?.('Oculto descubierto', hiddenResolution.blocked
+                ? 'La casilla está ocupada: la ruta se detiene antes de entrar.'
+                : 'El contacto a alcance Toque revela al token y detiene la ruta.', 'warning');
+        }
     };
 
     const handleCancelMobileTacticalMove = (event, tokenId) => {
@@ -380,6 +428,7 @@ const addTokenToCanvas = (tokenUrl) => {
                 to: { x: finalX, y: finalY },
                 cost,
                 isExceptional,
+                itemsOverride: scenario.items,
             });
             if (!confirmed) return false;
         } else {
@@ -467,6 +516,7 @@ const addTokenToCanvas = (tokenUrl) => {
             // Restricción de Jugador: No permitir interactuar con tokens ajenos
             const isOwner = !isPlayerView ||
                 (isCardItem(token) && isBoardMode && (
+                    (isCardItem(token) && Boolean(token.stackKey)) ||
                     !token.ownerName ||
                     token.ownerName === playerName ||
                     token.ownerId === currentUserId ||
@@ -546,11 +596,11 @@ const addTokenToCanvas = (tokenUrl) => {
 
             if (isCombatActive && activeLayer === 'TABLETOP' && currentScenario) {
                 const hasProneTokenInSelection = currentScenario.items.some(item =>
-                    newSelection.includes(item.id) && isTokenDerribado(item)
+                    newSelection.includes(item.id) && blocksMovementWhileProne(item)
                 );
                 if (hasProneTokenInSelection) {
                     const selectedProneToken = currentScenario.items.find(item =>
-                        newSelection.includes(item.id) && isTokenDerribado(item)
+                        newSelection.includes(item.id) && blocksMovementWhileProne(item)
                     );
                     const proneStatusMeta = getTokenProneStatusMeta(selectedProneToken);
                     triggerToast(
@@ -736,6 +786,11 @@ const addTokenToCanvas = (tokenUrl) => {
         if (!activeScenario) return;
 
         const itemToDelete = (activeScenario.items || []).find(i => i.id === itemId);
+        if (isBoardMode && isPlayerView && itemToDelete?.hideStackContentsForPlayers) return;
+        if (isPlayerView && itemToDelete?.areaEffect?.type === 'smoke') {
+            triggerToast('Zona persistente', 'Solo el master puede retirar una zona de humo.', 'warning');
+            return;
+        }
         const idsToDelete = new globalThis.Set([
             itemId,
             ...(isCardItem(itemToDelete) ? getCardStackIds(itemToDelete) : [])
@@ -865,15 +920,28 @@ const addTokenToCanvas = (tokenUrl) => {
     };
 
     const addAreaToCanvas = async (shape = 'rect') => {
-        if (!activeScenario) return;
+        if (!activeScenario || isPlayerView) return;
 
         const spawnX = WORLD_SIZE / 2;
         const spawnY = WORLD_SIZE / 2;
         const side = gridConfig.cellWidth * 2 || 100;
         const isHazard = shape === 'hazard';
+        const terrainDefinition = getTerrainAreaDefinition(shape);
         const isStairs = shape === 'stairs';
 
-        const newArea = {
+        const newArea = terrainDefinition ? createAreaSceneItem({
+            placement: {
+                valid: true,
+                shape: 'rect',
+                x: spawnX - side / 2,
+                y: spawnY - side / 2,
+                width: side,
+                height: side,
+            },
+            ...terrainDefinition,
+            controlledBy: ['master'],
+            metadata: { createdByRole: 'master', deletableBy: ['master'] },
+        }) : {
             id: crypto.randomUUID(),
             type: 'geometry',
             shapeType: shape, // 'rect' | 'circle' | 'hazard' | 'stairs'

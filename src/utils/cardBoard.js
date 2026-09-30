@@ -8,6 +8,11 @@ export const isHandCardItem = (item) => isCardItem(item) && item.zone === 'hand'
 
 export const isStackedCardItem = (item) => isCardItem(item) && !!item.stackParentId;
 
+export const isCardInPrivateStack = (item, items = []) => isCardItem(item) && (
+    item.hideStackContentsForPlayers === true
+    || (item.stackParentId && items.some(parent => parent.id === item.stackParentId && parent.hideStackContentsForPlayers === true))
+);
+
 export const isContainedCardItem = (item) => isCardItem(item) && !!item.containerId;
 
 export const preservePendingHandTransferState = (
@@ -292,6 +297,8 @@ export const stackCardOnTarget = (items = [], sourceId, targetId) => {
 
     const nextSourceStackIds = [...targetStackIds, target.id, ...sourceStackIds].filter(Boolean);
     const stackedIds = new globalThis.Set(nextSourceStackIds);
+    const privateStack = target.hideStackContentsForPlayers === true || source.hideStackContentsForPlayers === true;
+    const stackKey = target.stackKey || source.stackKey || null;
 
     const nextItems = items.map(item => {
         if (item.id === source.id) {
@@ -301,6 +308,10 @@ export const stackCardOnTarget = (items = [], sourceId, targetId) => {
                 containerId: nextContainerId,
                 stackParentId: null,
                 stackIds: nextSourceStackIds,
+                stackKey,
+                boardDraw: null,
+                hideStackContentsForPlayers: privateStack,
+                faceDown: privateStack ? true : item.faceDown === true,
             };
         }
 
@@ -311,6 +322,10 @@ export const stackCardOnTarget = (items = [], sourceId, targetId) => {
                 containerId: nextContainerId,
                 stackParentId: source.id,
                 stackIds: [],
+                stackKey: null,
+                boardDraw: null,
+                hideStackContentsForPlayers: false,
+                faceDown: privateStack ? true : item.faceDown === true,
                 x: source.x,
                 y: source.y,
                 rotation: source.rotation || 0,

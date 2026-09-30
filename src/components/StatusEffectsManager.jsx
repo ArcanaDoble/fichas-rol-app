@@ -19,7 +19,7 @@ import {
     FiArrowLeft,
     FiLayout
 } from 'react-icons/fi';
-import { ICON_MAP, DEFAULT_STATUS_EFFECTS } from '../utils/statusEffects';
+import { ICON_MAP, DEFAULT_STATUS_EFFECTS, mergeStatusEffectsConfig } from '../utils/statusEffects';
 import { Image as KonvaImage, Circle } from 'react-konva';
 import useImage from 'use-image';
 import PropTypes from 'prop-types';
@@ -111,7 +111,7 @@ const StatusEffectsManager = ({ onBack, highlightText }) => {
             if (Object.keys(data).length === 0) {
                 initializeDefaults();
             } else {
-                setEffects(data);
+                setEffects(mergeStatusEffectsConfig(data));
                 setLoading(false);
             }
         });

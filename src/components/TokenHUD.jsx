@@ -1,5 +1,7 @@
 
 import React from 'react';
+import CanvasTokenLife from '../features/canvas/components/CanvasTokenLife';
+import TokenResourceCrown from '../features/tactical-shared/components/TokenResourceCrown';
 
 /**
  * Renderiza HUD de recursos con JERARQUÍA SIMPLIFICADA.
@@ -10,8 +12,9 @@ import React from 'react';
  * 
  * Ingenio y Cordura NO se muestran en el token (solo en Inspector).
  */
-const TokenHUD = ({ stats, velocidad = 0, width, height }) => {
+const TokenHUD = ({ stats, velocidad = 0, width, height, variant, ...props }) => {
     if (!stats) return null;
+    if (variant === 'roguelite') return <CanvasTokenLife stats={stats} width={width} height={height} {...props} />;
 
     // Umbrales de tamaño
     // Consideramos "grande" algo mayor que una celda estándar (50px)
@@ -63,6 +66,29 @@ const TokenHUD = ({ stats, velocidad = 0, width, height }) => {
             </div>
         );
     };
+
+    if (variant === 'board' || props.isCircular === false) {
+        const greenKey = stats.hambre ? 'hambre' : 'postura';
+        const greenLabel = greenKey === 'hambre' ? 'Hambre' : 'Postura';
+        const greenMaximum = Math.max(0, Math.floor(Number(stats[greenKey]?.max) || 0));
+        const greenCurrent = Math.max(0, Math.min(greenMaximum, Math.floor(Number(stats[greenKey]?.current) || 0)));
+        const hasLife = Number(stats.vida?.max) > 0;
+        return <>
+            <TokenResourceCrown stats={stats} width={width} height={height} {...props} className="noma-token-board-crown">
+                {greenMaximum > 0 && <span className="noma-token-life-count noma-token-green-count"
+                    aria-label={`${greenLabel}: ${greenCurrent} de ${greenMaximum}`}>
+                    <strong>{greenCurrent}</strong><span>/ {greenMaximum}</span>
+                </span>}
+            </TokenResourceCrown>
+            <TokenResourceCrown stats={stats} width={width} height={height} {...props}
+                className="noma-token-board-crown"
+                resourceKey={greenKey} label={greenLabel} position="top" showReadout={!hasLife}
+                poisoned={false} healingEffect={null} damageEffect={null} />
+            {showArmor && <div className="absolute top-1 left-0 w-full flex justify-center pointer-events-none z-20">
+                {renderPips('armadura', '#94a3b8')}
+            </div>}
+        </>;
+    }
 
     return (
         <div className="absolute inset-0 w-full h-full pointer-events-none rounded-sm">

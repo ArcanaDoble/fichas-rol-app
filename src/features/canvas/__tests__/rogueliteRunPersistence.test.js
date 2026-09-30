@@ -3,6 +3,8 @@ import {
   resolveChangedRogueliteRunTokens,
   syncCanvasTokenWithRuntimeProfile,
 } from '../rogueliteRunPersistence';
+import { addCanvasLootToInventory } from '../canvasInventoryTransfer';
+import { consumeHealingPotionItem, resolveHealingPotionItem } from '../item-use/healingPotionRules';
 
 const makeToken = (overrides = {}) => ({
   id: 'token-1',
@@ -158,5 +160,52 @@ describe('Canvas run persistence selection', () => {
       null,
       null,
     ]);
+  });
+
+  test('delayed metadata refresh cannot resurrect a consumed belt item or hide a fresh pickup', () => {
+    const bomb = { instanceId: 'bomb', name: 'Bomba de humo', type: 'object' };
+    const first = { instanceId: 'potion-a', id: 'potion', name: 'Poción de curación', type: 'object' };
+    const second = { ...first, instanceId: 'potion-b' };
+    const original = makeToken({ runRevision: 6, inventory: [bomb, first, second],
+      equippedItems: [bomb, first, second], equipmentLoadout: { beltSlotCount: 3, belt_0: bomb, belt_1: first, belt_2: second } });
+    const profile = { id: 'barbarian', owner: 'Ada', profileType: 'rogueliteClass', activeRun: {
+      id: 'run-1', revision: 5, currentScenarioId: 'room-1', stats: { vida: { current: 3, max: 8 } },
+      inventory: { objects: [bomb, first, second] }, equippedItems: original.equipmentLoadout,
+    } };
+    const consumed = consumeHealingPotionItem(resolveHealingPotionItem(original, first));
+    const metadata = syncCanvasTokenWithRuntimeProfile(consumed, profile, 'room-1', { forceMetadataSync: true });
+    expect(metadata.runRevision).toBe(6);
+    expect(metadata.stats.vida.current).toBe(8);
+    expect(metadata.equipmentLoadout.belt_1).toBeNull();
+    expect(metadata.inventory.map(item => item.instanceId)).toEqual(['bomb', 'potion-b']);
+    const picked = addCanvasLootToInventory(metadata, { ...first, instanceId: 'potion-c' });
+    const updated = syncCanvasTokenWithRuntimeProfile(picked, profile, 'room-1', { forceMetadataSync: true });
+    expect(updated.equipmentLoadout.belt_1.instanceId).toBe('potion-c');
+    expect(updated.equippedItems.map(item => item.instanceId)).toEqual(['bomb', 'potion-c', 'potion-b']);
+    expect(updated.inventory.find(item => item.instanceId === 'potion-c').equippedSlots).toEqual(['belt_1']);
+    expect(updated.inventory.find(item => item.instanceId === 'potion-b').equippedSlots).toEqual(['belt_2']);
+  });
+
+  test('a potion profile arriving before its scene waits for the matching runtime and healing effect', () => {
+    const potion = { instanceId: 'potion', name: 'Poción de curación', type: 'object' };
+    const token = makeToken({ runRevision: 4, canvasRuntimeRevision: 1, stats: { vida: { current: 3, max: 8 } },
+      inventory: [potion], equippedItems: [potion], equipmentLoadout: { belt_0: potion } });
+    const profile = { id: 'barbarian', owner: 'Ada', profileType: 'rogueliteClass', name: 'Nombre actualizado', activeRun: {
+      id: 'run-1', revision: 5, currentScenarioId: 'room-1', sourceCanvasRuntimeRevision: 2,
+      stats: { vida: { current: 7, max: 8 } }, inventory: { objects: [] }, equippedItems: { belt_0: null },
+    } };
+    const beforeScene = syncCanvasTokenWithRuntimeProfile(token, profile, 'room-1', { forceMetadataSync: true });
+    expect(beforeScene.name).toBe('Nombre actualizado');
+    expect(beforeScene.stats.vida.current).toBe(3);
+    expect(beforeScene.inventory).toHaveLength(1);
+    expect(beforeScene.equipmentLoadout.belt_0.instanceId).toBe('potion');
+    expect(beforeScene.runRevision).toBe(4);
+    const sceneToken = { ...beforeScene, canvasRuntimeRevision: 2, runRevision: 5, stats: profile.activeRun.stats,
+      inventory: [], equipmentLoadout: { belt_0: null }, canvasHealingEffect: { id: 'healing-1', previousLife: 3, nextLife: 7 } };
+    const afterScene = syncCanvasTokenWithRuntimeProfile(sceneToken, profile, 'room-1', { forceMetadataSync: true });
+    expect(afterScene.stats.vida.current).toBe(7);
+    expect(afterScene.inventory).toEqual([]);
+    expect(afterScene.runRevision).toBe(5);
+    expect(afterScene.canvasHealingEffect).toEqual(sceneToken.canvasHealingEffect);
   });
 });

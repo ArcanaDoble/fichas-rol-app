@@ -1,3 +1,5 @@
+import { continueCanvasExplosiveBlast } from './canvasExplosiveBlast';
+
 export const CANVAS_COMBAT_VERSION = 1;
 
 export const ACTION_DIE_STATUSES = Object.freeze(['available', 'committed', 'spent']);
@@ -76,7 +78,8 @@ export const defaultEnemyActions = () => [
 ];
 
 export const getMovementBase = (token) => Math.max(0, asInteger(
-  token?.stats?.movimiento?.max
+  (token?.stats?.movimiento?.potionBase != null ? Number(token.stats.movimiento.potionBase) + Number(token.stats.movimiento.potionBonus || 0) : undefined)
+    ?? token?.stats?.movimiento?.max
     ?? token?.stats?.movimiento?.current
     ?? token?.stats?.movement
     ?? token?.movimiento
@@ -86,7 +89,7 @@ export const getMovementBase = (token) => Math.max(0, asInteger(
 ));
 
 export const getMovementStatMax = (token) => Math.max(0, asInteger(
-  token?.stats?.movimiento?.max
+  token?.stats?.movimiento?.potionBase ?? token?.stats?.movimiento?.max
     ?? token?.stats?.movimiento?.current
     ?? token?.stats?.movement
     ?? token?.movimiento
@@ -101,7 +104,7 @@ export const getMovementAllowance = (participant) => {
   const base = Number(runtime.base) || 0;
   const modifier = Number(runtime.modifier) || 0;
   const sprintBonus = Number(runtime.sprintBonus) || 0;
-  return Math.max(0, base + modifier + sprintBonus);
+  return Math.max(0, (runtime.bleedingForfeit ? 0 : base + modifier) + sprintBonus);
 };
 
 export const getAvailableMovement = (participant) => {
@@ -120,6 +123,7 @@ const createParticipant = (token, index) => {
   const movementBase = getMovementBase(token);
   return {
     tokenId: token.id,
+    ...(token.stats?.movimiento?.potionBonus ? { hasteBonus: token.stats.movimiento.potionBonus } : {}),
     name: token.name || (side === 'players' ? 'Aventurero' : 'Enemigo'),
     portrait: token.portrait || token.img || '',
     side,
@@ -249,17 +253,22 @@ export const queueCanvasAttack = (state, attack, options = {}) => {
     }
   }
 
+  const lastAttackWeaponIds = (attack.attackParts || []).map(part => part.weaponId).filter(Boolean).map(String);
+  const updatedAttacker = {
+    ...attacker,
+    ...(lastAttackWeaponIds.length ? { lastAttackWeaponIds } : {}),
+  };
   const participants = {
     ...state.participants,
     [attack.attackerId]: attacker.side === 'players'
       ? {
-        ...attacker,
+        ...updatedAttacker,
         actionDice: attacker.actionDice.map((die) => (
           selectedIds.has(die.id) ? { ...die, status: 'spent' } : die
         )),
       }
       : {
-        ...attacker,
+        ...updatedAttacker,
         threatValue: attack.usedThreat ? null : attacker.threatValue,
         enemyActions: (attacker.enemyActions || defaultEnemyActions()).map((action) => (
           action.id === 'attack' ? { ...action, status: 'spent' } : action
@@ -276,7 +285,7 @@ export const queueCanvasAttack = (state, attack, options = {}) => {
     participants,
     pendingAttack: {
       ...serializableAttack,
-      status: 'awaiting-defense',
+      status: attack.needsCunning ? 'awaiting-cunning' : attack.needsAdjustment ? 'awaiting-adjustment' : 'awaiting-defense',
       createdAt: attack.createdAt || now,
     },
     updatedAt: now,
@@ -451,6 +460,55 @@ export const setActionDieStatus = (state, tokenId, dieId, status, options = {}) 
   };
 };
 
+export const consumeItemUseResource = (state, tokenId, resource = {}, options = {}) => {
+  const participant = state?.participants?.[tokenId];
+  if (!participant || resource.status !== 'available') return state;
+
+  if (resource.kind === 'enemy-action') {
+    if (participant.side !== 'enemies' || resource.actionId !== 'attack'
+      || !participant.enemyActions?.some(action => action.id === 'attack' && action.status === 'available')) return state;
+    return setEnemyActionStatus(state, tokenId, 'attack', 'spent', options);
+  }
+
+  if (resource.kind === 'enemy-movement') {
+    const runtime = participant.movementRuntime;
+    if (participant.side !== 'enemies' || resource.actionId !== 'movement'
+      || !participant.enemyActions?.some(action => action.id === 'movement' && action.status === 'available')
+      || getMovementAllowance(participant) <= Number(runtime?.spent || 0)) return state;
+    const next = setEnemyActionStatus(state, tokenId, 'movement', 'spent', options);
+    return { ...next, participants: { ...next.participants, [tokenId]: { ...next.participants[tokenId],
+      movementRuntime: { ...runtime, spent: getMovementAllowance(participant), history: [] },
+    } } };
+  }
+
+  if (resource.kind === 'manual-threat') {
+    if (participant.side !== 'enemies' || !DIE_SIDES.includes(resource.sides)) return state;
+    return { ...state, updatedAt: options.now || Date.now(), history: [
+      ...(state.history || []).slice(-39), { id: `item-threat-${tokenId}-${options.now || Date.now()}`,
+        type: 'item-use-resource', tokenId, kind: 'manual-threat', sides: resource.sides, timestamp: options.now || Date.now() },
+    ] };
+  }
+
+  if (resource.kind === 'threat-die') {
+    if (participant.side !== 'enemies' || participant.threatValue === null || participant.threatValue === undefined) {
+      return state;
+    }
+    return {
+      ...state,
+      updatedAt: options.now || Date.now(),
+      participants: {
+        ...state.participants,
+        [tokenId]: { ...participant, threatValue: null },
+      },
+    };
+  }
+
+  if (resource.kind !== 'action-die') return state;
+  const die = participant.actionDice?.find((candidate) => candidate.id === resource.id);
+  if (!die || die.status !== 'available') return state;
+  return setActionDieStatus(state, tokenId, resource.id, 'spent', options);
+};
+
 export const setEnemyActionStatus = (state, tokenId, actionId, status, options = {}) => {
   const participant = state?.participants?.[tokenId];
   if (!participant) return state;
@@ -478,11 +536,20 @@ export const markParticipantActed = (state, tokenId, options = {}) => {
       ? { ...candidate, actedIds: [...candidate.actedIds, tokenId] }
       : candidate
   ));
+  const participant = state.participants?.[tokenId];
+  const hasteTurnBonus = Number(participant?.hasteTurnBonus) || 0;
+  const participants = hasteTurnBonus ? { ...state.participants, [tokenId]: { ...participant, hasteTurnBonus: 0,
+    movementRuntime: { ...participant.movementRuntime,
+      sprintBonus: Math.max(0, participant.movementRuntime.sprintBonus - hasteTurnBonus),
+      spent: Math.min(participant.movementRuntime.spent, getMovementAllowance(participant) - hasteTurnBonus),
+    },
+  } } : state.participants;
   const completed = blocks[state.activeBlockIndex].actedIds.length >= block.memberIds.length;
   return {
     ...state,
     updatedAt: options.now || Date.now(),
     blocks,
+    participants,
     activeBlockIndex: completed
       ? Math.min(state.activeBlockIndex + 1, blocks.length)
       : state.activeBlockIndex,
@@ -614,7 +681,7 @@ export const rechargeEnemyMovementWithAttack = (state, tokenId, options = {}) =>
         movementRuntime: {
           ...runtime,
           spent: 0,
-          sprintBonus: 0,
+          sprintBonus: runtime.bleedingForfeit ? baseAllowance : 0,
           sprintDieId: null,
           sprintDieIds: [],
         },
@@ -779,7 +846,7 @@ export const recordParticipantMovement = (state, tokenId, { from, to, cost = 0, 
         ...participant,
         defensiveReposition: usesDefensiveReposition
           ? { ...participant.defensiveReposition, remaining: Math.max(0, defensiveRemaining - effectiveCost) }
-          : participant.defensiveReposition,
+          : (participant.defensiveReposition ?? null),
         enemyActions: participant.side === 'enemies' && effectiveCost > 0 && !usesDefensiveReposition
           ? (participant.enemyActions || defaultEnemyActions()).map((action) => (
             action.id === 'movement' ? { ...action, status: 'spent' } : action
@@ -835,7 +902,7 @@ export const undoParticipantMovement = (state, tokenId, options = {}) => {
             remaining: Math.max(0, Number(participant.defensiveReposition?.remaining) || 0) + (Number(lastEntry.cost) || 0),
             ignoresDuelExit: true,
           }
-          : participant.defensiveReposition,
+          : (participant.defensiveReposition ?? null),
         enemyActions: participant.side === 'enemies' && nextHistory.length === 0
           ? (participant.enemyActions || defaultEnemyActions()).map((action) => (
             action.id === 'movement' ? { ...action, status: 'available' } : action
@@ -867,12 +934,14 @@ export const undoParticipantMovement = (state, tokenId, options = {}) => {
 };
 
 export const startNextRound = (state, options = {}) => {
+  if (state?.pendingAttack || state?.explosiveBlast) return state;
   const round = Math.max(1, asInteger(state?.round, 1)) + 1;
   const participants = Object.fromEntries(Object.entries(state?.participants || {}).map(([id, participant]) => [
     id,
     participant.side === 'players'
       ? {
         ...participant,
+        ...(participant.hasteTurnBonus ? { hasteTurnBonus: 0 } : {}),
         actionDice: [],
         awaitingRoll: participant.actionDiceProfile.length > 0,
         movementRuntime: {
@@ -888,6 +957,7 @@ export const startNextRound = (state, options = {}) => {
       }
       : {
         ...participant,
+        ...(participant.hasteTurnBonus ? { hasteTurnBonus: 0 } : {}),
         threatValue: null,
         enemyActions: defaultEnemyActions(),
         movementRuntime: {
@@ -922,6 +992,8 @@ export const finishCanvasCombat = (state, options = {}) => ({
   roundPhase: 'finished',
   finishedAt: options.now || Date.now(),
   pendingAttack: null,
+  explosiveBlast: null,
+  queuedFireBursts: [],
   updatedAt: options.now || Date.now(),
 });
 
@@ -948,12 +1020,16 @@ export const pruneCombatState = (state, tokens = []) => {
   const nextBlocks = buildInitiativeBlocks(nextParticipants);
   const activeBlockIndex = Math.min(state.activeBlockIndex || 0, Math.max(0, nextBlocks.length - 1));
 
-  return {
+  const pruned = {
     ...state,
     participants: nextParticipants,
     blocks: nextBlocks,
     activeBlockIndex,
     pendingAttack: hasOrphanedPendingAttack ? null : state.pendingAttack,
+    explosiveBlast: state.explosiveBlast && tokenIds.has(state.explosiveBlast.sourceTokenId)
+      ? state.explosiveBlast : null,
     updatedAt: Date.now(),
   };
+  return hasOrphanedPendingAttack && pruned.explosiveBlast
+    ? continueCanvasExplosiveBlast(pruned, state.pendingAttack, tokens) : pruned;
 };

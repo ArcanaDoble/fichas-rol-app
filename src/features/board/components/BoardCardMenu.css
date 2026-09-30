@@ -1,0 +1,64 @@
+.board-card-menu {
+    position: fixed;
+    z-index: 10000;
+    width: 332px;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #9d8252 #0b1120;
+    color: #f0e6d2;
+    background: linear-gradient(135deg, #182132, #0b1120 55%);
+    border: 1px solid #c8aa6e80;
+    border-radius: 8px;
+    box-shadow: 0 12px 36px #000a;
+    font-size: 13px;
+    animation: board-card-menu-enter 140ms ease-out;
+}
+.board-card-menu-heading { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid #c8aa6e30; color: #c8aa6e; }
+.board-card-menu-heading > div { flex: 1; }
+.board-card-menu-heading h4 { margin: 0; font: 700 15px/1.4 Cinzel, Georgia, serif; color: #f0e6d2; }
+.board-card-menu-heading p { margin: 3px 0 0; font-size: 12px; color: #b3afa5; }
+.board-card-menu-content { padding: 14px; }
+.board-card-menu button { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 44px; border-radius: 4px; touch-action: manipulation; }
+.board-card-menu-heading > button { width: 44px; flex-shrink: 0; }
+.board-card-menu :is(button, input, summary):focus-visible { outline: 2px solid #f8e7b9; outline-offset: 2px; }
+.board-card-menu label { display: block; margin-bottom: 8px; font-size: 13px; color: #d3cbbb; }
+.board-card-stepper { display: grid; grid-template-columns: 48px 1fr 48px; overflow: hidden; border: 1px solid #c8aa6e50; border-radius: 5px; background: #060b14; }
+.board-card-stepper button { min-height: 48px; color: #e0c792; border-radius: 0; }
+.board-card-stepper input { min-width: 0; width: 100%; min-height: 48px; padding: 0 6px; text-align: center; font: 600 23px/1 Cinzel, Georgia, serif; font-variant-numeric: tabular-nums; color: #f8e7b9; caret-color: #e0c792; background: transparent; border: 0; border-inline: 1px solid #c8aa6e25; border-radius: 0; }
+.board-card-presets { display: flex; gap: 6px; padding: 6px 0 10px; }
+.board-card-presets button { flex: 1; min-height: 36px; border: 1px solid #c8aa6e26; color: #b9b2a4; font-variant-numeric: tabular-nums; }
+.board-card-presets button[aria-pressed="true"] { color: #f8e7b9; border-color: #c8aa6e88; background: #c8aa6e19; }
+.board-card-menu .board-card-confirm { width: 100%; padding: 10px 14px; border: 1px solid #c8aa6e80; color: #f8e7b9; background: #c8aa6e12; font: 600 13px/1.4 Cinzel, Georgia, serif; }
+.board-card-confirm span { margin-left: auto; font-size: 16px; font-variant-numeric: tabular-nums; }
+.board-card-menu .board-card-confirm-primary { min-height: 48px; color: #1b1710; background: linear-gradient(#e0c792, #b79a60); border-color: #edd6a5; }
+.board-card-menu-hint { margin: 7px 0 0; color: #aaa99f; font-size: 12px; line-height: 1.5; }
+.board-card-copy-disclosure { margin: 14px 0 8px; border-block: 1px solid #c8aa6e26; }
+.board-card-copy-disclosure summary { display: flex; align-items: center; gap: 9px; min-height: 48px; list-style: none; color: #d4c19b; cursor: pointer; }
+.board-card-copy-disclosure summary::-webkit-details-marker { display: none; }
+.board-card-copy-disclosure summary > svg:last-child { margin-left: auto; }
+.board-card-copy-disclosure[open] summary > svg:last-child { transform: rotate(180deg); }
+.board-card-copy-disclosure .board-card-copy-form { padding-bottom: 14px; }
+.board-card-secondary-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.board-card-secondary-actions:empty { display: none; }
+.board-card-secondary-actions button { flex: 1 1 120px; padding: 7px; border: 1px solid #c8aa6e28; color: #d8c8aa; font-size: 12px; }
+.board-card-menu svg { flex-shrink: 0; }
+.board-card-menu .board-card-privacy { width: 100%; justify-content: flex-start; margin-top: 10px; padding: 8px; text-align: left; color: #c8aa6e; }
+.board-card-privacy span { font-size: 12px; color: #d3cbbb; }
+.board-card-privacy small { display: block; margin-top: 2px; font-size: 11px; color: #aaa99f; }
+.board-card-menu button:hover:not(:disabled) { background: #c8aa6e26; }
+.board-card-menu .board-card-confirm-primary:hover:not(:disabled) { background: #edd6a5; }
+.board-card-menu button:disabled { opacity: .36; cursor: default; }
+.board-card-menu ::selection { color: #fff5de; background: #c8aa6e66; }
+.board-card-actions-trigger:focus-visible { outline: 2px solid #f8e7b9; outline-offset: 3px; }
+@keyframes board-card-menu-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes board-card-turn { from { transform: rotateY(180deg); } to { transform: rotateY(0); } }
+@media (pointer: coarse) {
+    .board-card-presets button { min-height: 44px; }
+}
+@media (max-width: 600px) {
+    .board-card-menu { left: 12px !important; top: auto !important; bottom: max(12px, env(safe-area-inset-bottom)); width: calc(100vw - 24px); max-height: calc(100dvh - env(safe-area-inset-bottom) - 24px); border-radius: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .board-card-menu, .board-card-menu * { animation: none; transition: none; } }

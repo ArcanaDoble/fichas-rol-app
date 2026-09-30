@@ -7,6 +7,14 @@
 
 # NOMA — Frontend Design Rules
 
+## User-approved art direction — read first
+
+For NOMA UI/design work, read [DESIGN.md](DESIGN.md) and its relevant reference screenshots before proposing or editing. [PRODUCT.md](PRODUCT.md) records product context. These specific user preferences refine the generic guidance below: medieval RPG/JRPG atmosphere, illustrated equipment with image/title fades, meaningful rarity light, lively HUD folds and feedback, and comfortable desktop AND mobile play.
+
+Use the personal `noma-art-direction` skill when available; the repository guide remains usable without it. Impeccable is an optional design aid, subordinate to the user's visual references. Do not strip approved cards, gradients, glow, serif typography or animation to satisfy generic anti-pattern advice.
+
+The HUD Combat weapon selector and its modifiers are protected: preserve their restored appearance and interactions unless the user explicitly requests changes to them. The current two-column combat-modal redesign was rejected; see DESIGN.md before treating existing code as visual authority. Cross-chat persistence comes from these project files, not from assuming another conversation remembers this discussion.
+
 ## Product Identity
 
 NOMA is a virtual tabletop and RPG game interface.
@@ -54,7 +62,7 @@ Do not automatically use:
 - purple/blue “AI product” palettes
 - giant hero headings
 - decorative blobs
-- glowing borders
+- arbitrary glowing borders unrelated to interaction, rarity or game feedback
 - excessive drop shadows
 - pill buttons everywhere
 - huge whitespace
@@ -275,7 +283,7 @@ Do not install a UI library merely to solve a small styling problem.
 
 ## Responsive Behaviour
 
-NOMA is primarily a desktop game workspace unless a feature explicitly targets mobile.
+NOMA must support both the desktop game workspace and comfortable mobile play. Touch controls and readable icons are explicit user priorities; use DESIGN.md for the current mobile criteria.
 
 Do not compromise the desktop VTT experience merely to force every gameplay screen into a conventional mobile layout.
 

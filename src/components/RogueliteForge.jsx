@@ -66,6 +66,7 @@ const objectToForm = (item = {}) => ({
   rareza: item.rareza || item.rarity || '',
   rasgos: splitTraits(item.rasgos || item.traits).join(', '),
   descripcion: item.descripcion || item.description || '',
+  lore: item.lore || item.descripcionLore || item.flavorText || item.flavourText || '',
   valor: item.valor ?? '',
   color: item.color || '#c8aa6e',
 });
@@ -82,6 +83,8 @@ const objectToStorage = (item = {}) => ({
   category: 'objects',
   description: String(item.descripcion || '').trim(),
   descripcion: String(item.descripcion || '').trim(),
+  lore: String(item.lore || '').trim(),
+  descripcionLore: String(item.lore || '').trim(),
   rareza: String(item.rareza || '').trim(),
   rasgos: splitTraits(item.rasgos),
   valor: item.valor ?? '',
@@ -129,6 +132,7 @@ const colorWithAlpha = (hex, alpha) => {
 
 const getItemName = (item) => item?.nombre || item?.name || 'Objeto sin nombre';
 const getItemDescription = (item) => item?.descripcion || item?.description || '';
+const getItemLore = (item) => item?.lore || item?.descripcionLore || item?.flavorText || item?.flavourText || '';
 const asImageSource = (value) => /^(https?:|data:image|blob:|\/)/i.test(String(value || '').trim())
   ? String(value).trim()
   : '';
@@ -188,10 +192,17 @@ const ObjectFields = ({ value, setValue, rarities, glossary }) => {
         <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8ea0bd]">Rasgos</span>
         <TraitsInput value={value.rasgos || ''} onChange={update('rasgos')} glossary={glossary} placeholder="Consumible, Curación, Único…" className="!min-h-[44px] !rounded !border-[#c8aa6e]/25 !bg-black/40 !text-[#e8dfcf]" />
       </label>
-      <label className="block sm:col-span-2">
-        <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8ea0bd]">Descripción</span>
-        <textarea className={`${control} min-h-[110px] resize-y`} value={value.descripcion || ''} onChange={update('descripcion')} placeholder="Qué hace y cómo se utiliza" />
-      </label>
+      <fieldset className="grid min-w-0 gap-3 border-t border-[#c8aa6e]/15 pt-4 sm:col-span-2 sm:grid-cols-2">
+        <legend className="mb-1 pr-3 font-['Cinzel'] text-[11px] font-semibold uppercase tracking-[0.16em] text-[#c8aa6e]">Texto de la tarjeta</legend>
+        <label className="block min-w-0">
+          <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8ea0bd]">Reglas y efecto</span>
+          <textarea className={`${control} min-h-[120px] resize-y font-['Alegreya'] text-[15px] font-medium leading-[1.5]`} value={value.descripcion || ''} onChange={update('descripcion')} placeholder="Qué hace, qué cuesta y cómo se resuelve" />
+        </label>
+        <label className="block min-w-0">
+          <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8ea0bd]">Lore</span>
+          <textarea className={`${control} min-h-[120px] resize-y font-['Alegreya'] text-[15px] italic leading-[1.5]`} value={value.lore || ''} onChange={update('lore')} placeholder="Origen, aspecto o historia del objeto" />
+        </label>
+      </fieldset>
     </div>
   );
 };
@@ -508,6 +519,7 @@ const RogueliteForge = ({
       .filter((item) => !needle || normalizeText([
         getItemName(item),
         getItemDescription(item),
+        getItemLore(item),
         item.rareza,
         ...(Array.isArray(item.rasgos) ? item.rasgos : [item.rasgos]),
       ].join(' ')).includes(needle))
@@ -531,6 +543,7 @@ const RogueliteForge = ({
     defense: draft.defenseClass || draft.defensa,
     range: draft.alcance,
     description: draft.descripcion,
+    lore: draft.lore,
   }), [activeConfig.singular, category, draft]);
 
   const openNew = () => {

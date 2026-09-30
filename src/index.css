@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -1807,6 +1809,29 @@ body.noma-canvas-inventory-dragging [data-tactical-sidebar-backdrop="true"] {
   height: auto;
 }
 
+.canvas-smoke-zone__grid {
+  position: absolute;
+  inset: 0;
+  border: 1px dashed rgba(226, 232, 240, 0.28);
+  background: linear-gradient(90deg, transparent calc(50% - 0.5px), rgba(226, 232, 240, 0.22) 50%, transparent calc(50% + 0.5px)), linear-gradient(0deg, transparent calc(50% - 0.5px), rgba(226, 232, 240, 0.22) 50%, transparent calc(50% + 0.5px));
+}
+
+.canvas-smoke-zone__label {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  transform: translateX(-50%);
+  padding: 2px 7px;
+  border: 1px solid rgba(203, 213, 225, 0.28);
+  background: rgba(2, 6, 23, 0.78);
+  color: rgba(241, 245, 249, 0.86);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
 /* Matches a backpack column in LoadoutView's max-w-7xl layout. */
 .noma-forge-inventory-preview {
   width: 100%;
@@ -1996,6 +2021,100 @@ body.noma-canvas-inventory-dragging [data-tactical-sidebar-backdrop="true"] {
   gap: 4px;
 }
 
+.noma-equipment-copy {
+  display: inline-flex;
+  min-width: 24px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: rgba(200, 170, 110, 0.74);
+  opacity: 0.82;
+}
+
+.noma-equipment-copy svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 1.45;
+}
+
+.noma-equipment-copy > span {
+  color: rgba(224, 213, 190, 0.78);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.noma-equipment-hands {
+  display: inline-flex;
+  width: 42px;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0;
+}
+
+.noma-equipment-hands__hand {
+  position: relative;
+  display: grid;
+  width: 18px;
+  height: 24px;
+  place-items: center;
+  color: rgba(139, 151, 168, 0.46);
+  opacity: 0.72;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.9));
+  transform-origin: 50% 100%;
+  transition: color 140ms ease, filter 140ms ease, opacity 140ms ease;
+}
+
+.noma-equipment-hands__hand.is-left {
+  transform: rotate(-18deg);
+}
+
+.noma-equipment-hands__hand.is-right {
+  transform: rotate(18deg);
+}
+
+.noma-equipment-hands__hand.is-right svg {
+  transform: scaleX(-1);
+}
+
+.noma-equipment-hands__hand svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.55;
+}
+
+.noma-equipment-hands__hand.is-active {
+  color: #f1d58d;
+  opacity: 1;
+  filter:
+    drop-shadow(0 0 2px rgba(255, 226, 151, 0.95))
+    drop-shadow(0 0 5px rgba(200, 170, 110, 0.62))
+    drop-shadow(0 1px 1px rgba(0, 0, 0, 0.95));
+}
+
+.noma-equipment-hands__hand.is-active svg {
+  stroke-width: 1.9;
+}
+
+.noma-equipment-hands.is-subtle {
+  width: 34px;
+  height: 26px;
+}
+
+.noma-equipment-hands.is-subtle .noma-equipment-hands__hand {
+  width: 15px;
+  height: 22px;
+}
+
+.noma-equipment-hands.is-subtle .noma-equipment-hands__hand svg {
+  width: 13px;
+  height: 13px;
+}
+
 .noma-inventory-card__drag-handle {
   display: grid;
   width: 26px;
@@ -2055,6 +2174,23 @@ body.noma-canvas-inventory-dragging [data-tactical-sidebar-backdrop="true"] {
   background:
     linear-gradient(90deg, var(--noma-item-accent-faint), transparent 42%),
     #111722;
+}
+
+.noma-inventory-card__equipment-state {
+  display: flex;
+  min-height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  align-self: flex-end;
+  justify-content: flex-end;
+  gap: 3px;
+  margin-top: auto;
+  padding: 3px 14px 7px;
+  pointer-events: none;
+}
+
+.noma-inventory-card__equipment-state .noma-equipment-copy {
+  opacity: 0.76;
 }
 
 .noma-inventory-card__primary-stat {
@@ -2175,28 +2311,67 @@ body.noma-canvas-inventory-dragging [data-tactical-sidebar-backdrop="true"] {
   display: flex;
   min-height: 50px;
   flex: 1;
-  align-items: flex-start;
-  gap: 9px;
+  flex-direction: column;
   margin-top: auto;
-  padding: 11px 18px 13px;
   border-top: 1px solid rgba(148, 163, 184, 0.11);
   background: rgba(6, 9, 14, 0.3);
 }
 
-.noma-inventory-card__description > span {
-  flex: 0 0 auto;
+.noma-inventory-card__effect,
+.noma-inventory-card__lore {
+  position: relative;
+  padding: 10px 18px 12px;
+}
+
+.noma-inventory-card__lore {
+  padding-left: 28px;
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
+  background: linear-gradient(90deg, var(--noma-item-accent-faint), transparent 72%);
+}
+
+.noma-inventory-card__lore::before {
+  content: '';
+  position: absolute;
+  top: 13px;
+  bottom: 13px;
+  left: 18px;
+  width: 1px;
+  background: linear-gradient(180deg, var(--noma-item-accent), transparent);
+  opacity: 0.68;
+}
+
+.noma-inventory-card__text-label {
+  display: block;
+  margin-bottom: 4px;
   color: var(--noma-item-accent);
-  font-size: 7px;
-  line-height: 1.7;
+  font-family: 'Lato', sans-serif;
+  font-size: 0.54rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  line-height: 1.25;
+  text-transform: uppercase;
 }
 
 .noma-inventory-card__description p {
   margin: 0;
+  line-height: 1.48;
+}
+
+.noma-inventory-card__effect p {
+  color: #b7c0cd;
+  font-family: 'Alegreya', Georgia, 'Times New Roman', serif;
+  font-size: 0.79rem;
+  font-weight: 500;
+  letter-spacing: 0.008em;
+}
+
+.noma-inventory-card__lore p {
   color: #9fa9b8;
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: 0.71rem;
+  font-family: 'Alegreya', Georgia, 'Times New Roman', serif;
+  font-size: 0.77rem;
   font-style: italic;
-  line-height: 1.45;
+  font-weight: 400;
+  letter-spacing: 0.006em;
 }
 
 .noma-inventory-card__rarity-line {
@@ -2232,10 +2407,23 @@ body.noma-canvas-inventory-dragging [data-tactical-sidebar-backdrop="true"] {
 
 .noma-inventory-card--inspector .noma-inventory-card__primary-stat,
 .noma-inventory-card--inspector .noma-inventory-card__rules,
-.noma-inventory-card--inspector .noma-inventory-card__traits,
-.noma-inventory-card--inspector .noma-inventory-card__description {
+.noma-inventory-card--inspector .noma-inventory-card__traits {
   padding-right: 13px;
   padding-left: 13px;
+}
+
+.noma-inventory-card--inspector .noma-inventory-card__effect,
+.noma-inventory-card--inspector .noma-inventory-card__lore {
+  padding-right: 13px;
+  padding-left: 13px;
+}
+
+.noma-inventory-card--inspector .noma-inventory-card__lore {
+  padding-left: 22px;
+}
+
+.noma-inventory-card--inspector .noma-inventory-card__lore::before {
+  left: 12px;
 }
 
 .noma-inventory-card--inspector .noma-inventory-card__primary-stat {
@@ -2252,8 +2440,12 @@ body.noma-canvas-inventory-dragging [data-tactical-sidebar-backdrop="true"] {
 
 .noma-inventory-card--inspector .noma-inventory-card__description {
   min-height: 42px;
-  padding-top: 9px;
-  padding-bottom: 10px;
+}
+
+.noma-inventory-card--inspector .noma-inventory-card__equipment-state {
+  min-height: 30px;
+  padding-top: 1px;
+  padding-bottom: 5px;
 }
 
 @media (max-width: 520px) {
@@ -2278,10 +2470,23 @@ body.noma-canvas-inventory-dragging [data-tactical-sidebar-backdrop="true"] {
 
   .noma-inventory-card__primary-stat,
   .noma-inventory-card__rules,
-  .noma-inventory-card__traits,
-  .noma-inventory-card__description {
+  .noma-inventory-card__traits {
     padding-right: 15px;
     padding-left: 15px;
+  }
+
+  .noma-inventory-card__effect,
+  .noma-inventory-card__lore {
+    padding-right: 15px;
+    padding-left: 15px;
+  }
+
+  .noma-inventory-card__lore {
+    padding-left: 24px;
+  }
+
+  .noma-inventory-card__lore::before {
+    left: 14px;
   }
 
   .noma-inventory-card__rules > div {
@@ -2421,6 +2626,452 @@ body.noma-canvas-inventory-dragging [data-tactical-sidebar-backdrop="true"] {
 
 .noma-weapon-slots-container {
   animation: nomaSlotSwapFade 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.noma-hand-occupied-content {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100%;
+  text-align: center;
+  text-shadow: 0 1px 3px #000;
+}
+
+.noma-hand-occupied-content .noma-equipment-hands__hand.is-active {
+  color: #c8aa6e;
+  filter: drop-shadow(0 1px 1px #000);
+}
+
+.noma-hand-occupied-content__label {
+  margin-top: 10px;
+  color: #c8aa6e;
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.noma-hand-occupied-content__name {
+  margin-top: 5px;
+  color: #d8cfbc;
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.noma-hand-occupied-content__hint {
+  margin-top: 10px;
+  color: #94a3b8;
+  font-size: 9px;
+}
+
+.noma-two-handed-connector {
+  position: absolute;
+  top: 50%;
+  z-index: 20;
+  width: 24px;
+  height: 1px;
+  background: rgba(200, 170, 110, 0.55);
+  pointer-events: none;
+}
+
+.noma-two-handed-connector.is-right { right: -24px; }
+.noma-two-handed-connector.is-left { left: -24px; }
+
+.noma-two-handed-connector::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  content: '';
+  border: 1px solid #c8aa6e;
+  background: #0b1120;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.noma-hand-slot-marker {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  min-width: 112px;
+  min-height: 58px;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 11px 11px 0 28px;
+  background: radial-gradient(circle at 100% 0, rgba(4, 7, 11, 0.5) 0%, rgba(4, 7, 11, 0.22) 38%, transparent 72%);
+  pointer-events: none;
+}
+
+.noma-hand-slot-marker__role {
+  display: inline-flex;
+  align-items: center;
+  padding-top: 1px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  line-height: 1;
+  opacity: 0.82;
+  text-shadow: 0 1px 2px #000, 0 0 4px rgba(0, 0, 0, 0.82);
+}
+
+.noma-hand-slot-marker__role.is-off-hand {
+  color: rgba(238, 145, 145, 0.9);
+}
+
+.noma-hand-slot-marker__role.is-main-hand {
+  color: rgba(128, 226, 169, 0.92);
+}
+
+.noma-hand-slot-marker__role.is-occupied {
+  color: rgba(222, 196, 137, 0.86);
+}
+
+.noma-loadout-slot-remove {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 31;
+  display: block;
+  width: 58px;
+  height: 58px;
+  padding: 0;
+  border: 0;
+  background: radial-gradient(circle at 0 0, rgba(4, 7, 11, 0.5) 0%, rgba(4, 7, 11, 0.22) 38%, transparent 72%);
+  color: rgba(236, 143, 143, 0.62);
+  opacity: 0.7;
+  cursor: pointer;
+  transition: color 140ms ease, filter 140ms ease, opacity 140ms ease;
+}
+
+.noma-loadout-slot-remove svg {
+  position: absolute;
+  top: 11px;
+  left: 11px;
+  width: 12px;
+  height: 12px;
+  stroke-width: 1.65;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.88));
+}
+
+.noma-loadout-slot-remove:hover,
+.noma-loadout-slot-remove:focus-visible {
+  color: rgba(255, 174, 174, 0.95);
+  opacity: 1;
+  filter: drop-shadow(0 0 3px rgba(239, 128, 128, 0.42));
+  outline: none;
+}
+
+.noma-loadout-slot-remove:focus-visible::after {
+  content: '';
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(255, 170, 170, 0.72);
+  transform: rotate(45deg);
+}
+
+.noma-armor-slot-card {
+  min-height: 160px;
+}
+
+.noma-armor-slot-card__name {
+  max-width: calc(100% - 88px);
+  text-shadow: 0 1px 2px #000, 0 0 8px rgba(0, 0, 0, 0.9);
+}
+
+.noma-armor-defense-readout {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin-top: 6px;
+}
+
+.noma-armor-defense-emblem {
+  position: relative;
+  display: grid;
+  width: 42px;
+  height: 46px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: #d8c18d;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.92));
+}
+
+.noma-armor-defense-emblem > svg {
+  position: absolute;
+  inset: 0;
+  width: 42px;
+  height: 46px;
+  stroke-width: 1.05;
+  opacity: 0.72;
+}
+
+.noma-armor-defense-emblem__value {
+  position: absolute;
+  inset: 11px 0 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.noma-armor-defense-emblem__value > small {
+  color: rgba(223, 232, 241, 0.62);
+  font-size: 6px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  transform: translateX(0.08em);
+}
+
+.noma-armor-defense-emblem__value > strong {
+  color: #f0e6d2;
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 0.95;
+  margin-top: 2px;
+}
+
+.noma-armor-defense-rule {
+  min-width: 128px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(200, 170, 110, 0.34);
+  text-align: left;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
+}
+
+.noma-armor-defense-rule > span {
+  display: block;
+  color: rgba(174, 190, 209, 0.72);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.noma-armor-defense-rule p {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  margin: 3px 0 0;
+  white-space: nowrap;
+}
+
+.noma-armor-defense-rule strong {
+  color: #f0e6d2;
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.noma-armor-defense-rule small {
+  color: rgba(181, 195, 211, 0.76);
+  font-size: 8px;
+  letter-spacing: 0.02em;
+}
+
+.noma-loadout-hand-slot {
+  container-type: inline-size;
+}
+
+.noma-loadout-weapon-stats {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  max-width: 100%;
+  margin: 10px 0 2px;
+  text-align: center;
+  text-shadow: 0 1px 3px #000, 0 0 8px rgba(0, 0, 0, 0.65);
+}
+
+.noma-loadout-weapon-stats > div {
+  min-width: 0;
+  padding: 0 clamp(8px, 1.2vw, 16px);
+}
+
+.noma-loadout-weapon-stats > div + div {
+  border-left: 1px solid rgba(200, 170, 110, 0.28);
+}
+
+.noma-loadout-weapon-stats dt {
+  margin-bottom: 3px;
+  color: #c5b99e;
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.noma-loadout-weapon-stats dd {
+  margin: 0;
+  color: #f0e6d2;
+  font-family: 'Alegreya', Georgia, serif;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.noma-loadout-weapon-stats dd.noma-loadout-weapon-stats__damage {
+  color: #e6aaa2;
+}
+
+.noma-loadout-weapon-stats dd.noma-loadout-weapon-stats__cost {
+  color: #e5c575;
+}
+
+@container (max-width: 190px) {
+  .noma-loadout-weapon-stats {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .noma-loadout-weapon-stats > div {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: baseline;
+    gap: 6px;
+    padding: 3px 0;
+    text-align: left;
+  }
+
+  .noma-loadout-weapon-stats > div + div {
+    border-left: 0;
+    border-top: 1px solid rgba(200, 170, 110, 0.2);
+  }
+
+  .noma-loadout-weapon-stats dt {
+    margin: 0;
+    font-size: 7px;
+    letter-spacing: 0.04em;
+  }
+
+  .noma-loadout-weapon-stats dd {
+    font-size: 11px;
+    text-align: right;
+  }
+}
+
+.noma-loadout-traits {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  column-gap: 15px;
+  row-gap: 3px;
+  max-width: calc(100% - 32px);
+  margin-top: 8px;
+  padding: 3px 14px;
+  isolation: isolate;
+}
+
+.noma-loadout-traits::before {
+  position: absolute;
+  z-index: -1;
+  inset: -4px -14px;
+  content: '';
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(4, 7, 11, 0.48) 18%,
+    rgba(4, 7, 11, 0.66) 50%,
+    rgba(4, 7, 11, 0.48) 82%,
+    transparent 100%);
+  pointer-events: none;
+}
+
+.noma-loadout-traits--compact {
+  margin-top: 5px;
+}
+
+.noma-loadout-trait {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: baseline;
+  color: rgba(174, 187, 203, 0.74);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.25;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.98);
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: color 140ms ease, filter 140ms ease, opacity 140ms ease;
+}
+
+.noma-loadout-trait::before {
+  margin-right: 5px;
+  color: currentColor;
+  content: '◆';
+  font-size: 6px;
+  opacity: 0.72;
+  transform: translateY(-0.5px);
+}
+
+.noma-loadout-trait:not(:last-child)::after {
+  position: absolute;
+  right: -9px;
+  color: rgba(185, 196, 211, 0.28);
+  content: '·';
+  font-size: 9px;
+  pointer-events: none;
+}
+
+.noma-loadout-trait.is-defined {
+  cursor: help;
+}
+
+.noma-loadout-trait.is-defined:hover,
+.noma-loadout-trait.is-defined:focus-visible {
+  filter: brightness(1.35);
+  text-shadow: 0 0 7px currentColor, 0 1px 2px rgba(0, 0, 0, 0.98);
+}
+
+.noma-loadout-trait__detail {
+  margin-left: 1px;
+  color: rgba(205, 213, 224, 0.76);
+  font-size: 0.92em;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+@media (max-width: 520px) {
+  .noma-armor-slot-card {
+    min-height: 170px;
+  }
+
+  .noma-armor-defense-rule {
+    min-width: 0;
+  }
+
+  .noma-armor-defense-rule p {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1px;
+    white-space: normal;
+  }
 }
 
 @keyframes nomaSlotSwapFade {
@@ -3440,3 +4091,44 @@ body.noma-canvas-inventory-dragging [data-tactical-sidebar-backdrop="true"] {
 .forge-entry__options button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 10px 14px; color: #d6bd83; font-size: 13px; }
 .forge-entry__options button:hover { background: #785a2826; }
 .forge-entry__options .forge-entry__delete { color: #da969e; border-top: 1px solid #29303b; }
+.canvas-hidden-distortion {
+  isolation: isolate;
+  contain: paint;
+}
+
+.canvas-fog-shader {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+}
+
+.canvas-fog-shader:not([data-fog-rendered='true']) {
+  background-color: #a9adb1;
+  background-image: url('./assets/fog-shader-zone.webp');
+  background-size: 1200% 100%;
+  background-repeat: no-repeat;
+  animation: canvas-captured-fog 1.44s steps(11, end) infinite alternate;
+}
+
+.canvas-fog-shader[data-fog-preset='portrait']:not([data-fog-rendered='true']) {
+  background-image: url('./assets/fog-shader-portrait.webp');
+}
+
+@keyframes canvas-captured-fog {
+  from { background-position: 0% 0; }
+  to { background-position: 100% 0; }
+}
+
+.canvas-smoke-memory-veil {
+  transition: fill-opacity 450ms ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-fog-shader:not([data-fog-rendered='true']) {
+    animation: none;
+  }
+  .canvas-smoke-memory-veil {
+    transition: none;
+  }
+}

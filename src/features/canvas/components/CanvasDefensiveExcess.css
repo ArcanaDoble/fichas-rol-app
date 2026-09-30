@@ -1,0 +1,60 @@
+.attack-defense-aftermath { padding: 10px 32px 14px; }
+.attack-defense-aftermath .attack-defense-result { margin-bottom: 16px; }
+.attack-defense-aftermath .attack-defense-surplus { margin-top: 12px; color: #d3bd8e; font: italic 16px/1.3 Alegreya,Georgia,serif; }
+.attack-defense-surplus strong { margin-left: 7px; color: #f0d395; font: 500 26px/1 Alegreya,Georgia,serif; }
+.defensive-excess { --excess-ease: cubic-bezier(.16,1,.3,1); }
+.defensive-excess-options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; max-width: 400px; margin-inline: auto; }
+.defensive-excess-options button { position: relative; display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 52px; padding: 10px 3px; color: #b5b2bf; font: 600 12px/1.3 Cinzel,Georgia,serif; transition: color 160ms; }
+.defensive-excess-options button svg { flex: none; }
+.defensive-excess-options button::after { content: ''; position: absolute; bottom: 0; height: 1px; inset-inline: 10%; background: linear-gradient(90deg,transparent,#c8aa6e,transparent); opacity: .18; transition: opacity 180ms; }
+.defensive-excess-options button[aria-pressed='true'] { color: #f0d395; background: radial-gradient(ellipse at 50% 100%,#c8aa6e1f,transparent 72%); }
+.defensive-excess-options button[aria-pressed='true']::after { opacity: 1; }
+.defensive-excess-options button:disabled { opacity: .4; cursor: not-allowed; }
+.defensive-excess-scene { position: relative; isolation: isolate; display: grid; place-items: center; min-height: 215px; margin-top: 4px; text-align: center; }
+.defensive-excess-art { position: absolute; inset: 0; margin-inline: auto; width: min(100%,440px); z-index: -1; pointer-events: none; mask-image: radial-gradient(ellipse,#000 15%,#000a 45%,transparent 74%); }
+.defensive-excess-art-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 48%; opacity: 0; transition: opacity 220ms ease; user-select: none; -webkit-user-drag: none; }
+.defensive-excess-art-image[data-visible='true'] { opacity: .68; }
+.defensive-excess-scene-copy { position: relative; padding: 30px 12px 18px; width: 100%; animation: defensive-excess-reveal 240ms var(--excess-ease) both; }
+.defensive-excess-scene-copy::before { content: ''; position: absolute; z-index: -1; inset: 8px 0; background: radial-gradient(ellipse,#1a1b26b3 8%,transparent 70%); pointer-events: none; }
+.defensive-excess-scene h3 { color: #f0e6d2; font: 700 23px/1.3 Cinzel,Georgia,serif; text-transform: uppercase; overflow-wrap: anywhere; text-shadow: 0 2px 4px #000; }
+.defensive-excess-effect { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 9px; color: #e6aaa2; text-shadow: 0 2px 4px #000; }
+.defensive-excess-effect strong { font: 500 42px/1 Alegreya,Georgia,serif; font-variant-numeric: tabular-nums; }
+.defensive-excess-effect span { font: 600 12px/1.3 Cinzel,Georgia,serif; letter-spacing: .06em; }
+.defensive-excess-note { margin-top: 8px; color: #d3c9c3; font: italic 15px/1.45 Alegreya,Georgia,serif; text-align: center; }
+.defensive-excess-movement { color: #d3bd8e; }
+.defensive-excess-movement > svg { margin: 0 auto 8px; }
+.defensive-excess-movement .defensive-excess-effect { margin-top: 0; color: #f0d395; }
+.defensive-excess-instruction, .defensive-excess-unavailable { color: #c5b9b9; font: italic 14px/1.4 Alegreya,Georgia,serif; text-align: center; }
+.defensive-excess-instruction { margin-top: 4px; }
+.defensive-excess-unavailable { margin-top: 10px; }
+.defensive-excess-arsenal { max-width: 320px; margin: -10px auto 0; position: relative; }
+.defensive-excess-weapon-toggle { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 44px; color: #d3bd8e; font: 500 14px/1.3 Alegreya,Georgia,serif; }
+.defensive-excess-weapon-toggle svg { transition: transform 200ms var(--excess-ease); }
+.defensive-excess-arsenal[data-open='true'] .defensive-excess-weapon-toggle svg { transform: rotate(180deg); }
+.defensive-excess-weapon-fold { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 200ms var(--excess-ease); }
+.defensive-excess-arsenal[data-open='true'] .defensive-excess-weapon-fold { grid-template-rows: 1fr; }
+.defensive-excess-weapon-fold > div { overflow: hidden; min-height: 0; }
+.defensive-excess-weapons button { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 48px; padding: 8px 16px; text-align: left; color: #c5b9b9; font: 18px/1.3 Alegreya,Georgia,serif; border-bottom: 1px solid #c8aa6e25; }
+.defensive-excess-weapons button > span { min-width: 0; overflow-wrap: anywhere; }
+.defensive-excess-weapons button > svg { flex: none; }
+.defensive-excess-weapons small { display: block; font: italic 12px/1.3 Alegreya,Georgia,serif; }
+.defensive-excess-weapons button[aria-pressed='true'] { color: #f0d395; }
+.defensive-excess button:focus-visible { outline: 1px dashed #e5c98c; outline-offset: -3px; }
+.attack-defense-footer[data-excess='true'] .defensive-excess-discard { display: block; width: 100%; min-height: 44px; margin-top: 3px; color: #c5b9b9; font: italic 14px/1.3 Alegreya,Georgia,serif; text-align: center; }
+.attack-defense-footer[data-excess='true'] .combat-confirm:disabled { background: #38343a; color: #b7b1a5; cursor: default; }
+.attack-defense-footer[data-excess='true'] button:disabled { opacity: .55; }
+@keyframes defensive-excess-reveal { from { opacity: .65; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@media (hover: hover) {
+  .defensive-excess button:hover:not(:disabled), .defensive-excess-discard:hover:not(:disabled) { color: #f0d395; }
+}
+@media (max-width: 680px) {
+  .attack-defense-aftermath { padding: 6px 18px 12px; }
+  .defensive-excess-options { gap: 8px; }
+  .defensive-excess-options button { flex-direction: column; gap: 5px; min-height: 66px; font-size: 11px; }
+  .defensive-excess-scene { min-height: 192px; }
+  .defensive-excess-scene h3 { font-size: 21px; }
+  .defensive-excess-effect strong { font-size: 38px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .defensive-excess *, .defensive-excess *::after { animation: none; transition: none; }
+}

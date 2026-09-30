@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import {
+    CANVAS_CATALOG_ITEM_ARM_EVENT,
+    CANVAS_CATALOG_ITEM_DRAG_END_EVENT,
+    CANVAS_CATALOG_ITEM_DRAG_PREVIEW_EVENT,
+    CANVAS_CATALOG_ITEM_DROP_EVENT,
     CANVAS_INVENTORY_DRAG_END_EVENT,
     CANVAS_INVENTORY_DRAG_PREVIEW_EVENT,
     CANVAS_INVENTORY_DROP_EVENT,
@@ -20,6 +24,8 @@ import {
     mergeCanvasRogueliteRuntimeSheet,
     syncCanvasTokenWithRuntimeProfile,
 } from './rogueliteRunPersistence';
+import { useCanvasSharedPointer } from './useCanvasSharedPointer';
+import { useCanvasItemUseSystem } from './item-use/useCanvasItemUseSystem';
 
 const noop = () => undefined;
 const emptyList = () => [];
@@ -32,6 +38,7 @@ const emptyList = () => [];
 export const useCanvasFeatureController = ({
     activeScenario,
     activeScenarioRef,
+    currentUserId,
     divToWorld,
     gridConfig,
     isPlayerView,
@@ -43,6 +50,15 @@ export const useCanvasFeatureController = ({
     triggerToast,
 }) => {
     const [sceneDropPreview, setSceneDropPreview] = useState(null);
+    const [catalogPlacementItem, setCatalogPlacementItem] = useState(null);
+    const sharedPointer = useCanvasSharedPointer({
+        activeScenario,
+        currentUserId,
+        divToWorld,
+        isPlayerView,
+        playerName,
+        scenarioCollectionName,
+    });
     const runtimeSyncCallbacksRef = useRef({ safePersistItems, triggerToast });
     useEffect(() => {
         runtimeSyncCallbacksRef.current = { safePersistItems, triggerToast };
@@ -56,6 +72,16 @@ export const useCanvasFeatureController = ({
         safePersistItems,
         scenarioCollectionName,
         setActiveScenario,
+        triggerToast,
+    });
+    const itemUseSystem = useCanvasItemUseSystem({
+        activeScenario,
+        activeScenarioRef,
+        combatRuntime,
+        divToWorld,
+        gridConfig,
+        isPlayerView,
+        playerName,
         triggerToast,
     });
     const runtimeProfileSubscriptionKey = (activeScenario?.items || [])
@@ -124,9 +150,18 @@ export const useCanvasFeatureController = ({
                 });
 
                 if (modifiedIds.length === 0) return;
-                setActiveScenario((current) => (
-                    current?.id === scenarioId ? { ...current, items: nextItems } : current
-                ));
+                setActiveScenario((current) => {
+                    if (current?.id !== scenarioId) return current;
+                    // React can apply this update after a pickup or potion
+                    // snapshot. Enrich that current token, not the earlier
+                    // array captured by the profile subscription callback.
+                    const currentItems = (current.items || []).map((item) => (
+                        item.linkedClassOwner === owner && item.linkedClassId === classId
+                            ? syncCanvasTokenWithRuntimeProfile(item, runtimeProfile, scenarioId, { forceMetadataSync: true })
+                            : item
+                    ));
+                    return { ...current, items: currentItems };
+                });
                 runtimeSyncCallbacksRef.current.safePersistItems(
                     scenarioId,
                     nextItems,
@@ -188,6 +223,7 @@ export const useCanvasFeatureController = ({
 
     const handleModeItemDrop = useCallback(({
         draggedItemId,
+        worldPoint,
         finalItems,
         interactionOriginalItems,
         scenarioId,
@@ -196,6 +232,7 @@ export const useCanvasFeatureController = ({
         if (movedLoot) {
             const { recipient, blockedRecipient } = resolveCanvasLootRecipient({
                 loot: movedLoot,
+                worldPoint,
                 items: finalItems,
                 isPlayerView,
                 playerName,
@@ -298,6 +335,202 @@ export const useCanvasFeatureController = ({
         setActiveScenario,
         setSelectedTokenIds,
         triggerToast,
+    ]);
+
+    const buildCatalogDropPreview = useCallback((clientX, clientY) => {
+        const scenario = activeScenarioRef.current || activeScenario;
+        if (!scenario?.id || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+        const position = findCanvasLootPosition({
+            worldPoint: divToWorld(clientX, clientY),
+            sourceToken: null,
+            items: scenario.items || [],
+            gridConfig,
+        });
+        return {
+            ...position.cellRect,
+            cellKey: `${position.gridCell.x}:${position.gridCell.y}`,
+        };
+    }, [activeScenario, activeScenarioRef, divToWorld, gridConfig]);
+
+    const placeCatalogItem = useCallback((detail = {}) => {
+        const scenario = activeScenarioRef.current || activeScenario;
+        if (
+            isPlayerView
+            || !scenario?.id
+            || !detail.item
+            || !Number.isFinite(detail.clientX)
+            || !Number.isFinite(detail.clientY)
+        ) return false;
+
+        const worldPoint = divToWorld(detail.clientX, detail.clientY);
+        const { recipient } = resolveCanvasLootRecipient({
+            worldPoint,
+            items: scenario.items || [],
+            isPlayerView: false,
+            playerName,
+            gridConfig,
+        });
+
+        if (recipient) {
+            const nextRecipient = addCanvasLootToInventory(recipient, detail.item, detail.image);
+            const nextItems = (scenario.items || []).map((item) => (
+                item.id === recipient.id ? nextRecipient : item
+            ));
+            setActiveScenario((current) => (
+                current?.id === scenario.id ? { ...current, items: nextItems } : current
+            ));
+            safePersistItems(
+                scenario.id,
+                nextItems,
+                scenario.items || [],
+                [recipient.id],
+                { persistRuntime: true },
+            );
+            setSelectedTokenIds([recipient.id]);
+            triggerToast(
+                'Objeto generado',
+                `${detail.item.name || detail.item.nombre || 'El objeto'} se añadió al inventario de ${recipient.name || 'la ficha'}`,
+                'success',
+            );
+            return true;
+        }
+
+        const position = findCanvasLootPosition({
+            worldPoint,
+            sourceToken: null,
+            items: scenario.items || [],
+            gridConfig,
+        });
+        const loot = createCanvasLootSceneItem({
+            item: detail.item,
+            image: detail.image,
+            sourceToken: null,
+            position,
+        });
+        const nextItems = [...(scenario.items || []), loot];
+        setActiveScenario((current) => (
+            current?.id === scenario.id ? { ...current, items: nextItems } : current
+        ));
+        safePersistItems(
+            scenario.id,
+            nextItems,
+            scenario.items || [],
+            [loot.id],
+            { persistRuntime: false },
+        );
+        setSelectedTokenIds([loot.id]);
+        triggerToast('Objeto generado', `${loot.name} se ha colocado en el Canvas`, 'success');
+        return true;
+    }, [
+        activeScenario,
+        activeScenarioRef,
+        divToWorld,
+        gridConfig,
+        isPlayerView,
+        playerName,
+        safePersistItems,
+        setActiveScenario,
+        setSelectedTokenIds,
+        triggerToast,
+    ]);
+
+    const cancelCatalogPlacement = useCallback(() => {
+        setCatalogPlacementItem(null);
+        setSceneDropPreview(null);
+    }, []);
+
+    useEffect(() => {
+        const handleCatalogDragPreview = (event) => {
+            if (isPlayerView) return;
+            const detail = event.detail || {};
+            const preview = buildCatalogDropPreview(detail.clientX, detail.clientY);
+            setSceneDropPreview((current) => (
+                current?.cellKey === preview?.cellKey ? current : preview
+            ));
+        };
+        const handleCatalogDragEnd = () => setSceneDropPreview(null);
+        const handleCatalogDrop = (event) => {
+            setSceneDropPreview(null);
+            placeCatalogItem(event.detail || {});
+        };
+        const handleCatalogArm = (event) => {
+            if (isPlayerView || !event.detail?.item) return;
+            setCatalogPlacementItem(event.detail);
+            setSceneDropPreview(null);
+            triggerToast(
+                'Colocar objeto',
+                `Toca una casilla para generar ${event.detail.item.name || event.detail.item.nombre || 'el objeto'}`,
+                'info',
+            );
+        };
+
+        window.addEventListener(CANVAS_CATALOG_ITEM_DRAG_PREVIEW_EVENT, handleCatalogDragPreview);
+        window.addEventListener(CANVAS_CATALOG_ITEM_DRAG_END_EVENT, handleCatalogDragEnd);
+        window.addEventListener(CANVAS_CATALOG_ITEM_DROP_EVENT, handleCatalogDrop);
+        window.addEventListener(CANVAS_CATALOG_ITEM_ARM_EVENT, handleCatalogArm);
+        return () => {
+            window.removeEventListener(CANVAS_CATALOG_ITEM_DRAG_PREVIEW_EVENT, handleCatalogDragPreview);
+            window.removeEventListener(CANVAS_CATALOG_ITEM_DRAG_END_EVENT, handleCatalogDragEnd);
+            window.removeEventListener(CANVAS_CATALOG_ITEM_DROP_EVENT, handleCatalogDrop);
+            window.removeEventListener(CANVAS_CATALOG_ITEM_ARM_EVENT, handleCatalogArm);
+        };
+    }, [buildCatalogDropPreview, isPlayerView, placeCatalogItem, triggerToast]);
+
+    useEffect(() => {
+        if (!catalogPlacementItem || isPlayerView) return undefined;
+
+        const pointIsInsideViewport = (clientX, clientY) => {
+            const rect = document.querySelector('[data-tactical-viewport="true"]')?.getBoundingClientRect?.();
+            return Boolean(
+                rect
+                && clientX >= rect.left
+                && clientX <= rect.right
+                && clientY >= rect.top
+                && clientY <= rect.bottom
+            );
+        };
+        const handlePointerMove = (event) => {
+            if (!pointIsInsideViewport(event.clientX, event.clientY)) {
+                setSceneDropPreview(null);
+                return;
+            }
+            const preview = buildCatalogDropPreview(event.clientX, event.clientY);
+            setSceneDropPreview((current) => (
+                current?.cellKey === preview?.cellKey ? current : preview
+            ));
+        };
+        const handlePointerDown = (event) => {
+            if (!pointIsInsideViewport(event.clientX, event.clientY)) return;
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation?.();
+            placeCatalogItem({
+                ...catalogPlacementItem,
+                clientX: event.clientX,
+                clientY: event.clientY,
+            });
+            cancelCatalogPlacement();
+        };
+        const handleKeyDown = (event) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            cancelCatalogPlacement();
+        };
+
+        window.addEventListener('pointermove', handlePointerMove);
+        window.addEventListener('pointerdown', handlePointerDown, true);
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerdown', handlePointerDown, true);
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [
+        buildCatalogDropPreview,
+        cancelCatalogPlacement,
+        catalogPlacementItem,
+        isPlayerView,
+        placeCatalogItem,
     ]);
 
     useEffect(() => {
@@ -452,9 +685,13 @@ export const useCanvasFeatureController = ({
     ]);
 
     return {
+        ...sharedPointer,
         handleModeItemDrop,
         sceneDropPreview,
+        catalogPlacementItem,
+        cancelCatalogPlacement,
         combatRuntime,
+        itemUseSystem,
         handleBoardCardBackUpload: noop,
         addCardToBoard: noop,
         getHandCardsForToken: emptyList,

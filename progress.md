@@ -1,5 +1,64 @@
 Original prompt: Perfecto. Ahora necesito que vayas implementando cada cambio que ya hicimos antes, pero lo haremos poco a poco.
 
+## Descontar Vida temporal desde el inspector (2026-09-28)
+
+- Los segmentos dorados eran spans de solo lectura. Ahora cada bloque disponible permite descontar 1 Vida temporal con ratón, toque o teclado mediante `setCurrentStat` / `updateItem`, preservando máximo, origen y Vida normal. Los gastados quedan deshabilitados; no se pueden curar. También se muestran si el máximo normal es cero. Guarda por Confirmar cambios, como los demás recursos.
+- Regresión cubierta para jugador y enemigo: 2→1→0, no regeneración al pulsar gastados, conservación de metadatos y Vida normal.
+
+## Indicadores de estado legibles (2026-09-28)
+
+- Petición: ampliar los estados minúsculos y adaptarlos a coronas, retratos circulares y siluetas. `TokenStatusBadges` sustituye los iconos de 7px dentro del marco seleccionado por medallones de 26–40px en pantalla, arco lateral/columna, contrarrotación, colores semánticos y contador de excedentes. No cambia reglas ni permisos de visibilidad; conserva `isPresentedPoisoned` y aparece sin selección.
+- Playwright: seis escenarios (PC, móvil, varios estados, 0.25, 2x2, rotación), sin errores JS; dimensiones verificadas y capturas inspeccionadas. Cliente develop-web-game ejecutado. Demo local en 4219, artefactos `output/silhouette-review/status-*`.
+- Pruebas existentes: 6 pasan; persiste el fallo previo de `boardTokenCrowns` que espera offset 58px y recibe 66px (geometría de coronas no modificada aquí).
+
+## Gasto de Maná de nivel 1 (2026-09-28)
+
+- Mismo alcance acordado para recursos: generación manual; implementada la potenciación de Descarga arcana, no el catálogo de conjuros ni recargas por ronda. `canvasMana.js` valida clase/reserva/Catalizador único, coste 0 o 1 y dado base homogéneo. Un punto añade un solo dado base; no concede Crítico, pero hereda el rasgo activo y sus cadenas.
+- Preparar ataque tiene toggle accesible y táctil, reserva y remanente. Maná a cero permite Descarga normal; si la reserva cambia mientras está seleccionado, bloquea confirmar hasta desactivar. Consumo transaccional comparte la ruta de Furia y actualiza aventura vinculada. Resultado/registro separan Maná con paleta violeta arcana.
+- 112 pruebas / 9 suites relevantes pasan; compilación de producción correcta. Playwright PC y móvil sin errores JS, reserva 1→0, un dado adicional, capturas inspeccionadas. Cliente develop-web-game ejecutado e inspeccionado. Demo temporal en 4222 `?mode=mana&start=confirm`.
+
+- 2026-09-28: usuario solicita explicar el flujo base del Pícaro y distinguir dados por color. Implementada apariencia común `combatDieAppearance`: Furia rojo, Crítico ámbar, modificadores azul en preparación/resultados y registro Canvas. Oro base y rojo Amenaza preservados. Golpe sucio revisado contra documento: 1 Astucia, repetir un dado de arma tras verlo y elegir resultado; no automatizado en este cambio de color.
+
+## Furia ofensiva de nivel 1 (2026-09-28)
+
+- Petición autorizada: integrar únicamente el gasto de Furia en el ataque automático; generación manual, sin progresión nueva. `canvasFury.js` valida reserva y armas cuerpo a cuerpo/Arrojadizas. Cada punto añade un dado de perfil; Crítico respeta supresión y protecciones existentes. Perfiles mixtos bloqueados con explicación hasta cerrar su referencia reglamentaria.
+- Preparar ataque incorpora contador táctil −/+ con reserva, dados añadidos y remanente; confirmación definitiva paga. La transacción revalida Furia/equipo/permisos/dados y escribe combate, ficha y aventura vinculada; cancelar no consume. Tirada separa Furia de arma/modificadores; registro identifica dados y coste. Probado también en práctica.
+- 78 pruebas pasan en 7 suites relacionadas. Build de producción correcto. Revisión Playwright escritorio/móvil: 2 Furia gastada, 2 dados adicionales, reserva restante 1, sin errores JS. Preview temporal `output/fury-review`, servidor 4222 con recursos públicos; capturas inspeccionadas.
+- La ejecución global detectó un fallo ajeno en `boardTokenCrowns.test.jsx`: esperaba 58px, el ribbon actual da 66px. No se modifica geometría de coronas en esta tarea. Dos expectativas antiguas de argumentos de confirmación se preservaron evitando enviar `furySpend: 0`.
+
+- 2026-09-27: Veneno de siluetas deja de usar la atenuación radial de retratos circulares. Campo compartido de nubes y onda móvil sobre toda la imagen, recortado por su alfa; los retratos conservan el campo anterior. Solo calcula el campo adicional si hay siluetas suscritas. Verificación de navegador durante 8 s: alfa superior/central/inferior cambia entre [155,85,41], [112,133,76], [42,53,121], [52,55,41]; todas las zonas participan. Capturas temporales y cliente develop-web-game inspeccionados en output/silhouette-review/poison-drift-*.png. Sin errores JS.
+
+## Siluetas transparentes y recursos (2026-09-27)
+
+- Petición: recortar todos los efectos al token no circular y adaptar las coronas. Máscara alfa CSS compartida (`tokenSilhouette.js`, contain/center/no-repeat y prefijos WebKit) para Veneno, Brea, impacto, Oculto, curación, Antídoto, Presteza/Vitalidad y highlights/correr. Los efectos en capas flotantes reciben imagen, forma y rotación desde TacticalViewport. La animación se mantiene dentro de una máscara fija; indicadores externos quedan legibles.
+- Tokens estándar no circulares usan TokenResourceCrown como los de Canvas/Tablero: cinta inferior de Vida, superior de Postura/Hambre, una sola etiqueta de nombre. Segmentos dimensionados según tamaño/zoom; colores temporales/veneno y feedback preservados. Se corrigen separación del marco, avisos de recogida y captions de pociones.
+- 88 pruebas dirigidas en 11 suites y build correctos. Preview aislado puerto4219 con silueta SVG asimétrica y huecos, proporción 100x160 dentro de caja cuadrada; comparación con retrato circular. Capturas revisadas para escritorio/móvil emulado, rotación35 grados, Veneno/Brea/Oculto/daño/pociones. Antídoto comprobado específicamente con remove-poison; sin errores JS. Cliente develop-web-game ejecutado y captura inspeccionada. Evidencia output/silhouette-review.
+- Pendiente valoración estética del usuario. Sin commit ni despliegue.
+
+- 2026-09-27: aviso de recogida unificado con las etiquetas de nombre, a petición del usuario: misma clase de texto (Alegreya 14), superficie CSS compartida, borde tenue y fondo azul oscuro. Eliminado separador vertical; «Soltar» en cursiva dorada. Revisión visual en navegador y separación de 8.2 px conservada en zoom 0.3–4.
+
+- 2026-09-27: corregido solapamiento de «Soltar · Nombre» con la etiqueta de Vida. El aviso usa el desplazamiento real de la corona, reserva 26 px para la etiqueta y 8 px de separación en pantalla; sustituye el margen fijo en coordenadas del mapa. Verificación visual y medición en navegador a zoom 0.3/0.5/1/2/4: separación de 8.2 px en todos. Captura output/pickup-cursor-review/spacing.png. Sin cambios en la recogida ni sus permisos.
+
+## Recogida con cursor en duelo y formación (2026-09-27)
+
+- Petición: evitar entregas accidentales al token vecino al arrastrar objetos. La previsualización y la entrega usan el mismo worldPoint del ratón/toque y las posiciones visuales de combate. Selección por retrato y proximidad al centro, sin priorizar el solapamiento del objeto arrastrado; margen pequeño de borde y controles de propiedad preservados.
+- La ficha resaltada muestra «Soltar» y su nombre en Alegreya. No se alteran reglas de inventario, equipamiento ni recogida por movimiento.
+- 40 pruebas dirigidas correctas en 4 suites; build correcto. Navegador: 8 arrastres verificados (ambos destinatarios en duelo y formación, ratón y toque emulado), con agarre descentrado y entrega junto al límite entre retratos; previsualización e inventario coinciden, sin errores JS. Capturas desktop/móvil y cliente develop-web-game inspeccionados en output/pickup-cursor-review.
+- Sin commit ni despliegue. Vista aislada en http://127.0.0.1:4218/.
+
+## Corrección urgente del playtest: sincronización de ronda
+
+- La captura señala `canvasCombat.participants.<token>.defensiveReposition` con valor `undefined`. Movimiento y deshacer generaban esa propiedad sin reposicionamiento activo.
+- Se utiliza `null` en ambos casos y se sanea el estado al persistir combate y práctica. Prueba de regresión para movimiento ordinario, deshacer y preservación del segundo jugador.
+- El ajuste visual de rasgos permanece en el árbol de trabajo; el bloqueo de sincronización tiene prioridad.
+- Build correcto y despliegue de Hosting completado en `base-de-datos-noma`. Suite completa: 97 correctas y un timeout de la ficha maestra bajo carga; repetición focal de esa suite y las dos de combate: 29 pruebas correctas. Se requiere recargar los clientes abiertos para cargar el arreglo.
+
+## 2026-09-08 — Selección defensiva y contraataque
+
+- Selector de armas compartido con retrato, nombre, perfil/alcance, rasgos y marca de selección independiente. El contraataque abre una lista ilustrada y conserva el arma elegida visible con miniatura.
+- Acciones de excedente con jerarquía para casillas y Presión, apiladas a 320 px y desplazamiento acotado cuando se abre la lista.
+- Verificados 10 tests del modal y selección/defensa/contraataque/reposicionamiento a 1280, 390 y 320 px en el harness local. Capturas inspeccionadas y cliente de la skill ejecutado; no verifica sincronización Firebase real.
+
 - Tarjetas de previsualización e información de objetos en el suelo (`CanvasLootVisual`, `RogueliteInventoryCard`):
   1. Detección completa de rareza y acento cromático (`resolveRarityAccent`): las tarjetas en el suelo ahora respetan la paleta de rarezas del juego (`rarityColorMap`, sin importar mayúsculas, minúsculas, tildes o género gramatical) aplicando el tono exacto en bordes, sombras, brillos, título y líneas decorativas.
   2. Integración con el Glosario de Rasgos (`glossary`): los rasgos de las armas y objetos (como "AGUDEZA", "DESTREZA", "SIN GUARDIA") heredan sus colores definidos en el glosario junto a sus respectivos símbolos `◆`.
@@ -653,3 +712,835 @@ Original prompt: Perfecto. Ahora necesito que vayas implementando cada cambio qu
 - El resolvedor compartido incorpora las armaduras locales del catálogo por nombre, por lo que `Armadura acolchada` y el resto de piezas clásicas muestran su arte aunque no guarden una URL explícita.
 - La tarjeta de defensa reduce su altura y adopta la estructura horizontal de Presión entrante: datos y regla a la izquierda, imagen panorámica de fondo y CD en una columna derecha con divisor vertical.
 - Validación: 16 pruebas focales correctas, incluida la resolución automática del arte. Revisión de 27 escenarios en 1440×1000, 390×844 y 320×640 sin errores de navegador ni desbordamiento horizontal.
+
+## 2026-09-08 — Reglas y lore en las tarjetas del inventario
+
+- La Forja separa ahora `Reglas y efecto` de `Lore` para armas, armaduras, habilidades, objetos y accesorios. Los registros antiguos conservan íntegra su descripción como texto mecánico y pueden incorporar lore sin migración destructiva.
+- La tarjeta real del inventario presenta el efecto con tipografía directa y el lore como un fragmento editorial en serif cursiva, separado por una línea y un acento vertical de la rareza. El contenedor mantiene el scroll interno de las tarjetas fijas en PC.
+- La búsqueda de la Forja y de la mochila incluye ambos textos. La serialización conserva las claves compatibles en español e inglés.
+- La incorporación de equipo a una clase conserva el lore en la copia de inventario. Las copias anteriores que aún no lo contienen lo recuperan del catálogo actual por identificador o nombre, también en la vista del jugador.
+- Los campos de la Forja y los textos finales de la tarjeta comparten Alegreya: peso medio para las reglas y cursiva para el lore. Sustituye el aspecto genérico de Lato sin sacrificar legibilidad en móvil.
+- Validación: 10 pruebas focales correctas y compilación de producción satisfactoria. El harness `output/inventory-copy-review` verificó el componente real a 820×720, 390×844 y 320×640 sin errores de navegador ni desbordamiento horizontal.
+
+## 2026-09-08 — Presentación y recogida del botín
+
+- Petición: pulir los objetos del suelo y su recogida por tokens con una presentación propia de juego.
+- Marcador compacto con arte de catálogo, apoyo sobre el tablero, rareza y nombre contextual; eliminados brillo difuso y marco facetado.
+- Destinatario estable, anillo semántico verde y mensaje antes de soltar; confirmación temporal de entradas al inventario sin mutar datos del juego.
+- Vista previa alcanzable con cursor, apertura/cierre por teclado, imagen alternativa y controles móviles dentro del panel.
+- Validación: 95 suites / 465 pruebas existentes correctas; 23 pruebas focales posteriores, incluidas dos regresiones de la confirmación. Compilación de producción correcta. Harness de componentes reales en output/loot-review: hover, teclado, móvil, destino y caducidad de confirmación; no sustituye una sesión multijugador con Firebase.
+
+## 2026-09-08 — Corrección visual del botín según capturas
+
+- Objetos rectos y eliminado el verde de destino y confirmación.
+- Aviso único de recogida con la geometría compacta, negro y oro del HUD. El nombre del objeto arrastrado se oculta sobre el token; el mismo aviso cambia de Soltar a confirmación sin + ni segunda línea.
+- Regresión añadida para que un destino nuevo sustituya una confirmación previa, sin dos mensajes simultáneos.
+
+## 2026-09-08 — Ataque inminente y selección defensiva
+
+- Panel ofensivo alineado con la defensa: nombre del arma, composición compartida y sello numérico de la misma escala. Base fija alineada con las caras de los dados y operadores centrados.
+- Eliminados los contenedores de tarjeta de los dados seleccionables; selección sobre el dado con desplazamiento corto, indicador y estado textual.
+- Resultado con columna numérica común y explicación de defensa total y excedente.
+- Sin capturas ni revisión visual por petición explícita del usuario. Validación mediante pruebas del modal y compilación.
+
+## 2026-09-08 — Excedente defensivo funcional
+
+- Restaurada la altura de defensa a 126 px; Presión entrante en rojo.
+- Elección obligatoria de excedente para jugadores y enemigos: reposicionamiento o contraataque con arma equipada de alcance legal. El contraataque no tira dados ni crea otro ataque pendiente; se persiste la Vida del atacante y su pérdida en el registro compartido.
+- Reserva de reposicionamiento acumulable, consumible sin gastar movimiento ordinario y visible en el contador del token, también en combates de prueba. La salida de Duelo no genera reacción de oportunidad en el motor actual.
+- Animaciones compartidas desde combat_log: Contraataque y daño o Resiste, Bloqueo Perfecto con empate y ráfaga de Reposicionamiento.
+- Añadidas regresiones del runtime, selector y animaciones. Sin capturas según petición del usuario.
+
+## 2026-09-08 — Equipo defensivo y CD enemiga visible
+
+- Dados de preparación centrados. Arma defensiva con composición de armadura: ilustración, identidad, separación de rasgos y columna de tirada.
+- La CD ya intervenía en resolveCanvasAttackDamage; faltaba en la interfaz enemiga. Ahora muestra CD base/efectiva y daño previsto, recalculados con el mismo resolvedor del runtime.
+- Regresión: 13 de Presión menos 2 de defensa deja 11; contra CD 5 muestra 2 bloques de Vida. Sin capturas por petición del usuario.
+
+## 2026-09-08 — Botón contextual de defensa activa
+
+- Eliminado el par ambiguo «Recibir ataque» + «Defender».
+- El mismo botón pasa a «Confirmar defensa» cuando el enemigo tiene equipo defensivo seleccionado y ejecuta equipo/Amenaza; sin defensa elegible conserva «Recibir ataque».
+- Actualizada la regresión del modal.
+
+## 2026-09-08 — Selección reversible del equipo defensivo
+
+- Restaurado el color rojo del botón de acción.
+- La primera arma se muestra seleccionada por defecto, pero se puede desmarcar pulsándola de nuevo o sustituir por otra; el botón cambia a «Recibir ataque» cuando no queda ninguna seleccionada.
+- Añadida regresión de marcado, cambio y desmarcado del arma defensiva.
+
+## 2026-09-08 — Señal visual de equipo defensivo seleccionado
+
+- Simplificada la tarjeta seleccionada: una única marca ✓ circular en la esquina, sin barra lateral ni marco interior.
+- Las tarjetas siguen siendo botones accesibles y conservan el foco visible; no cambia la lógica de selección ni el tamaño de la tarjeta.
+
+## 2026-09-15 — Copias físicas e indicador sutil de manos
+
+- El equipamiento Roguelite distingue plantilla y copia física; una misma instancia no puede ocupar dos manos ni dos conjuntos, mientras dos copias iguales sí permiten combatir con doble arma.
+- Tras la revisión visual, las ranuras recuperan los rótulos discretos `HÁBIL` y `TORPE`. Izquierda/derecha deja de mostrarse como texto visible.
+- El selector representa la ocupación con dos manos inclinadas en V: cada mano se ilumina de forma independiente y las armas a dos manos encienden ambas.
+- Las tarjetas del inventario eliminan las etiquetas textuales de copia/ubicación y solo muestran el indicador de manos cuando esa copia está equipada.
+- Pruebas focales: 25 correctas para selector, tarjetas, armas a dos manos, copias repetidas y conjuntos independientes.
+- Revisión visual completada con el componente real a 1366 y 390 px: selector y mochila sin errores de navegador ni desbordamiento horizontal; el cliente automatizado de juego confirmó el estado esperado.
+- Validación final: 98 suites correctas, 494 pruebas superadas y 1 omitida; `npm run build` compila correctamente.
+
+### Revisión del indicador de copias
+
+- Eliminada definitivamente la fila textual `Copia N de N · Libre` del cuerpo de la tarjeta.
+- Las repeticiones se comunican con `Layers2` y el total, junto al indicador independiente de manos; una copia libre no añade ningún texto de estado.
+- Reubicados los indicadores de copias y manos en un único grupo gráfico, sin fondo ni rótulos, en la esquina inferior derecha del cuerpo de la tarjeta. La cabecera queda reservada para arrastrar o eliminar.
+- Revisión visual repetida a 1366 y 390 px con dos dagas físicas: composición estable, sin desbordamiento ni errores de navegador.
+
+### Integración visual de manos y controles
+
+- `TORPE`, `HÁBIL` y `OCUPADA` abandonan la placa rectangular y se integran en la esquina de la ilustración mediante un fundido oscuro, una línea fina semántica y texto con sombra contenida.
+- La acción de desequipar deja de ser un botón rojo flotante: ocupa el remate opuesto de la imagen, permanece discretamente visible y refuerza su estado al pasar el cursor o recibir foco.
+- El indicador de manos ya no acumula opacidad en sus contenedores. La mano inactiva conserva lectura tenue y la activa gana trazo, luz y contraste para seguir distinguiéndose en pantallas oscuras o poco contrastadas.
+- Revisión visual del componente real a 1366 y 390 px: los remates se funden con arte claro y fondo oscuro, la X permanece localizable y la mano activa mantiene una lectura inequívoca. El harness y el cliente automatizado no registraron errores ni desbordamiento horizontal.
+- Validación final: 98 suites correctas, 494 pruebas superadas y 1 omitida; la compilación de producción termina correctamente.
+- Refinada la acción de desequipar tras la revisión: desaparece el guion lateral, la `X` pierde dureza y el oscurecimiento pasa de una cuña marcada a un halo radial más amplio y transparente, integrado con el arte.
+- Ajuste comprobado a 1366 y 390 px sin errores ni desbordamiento; las 11 pruebas focales pasan y el build de producción compila correctamente.
+- `HÁBIL`, `TORPE` y `OCUPADA` adoptan el mismo halo radial suave de la acción de desequipar: desaparece también su guion y el texto queda integrado directamente en la esquina del arte.
+- Corregido el conector de armas a dos manos: la ranura bloqueada dirige ahora la línea hacia la ranura propietaria, tanto desde la izquierda hacia la derecha como en el caso inverso.
+- Verificación final en los conjuntos I y II a 1366 y 390 px: el conector cruza el hueco interior en la dirección correcta, los rótulos se funden con el arte y no hay errores ni desbordamiento. Las 12 pruebas focales pasan y el build compila.
+
+### Defensa pasiva de armaduras
+
+- El documento maestro establece que la armadura aporta principalmente la CD, que cada múltiplo completo de CD en la Presión restante cuesta un bloque de Vida y que ciertas piezas neutralizan un rasgo ofensivo de forma permanente mientras estén equipadas.
+- La armadura equipada sustituye `Defensa: N` por una lectura compuesta: escudo `CD N`, regla `1 bloque cada N de Presión` y protección explícita `Neutraliza ...`; `Conmocionante` se interpreta defensivamente como `Neutraliza Conmoción`.
+- La `X` de armaduras reutiliza exactamente el fundido radial discreto de las armas y el selector pasa de `Defensa` a `CD`.
+- Revisión visual completada con el componente real a 1366 y 390 px, incluida la apertura del selector: composición estable, sin errores del navegador ni desbordamiento horizontal.
+- Validación final: 98 suites correctas, 496 pruebas superadas y 1 omitida; la compilación de producción termina correctamente.
+- Refinada la lectura de armadura: `CD` y su valor quedan contenidos dentro de la silueta del escudo, sin invadir su corona. Se elimina el escudo redundante de la fila inferior.
+- La armadura muestra como máximo tres rasgos usando exactamente las etiquetas, colores y tooltips del glosario compartido por las armas; el cuarto rasgo se oculta para conservar la densidad de la tarjeta.
+- Revisión visual repetida a 1366 y 390 px, con tooltip real activado por hover, sin errores de navegador ni desbordamiento horizontal.
+- Validación posterior al refinamiento: 98 suites correctas, 496 pruebas superadas y 1 omitida; el build de producción compila correctamente.
+- Microajuste del emblema defensivo: `CD` y el valor suben dentro del escudo, aumentando a la vez el aire vertical entre ambos.
+
+### Sincronización en vivo de clases en preparación
+
+- El catálogo maestro ya llegaba mediante listeners de Firebase, pero la ficha abierta ignoraba sus cambios en cuanto el jugador tenía un borrador local de preparación.
+- Las clases sin aventura activa fusionan ahora cada actualización de plantilla con el borrador personal: la pool, reglas y presentación se refrescan sin cerrar la ficha, mientras manos, talentos, habilidades y demás selección personal se conservan.
+- Antes de reconciliar el equipo se liberan las identidades efímeras de preparación; así una copia sigue equipada si la plantilla conserva ese objeto, aunque la nueva pool haya rematerializado sus instancias.
+- Las runs activas no entran en esta fusión de preparación y mantienen el documento personal de la aventura como fuente de verdad.
+- Prueba de integración añadida: con una espada ya equipada, el máster añade un arco; el arco aparece en la ficha abierta y la espada continúa equipada.
+- Validación final: 98 suites correctas, 497 pruebas superadas y 1 omitida; el build de producción compila correctamente. La regresión visual del mazo no registra errores de navegador.
+
+## 2026-09-17 — Banda de nombre del puntero compartido
+
+- Petición: probar un nombre que nazca detrás del rombo del puntero, inspirado en una banda enrollada, conservando el color individual y omitiendo la pieza inferior de la referencia.
+- Primer corte: rombo ligeramente reforzado por delante de una banda negra compacta con la tipografía existente y un remate plegado en el extremo derecho.
+- La primera captura mostró que el rombo perdía jerarquía frente a la banda; se aumentó a 18 px para recuperar la proporción dominante de la referencia sin agrandar el nombre.
+- Revisión visual final con Máster, un nombre corto y uno largo sobre la cuadrícula: banda legible, rombo por delante, pliegue derecho estable y sin pieza inferior. El cliente de playtest no registró errores; prueba focal y build correctos.
+- Corregida una excepción al mover con `Ctrl` antes del primer ping: el estado local `null` ahora se trata como una colección vacía. Añadida regresión específica.
+- Retirado el pliegue del extremo derecho: el nombre queda en una banda rectangular limpia.
+- Separada la presencia del cursor de la vida de sus pings. Soltar `Ctrl`, salir del Canvas, perder foco u ocultar la pestaña marca el cursor como oculto y conserva en Firestore las ondas activas hasta su caducidad individual; después se elimina el documento efímero.
+- Tras detectar una regresión de sincronización entre clientes, el cursor recupera su documento efímero original y cada ping pasa a un documento temporal independiente en `sharedPings`. El cursor vuelve a actualizarse y borrarse en tiempo real sin poder cancelar las ondas ya iniciadas.
+
+## 2026-09-17 — Edición de imagen desde la biblioteca de clases
+
+- El botón de imagen de la tarjeta abre ahora la ficha directamente en modo de encuadre, reutilizando el editor de portada/avatar, zoom, desplazamiento, guías y sustitución de archivo.
+- Las clases sin imagen muestran una acción explícita para seleccionar el archivo, evitando un editor vacío sin controles.
+- La regresión de biblioteca confirma que el botón abre el editor con modos Portada/Avatar y una acción de guardado habilitada. El cliente visual alcanzó la pantalla inicial; la navegación automatizada de máster quedó detenida esperando la carga de fuentes, por lo que la vista autenticada se cubre con el componente real bajo prueba.
+
+## 2026-09-17 — Estado Oculto y visión por Team ID
+
+- Sustituido `Ensordecido` por `Oculto` en los estados por defecto, selector, sincronización de ficha y tracker heredado. La lectura de `status_effects_config` descarta el ID antiguo y añade el nuevo aunque Firebase conserve una configuración previa.
+- Centralizada la regla del Canvas: un jugador accede a la visión de sus tokens controlados y de los tokens con el mismo `Team ID`, pero el equipo no concede control.
+- Los tokens ocultos quedan fuera del render, máscaras de visión, selección, objetivos, efectos flotantes y cronología para espectadores sin acceso. El máster conserva sus tokens sin controlador, pero no ve los controlados exclusivamente por jugadores.
+- Regresiones focales: 10 pruebas correctas para estado, equipo, control separado, visibilidad de jugador/máster y actualización de visión; `npm run build` compila.
+- Revisión visual mediante harness local sin fuentes externas: aliado ve el token oculto, rival y máster no; ningún estado registra control por Team ID. El cliente de juego no emitió errores. La app completa continúa bloqueando la captura automática mientras espera fuentes remotas.
+- La primera batería completa detectó una importación prohibida desde el núcleo compartido hacia Canvas; la regla pura se trasladó a `tactical-shared` y permanece activada únicamente fuera de Board mediante `isBoardMode`.
+- Validación final: 105 suites correctas, 519 pruebas superadas y 1 omitida; `npm run build` compila correctamente.
+
+### Detección, colisiones y representación mágica de Oculto
+
+- Los tokens visibles para propietario o aliados muestran ahora una distorsión translúcida con dos ondas desfasadas y un barrido refractado; se conserva el indicador lateral de estado existente.
+- Añadido al Canvas el toggle local del máster `Mostrar ocultos`. Permite inspeccionar todos los ocultos como siluetas no interactivas y no altera estado, permisos ni detección.
+- La detección de `Oculto` recorre el trayecto casilla por casilla y compara las celdas ocupadas completas, incluyendo criaturas Grandes. Funciona al mover cualquiera de los dos bandos y detiene la ruta en el primer contacto hostil.
+- La previsualización de ocupación excluye enemigos ocultos. Tras el contacto se revela primero y se recalcula después: una Formación completa bloquea la entrada, conserva la última posición válida y gasta el paso; una casilla que admite Duelo acepta la entrada.
+- La revelación de estado se persiste de inmediato sin confirmar por accidente una posición pendiente. La confirmación de movimiento acepta la instantánea ya revelada para evitar que el runtime restaure un estado antiguo.
+- Un enemigo oculto no puede seleccionarse como objetivo directo; los aliados sí conservan acceso. El atacante pierde `Oculto` únicamente después de resolver el ataque. Queda disponible la regla pura `actionRevealsHidden` para acciones futuras con `revelaOculto`; mover normalmente no revela salvo contacto.
+- Revisión visual con el cliente de juego: toggle apagado sin pistas; toggle encendido con token translúcido, tres frentes de onda legibles e indicador lateral. El estado textual confirmó que la inspección no muta `Oculto` y no aparecieron errores de navegador.
+- Validación final: 106 suites correctas, 527 pruebas superadas y 1 omitida; las pruebas focales de ocultación/movimiento/ataque pasan y `npm run build` compila correctamente.
+- TODO futuro: cuando se incorporen acciones de Canvas distintas de ataque, hacer que su resolvedor consulte `actionRevealsHidden(action)` después de resolverlas.
+
+### Revisión visual de Oculto: efecto Fog
+
+- Sustituidas las ondas violetas por una interpretación CSS del efecto `16-Fog.gif` de TokenMagic: tres bancos de bruma con recorridos, escalas y velocidades independientes más un velo irregular muy tenue.
+- El retrato oculto queda parcialmente desaturado y translúcido. Se retiró el primer halo uniforme porque parecía una burbuja; el acabado final concentra la niebla dentro de la silueta sin introducir recursos remotos ni modificar el icono lateral.
+- Revisión visual sobre una ilustración real y comparación de estados con el toggle del máster. El token normal conserva contraste y el oculto se reconoce por la bruma gris móvil.
+- Validación final: 106 suites correctas, 527 pruebas superadas y 1 omitida; el cliente de juego conserva `hiddenStateMutated: false` y el build de producción compila correctamente.
+
+### Recorte continuo del Fog y coste real del descubrimiento
+
+- El Fog queda recortado dentro del retrato (`2px` en tokens circulares), por debajo del aro exterior de selección. Se retiraron `backdrop-filter` y los modos de mezcla que hacían variar el brillo al seleccionar.
+- Las tres capas recorren órbitas lineales cuyos fotogramas inicial y final son equivalentes, con duraciones y retrasos negativos distintos. No existe salto de reinicio ni pausa de `ease-in-out` al completar el ciclo.
+- Descubrir un enemigo antes de entrar ya no cobra la casilla fallida: `spentCost` cuenta únicamente los pasos anteriores realmente recorridos. Si la casilla admite entrada, sí se cobra y se forma Duelo; en ambos casos la ruta se detiene al descubrir.
+- La composición de Formación usa ahora la lista visible para cada espectador. Un enemigo no ve desplazarse al miembro visible por culpa de su compañero oculto; al revelarse, ambos recuperan inmediatamente la distribución normal.
+- Añadidas regresiones para choque en el primer paso (coste 0), choque tras dos casillas válidas (coste 2), criatura Grande y ocultación del desplazamiento de Formación.
+- Validación final: 106 suites correctas, 529 pruebas superadas y 1 omitida; el build de producción compila correctamente y la revisión visual confirma que el Fog permanece dentro del retrato incluso con el token seleccionado.
+
+## 2026-09-18 — Rebote del puntero al soltar Ctrl
+
+- El salto no procedía del ping: al limpiar `localPointer`, el snapshot propio de `sharedPointers` dejaba de excluirse durante los milisegundos que Firebase tardaba en confirmar `deleteDoc`, por lo que reaparecía en su última coordenada publicada.
+- El actor local se excluye ahora siempre del canal remoto. Mientras Ctrl está pulsado se representa con el estado local inmediato; al soltarlo desaparece sin esperar a la red y las ondas independientes continúan.
+- Añadida una regresión que conserva deliberadamente el documento remoto propio durante el borrado pendiente y confirma que no se vuelve a renderizar el cursor.
+- Revisión visual con el cliente de juego: con `ownRemoteEchoCount: 1` y borrado aún pendiente se mantienen `visibleCursorCount: 0` y el ping activo, sin errores de navegador.
+- Validación final: 106 suites correctas, 530 pruebas superadas y 1 omitida; `npm run build` compila correctamente.
+
+## 2026-09-19 — Uso genérico de objetos y colocación de áreas
+
+- Añadidos los núcleos puros `ItemUseSystem` y `AreaPlacementSystem`. El primero encadena fases declarativas y el segundo resuelve huella, snap, alcance Chebyshev, límites y validadores personalizados sin depender de ningún objeto.
+- `Bomba de humo` queda descrita como una receta: seleccionar dado, colocar área, confirmar, consumir recursos y resolver efectos. Su plantilla es rectangular 2×2 y permite alcance 0 sobre la propia casilla.
+- Primeras regresiones focales: 7 pruebas correctas para encadenado configurable, validación de fases, detección de objeto, snap 2×2, cuerpo a cuerpo, fuera de alcance/límites y creación de áreas persistentes.
+- Pendiente en este bloque: conectar el orquestador React al HUD/viewport, commit atómico, visual de Humo, reglas derivadas de Oculto y selector del máster.
+- Integrado el flujo completo en el HUD: selector de dado con la estética y dimensiones de Correr, plantilla 2×2 con alcance visible, recolocación/cancelación, confirmación explícita y soporte de `Escape`. Jugadores gastan dados de acción y enemigos gastan Amenaza.
+- El commit final valida control y disponibilidad, consume dado y objeto, limpia cinturón/equipables, persiste la run y crea la zona en el mismo cambio optimista. El arrastre `Soltar objeto en mapa` no se ha reutilizado ni alterado.
+- `Humo` es ahora un tipo de área del máster y una fuente ambiental de `Oculto` mientras un token la solape. Conserva una representación de bruma animada alineada 2×2 y las zonas creadas por jugadores declaran borrado exclusivo del master.
+- Revisión visual del flujo real mediante harness: selector → plantilla válida 4/6 → confirmar/recolocar/cancelar → zona persistente. El estado textual verificó inventario 1→0, dado disponible→gastado, efecto `oculto` y `deletableBy: master`; la pasada final no registró errores de navegador.
+- Validación final: 110 suites correctas, 549 pruebas superadas y 1 omitida. El build de producción compila correctamente; los avisos de `act(...)`, Firebase y `window.alert` proceden de pruebas heredadas que ya terminan en PASS.
+
+### Corrección: Humo reutiliza exactamente el Fog de Oculto
+
+- Eliminadas las animaciones y capas propias `canvas-smoke-zone__bank` que diferenciaban visualmente la zona del estado `Oculto`.
+- Primer intento ya sustituido: `HiddenFogEffect` compartía las mismas capas CSS entre token y área, pero seguía siendo una aproximación visual y no el preset procedural solicitado.
+- Se conserva únicamente el borde, división 2×2 y rótulo funcional de la zona; no existe un segundo efecto de bruma.
+- Añadida regresión que compara ambas salidas y prohíbe que vuelva a aparecer `canvas-smoke-zone__bank`.
+- Primer ajuste descartado: dividir la zona en cuatro gradientes evitaba el estiramiento, pero seguía sin reproducir el preset real de TokenMagic.
+- Corrección definitiva a partir de los archivos enlazados del preset `fog`: retirada la aproximación de gradientes y órbitas CSS. `HiddenFogEffect` aloja ahora un canvas WebGL común para token y zona, configurado con color negro, densidad `0.65`, dimensiones `1×1` y tiempo a velocidad `2.2`.
+- Tras la autorización expresa para adoptar GPL v3, el fragment shader `innerFog` de TokenMagic se incorpora literalmente desde la revisión `0999bb9f2f4d4b5e41135913a67bc73a4fc2cc1d`. Se añadió la licencia GPL v3 completa, atribución y procedencia; el adaptador WebGL suministra `uSampler` y el tiempo en milisegundos como hace la animación `move` original.
+- Revisión visual en dos fotogramas separados: token y zona usan el mismo campo procedural normalizado y el patrón cambia con el tiempo; el navegador no registró errores WebGL.
+- Validación final: 110 suites correctas, 551 pruebas superadas y 1 omitida; el build de producción compila correctamente.
+- Revisión posterior con el shader GPL literal: el Fog muestra ahora las nubes suaves y contrastadas del preset original en el token y en la zona continua 2×2. Ambos canvas obtienen contexto WebGL sin fallback ni errores.
+- Verificación de procedencia: el GLSL local es idéntico al archivo de TokenMagic fijado y comparte SHA-256 `6979adfb0bc6ca25f7aa51afe167f5271a1355548b6ad1e68603eafe617565aa`.
+- Validación GPL final: 110 suites correctas, 552 pruebas superadas y 1 omitida; `npm run build` compila correctamente.
+
+
+## 2026-09-19 — Rendimiento del Fog y visión aislada del humo
+
+- Petición: aligerar varias zonas y entrada/salida de tokens, ralentizar la nube y aplicar visión aislada con excepciones de control/equipo, perspectiva seleccionada y niebla de guerra.
+- Sustituidos los contextos y compilaciones por instancia por un renderer WebGL compartido, con snapshots por preset, precalentamiento ocioso, resolución 128×128 y límite de 24 actualizaciones/s. No se cargan ni suben retratos a GPU al entrar. Se detiene el bucle sin suscriptores, fuera de pantalla o con pestaña oculta.
+- Velocidad 0.75; GLSL vendorizado intacto. Las copias 2D se componen sobre el retrato existente.
+- Caché por snapshot de escenario para zonas, pertenencia, equipos y perspectivas. La selección fuerza visión local; la vista general combina controlados/equipo y las piezas propias del máster. El toggle de inspección conserva su excepción.
+- Máscara inmediata de humo tanto en la niebla como sobre los resplandores; las fuentes internas se recortan a la zona. Sin niebla se conserva el entorno. Rayos/indicadores de objetivos respetan visibilidad.
+- Separado el humo ambiental de la detección por contacto y de la prohibición de atacar a un Oculto explícito: permite ataques dentro y bloquea ataques a través de la frontera.
+- Añadidas nueve regresiones de visión/niebla/movimiento. Primera validación completa: 111 suites, 561 pruebas correctas y 1 omitida; build compilado.
+- Harness local con el viewport real en output/smoke-performance-review: 25 zonas/30 canvas visibles conservan 1 contexto y 2 compilaciones (vértice/fragmento), alrededor de 40 llamadas al shader/s entre los dos presets. Cruce, retirada y reposición de humo no recompilan. Capturas verificadas con/sin niebla y viewport móvil con CPU 4×; sin errores de navegador. No se ha medido en un teléfono físico.
+- Validación final tras snapshots por preset y caché de equipos: 111 suites, 561 pruebas superadas y 1 omitida; producción compilada correctamente. Repetida la revisión visual y la prueba de 25 zonas sin errores, con pausa/reanudación verificadas al ocultar/mostrar los canvas. Sin tareas pendientes dentro del alcance solicitado.
+
+
+## 2026-09-19 — Correcciones de humo tras capturas del usuario
+
+- Las capturas muestran dos problemas reales que el fixture anterior no detectaba: la máscara extra ocultaba la nube como un bloque negro desde fuera y encerraba la vista dentro de un rectángulo; el renderer trataba todos los ocultos como siluetas pasivas al activar el toggle del máster.
+- Eliminado el negro rectangular y el recorte de fuentes a la zona: el entorno usa el radio/degradado y las sombras normales; el aislamiento sigue aplicado a los tokens y al targeting. La nube se reconoce desde fuera dentro de visión normal.
+- La visión exclusiva dentro del humo aplica bruma al 20 % sobre retratos a contraste normal. `Oculto` explícito conserva su efecto. Retirada la transición de opacidad de 500 ms en tokens Canvas y sustituido useEffect por useLayoutEffect para copiar la textura antes de pintar; las fichas circulares no vuelven a cargar una máscara de imagen.
+- Precarga acotada de retratos de residentes (cuatro solicitudes simultáneas, sin duplicados ni reintentos en cada movimiento). Su visibilidad lógica no cambia.
+- Corregidos el bloqueo del toggle y la pérdida de selección al mover una ficha de jugador como máster: la limpieza y los observadores consultan la perspectiva seleccionada.
+- Nuevas regresiones para máscara, intensidad y movimiento mediante handlers reales de ratón/táctil; tests de precarga. Fixture output/smoke-followup-review usa CanvasViewport y createSceneItemRenderer reales. Comprobados arrastres consecutivos de fichas propias y de jugador, vista externa/interna y móvil con CPU 4×. Un contexto WebGL, dos compilaciones, sin errores. Capturas revisadas: nube legible desde fuera, campo radial más amplio desde dentro y retratos claros.
+- Validación final de la corrección: 113 suites correctas, 572 pruebas superadas y 1 omitida; build de producción compilado. Cliente de juego ejecutado y capturas completas verificadas con el renderer real; sin errores de navegador. Prueba móvil simulada, no realizada en teléfono físico.
+
+## 2026-09-19 — Velo exterior del humo al 30 %
+
+- Añadida una cobertura del 30 % en la máscara existente de niebla cuando todos los observadores están dentro del humo. Se compone con el degradado radial sin revelar nuevas zonas; los interiores compartidos se recortan después y mantienen su claridad. No añade efectos WebGL ni modifica la visibilidad de tokens.
+- Actualizada la regresión de la máscara para comprobar la intensidad parcial solicitada.
+- Verificación: 12 regresiones de visión correctas y revisión visual con el viewport/renderizador reales; exterior atenuado, interior claro, tokens exteriores ocultos y arrastre operativo. Cliente de juego y prueba de navegador sin errores.
+
+## 2026-09-19 — Velo del 50 % con entrada y salida progresivas
+
+- Aumentado el velo exterior a 50 %. El rectángulo SVG permanece montado y transiciona fill-opacity durante 450 ms, tanto al entrar como al salir, al eliminar la última nube y al activar la excepción del máster. La animación revierte desde su valor actual sin añadir bucles JavaScript. Movimiento reducido desactiva la transición.
+- Se conserva la visibilidad inmediata de tokens y el recorte limpio del interior.
+- Verificado: 12 pruebas de visión correctas. Navegador real: entrada y salida con valores intermedios, intensidad final 0.5/0, inversión rápida estable y movimiento reducido inmediato; tokens ocultos desde el primer cambio. Cliente de juego ejecutado, captura revisada y sin errores de navegador.
+
+## 2026-09-19 — Pestaña de combate del máster
+
+- Sustituido el pulsador redondeado con flecha por MasterCombatHUDLauncher: placa SVG con biseles recortados, doble grabado tenue, dorado NOMA, símbolo de combate y etiqueta compacta Cinzel. Sin desenfoque, resplandor ni gradientes. Se conserva la misma acción de apertura y ubicación central inferior.
+- Área táctil 176×50 en móvil y 196×56 en escritorio, margen seguro inferior, foco de teclado, estados de presión/hover y movimiento reducido.
+- Verificado con el componente real y CombatHUD: tamaños 1440×900, 390×844, 320×568 y 844×390; apertura con Enter y toque, cierre/reapertura y sin errores de navegador. Cliente de juego ejecutado; capturas de escritorio y móvil revisadas en output/master-hud-launcher-review. Build de producción compilado correctamente.
+
+## 2026-09-19 — Apertura compacta y plegado discreto del HUD
+
+- Reducidas las espadas a 15 px y la apertura a 176×50 px en escritorio / 160×48 en móvil.
+- Añadido MasterCombatHUDCollapse: muesca de 34×25 px con área táctil real 44×44, una flecha pequeña y sin texto. Se integra al lado de las categorías mediante el slot opcional collapseControl, sin acoplar CombatHUD a un modo concreto; eliminado el antiguo botón fijo inferior. El estado vacío usa el mismo cierre.
+- Pruebas de navegador a 1440, 390, 320 y 844 px: apertura, plegado, reapertura, Enter y toque correctos. Cliente de juego y revisión de capturas realizados, sin errores de navegador. 13 pruebas focales de CombatHUD y límites entre modos correctas.
+
+## 2026-09-19 — Bordes continuos y controles alineados del HUD
+
+- Simplificada la apertura a una única flecha hacia arriba, sin espadas, etiqueta ni marcos SVG recortados. Tamaño 56×48 px y borde continuo con el fondo y dorado del HUD.
+- Integrado el cierre dentro de la barra de categorías: comparte el borde exterior, fondo y altura de Acciones, Clase y Objetos; área táctil mínima 44×44 px. Se conservan foco visible, teclado, toque y área segura inferior.
+- Verificación con componentes reales a 1440, 390, 320 y 844 px: alineación exacta con las categorías, apertura/cierre/reapertura y teclado/toque correctos, sin errores de navegador. Capturas revisadas y cliente de juego ejecutado. 13 pruebas focales correctas y build de producción compilado correctamente.
+
+## 2026-09-19 — Altura del desplegador
+
+- Elevado el botón de apertura 22 px: margen inferior de 32 px, igual al de las instrucciones rápidas del canvas, conservando el centrado y el área segura móvil.
+- Verificado en navegador a 1440, 390, 320 y 844 px, con apertura/cierre, teclado y toque correctos; sin errores. Cliente de juego ejecutado y captura móvil revisada.
+
+## 2026-09-19 — Cinturón automático al recoger
+
+- addCanvasLootToInventory asigna objetos compatibles al primer hueco habilitado y vacío; respeta capacidad explícita, capacidad heredada, copias e inventario completo. No sustituye equipo ni amplía el cinturón. Los enemigos mantienen su sistema de equipo sin cinturón.
+- Compartido resolveBeltSlotCount con LoadoutView y reutilizada la clasificación de la aventura. Se actualizan loadout, lista equipada y marcas de la copia adquirida en una sola actualización, usando la persistencia existente.
+- Verificación: 5 suites, 81 pruebas correctas, incluidas capacidad, categorías incompatibles, persistencia de copias y cambio/desequipado manual. Build compilado correctamente. Recogida real y aparición en CombatHUD verificadas en navegador a 1440 y 390 px; cliente de juego ejecutado y captura móvil revisada, sin errores de JavaScript.
+
+## 2026-09-19 — Dados de prueba para objetos fuera de combate
+
+- Añadida preparación explícita de recursos al iniciar ItemUseSystem: tiradas temporales del perfil del token, 3d6 como fallback o amenaza del enemigo. Permanecen estables durante el selector y se renuevan al comenzar otro intento. Se indica Dados de prueba en el HUD.
+- Confirmar fuera de combate valida el dado temporal, consume la copia disponible y persiste los cambios de inventario y el área con safePersistItems. No escribe canvasCombat ni canvasPracticeCombat. Rechaza recursos caducados, fichas ajenas y objetos desaparecidos. Preparación de combate y combate activo mantienen recursos reales.
+- Pruebas: 6 suites / 55 tests correctos (flujo completo real de los hooks, alcance, consumo único, cancelación, renovación, transición de escena/combate, permisos y regresiones de combate). Build compilado correctamente. Dos lanzamientos consecutivos con hooks, HUD, plantilla y renderizador reales a 1440 y 390 px (toque), sin errores de navegador. Capturas revisadas tras esperar la apertura del selector; cliente de juego ejecutado. Persistencia de backend simulada en el fixture.
+
+## 2026-09-19 — Trayectoria y colocación táctil de humo
+
+- Añadida curva cuadrática entre borde del token renderizado y centro de plantilla, con distancia/alcance sobre el arco e indicador central conservado. Trazo SVG sin escalado y etiquetas con zoom compensado; colores dorado/rojo según validez y sin animación continua.
+- Separados controles de la capa de mundo: barra de pantalla fija, botones de 48 px con texto y cancelación disponible desde el inicio. El HUD se aparta durante colocación/confirmación y vuelve después.
+- Captura de eventos en CanvasViewport para colocar incluso encima de fichas: arrastre de un dedo actualiza la vista previa y fija al soltar, dos dedos delegan zoom sin colocar al terminar. Se suprime el clic sintético posterior. El ratón conserva paneo central/Alt y Escape cancela. Se evitan actualizaciones de plantilla dentro de la misma casilla sin cambios.
+- Validación: 4 suites / 23 tests correctos, build de producción compilado. Navegador con CanvasViewport, hooks, HUD y controles reales a 1440×900 (zoom .3 y 1), 390×844 (.5), 320×568 (1) y 844×390 (2). Comprobados tamaño constante de etiqueta, controles dentro de pantalla, arrastre táctil, pinch, recolocar, cancelar, repetir y lanzar; sin errores. Cliente de juego ejecutado y capturas revisadas. Backend y manejador de zoom del fixture simulados; delegación de gestos verificada.
+
+## 2026-09-19 — Confirmación coherente con CombatHUD
+
+- Ajustado el panel de confirmación al ancho del bloque central de CombatHUD: hasta 672 px en escritorio y viewport menos 32 px en móvil. Mismos botones de 96/64 px, iconos de 32/18 px, separaciones, fondo, borde dorado y radios. Cabecera integrada superior con estado e indicación de uso.
+- Verificado visualmente en escritorio y móvil; el navegador compara ancho y alto de ambos paneles en cinco combinaciones de viewport/zoom. Repetido el flujo de colocar, recolocar, pinch, cancelar y confirmar sin errores. Cliente de juego ejecutado. Cambio exclusivamente de presentación.
+
+## 2026-09-19 — Objetos centrados en móvil
+
+- La fila de Objetos usa márgenes automáticos en sus extremos para centrar 1–3 objetos tanto en móvil como en escritorio, sin recortar el inicio cuando hay desbordamiento. Se mantienen los tamaños de ranura y el desplazamiento horizontal.
+- Verificado en navegador con 1, 2, 3 y 6 objetos a 320, 390 y 1440 px: centrado exacto y ambos extremos alcanzables. Cliente de juego ejecutado y captura móvil revisada.
+
+## 2026-09-20 — Reglas de habilidades y equipo sin metadatos repetidos
+
+- Eliminada la concatenación de Alcance/Rasgos en buildAbilityEntry. getItemRulesPresentation separa el pie legado, mantiene los metadatos accesibles y deja intacto el cuerpo de reglas. Se aplica a tarjetas, selector y descripción de habilidades equipadas.
+- ItemRulesText ofrece extractos delimitados por frases cuando es posible y texto íntegro bajo Ver reglas completas, con estado accesible y área táctil. En el selector, lectura y equipamiento son botones independientes; la metadata se muestra en la cabecera.
+- Validación final: 5 suites / 25 pruebas correctas. Build de producción compilado y fixture final compilado. Navegador con tarjetas y RogueliteTalentsPanel reales a 1200 y 390 px: limpieza del pie, reglas íntegras al desplegar, no equipar al leer, selección operativa; sin errores. Cliente de juego ejecutado y capturas revisadas.
+## 2026-09-20 — Descripciones completas con scroll en tarjetas
+
+- Restaurado el texto íntegro de armas y conjuros en RogueliteInventoryCard, usando el área de desplazamiento existente y eliminando el botón «Ver reglas completas» de estas tarjetas. Se conserva la limpieza de alcance/rasgos duplicados y el selector mantiene su presentación compacta.
+- Validación: 15 pruebas correctas en 2 suites de inventario y resumen de clase. Fixture de navegador compilado y comprobado a 1200 y 390 px: texto completo, sin desplegable en tarjetas, scroll funcional en escritorio y selector operativo. Cliente de juego ejecutado y captura revisada.
+
+## 2026-09-20 — Jerarquía de Daño, Alcance y Coste
+
+- Petición: afinar los tres campos de las armas equipadas conservando el diseño apreciado por el usuario. Sustituida la línea apretada por una lista descriptiva: etiquetas Cinzel discretas, valores Alegreya, colores semánticos y separadores dorados tenues. Sin cambiar ilustraciones, bordes exteriores ni controles.
+- Contenedor adaptable: tres columnas en cartas amplias y tres filas cuando el espacio interior baja de 190 px, evitando palabras partidas en móvil.
+- Validación: fixture del LoadoutView real a 1366, 390 y 320 px, campos visibles sin desbordamiento y selector funcional; capturas revisadas y cliente de juego ejecutado sin errores. 13 pruebas de LoadoutView correctas.
+
+## 2026-09-20 — Carta compartida para armas a dos manos
+
+- Petición: mejorar la representación de un arma que ocupa ambas manos manteniendo la estética del equipamiento. Sustituidas la tarjeta bloqueada y la conexión entre dos paneles por una sola carta ilustrada que abarca ambas columnas. Línea inferior de agarre Torpe / A dos manos / Hábil con el indicador compartido de manos, sin resplandor.
+- Se conserva el slot de origen para seleccionar o desequipar, así como la ocupación real y la independencia de conjuntos. Retirar el arma recupera las dos ranuras. Estado accesible con nombre de arma y ambas manos.
+- Validación: 13 pruebas correctas; actualizadas las regresiones de dos manos y comprobada la retirada desde mano torpe. Navegador en 1366, 390 y 320 px para ambos slots de origen: selector, cambio de conjuntos, retirada y recuperación de ranuras; sin errores ni desbordamiento. Capturas revisadas y cliente de juego ejecutado.
+
+## 2026-09-20 — Dos ranuras siempre visibles
+
+- Corrección del usuario: no quiere fusionar las ranuras; quiere ver siempre la otra mano ocupada. Restauradas ambas tarjetas independientes y retirado el diseño panorámico. La mano de apoyo muestra la imagen atenuada, el nombre del arma, el indicador de dos manos y la marca Ocupada. Conexión fina con rombo centrado entre ambas cartas.
+- Se conserva el bloqueo de la mano de apoyo y la retirada desde el slot original. Verificadas 13 pruebas y navegador a 1366/390/320 px con ambas orientaciones, cambio de conjunto, selector, bloqueo y retirada. Cliente de juego ejecutado y capturas revisadas.
+
+## 2026-09-20 — Ataque vacío con coste 0
+
+- La captura muestra un arma sin nombre, daño ni rasgos. Causa reproducida: el adaptador heredado recorría weaponSets y activeWeaponSet como si fueran objetos equipados, generando armas falsas. Ahora excluye metadatos y normaliza las manos del conjunto activo. También rechaza entradas sin nombre, arrays y primitivas no válidas durante la conversión.
+- CombatHUD descarta ataques sin nombre en snapshots ya guardados. Se conserva el coste real del equipo válido.
+- Regresiones: 3 pruebas nuevas fallaron antes del arreglo; después pasan las 21 pruebas de sincronización y HUD. Navegador a 1366/390 px comprueba que el equipo válido se muestra y confirma, que el ataque falso desaparece y que una lista solo contaminada queda vacía. Cliente de juego ejecutado y captura revisada.
+
+## 2026-09-20 — Rediseño de ventanas de ataque y defensa
+
+- Dirección: jerarquía de juego densa, fondo oscuro y oro existente, título contenido, ataque y CD en una cabecera de dos columnas en escritorio; pila compacta móvil. Se eliminan el aviso gigante, resplandores y cartas de selección sobredimensionadas.
+- Resultado fijo junto a las acciones: bloques de Vida que se perderían, ataque, defensa, presión restante, CD y excedente. Se usa lifeLost del motor (incluido límite por Vida actual); diferencia entre presión anulada y presión insuficiente para causar daño. En defensa enemiga sin tirar se presenta como escenario si se recibe el ataque.
+- Selección de armas en filas con ilustración, perfil y marca; Recibir ataque disponible directamente aunque haya equipo defensivo seleccionado. Excedente compacto, arma elegida visible y selector superpuesto para no desplazar los botones. Preparar ataque adopta la misma presentación del arma.
+- Accesibilidad: diálogo modal, foco inicial/restauración, ciclo Tab contenido y recuperación del foco tras resolver una tirada. Selecciones aria-pressed y resultado anunciado al cambiar.
+- Validación: 23 pruebas correctas de ventana y reglas; añadidas comprobaciones de cambio de daño previsto/excedente. 36 escenarios de navegador en 1440/390/320 px y horizontal 844x390; defensa, amenazas, selección, recibir, confirmar, contraataque y reposición. Sin errores ni desbordamiento; verificación de foco y capturas finales revisadas. Cliente de juego ejecutado.
+- Build de producción final: compilado correctamente. Capturas y comprobaciones en output/combat-clarity-review.
+
+## 2026-09-20 — Acabado de combate coherente con el equipamiento
+
+- El usuario sigue percibiendo las ventanas como CSS genérico. Comparados los estilos con RogueliteInventoryCard y los selectores de RogueliteTalentsPanel: tipografía Cinzel/Lato/Alegreya, fondo #080c17, bordes discretos y selección contenida.
+- Ajuste exclusivamente visual de CanvasCombatDetails.css: marco casi recto, títulos Cinzel espaciados, texto y números Alegreya, ataque/armadura como una franja ilustrada, filas de equipo menos encajonadas, controles oscuros sin grandes bloques de oro/rojo. El color distingue selección y peligro. Cálculo alineado en móvil incluso con etiquetas de dos líneas.
+- Verificación con las fuentes cargadas desde los mismos enlaces de public/index.html: 12 vistas en 1280/390/320 px, sin desbordamiento y con pie accesible. Repetidos selección defensiva, cambio de arma, contraataque y reposición en los tres anchos. Cliente de juego ejecutado y capturas revisadas en output/combat-clarity-review/aesthetic-*.png. No cambia la lógica de combate.
+
+
+## 2026-09-20 — Ajuste visual y recuperación del registro de combate
+
+- Petición: recuperar títulos centrados rojos y confirmación roja, armas atractivas centradas, imagen del enemigo, quitar recepción directa mientras hay equipo seleccionado y rescatar el log detallado anterior sin revelar CD enemiga.
+- Historial local: `03e9ede^:src/components/CanvasSection.jsx` contenía el esquema completo (attackerDice/defenderDice/defenderSteps, evadedDiceIds, efectos); el panel extraído por 03e9ede/b06ddf9 conserva DiceSvg y evasión/Elusión. El runtime Canvas escribía otro esquema reducido: corregida la causa, conservada la estética histórica.
+- buildCanvasCombatLog guarda tiradas reales y procedencia, resultados y gasto, arma defensiva y de contraataque, bloques perdidos y diferencias de estados. CD/snapshots privados no se incluyen en nuevas entradas. attackThreatUsed conserva la Amenaza ofensiva aunque el defensor tire la suya.
+- El listener estaba limitado a 3 entradas globales: ahora filtra scenarioId y ordena el historial de la escena sin necesitar índice compuesto. No reconstruye dados nunca almacenados. Las fechas pendientes del servidor usan clientTimestamp.
+- Validación: 25 pruebas pasadas (modal, builder, panel, runtime de excedente), 36 escenarios responsive a 1440/390/320 px y apaisado 844×390, foco de teclado y selección/confirmación. Inspección visual con fuentes reales y cliente develop-web-game para el registro. Compilación de producción correcta. No commit ni despliegue.
+
+
+## 2026-09-20 — Ataque dual y armas de inventario enemigas
+
+- Petición: enemigos usan armas del inventario sin equipar y pueden combinar varias por una acción; jugadores combinan dos armas físicas de una mano del conjunto activo por exactamente dos dados visibles, según el texto adjunto.
+- Reutilizados CombatHUD/modificadores, CanvasCombatActionModal, alcance/Duelo, dados/Crítico, presión/defensa/CD/excedente y registro existentes. canvasAttackSelection resuelve cada copia antes de unir rasgos ofensivos; no transfiere Duelista, no acumula Perforación y no combina conjuros.
+- Confirmación mediante transacción Firestore: revalida control, armas, objetivo, perfiles y recursos; doble clic bloqueado, consumo y resultado compartidos en una operación. Cancelación gratuita solo durante preparación.
+- Ajuste cambia un dado comprometido antes de defensa, devuelve el original y conserva ambas tiradas de arma. Registros con identidades de cada copia y dado, críticos vinculados y modificadores separados; no añaden CD pública.
+- Validación inicial: 78 tests/9 suites, 12 flujos completos en navegador con runtime real y Firestore simulado (1280, 390, 320 y 844x390), capturas inspeccionadas, compilación de producción correcta. Últimas comprobaciones amplían cobertura a identidad de clase y procedencia de modificadores.
+- Pendiente por respuesta explícita del usuario («Luego te respondo»): qué arma determina «un dado de arma» de Furia con perfiles distintos. No elegir el mayor ni duplicar perfiles; tampoco introducir dual + Barrido o nuevas reglas de oportunidad. No commit ni despliegue.
+
+- Verificación final: 81 tests/9 suites correctos, 12 flujos completos de selección → preparación → confirmación → defensa → log (Firestore simulado) sin errores de navegador; revisadas capturas móvil/PC y cliente develop-web-game. Build de producción correcto; aviso preexistente de tamaño de bundle.
+- Archivos de esta entrega: `src/features/canvas/combat/canvasAttackRules.js`, `canvasAttackSelection.js`, `canvasAttackAdjustment.js`, `canvasCombatState.js`, `useCanvasCombatRuntime.js`, `canvasCombatLog.js`; `src/features/canvas/components/CanvasCombatActionModal.jsx`, `CanvasCombatDetails.jsx`, `CanvasCombatDetails.css`; `src/features/canvas/rogueliteTokenSheetSync.js`; `src/components/CombatHUD.jsx`; `src/features/tactical-shared/components/TacticalWorkspaceShell.jsx`, `sidebar/CombatLogDetails.jsx`; pruebas `canvasDualAttack.test.js`, `dualAttackRuntime.test.jsx`, `canvasCombatLog.test.js`, `rogueliteTokenSheetSync.test.js`; README y este seguimiento. Harness/capturas locales en `output/dual-combat-review/`.
+
+
+## 2026-09-20 — Reglas básicas v0.2.40 y oclusión del humo
+
+- Petición activa: priorizar humo visible que bloquee como muro, Pesada, armadura sin durabilidad, Derribado/Cegado y doble Varita; aplazar automatizaciones de clase.
+- SmokeOcclusion comparte la proyección de sombras de muros pero excluye la superficie de la nube de su propia sombra. Las sombras físicas siguen aplicándose. tokenVisibilityAccess comprueba intersección de segmento y agrupa zonas continuas en la caché de escena; overview/foco/revelado del máster conservados. Interior conserva el velo de orientación 50 % y retratos 20 %.
+- canvasAttackSelection calcula coste antes de suprimir rasgos y rechaza combinar catalizadores para jugadores/enemigos. canvasArmorRules sustituye la protección legacy; elección mutable explícita, transaccional, una vez hasta preparar nuevo combate, desde Ronda. Las armaduras no se activan por estar en inventario ni requieren bloques.
+- Cegado aplicado en legalidad de ataques/contraataques y revalidación al confirmar. Derribado deja atacar/defender, bloquea Sprint/movimiento/reposición; selector Levantarse reutiliza el panel de dados y permite Movimiento básico completo o un dado. Board conserva sus reglas. Conmocionado deja de ser alias de Derribado en estos controles Canvas.
+- Contraataque usa las mismas neutralizaciones; opción de renunciar al excedente evita bloquear la resolución si no puede moverse ni alcanzar con un arma.
+- Validación: compilación de producción correcta (aviso de tamaño de bundle existente); suite completa 122 suites/647 pruebas correctas, 1 omitida. Se actualizó la expectativa accesible antigua de Barrera arcana (su botón ya no incorpora la descripción) tras repetir el fallo aislado.
+- Navegador: 12 flujos anteriores dual/múltiple/ajuste conservados; humo PC/móvil, entrada/salida gradual y movimiento reducido, sin niebla, retirada/reaplicación y 24 nubes con un único contexto WebGL. Capturas inspeccionadas y cliente de develop-web-game ejecutado. Harness usa Firebase simulado: no comprueba concurrencia en servidor real ni rendimiento en hardware móvil real.
+- Artefactos: output/core-smoke-review y output/core-combat-review; logs output/core-all-tests.log y output/core-rules-build.log. Sin commit ni despliegue. Pendientes de próximas iteraciones: automatizaciones de clase expresamente aplazadas; Barrido con reparto, lanzamiento/recuperación física de armas y automatizaciones de estados más amplias no forman parte de esta pasada. La aclaración de Furia/At. furtivo dual está registrada en la conversación para cuando se aborden clases.
+
+## 2026-09-20 — Nueva composición de las ventanas de combate
+
+- Petición: rehacer la estética general de ataques/defensa por falta de composición y coherencia con NOMA; priorizar intuición, arte existente, PC y móvil, sin cambiar reglas.
+- Dirección: ventana de equipo y decisiones en dos zonas. Una ilustración de referencia conserva protagonismo, opciones de arma en filas compactas con miniatura y selección clara, dados de acción con estados legibles. Cabecera centrada roja con identidad de ambos participantes. Ajuste comparte esta composición.
+- Defensa: resultado (Vida perdida o ataque anulado) destacado junto al cálculo y la confirmación. Excedente y arma del contraataque agrupados en el pie. En móvil los controles de defensa preceden al detalle de la tirada; cuerpo desplazable y acciones accesibles. Selector inicial, modificadores y selector de rasgos reciben bordes/fondos coherentes solo en Canvas, sin afectar Board.
+- Archivos: CanvasCombatActionModal.jsx, CanvasCombatDetails.jsx/css, CombatHUD.jsx, CombatModifiersPanel.jsx, expectativa de copy en CanvasCombatActionModal.test.jsx y README. Se conserva lógica de recursos, alcance, dados, daño, neutralizaciones y registro.
+- Validación: suite completa 122 suites, 647 pruebas correctas y 1 omitida; tras ajustes finales de copy y accesibilidad, 29 pruebas/3 suites afectadas correctas. Compilación de producción correcta (aviso preexistente de tamaño de bundle). 36 escenarios responsive (1440x1000, 390x844, 320x640 y 844x390), 12 flujos completos dual/múltiple/ajuste con runtime real y Firebase simulado, cambio de arma defensiva/contraataque/reposición, teclado y selector/modificadores/rasgos sin errores de navegador. Cliente develop-web-game ejecutado y capturas inspeccionadas.
+- Artefactos: output/combat-folio-review (capturas, checks, dual-checks, build.log y focused-tests.log). Verificación móvil por viewport de Chromium; no prueba física en teléfono ni sesión Firebase compartida. Sin commit ni despliegue.
+
+## 2026-09-20 — Rechazo de la propuesta visual y restauración del selector
+
+- El usuario rechaza el rediseño y pide detener implementaciones para acordar una dirección visual. No seguir iterando interfaces sin acordarla.
+- Restaurados exclusivamente el selector de armas del HUD Combat y sus modificadores a su estado previo a la última propuesta: retiradas clases/overrides Canvas y variante añadida a CombatModifiersPanel. Se preservan los cambios funcionales anteriores de ataque dual/inventario enemigo.
+- El selector del HUD Combat queda explícitamente excluido de futuros cambios estéticos salvo nueva petición del usuario.
+- Las ventanas principales conservan por ahora la propuesta rechazada; pendientes de conversación, sin nuevos cambios estéticos. Validación dirigida de selector y modificadores correcta.
+
+## 2026-09-20 — Dirección artística persistente y skills
+
+- El usuario autoriza preparar herramientas y preferencias entre conversaciones de Codex. Prioriza sensaciones de juego RPG/JRPG medieval, personalidad, diversión, elegancia, efectos de interacción y comodidad móvil; no estética futurista.
+- Instaladas en el perfil personal de Codex: impeccable 4.3.1 desde pbakaus/impeccable, commit f2c7051853848826aac2f4646581d62a732155ad, mediante Skill Installer; creada noma-art-direction con selección implícita permitida y alcance exclusivo NOMA. Ambas estructuras validadas. En Windows el validador de Impeccable requiere python -X utf8.
+- Nuevo DESIGN.md como referencia visual canónica, PRODUCT.md con contexto y AGENTS.md enlazándolos para futuras tareas. Corregida ambigüedad de las reglas genéricas sobre glow y móvil. Copiadas las cinco capturas originales a docs/design/references para no depender de Temp. README actualizado.
+- Elementos protegidos: selector de armas HUD Combat/modificadores restaurados. La propuesta de dos columnas sigue marcada como rechazada; lo siguiente es discutir una maqueta, no aplicar otro rediseño. Las referencias de juego no determinan reglas mecánicas ni autorizan automatizaciones.
+- Impeccable se instala como apoyo; no se añadieron hooks ni dependencias al proyecto. Figma y Frontend Design no se instalan por no ser necesarios en esta fase. No se modificaron archivos de interfaz ni reglas durante esta configuración.
+
+## 2026-09-20 — Prueba implementada solo en Preparar ataque
+
+- El usuario autoriza probar una única ventana, corrige la maqueta generada y pide volver a los colores de Ataque inminente, evitar cajas, dados originales con elevación y luz inferior, rostros laterales fundidos y confirmación vinculada al dorado del HUD.
+- Nueva presentación CanvasAttackPreparation.jsx/css, aislada mediante attack-preparation-frame. Reutiliza ActionDieSvg, imágenes reales de equipo y retratos normalizados del token. No modifica el selector del HUD, sus modificadores, defensa, ajuste o resolución.
+- La extracción conserva estado/selección de dados, elegibilidad, selección múltiple enemiga, Amenaza, callback de confirmación y cancelación. No se añaden reglas ni automatizaciones. Footer accesible y cuerpo desplazable, hover solo en dispositivos adecuados y movimiento reducido.
+- Verificación: 32 pruebas dirigidas correctas (modal, reglas y runtime dual); producción compila correctamente con aviso preexistente de tamaño del bundle. 28 escenarios de navegador con Firebase simulado: PC, móvil390 y320, horizontal844, teclado, selección/deselección, cancelación, busy, amenaza y armas múltiples. Cliente develop-web-game ejecutado por harness.
+- Artefactos y revisión: output/prepare-attack-review, servidor local127.0.0.1:4213. La opinión estética del usuario sigue pendiente; no extender aún a otras ventanas. DESIGN.md recoge las nuevas preferencias explícitas. Sin commit ni despliegue.
+- Cierre visual: cabecera y arma se compactan solo en escritorio con poca altura; 1280x720 verificado con dados y etiquetas visibles sin scroll inicial. Retratos del harness encuadrados desde capturas del usuario; producción sigue usando los del token. Revisión de alcance sin fugas de CSS a otras ventanas; conservada también la distancia actual en casillas. Capturas finales prepare-desktop-detail.png, prepare-mobile-detail.png y portátil.png; preview interactiva abierta en Codex.
+
+## 2026-09-20 — Afinado de la preparación aprobada
+
+- El usuario aprueba la mejora, animación de dados, retratos y especialmente el botón dorado. Pide acercar el arma a Equipables, disolver la separación de retratos/arma, simplificar el texto de selección y dar a la nota final tratamiento cursivo.
+- Reutilizadas las clases noma-loadout-weapon-stats y noma-loadout-traits. Nombre en Cinzel700 y valores Alegreya; dados del perfil compactados solo visualmente (2d8), coste con puntos desde draft.actionCost y colores de rasgos desde el glosario ya cargado (sin nuevas consultas). Se conserva la suma efectiva y la distancia en casillas.
+- Fundidos solapados en cabecera/cuerpo, con scroll-padding para el foco. Sustituido párrafo de ayuda por Elige N dados / Dados preparados y contador discreto. Botón y animación de selección intactos.
+- Validación: 10 pruebas del modal correctas y 28 escenarios de navegador correctos; capturas PC, móvil y portátil inspeccionadas, hover y movimiento reducido comprobados, cliente develop-web-game ejecutado. Harness recompilado y capturas actualizadas en output/prepare-attack-review. Sin cambios en reglas, defensa, resolución o selector HUD. Sin commit ni despliegue.
+
+## 2026-09-20 — Coste en dados y continuidad de la ilustración
+
+- Petición: sustituir bolitas de coste, recuperar colores del glosario en rasgos y eliminar cortes amplios entre retratos, arma y pie de la ilustración.
+- Preparar ataque usa un solo fondo de arma bajo cabecera y estadísticas, con retratos disueltos lateralmente. Se eliminan los fundidos horizontales enfrentados y el sombreado propio de la antigua sección de arma. La pequeña franja de rasgos permanece, tal como pidió el usuario.
+- Coste: Dices del inventario + cantidad real; enemigos siguen indicando una acción principal. Glosario: prioridad a entrada exacta, luego etiqueta antes de dos puntos y base sin multiplicador final; color/hex. La preview recibe colores verificados del glosario real. Rasgos a 11px con iluminación para facilitar lectura en el fondo oscuro.
+- Cabecera y escena se desplazan en el mismo cuerpo; cierre y confirmación permanecen accesibles. No se modifica el selector HUD, defensa, resolución ni reglas.
+- Verificación: 10 pruebas existentes del modal pasan; 28 escenarios del harness pasan sin errores de consola. Comprobados coste, color heredado, cierre y confirmación tras scroll, PC, móvil, horizontal y portátil; hover y reduced motion. Ajuste final de contraste con capturas PC/móvil actualizadas. Sin commit ni despliegue.
+
+## 2026-09-20 — Prueba de Preparar ataque sin retratos
+
+- El usuario pide probar la composición sin caras: solo se retiran los dos retratos decorativos y su CSS, conservando arma, nombres, medidas, fundidos, controles y reglas.
+- README y DESIGN recogen esta prueba vigente, que sustituye los retratos laterales previamente aprobados. La presentación de doble empuñadura queda para una iteración posterior.
+- Preview recompilada y recargada en 127.0.0.1:4213. Capturas PC y móvil inspeccionadas: solo arte del arma, nombres conservados y dados/botón intactos; final-review y cliente develop-web-game ejecutados. Sin commit ni despliegue.
+
+## 2026-09-20 — Preparación del Ataque dual
+
+- El usuario aprueba la preparación de un arma sin retratos y autoriza implementar y mostrar la variante dual. Se conserva la elección en el HUD: objetivo, arma individual o Ataque dual, preparación de dados y confirmación definitiva. El primer botón del HUD dice «Preparar ataque» solo en Canvas; no cambia su estilo ni sus modificadores.
+- La presentación dual integra las dos ilustraciones con sus nombres, mano, perfil y rasgos efectivos en una misma escena. Coste común de dos dados, selección y confirmación únicas. La suma diferencia cada arma y los dados adicionales de modificadores. Se reutilizan tipografías, colores del glosario, dados y botón aprobados. Sin cambios en reglas ni automatizaciones de clase, selección de arsenal enemigo, defensa o resolución.
+- La preview aislada añade Espada corta + Estoque, dos copias distintas de Daga a Toque, nombres largos, ausencia de una ilustración y dados de modificadores. Cerrar o confirmar vuelve a un menú de pruebas; no guarda cambios en una partida. Se mantienen ambas armas visibles a la vez en móvil.
+- Corregidos dos casos responsive detectados en navegador: el fondo de los rasgos se salía 2px del cuerpo; los nombres largos repetidos en la suma ocupaban demasiado pie. El fondo queda dentro del panel y solo los nombres duplicados del pie se eliden, conservando los completos en la cabecera, el título y el árbol accesible. El cuerpo permite scroll y el cierre y la confirmación siguen accesibles.
+- Validación: 46 pruebas dirigidas de HUD, modal, reglas duales y runtime correctas; tras el último ajuste de marcado, las 12 pruebas del modal vuelven a pasar. Compilación de producción correcta, con aviso previo de tamaño del bundle. Matriz de 20 escenarios de navegador sin errores (1440×1000, 390×844, 320×640 y 844×390): identidad de copias, coste, selección/deselección, teclado, bloqueo del tercer dado, cancelación/confirmación, suma de perfiles y modificadores, scroll y navegación de retorno. Capturas PC, móvil, nombres largos, dos dagas y falta de arte inspeccionadas.
+- Artefactos: output/prepare-attack-review/dual-checks.json y capturas dual-*.png. Preview interactiva abierta en 127.0.0.1:4213/?mode=dual, pendiente de valoración estética del usuario. Pruebas móviles por viewport de Chromium, sin dispositivo físico ni partida Firebase compartida. Sin commit ni despliegue.
+- Cierre: final-review.cjs verifica también la variante de un arma, hover y movimiento reducido. Cliente develop-web-game ejecutado sobre el bundle final y captura skill-client-dual-final/shot-0.png inspeccionada. Se comprobó además la preview visible en Codex: un dado mantiene la confirmación deshabilitada, dos la habilitan y bloquean el tercero.
+
+## 2026-09-20 — Avisos integrados en Preparar ataque
+
+- El usuario aprueba la estética dual y pide acortar e integrar los mensajes, especialmente el de Duelo. Duelo y Toque ahora se muestran como notas breves bajo las estadísticas del arma, con contexto Cinzel discreto y explicación Alegreya en cursiva, sin cajas. La nota global bajo los dados desaparece; en dual cada arma presenta solo su propia nota y evita duplicarla con «Sin rasgos activos».
+- Ayudas de preparación y Amenaza comparten tipografía y tonos cálidos. La falta de recursos indica directamente «Falta 1 dado de acción» o su cantidad plural. Se mantiene el texto original de cualquier nota desconocida. El motor y las reglas no cambian.
+- Validación: 12 pruebas existentes del modal correctas; 9 escenarios de navegador aprobados, sin errores ni desbordamiento horizontal. Comprobados Duelo individual y dual en PC, móvil390 y320; Toque a1casilla, dados insuficientes, Amenaza y nota por arma en ataque enemigo combinado. Capturas inspeccionadas y cliente develop-web-game ejecutado. La preview visible queda en ?mode=single-duel.
+- Artefactos: output/prepare-attack-review/notes-checks.json, notes-*.png y skill-client-notes-final. README y DESIGN actualizados. Sin commit ni despliegue.
+
+## 2026-09-20 — Prueba de defensa básica: Ataque inminente
+
+- El usuario autoriza continuar con la defensa básica tras aprobar Preparar ataque. Nuevo CanvasAttackDefense.jsx/css: ilustración del arma, Presión y dados reales del atacante, protección, selección defensiva y pérdida prevista de Vida junto a la confirmación. Comparte tipografías, dados con luz inferior y botón dorado de la preparación aprobada. Recibir ataque queda como acción sin defensa seleccionada, con tono rojo discreto.
+- Extraído IncomingAttackDice desde el resumen existente para reutilizar sus dados, críticos y modificadores. El estado, elegibilidad, resolución y callbacks permanecen en CanvasCombatActionModal. Los jugadores seleccionan sus dados comprometidos; los enemigos eligen equipo y Amenaza según las reglas existentes. Antes de tirar la defensa enemiga se muestra una previsión explícita sin defensa, no un resultado definitivo.
+- La CD del enemigo se oculta también cuando un jugador controla ese token; el máster conserva el dato. Excedente, contraataque, reposicionamiento, ajuste y registro mantienen su funcionamiento previo y quedan fuera de este rediseño.
+- Verificación: 35 pruebas correctas en cuatro suites (modal, excedente, reglas básicas y registro). Compilación de producción correcta con aviso preexistente de tamaño. Matriz final de navegador: 22/22 escenarios sin errores de consola ni desbordamiento horizontal, incluyendo PC, móvil390 y320, horizontal844, teclado, movimiento reducido, privacidad, selección, equipo, Amenaza y confirmación. Regresión corta de Preparar ataque y cliente develop-web-game correctos.
+- Capturas finales PC y móvil inspeccionadas. Corregidos el recorte heredado de la imagen de armadura, su fundido, la fila de tres dados a320 y la especificidad de movimiento reducido. Preview visible en 127.0.0.1:4213/?mode=defense-player, con d6 seleccionado: Presión17 menos Defensa6 deja11 y prevé perder1 bloque de Vida. Artefactos defense-checks.json y defense-*-detail-*.png en output/prepare-attack-review.
+- README y DESIGN actualizados. Revisión móvil mediante viewports de Chromium, sin dispositivo físico ni escrituras en Firebase. La estética de defensa queda pendiente de valoración del usuario. Sin commit ni despliegue.
+
+## 2026-09-20 — Afinado de equipo y Amenaza defensiva
+
+- El usuario valora el planteamiento de defensa y pide selección directa de dados de Amenaza, mejor encuadre del equipo, rasgos como Preparar ataque y tipografía de estadísticas para Presión entrante.
+- EnemyDefenseThreatDice sustituye las pestañas solo en defensa enemiga: reserva con su valor real y dados puntuales d4/d6/d8/d10/d12/d20 sin resultado hasta tirar. Pulsar el mismo dado deselecciona; elegir otro sustituye la selección. Máximo uno, sin selección no se añade Amenaza, sin equipo los dados quedan deshabilitados. Runtime y costes conservados. ActionDieButton acepta etiquetas opcionales sin cambiar sus valores por defecto.
+- Ilustraciones defensivas cuadradas con contain y texto fundido, evitando el recorte apaisado del arma. CombatWeaponTraits comparte la presentación y búsqueda de colores del glosario de Preparar ataque; se mantiene intacta su apariencia allí. Presión entrante usa el mismo patrón tipográfico de las estadísticas del arma. README y DESIGN actualizados.
+- Validación: 52 tests correctos en cinco suites, incluyendo reserva vacía/cero, sustitución, deselección, callbacks, privacidad y dual. Compilación de producción correcta. Matriz enfocada de navegador con 15 casos y cero errores; selección, consumo real, encuadre, glosario, teclado, movimiento reducido y viewports PC1440, móvil390/320 y horizontal844. Regresión de preparación y cliente develop-web-game ejecutados.
+- Inspeccionadas capturas PC y móvil de la primera ronda, sin necesidad de otra iteración visual. Artefactos refinements-checks.json y refined-defense-enemy-*.png en output/prepare-attack-review. Preview de defensa enemiga recargada en Codex con un d6 puntual seleccionado. Pruebas aisladas, sin escrituras en Firebase, sin dispositivo físico, commit ni despliegue.
+
+## 2026-09-20 — Numerales de Amenaza y presión horizontal
+
+- Corrección solicitada: Presión entrante recupera la fila con cifra a la izquierda y texto a la derecha, manteniendo las tipografías Alegreya/Cinzel. Perfil del arma defensiva en rojo #e6aaa2.
+- Dados puntuales de Amenaza con su número de caras dentro del SVG y sin repetir dN debajo. Conservan «Por tirar» y el nombre accesible; el número identifica el tipo y no simula un resultado. La reserva sigue mostrando su valor real y tipo.
+- D20 de Amenaza con contorno cerrado y facetas unidas mediante variante connectedFaces de ActionDieSvg; no modifica el d20 legado de otros lugares ni los demás dados. La variante también se aplica si la reserva es d20.
+- Verificación: 19 tests del modal y 13 del SVG correctos; 4 casos de navegador aprobados sin errores, PC1440, móvil390/320 y defensa del jugador. Se comprobó que seleccionar el numeral20 genera una tirada real (11 en la fixture determinista) y conserva la reserva5. Regresión de preparación correcta; capturas PC/móvil inspeccionadas sin otra iteración visual. Artefactos defense-numerals-*.png y numerals-check.cjs en output/prepare-attack-review.
+- README y DESIGN actualizados; preview recargada con d20 seleccionado. Sin cambios de reglas, Firebase, commit ni despliegue.
+
+## 2026-09-21 — Amenaza compartida en preparación enemiga
+
+- Petición: aplicar en Preparar ataque enemigo el diseño de Amenaza ya afinado en defensa. EnemyThreatDice y su CSS compartido sustituyen las pestañas de preparación: número dentro de cada dado puntual, d20 conectado, luz inferior, reserva diferenciada y selección exclusiva. En ataque se usa «En ataque»; pulsar otra vez desmarca y ningún dado significa sin Amenaza.
+- Se conservan los valores reales de reserva, los dados por tirar y todos los callbacks de confirmación. Sin cambios en reglas, HUD, arte del arma, defensa ni excedente. README y DESIGN actualizados.
+- Validación: 36 tests del modal y ActionDieSvg correctos; 7 casos de navegador correctos, sin errores, con PC1440 y móvil390/320, reserva/cero/sin reserva, selección y deselección, teclado, movimiento reducido, cancelación y regresión defensiva. Capturas PC y móvil inspeccionadas sin otra iteración visual; cliente develop-web-game completado.
+- Preview abierta en 127.0.0.1:4213/?mode=enemy-threat con d20 seleccionado. Artefactos threat-attack-checks.json y attack-threat-*.png en output/prepare-attack-review. Pruebas aisladas, sin escrituras en Firebase, dispositivo físico, commit ni despliegue.
+
+## 2026-09-21 — Presión roja y equipo defensivo único
+
+- Petición: igualar el color de «Presión entrante» al de su número y corregir la composición de defensa enemiga con una sola arma disponible.
+- Ambos elementos de Presión heredan #e6aaa2. La opción defensiva única ocupa las dos columnas y se centra con un máximo de280px y proporción cuadrada; con varias opciones se conserva la distribución existente. Solo CSS de defensa, sin cambios en reglas o controles.
+- README y DESIGN actualizados. Fixture aislada con equipment=single para revisar Daga sin reserva. Compilación de preview correcta;4casos de navegador sin errores: PC1440, móvil390/320 y regresión con dos armas. Centrado, color, selección/deselección de equipo, Amenaza y confirmación comprobados. Capturas PC/móvil inspeccionadas en una ronda.
+- Preview abierta en 127.0.0.1:4213/?mode=defense-enemy&equipment=single&reserve=none. Artefactos single-defense-checks.json y single-defense-*.png en output/prepare-attack-review. Sin escrituras en Firebase, commit ni despliegue.
+
+## 2026-09-21 — Dados del resultado defensivo
+
+- Petición: centrar y ampliar los dados ya tirados de la defensa. Estilos limitados a combat-defense-roll dentro de la ventana de defensa: grupos centrados, SVG74px en PC y70px en móvil como los seleccionables de Preparar ataque; tipo y procedencia en Alegreya con tamaño legible. Operador entre Equipo y Amenaza alineado con los dados.
+- Sin cambios en tiradas, valores, interacciones ni dados entrantes. README y DESIGN actualizados.
+- Verificación: preview recompilada;6casos de navegador correctos con/sin Amenaza en1440/390/320, sin errores ni desbordamiento. Valores y Aplicar ataque conservados; resultados sin botones seleccionables. Capturas PC/móvil inspeccionadas en una ronda y cliente develop-web-game completado.
+- Preview visible en el resultado de Daga sin Amenaza, dado3 centrado. Capturas defense-result-*.png en output/prepare-attack-review. Sin escrituras en Firebase, commit ni despliegue.
+
+## 2026-09-21 — Arma defensiva sin seleccionar más oscura
+
+- Petición: reforzar visualmente la diferencia entre equipo defensivo seleccionado y disponible. Solo CSS de defensa: ilustración al30% sin seleccionar frente al90% seleccionado; nombre discreto y texto/rasgos menos saturados. Hover/foco indican disponibilidad con42%, sin recuperar el brillo de selección. Selección aprobada intacta; transiciones respetan movimiento reducido.
+- README y DESIGN actualizados. Preview recompilada,2casos PC1440/móvil390 correctos, sin errores. Verificados contraste entre estados, teclado, movimiento reducido, reselección, Recibir/Confirmar ataque y bloqueo de Amenaza sin equipo. Capturas seleccionada/deseleccionada inspeccionadas en una ronda; cliente develop-web-game completado.
+- Preview visible con Daga desmarcada. Artefactos defense-card-selected/unselected-*.png en output/prepare-attack-review. Sin cambios de reglas, escrituras en Firebase, commit ni despliegue.
+
+## 2026-09-21 — Precarga del arte de protección
+
+- Petición: evitar la aparición brusca de la imagen junto a CD al pasar de Preparar ataque a Ataque inminente.
+- LoadingImage expone preloadImage y comparte su registro de fuentes decodificadas con el render. Deduplica peticiones simultáneas, espera decode y libera las entradas pendientes al terminar; un fallo permite reintentar. Se reutiliza el componente existente sin skeleton ni recuadro de error para protección, con key por URL y movimiento reducido.
+- El modal siempre montado prepara arte de los participantes y objetivos draft/pending antes de abrir la defensa, incluido el cliente defensor sin draft. Precarga y render usan el mismo resolver de armadura/imagen enemiga y actualizan URLs personalizadas tardías. La imagen pendiente entra con fundido; datos, geometría y acciones no esperan a la red. README y DESIGN actualizados.
+- Validación:32tests correctos en3suites (LoadingImage, precarga del modal, modal).3casos de navegador con petición retenida: solicitud anterior a confirmar, entrada inmediata con recurso preparado, fundido tras carga tardía en móvil y fallo invisible sin bloquear controles ni mover la composición. Capturas PC/móvil inspeccionadas; cliente develop-web-game completado.
+- Preview abierta en 127.0.0.1:4213/?mode=enemy-threat&transition=defense-player para probar Confirmar ataque→Ataque inminente. Artefactos armor-*.png y comprobación de precarga en output/prepare-attack-review. Sin escrituras en Firebase, commit ni despliegue.
+
+## 2026-09-21 — Prueba del texto centrado en arma defensiva única
+
+- Petición: probar nombre, Defensa y rasgos en el centro de la imagen. CSS limitado a la opción defensiva única: contenido centrado verticalmente, sombra radial local sin marco y línea dorada junto al grupo de texto. Ilustración, dimensiones y estados claros/atenuados conservados; varias opciones mantienen la composición anterior.
+- README y DESIGN registran la prueba pendiente de valoración. Preview recompilada;3comprobaciones de navegador correctas, sin errores: centrado exacto y selección en PC1440/móvil390, más regresión de dos armas. Capturas comparativas inspeccionadas en una ronda.
+- Preview abierta en defense-enemy&equipment=single&reserve=none con Daga seleccionada. Artefactos centered-defense-*.png en output/prepare-attack-review. Sin cambios de reglas, escrituras en Firebase, commit ni despliegue.
+
+## 2026-09-21 — Suma centrada entre los dados entrantes
+
+- Ajustado únicamente el signo entre grupos del ataque entrante: ocupa el hueco completo y centra el texto, con separación compartida de 22 px en escritorio y 18 px en móvil.
+- README y DESIGN actualizados. Preview recompilada; 2 comprobaciones de navegador correctas (1440 y 390 px), desviación de centrado de 0 px y sin errores. Recorte inspeccionado; preview visible actualizada.
+- Artefactos incoming-plus-centered-1440.png e incoming-plus-checks.json en output/prepare-attack-review. Sin cambios de reglas, commit ni despliegue.
+
+## 2026-09-21 — Evitar arrastre accidental de imágenes en defensa
+
+- Añadido draggable={false} al arte del equipo defensivo, arma entrante y protección. Se mantiene el comportamiento del componente LoadingImage y la selección por clic; no afecta al inventario ni al HUD.
+- README actualizado. Preview recompilada y comprobación PC correcta: un gesto real de arrastre sobre Daga no inicia drag nativo, dos clics alternan y restauran la selección, confirmación habilitada y sin errores de consola.
+- Preview visible actualizada. Informe combat-image-drag-checks.json en output/prepare-attack-review. Sin cambios de reglas, commit ni despliegue.
+
+## 2026-09-21 — Fundido dual compartido en Ataque inminente
+
+- Petición: corregir el corte central y desequilibrio entre las ilustraciones del ataque dual recibido usando la composición aprobada de Preparar ataque.
+- Extraídas sin alterar valores las reglas de arte dual a CanvasCombatWeaponArt.css, compartidas por preparación y defensa de dos armas: capas del 57% con superposición simétrica, máscaras enfrentadas y el mismo encuadre. La variante de una arma conserva sus reglas. README y DESIGN actualizados.
+- Preview recompilada. Tres comprobaciones correctas: defensa/preparación en PC 1440 y móvil 390, más regresión de una arma. Misma anchura por arma, sin desbordamiento; recortes PC/móvil inspeccionados y sin corte central abrupto. No cambian reglas ni controles.
+- Preview visible en defense-dual&equipment=single&reserve=none. Capturas dual-defense-header-1440/390.png y referencias de preparación en output/prepare-attack-review. Sin commit ni despliegue.
+
+## 2026-09-21 — Preparación de varias armas enemigas
+
+- Petición: acercar la preparación del ataque dual enemigo al diseño aprobado de jugador y eliminar las tarjetas ilustradas duplicadas entre resumen y selección.
+- Dos armas enemigas usan ahora el arte simétrico compartido, perfiles de Daño/Alcance y rasgos efectivos del glosario. Tres o más mantienen todas las armas visibles; los ejemplares iguales se distinguen por identidad, sin asignar manos a enemigos.
+- «Elegir armas» abre un selector compacto plegable con selección accesible, mínimo una arma y bloqueo durante confirmación. Al cerrarlo queda inerte y fuera del recorrido del teclado; movimiento reducido soportado. Una acción principal y Amenaza siguen usando el runtime existente. La suma distingue armas y modificadores y usa el fallback de Base ofensiva del token.
+- README y DESIGN actualizados; la nueva propuesta queda pendiente de valoración estética. No se altera el HUD.
+- Validación: 25/25 pruebas en las suites nueva de selección enemiga y modal existente. Cinco casos de navegador correctos, sin errores: dos Dagas PC/móvil, dos armas distintas, tres armas con cambios y tránsito a defensa, y regresión del dual jugador. Revisadas capturas de selector cerrado/abierto en escritorio y móvil; único ajuste final de especificidad para la nota del coste en cursiva.
+- Preview abierta en ?mode=enemy-dual&reserve=none&transition=defense-player, con Confirmar ataque conectado a defensa en el entorno aislado. Capturas enemy-dual-detail-*.png y enemy-dual-open-detail-*.png en output/prepare-attack-review. Sin escrituras en Firebase, commit ni despliegue.
+- Confirmación final acotada: nota de coste en Alegreya cursiva en PC/móvil, apertura por teclado, panel cerrado inerte y cancelación correctos; objetivos táctiles de 46/60 px. Cliente develop-web-game completado e inspeccionado. Informes enemy-combined-checks.json y enemy-combined-final-checks.json, sin errores.
+
+## 2026-09-21 — Nombre y daño juntos en Elegir armas
+
+- El usuario valora el selector plegable y pide acercar el perfil al nombre. Agrupados nombre y daño en una línea con 12 px de separación y alineación de texto; Ejemplar permanece debajo. Se conserva toda la superficie seleccionable y el ajuste de nombres largos.
+- README y DESIGN actualizados. Preview recompilada; PC 1440 y móvil 390 verificados sin desbordamiento ni errores, con 12 px reales entre nombre y perfil. Selección/desmarcado correctos. Recortes enemy-selector-inline-*.png e informe enemy-selector-inline-checks.json en output/prepare-attack-review.
+- Preview visible con selector desplegado. Sin cambios de reglas, nuevas pruebas unitarias, commit ni despliegue.
+
+## 2026-09-21 — Recuperar equilibrio izquierda/derecha en Elegir armas
+
+- El usuario rechaza nombre y daño pegados; aclara que sí aprecia las dos alineaciones, pero no el hueco excesivo. Restaurados nombre/Ejemplar a la izquierda y daño a la derecha dentro de un selector centrado de máximo 300 px, frente a los 420 px iniciales. Eliminadas las reglas de la prueba anterior.
+- README y DESIGN actualizados con la corrección de preferencia. Preview recompilada y selector abierto. Tres comprobaciones correctas: PC 1440, móvil 390 y nombre largo en móvil; centrado exacto, sin solapamiento ni desbordamiento y selección intacta. Recortes inspeccionados.
+- Evidencias enemy-selector-compact-*.png y enemy-selector-compact-checks.json en output/prepare-attack-review. Sin cambios de reglas, nuevas pruebas unitarias, commit ni despliegue.
+
+## 2026-09-21 — Amenaza múltiple en ataque y defensa
+
+- Petición: seleccionar varios dados de Amenaza en general y concretar la siguiente fase visual. Eliminado el límite de uno en preparación y defensa enemigas, con tipos combinables, repeticiones mediante controles +/− de 44 px y reserva independiente. Sin selección no se añade Amenaza; se conservan SVG, numerales y luz inferior.
+- Selección canónica threatSelection con useStored/customDice; arrays attackThreatDice/defenseThreatDice guardan cada tirada real. La reserva conserva su valor (incluido 0), se consume una sola vez y los puntuales no la gastan. Ataque y defensa revalidan recursos al confirmar; defensa transaccional y bloqueada mientras guarda, sin repetir resultados en reintentos. Compatibilidad con combates anteriores.
+- Presión, defensa, pérdida de Vida y logs suman y muestran cada dado sin duplicar. Los jugadores mantienen sus dados de acción. README y DESIGN actualizados con la nueva petición; siguiente fase: excedente defensivo (contraataque y reposicionamiento).
+- Verificación funcional: 81 pruebas correctas en 8 suites dirigidas (46 reglas/runtime, 25 UI, 10 desglose/logs). Cinco casos de navegador correctos en PC1440, móvil390 y320 sin reserva, sin errores; reserva5 + 2d6 + d4 suma16 de Amenaza,33 de Presión y19 de Defensa en las fixtures. Corregido el operador entre grupos del resultado móvil al apilarlos.
+- Preview actualizada y visible con 1d4 + 2d6 seleccionados en enemy-dual&reserve=none&transition=defense-player. Sin commit ni despliegue.
+- Confirmación final acotada: operador móvil centrado entre grupos, sin recorte ni desbordamiento. Cliente develop-web-game ejecutado e inspeccionado, sin errores. Evidencias multi-threat-checks.json, multi-threat-final-checks.json y capturas multi-threat-* en output/prepare-attack-review.
+
+## 2026-09-21 — Propuesta de excedente defensivo
+
+- El usuario aprueba Amenaza múltiple y autoriza rediseñar contraataque/reposicionamiento siguiendo Preparar ataque. Se mantiene el HUD protegido y las reglas de combate.
+- Sustituido DefensiveExcessChoice legado por CanvasDefensiveExcess. Resultado y decisiones viven en el cuerpo desplazable; el pie conserva la confirmación dorada y continuar sin gastar excedente. Opciones sin recuadros, arte fundido del arma, Cinzel/Alegreya, Presión roja y casillas doradas. El perfil del arma no se presenta como una nueva tirada.
+- Elegir respuesta/arma solo prepara; el CTA confirma la defensa. Selector plegable por identidad real de arma, copias diferenciadas, ausencia de selector si solo existe una. Arte precargado, imágenes no arrastrables, controles táctiles y movimiento reducido. La confirmación bloquea también los dados de defensa; evita confirmaciones duplicadas y recupera controles al devolver false.
+- Derribado impide reposición; sin arma legal sigue disponible movimiento y descartar, y con ambas opciones bloqueadas puede descartarse. No se revela CD enemiga. Retiradas las reglas CSS del componente legado ya sin consumidores.
+- README y DESIGN registran la nueva propuesta pendiente de valoración. 60/60 pruebas en cuatro suites de UI/runtime/estado; seis de la nueva suite repetidas tras corregir el desplegado. Siete escenarios de navegador PC/móvil/320 pasan sin errores ni desbordamiento.
+- Revisión visual acotada: las opciones de armas podían quedar debajo del pie al abrir. Corregido para traer el desplegable a la vista al finalizar su animación, con desplazamiento inmediato en movimiento reducido. No se desplaza automáticamente al elegir dados.
+- Vista de prueba abierta en ?mode=defense-excess-player, con defensa9 frente a ataque4 (excedente5). Sin commit ni despliegue.
+- Confirmación final: la lista abierta queda completamente visible de forma natural (0 px ocultos) en PC/móvil y movimiento reducido. Cliente develop-web-game ejecutado, capturas nativas y estado verificados sin errores. Bundle final servido y preview recargada con cinco puntos de excedente. Informes excess-checks.json y excess-final-checks.json; capturas excess-counterattack/reposition/weapons-final-* en output/prepare-attack-review.
+
+## 2026-09-21 — Continuidad del arte y arma predeterminada del contraataque
+
+- Petición: eliminar popping al cambiar arma y preseleccionar el arma usada para defender o en el último ataque propio, manteniendo el cambio manual.
+- Ilustraciones en capas persistentes con fundido de 220 ms. La imagen previa permanece hasta que la candidata está decodificada; las respuestas tardías de selecciones abandonadas no sustituyen la selección actual. Si falla el recurso, se retira el arte anterior para no mostrar otra arma. Se mantiene el comportamiento de movimiento reducido y el bloqueo de arrastre.
+- Preferencia por identidad de ejemplar y solo entre contraarmas legales. La defensa actual tiene prioridad; los ataques confirmados recuerdan las armas participantes del actor. La elección manual válida prevalece. No se implementan aún las reglas de doble defensa enemiga ni escudo revisadas en el turno anterior.
+- README y DESIGN actualizados. 86 pruebas dirigidas correctas (37 interfaz/precarga, 49 reglas/estado/runtime). Navegador PC1440 y móvil390: preferencia no primera, carga demorada mantiene arte previo, fundido con ambas capas, cambio rápido descarta imágenes tardías y confirmación conserva la elección manual; sin errores ni desbordamiento. Capturas counter-art-final-1440/390.png inspeccionadas y evidencia en counter-art-checks.json. Preview abierta con Estoque preseleccionado y selector desplegado. Sin commit ni despliegue.
+- Cliente develop-web-game completado en skill-client-counter-art: estado confirma la preferencia por Estoque; las capturas nativas desplazadas documentan el contraataque completo en PC y móvil.
+
+## 2026-09-21 — Defensa enemiga con dos armas y escudo pasivo
+
+- El usuario autoriza implementar la defensa enemiga revisada y mostrar el escudo junto al equipo, seleccionado por defecto. Una acción reactiva tira el perfil completo de una arma o dos de una mano, sin Base ofensiva; conserva el gasto hasta la siguiente ronda y no gasta Movimiento. Jugadores y HUD protegidos conservan su flujo.
+- Selección por identidad de ejemplar, máximo dos manos y un escudo. La segunda arma o el arma a dos manos sustituye el escudo; elegir escudo conserva como máximo una arma de una mano. Escudo solo aporta +1 CD, sin tirar su daño configurado ni gastar acción o Amenaza; sigue disponible cuando la acción principal ya está gastada. La CD guardada permanece como base, con bono separado para esta resolución y compatible con Perforante.
+- Encontrados Escudo (sheet-weapon-granescudo), Rodela (sheet-weapon-escudo) y Escudo de torre en el catálogo existente mediante lectura. Se reconoce también el identificador legado de Rodela; Escudo tiene ilustración propia y se utiliza en la preview. No se modifica el catálogo. La regla de escudo se limita a enemigos.
+- Runtime revalida equipo, manos, perfiles y recursos en la transacción; congela armas, escudo y bono con la tirada. Resultado muestra dados por arma y el registro incluye ambas armas/escudo sin revelar CD enemiga. El contraataque mantiene una resolución directa del excedente y solo conserva escudo del enemigo atacado si el ataque de origen dejó una mano libre.
+- Interfaz mantiene ilustraciones fundidas, daño rojo, selección luminosa y ejemplares diferenciados. Escudo muestra Protección +1 CD / Pasivo · Sin dados; no introduce tarjeta de armadura ni dados ficticios. README y DESIGN actualizados.
+- Validación dirigida: 71 pruebas de reglas/selección, 51 de runtime/registros y 42 de interfaz correctas. Cinco escenarios de navegador pasan sin errores ni desbordamiento: selección y tirada dual PC/móvil, escudo solo con/sin acción, y regresión de jugador. Cliente develop-web-game ejecutado; sus bandas virtuales conocidas no aparecen en capturas nativas, inspeccionadas en PC y móvil.
+- Preview actualizada en ?mode=defense-enemy-hands con Daga + Escudo por defecto. Evidencia en output/prepare-attack-review/defense-hands-checks.json y capturas defense-hands-shield/dual-1440/390.png. Sin escrituras de prueba en Firebase, commit ni despliegue.
+
+## 2026-09-22 — Modificadores del HUD reflejados en el ataque
+
+- El usuario pide que los dados adicionales elegidos desde el HUD y los rasgos manuales Crítico/Perforante funcionen para jugadores y enemigos y se distingan en las ventanas posteriores. Restricción de opciones solo en Canvas; se mantienen diseño, pliegues, rasgos propios del equipo y otros modos de juego.
+- Corregida selección de reglas: los rasgos manuales se aplican por arma antes de alcance/competencia/armadura. Crítico no se transfiere de una mano a otra que no lo tenga; la protección de una sola arma tampoco neutraliza toda la combinación. Los dados extra siguen sin generar Crítico, conservan su origen Modificador y se suman una única vez. Perforante reduce CD una sola vez. El HUD conserva el rasgo manual explícito aunque ya estuviera presente en otra arma del dual.
+- Preparación separa el perfil base del arma y muestra dados adicionales bajo Modificadores con los SVG aprobados, nota de tirada y rasgos coloreados. La suma distingue su aporte. Ataque inminente separa resultados de Modificador también con arma única; rasgos añadidos y anulados siguen visibles. No se introduce selección de modificadores en estas ventanas.
+- Verificación dirigida: 74 pruebas de reglas/selección, 44 de HUD/transporte/runtime/registro y 34 de interfaz correctas. El test nuevo de UI necesitó declarar bandos distintos en la fixture; corregida la fixture y sus cinco casos pasan. El helper conserva strings de rasgos sin comas añadidas cuando no hay rasgos nuevos, comprobado con 10 pruebas. README y DESIGN actualizados.
+- Navegador: cuatro flujos completos correctos (HUD real jugador/enemigo y dual jugador/enemigo) hasta defensa y Vida, en PC/móvil, sin errores ni desbordamiento. Capturas manual-modifiers-*-prepare/defense.png inspeccionadas; dados extra separados, rasgos efectivos coloreados y anulación en Duelo visible. Informe manual-modifiers-checks.json y cliente develop-web-game completado. El servidor aislado 4213 se reanudó tras comprobar libre el puerto; no se abrió otro puerto.
+- Preview abierta con Estilete, +2d6, Crítico y Perforante y un dado de acción elegido en ?mode=single-modifier&modifiers=manual&transition=defense-enemy. Confirmar permite probar el paso a defensa. Sin escrituras de prueba en Firebase, commit ni despliegue.
+
+## 2026-09-22 — Poción de curación (en curso)
+- Regla contrastada con documento maestro v0.2.40 §10.2 y entrada real Forja `customItems/0Ett8V_mcWfUanXRRIPCG`: uso propio, 1d4 bloques de Vida hasta máximo, una copia; en combate dado de acción cuyo valor se ignora. Enemigos usan su acción principal; exploración no crea dados ni combate.
+- Nuevo flujo de confirmación/resultado ilustrado con arte real, acceso desde Objetos y selector de coste del HUD conservado. Cancelar no consume. Envenenado/0Vida bloquean el uso; Vida completa permite gasto consciente con aviso.
+- Primera comprobación: 22 tests de definición, modal y regresión de humo pasan. Persistencia transaccional y QA PC/móvil en curso en arnés aislado, sin escrituras reales a Firebase.
+
+### Poción — implementación y validación final
+- Consumo transaccional en escena: una copia (incluidas pilas y payloads), Vida, dado de acción/acción principal, run vinculado, recibo idempotente y registro. No escribe datos de prueba en Firebase. Recursos de humo conservan su política anterior.
+- Revalida control, turno/bloque, ronda/combate, ataque pendiente, Vida, veneno, identidad y revisión de aventura antes de aplicar. Una confirmación repetida usa la misma tirada; cambiar de escena durante un fallo descarta la sesión antigua. Limpiar cinturón al agotar la última copia impide rematerializarla.
+- Definición explícita healing-potion o nombre exacto Poción de curación; objetos genéricos como Poción menor/Poción no se convierten en curativos. No administra a aliados, no levanta caídos y no implementa todavía aplicación de veneno ni antídoto.
+- Comprobación final: 108 pruebas aprobadas en 9 suites (reglas, sesión, runtime, modal, humo, economía y registro). Regresiones adicionales del HUD/área: 40 pruebas aprobadas en 6 suites; un aviso jsdom scrollTo preexistente en HUDMovement, sin fallo de test.
+- Arte y UI comprobados visualmente en capturas PC 1440 y móvil 390. Preview aislada http://127.0.0.1:4214/?start=confirm; ruta sin query permite flujo completo desde HUD. Build completo inicial compila correctamente; reconstrucción final tras revisión de concurrencia en curso.
+- Siguiente iteración: valoración visual de esta poción. Después elegir el siguiente consumible; si es antídoto, implementar antes el flujo de Envenenado completo sin automatizar clases. No desplegado ni commit.
+- Cierre: build final de producción compilado correctamente. Revisión responsive adicional 320×640 y 844×390 sin desbordamiento; botón de confirmación visible y contenido desplazable en horizontal.
+- QA cerrado: 7 escenarios funcionales y 2 tamaños compactos pasan, cero errores de navegador. Cliente develop-web-game ejecutado e imágenes/estado inspeccionados. Rebuild final del arnés tras ajustes de concurrencia completado; revisión queda disponible en 4214.
+
+## 2026-09-22 — Poción en HUD, tirada compartida y Vida del token
+
+- El usuario autoriza implementar la dirección discutida: preparación compacta desde Objetos, resultado d4 animado sobre el token compartido, registro integrado y Vida por bloques legible con zoom. Prioridad estética y continuidad con el retrato circular, aro dorado y controles actuales. README y DESIGN recogen la preferencia para otras tareas.
+- Coste enemigo confirmado expresamente: un recurso a elegir entre principal, Movimiento, reserva de Amenaza o Amenaza manual para ese uso; dado ignorado, curación siempre 1d4. Jugador gasta un dado de acción. Combate OFF utiliza recursos de práctica, no free-use.
+- Nuevas copias del generador/recogida con instanceId; normalización de pociones legacy en el consumo. El HUD distingue ejemplares antes de cruzar catálogo/nombre para evitar duplicar la copia del cinturón y ocultar otra. Se preservan consumo único, límites de Vida y revisión de escena/run.
+- CanvasPotionPreparation sustituye el modal de poción; elección/cambio/deselección/cancelación sin gasto, confirmación dorada. Tras commit la sesión se cierra y deja el resultado al tablero. Header ilustrado con máscara; Vida segmentada; acceso manual a Amenaza mediante despliegue.
+- CanvasTokenLife se limita a perfiles roguelite de Canvas: arco inferior segmentado, lectura exacta seleccionada y tamaño mínimo con zoom; contrarrotación, transiciones por bloques y reduced motion. Renderer mantiene retrato, aro, controles y permisos originales. Los HUD de sistemas antiguos conservan sus recursos.
+- Primer lote visual PC/móvil detectó imagen en flujo (LoadingImage no acepta wrapper className); corregido con capa explícita. Horizontal requería reservar 210px para HUD al calcular alto del despliegue; corregido. QA final y build pendientes al escribir esta entrada.
+- Pruebas dirigidas iniciales: 35 UI/sesión/humo/HUD, 135 reglas/runtime/inventario/registro y 33 efectos/visibilidad/registro correctas. Suite completa en ejecución, sin escrituras de prueba en Firebase ni despliegue.
+- Cierre: suite completa con 142 suites correctas, 884 pruebas aprobadas y una omitida. Tras los últimos ajustes de visibilidad, costes y colocación se repitieron seis suites relevantes: 73 pruebas correctas. Build final de producción compilado; se mantiene el aviso de tamaño del bundle preexistente.
+- QA final: 11 escenarios correctos y cero errores de navegador, incluidos costes alternativos, práctica, cancelación, consumo único, límite de Vida y receptor oculto; PC, móvil, 320px y horizontal. Cliente develop-web-game ejecutado y captura/estado inspeccionados. El dado evita los controles y bordes del viewport; el arco de Vida queda dentro del aro para separar los segmentos del tirador de tamaño.
+- Preview final en http://127.0.0.1:4214/?start=confirm. Evidencia en output/healing-potion-review/compact-checks.json, capturas compact-*, log-player-* y skill-client-compact/shot-0.png con state-0.json. Dos receptores locales muestran el mismo resultado confirmado; queda pendiente probar una partida real entre clientes Firebase. Sin commit ni despliegue.
+
+## 2026-09-22 — Encaje de la poción y nombres al inspeccionar enemigos
+
+- El usuario aprueba corona, nombres legibles y animación/halo de curación. Pide que el panel de poción quede incrustado en la fila Acciones/Clase/Objetos, como Correr, sin sobresalir; aplicar las nuevas etiquetas también al hover de enemigos no controlados.
+- La poción se ancla al tamaño intrínseco de las pestañas, con margen interior en escritorio y ajuste al ancho en móvil. Mantiene pliegue, arte, selección y confirmación; dados en rejilla flexible para conservar tres opciones en pantallas estrechas. Los paneles de armas/modificadores y Correr mantienen su implementación.
+- README y DESIGN recogen aprobación y preferencia. 24 pruebas focales de HUD/modificadores/poción/sesión pasan. Revisión visual y ajuste del nombre con permisos en curso.
+- Nombres: readout compartido para dueño y enemigo visible, con compensación de zoom y rotación. El modo solo nombre no recibe stats. Separado permiso de ver recursos del permiso de apuntar; enemigos ocultos no montan etiquetas. 16 pruebas de nombres/permisos/corona/humo correctas (40 focales junto al lote del HUD).
+- QA detectó poco espacio móvil si se conservaba el ancho estrecho de pestañas. Durante el despliegue de la poción, móvil amplía conjuntamente fila y panel hasta 320px (288px en pantalla320), con ancho idéntico y cierre que conserva la unión. PC mantiene 16px de margen interior. Ocho escenarios y cero errores; hover y Correr correctos. Se está comprobando una última compactación horizontal para que la fila de dados quepa completa.
+- Cierre: 9 escenarios de navegador correctos, cero errores. Separación panel/pestañas de 0px; fila completa de dados en horizontal (99.39px dentro de 102.20px), confirmación de 44px. Revisión PC/móvil320/390/horizontal844 y cliente develop-web-game final inspeccionados. Capturas fit-* e informe fit-checks.json en output/healing-potion-review; cliente en skill-client-fit-final. Build final de producción correcto. Sin commit, despliegue ni escrituras de prueba Firebase.
+
+## 2026-09-22 — Recuperar la corona exterior de Vida
+
+- El usuario precisa que aprobó la corona exterior anterior y rechaza su colocación posterior dentro del aro. Restaurados el diámetro screenWidth + 12 y la colocación inferior .27, antes cambiados a -10 y .35 para evitar el tirador. No se cambia color, segmentos de Vida, nombres, panel ni lógica de curación.
+- README y DESIGN corrigen la referencia aprobada. Diez pruebas existentes de Vida/nombres/permisos pasan; comprobación visual de zoom y preview en curso.
+- La revisión a zoom4.6 detectó que el antiguo límite de 180px también metía los extremos dentro del retrato. Eliminado ese máximo; se conserva el mínimo de lectura. La etiqueta se coloca debajo del arco exterior y su grosor con 4px de separación, para que no tape los segmentos al ampliar. No cambia el nombre de enemigos sin corona.
+- Cierre: diez pruebas correctas y revisión visual de la corona en PC/móvil, seleccionada/sin selección, zoom0.6/1.4/4.6. Capturas crown-*.png y cliente skill-client-crown-final inspeccionados; etiqueta separada de la corona, sin errores. Preview4214 reconstruida. Sin cambios de reglas ni despliegue.
+
+## 2026-09-22 — Corrección de sincronización de pociones y geometría de Vida
+
+- Informe real: Vida distinta entre jugador/máster, segunda curación desde estado aparente antiguo, objetos que no vuelven a ocupar huecos del cinturón, parpadeo del HUD y segmentos adelantados al d4. La corona externa aprobada necesita centro exacto al ampliar y segmentos proporcionados en2×2.
+- Causas corregidas: identidad duplicada al pegar loot; runItemId sintético distinto de instanceId; refresco de metadatos reconstruía cinturón desde activeRun anterior; locks se registraban después de confirmarse el snapshot; persistencia secundaria publicaba el token capturado antes de curar. Los commits transaccionales de curación ya tiraban1–4; el0 era recuperación efectiva a Vida completa.
+- Reconciliación compartida descarta snapshots de versión anterior, limpia protecciones de runtime superadas y persiste hojas editadas de objetos anidados. Guardado de aventura relee escena y vincula revisión de perfil/escena en transacción. Un perfil adelantado espera el estado de escena para no anticipar Vida.
+- Presentación desde metadata en el mismo commit de escena: d4/corona comparten1300ms de revelado y3200ms de duración; no se anima de nuevo por el log independiente. La corona conserva el aro dorado y bloques rosados, con centro exacto, grosor4px y segmentos limitados.
+- Pruebas: regresiones focales correctas; primera suite completa detectó dos ajustes pendientes (mock de suscripción de creación y límite de importación Canvas/shared), ambos corregidos. QA de dos clientes independientes en curso; sin datos de prueba en Firebase ni despliegue.
+- Cierre técnico: 145 suites correctas; 928 pruebas aprobadas y una omitida. Build de producción compilado correctamente. Se añadió regresión de guardado de aventura atrasado y de pickup concurrente que no debe resucitar una copia consumida.
+- QA con dos estados React independientes y listeners separados: recogida→consumo→recogida→consumo conserva belt_0, reutiliza belt_1 y ambos clientes llegan3→7→8 pese a snapshots retrasados, invertidos y repetidos, perfiles adelantados y locks antiguos. Los segmentos permanecen3/7 antes del revelado y pasan7/8 después. Curaciones rápidas forman una cola visual de un dado por token.
+- Diez vistas geométricas revisadas: PC/móvil,1×1/2×2, seleccionado/sin seleccionar y zoom cercano4.6; centro exacto, trazo4px, huecos2,5px y bloques hasta16px. Informes/capturas en output/healing-potion-review/sync-checks.json y geometry-checks.json. Es transporte local de pruebas con lógica de producción, no E2E Firebase real. Sin commit ni despliegue.
+
+## 2026-09-22 — Proporciones de corona y continuidad móvil de poción
+
+- El usuario confirma que sincronización, recogida y curación funcionan bien. Rechaza corona exagerada al alejar y minúscula al acercar; prefiere proporciones al30%en2×2. Pide animar el ancho móvil al abrir/cerrar poción y cerrar huecos de esquinas entre panel y pestañas. Pregunta el motivo del dado lateral, sin pedir cambiarlo.
+- Corona: abandona4px y16px fijos, conserva arco de120grados y escala grosor/márgenes/separaciones con el retrato, con pequeña compensación suave de distancia. No hay radio mínimo de27,5px que la despegue.26pruebas de geometría/presentación pasan; QA de tamaños reales768unidades y porcentajes reales en curso.
+- Posición del dado verificada en getCanvasDieOutcomeOffset: prioridad superior derecha, después izquierda/laterales y alternativas centradas, para despejar herramientas sobre el token y bordes de pantalla. Se conserva en esta petición.
+- Cierre visual:20configuraciones revisadas con tokens50/100/256/768unidades y zoom10/30/50/100/460%; arco120grados y margen exterior positivo. Capturas proporcional-crown (nombre de archivo proportional-crown-*) muestran referencia768al30%=230,4px y su escalado.
+- Móvil: width numérico medido cerrado y transición320ms coordinada con pliegue; unión opaca con esquinas rectas mientras se muestra panel. En390px anima226,47→320→226,47; en320px llega288px.18–20anchos intermedios observados y hueco0px; PC1440 y horizontal844 no cambian ancho. Capturas motion-* e informe de revisión en output/healing-potion-review.
+-60pruebas focales correctas: geometría, sincronización de revelado, nombres, poción, HUD/modificadores y dado. Sin cambios de reglas, consumo, sincronización o colocación del dado. Build final en output/crown-mobile-polish-build.log.
+
+## 2026-09-22 — Apertura móvil estable y Vida en tokens pequeños
+
+- El usuario detecta un salto al abrir la poción en móvil y aprueba Vida1×1, pero pide reforzar0,5y0,25.
+- Reproducido el salto: el ancho animado cambiaba los saltos de línea y la altura del panel 23–26px durante el pliegue. Corregido con contenido a su ancho final desde el inicio, medición de pestañas fuera de pantalla y pliegue móvil sin traslación ni escala. Escritorio conserva su animación.
+- La corona recibe cellSize real desde el renderer. Para tamaños subcasilla se refuerza solo el grosor tomando como referencia 1×1; 0,5≈80% y 0,25≈70% del grosor de 1×1, con compensación de distancia. Radio sigue el retrato; 1×1 y 2×2 conservan exactamente su geometría previa.
+- Cierre: 63 pruebas focales correctas y build de producción compilado. QA móvil a 320/390px confirma altura constante de 441px y separación de 0px respecto a las pestañas durante apertura, cierre y reapertura. Doce combinaciones de tamaño/zoom revisadas; cliente oficial sin errores. Artefactos en output/healing-potion-review/dock-final-traces.json, subcell-crown-checks.json y skill-client-subcell-final/. Sin cambios en reglas ni sincronización.
+
+## 2026-09-22 — Remate de la unión móvil de poción
+
+- El usuario señala una línea fina que todavía parece un hueco. Reproducido a 320/390px con DPR 1/2: los rectángulos se tocan, pero el borde superior dorado de las pestañas dibuja una raya distinta del fondo del panel.
+- Solo en móvil y mientras existe el despliegue, ese borde toma el fondo opaco de la poción; el panel solapa además 1px para evitar rendijas por rasterizado fraccional. Se conservan alturas, animación y escritorio. README actualizado.
+- Validación visual a 320/390px y DPR 1/2: unión continua, solape de 1px, sin raya dorada. Capturas seam-final-* e informe seam-final.json en output/healing-potion-review. Cliente oficial ejecutado en skill-client-seam-final/: selección y consumo correctos (Vida 3→4, una poción restante, una transacción local de prueba).
+
+## 2026-09-22 — Humo por huella en fichas grandes
+
+- Petición: resolver fichas 2×2 y 3×3 parcialmente dentro de Humo sin convertir el contacto parcial en un estado binario de toda la criatura.
+- Regla implementada: la huella se divide por los bordes reales de las áreas de Humo. Cada porción interior o expuesta aporta un punto válido de visión; dos porciones en la misma nube continua se ven entre sí y dos porciones exteriores se ven si el segmento no cruza Humo. Interior↔exterior y nubes distintas continúan bloqueados.
+- Una ficha parcial participa tanto dentro como fuera; una ficha completamente cubierta conserva el comportamiento de residente interior. `Oculto` vuelve a ser exclusivamente un estado explícito y las zonas nuevas ya no lo declaran.
+- Presentación: el Humo sigue dibujándose sobre sus casillas, pero una intersección parcial no aplica niebla, opacidad o desaturación a todo el retrato. La oclusión exterior se conserva mientras exista una porción expuesta.
+- Pruebas focales: 10 suites, 118 pruebas correctas, incluidas huellas 2×2/3×3, cobertura completa, alcance real de ataque, render y compatibilidad de objetos. Tras la limpieza final se repitieron las 4 suites directamente afectadas: 42 pruebas correctas.
+- Cierre: build de producción correcto. Revisión visual aislada con lógica de producción y cliente oficial `develop-web-game`: 2×2 a media cobertura visible desde exterior e interior, bloqueado al mirar a través de la nube; 3×3 con 4/9 cubiertas visible desde su parte expuesta. El retrato permanece completo y el área cubre únicamente su región geométrica. Estados y capturas en `output/smoke-footprint-review/skill-client*`; sin errores de navegador, commit ni despliegue.
+
+## 2026-09-22 — Integración de la corona de Vida dentro del Humo
+
+- El usuario detecta que la Vida mantiene demasiado color y contraste frente al retrato cubierto, por lo que parece una capa separada.
+- Solo con la huella completamente dentro se transmite la densidad de Humo a `CanvasTokenLife`: velo suave en perspectiva interior y más marcado en la inspección general. Se conserva el socket oscuro y el conteo de bloques.
+- Hover y selección recuperan parte de la lectura; los bloques que cambian por curación o daño ganan claridad durante el feedback. Los solapes parciales no atenúan toda la corona.
+- Cierre: 54 pruebas focales correctas, incluida propagación de densidad, cobertura parcial y timeline de curación. Build de producción correcto. Revisión visual final con el componente de producción y cliente oficial en `output/smoke-footprint-review/skill-client-life-veil-final`: siete bloques siguen contables, corona integrada en la bruma y estado textual coherente. Sin commit ni despliegue.
+
+## 2026-09-22 — Visión estable durante el movimiento en Humo
+
+- Arrastrar una ficha conserva sombras, niebla, Humo y visibilidad de objetivos desde la huella de partida. En combate, la posición de visión se mantiene durante todo el movimiento pendiente hasta confirmar el turno; fuera de combate cambia al soltar.
+- El retrato móvil permanece como previsualización. Máscaras SVG, filtro de fichas, indicadores y efectos consultan la misma posición de visión comprometida; se evita tanto el apagón temporal como el vistazo gratuito fuera de la nube.
+- Pruebas focales de Humo, render, movimiento y Canvas: 44/44. Revisión visual de arrastre, pendiente y confirmación con la skill develop-web-game y estado render_game_to_text. Build final correcto.
+
+
+## 2026-09-22 — Humo y Oculto con el mismo aspecto en móvil
+
+- El efecto compartido conserva el shader TokenMagic original en WebGL, con precisión alta cuando el dispositivo la admite, buffer preservado y comprobación de imagen vacía. Se retiró la aproximación 2D porque cambiaba la estética.
+- Como respaldo visual se capturaron doce fotogramas reales del mismo shader, en dos densidades (zona y retrato). Dos sprites WebP de 76 y 87 KB los animan si el navegador no puede ejecutar o copiar el shader. En el harness móvil forzando WebGL desactivado, la captura completa muestra la misma niebla; en el navegador normal ambos canvases usan WebGL. Pendiente de comprobación física en el teléfono del usuario.
+
+## 2026-09-22 — Registro ilustrado de curación
+
+- La imagen de la poción ocupa la superficie completa de la entrada del registro y se funde hacia el fondo azul noche, con el texto, la tirada y el coste por encima. Las entradas sin imagen mantienen su disposición anterior.
+- Prueba del panel: 6/6. Build de producción correcto. Capturas del componente real a 1440 y 390 px en `output/log-art-review/log-1440.png` y `log-390.png`; imagen cargada, arte del tamaño de la entrada y sin errores de consola.
+- Pendiente: valoración estética del usuario antes de extender este tratamiento a nuevos tipos de registro con imágenes.
+
+## 2026-09-22 — Impacto visual al perder Vida
+
+- Un descenso confirmado de Vida dispara un destello cálido rojizo sobre el retrato, coordinado con la pérdida de bloques de la corona. La imagen no se remonta ni se mueve, y los controles quedan libres.
+- El efecto se monta solo para una pérdida nueva; no se repite al cargar una escena, se cancela al curar, se reinicia ante otro golpe y se omite con movimiento reducido. Puede mostrarse en una ficha enemiga visible sin revelar su cifra de Vida.
+- Prueba focal de componentes y render de Humo: 28/28. Build correcto. Capturas de impacto en escritorio y móvil en `output/token-damage-review/`; revisión de estado y consola sin errores. Pendiente de valoración estética del usuario.
+
+### Simulador de revisión
+
+- Vista aislada en `http://127.0.0.1:4214/?review=damage`, abierta en el navegador integrado. Permite repetir el golpe y elegir velocidad Normal (0,85 s), Lento (2,4 s) o Muy lento (5 s); la partida no cambia.
+- Se comprobó la repetición, la Vida 8→6, la imagen y corona en escritorio y móvil de 390 px, sin desbordamiento ni errores de consola. Capturas en `output/token-damage-review/simulator-1440.png` y `simulator-390.png`.
+
+## 2026-09-23 — Bomba explosiva
+
+- Uso integrado: se selecciona dado y casilla de impacto sin alcance máximo; en ese momento se consume una bomba y el dado y se tiran una sola vez 2d8. La Presión compartida es `máx(0, dado + 2d8 − distancia a impacto)`. Después se elige una de cuatro orientaciones 2×2 que contienen el impacto.
+- El área alcanza aliados, enemigos y lanzador; una criatura grande solapada resuelve una sola defensa y CD. Los tokens decorativos sin ficha de criatura no detienen la resolución. La cadena usa las defensas activas existentes y conserva tirada, Presión y costes entre objetivos, clientes y recargas.
+- Se guarda el origen y la distancia del lanzamiento para que el selector siga mostrando los valores comprometidos. Un blanco retirado se salta sin interrumpir la cadena, incluso si su eliminación llega por snapshot remoto. Otra acción no sustituye una bomba pendiente en práctica.
+- Verificación: 151 suites, 974 pruebas correctas (1 omitida), incluida la ruta completa multiobjetivo y la recuperación remota; build de producción correcto. Se ejecutó el cliente oficial de `develop-web-game` y se inspeccionó su captura, pero el navegador aislado solo alcanzó la pantalla inicial porque la escena requiere una sesión con acceso; queda una revisión manual de la secuencia visual en una partida real de máster y jugador.
+
+## 2026-09-23 — Alcance legal de Arrojadiza
+
+- La regla nueva sustituye el lanzamiento ilimitado de la entrada anterior: el dado de acción visible fija el alcance, el mayor si se comprometen varios; los enemigos usan su Base ofensiva. Una casilla fuera de alcance no puede confirmarse, no consume recursos ni dispara tiradas; la distancia sigue restando una vez de la Presión legal.
+- La Bomba explosiva muestra en la plantilla y parábola la distancia frente al alcance, tiñe el lanzamiento inválido y valida otra vez los valores recientes dentro de la transacción. El alcance comprometido se conserva al orientar o reanudar la explosión.
+- Los ataques con arma Arrojadiza muestran el alcance del dado elegido en Preparar ataque y bloquean su confirmación cuando no llega. Ajuste tampoco puede sustituir el dado por otro que deje el objetivo fuera de alcance.
+- Verificación: 151 suites, 980 pruebas correctas y 1 omitida en ejecución secuencial; build de producción correcto. La primera ejecución paralela agotó el tiempo de una prueba ajena al cambio y la repetición secuencial pasó completa.
+
+
+## 2026-09-23 — Bomba de brea
+- Fuente leída: `C:/Users/Arcana/Downloads/documento_maestro_ttrpg_roguelite_v0_2_40.docx` (Bomba de brea, Bombas de zona sin Presión, Terreno difícil, Fuego e Inflamable). Se mantiene la regla más reciente del usuario para alcance enemigo = Base ofensiva.
+- Definición tar-bomb; impacto legal, parábola existente y cuatro orientaciones 2×2; consumo transaccional de copia/dado y sincronización de aventura vinculada. Práctica sin crear combate.
+- Terreno difícil cobra cada casilla atravesada de la ruta recta del Canvas, por huella completa y sin sumar manchas; integrado en previsualización PC, opciones móvil y validación del runtime; excepcional ignora recargo.
+- Ignición ortogonal y expansión de ataques Fuego con Presión compartida, defensa independiente y deduplicación. Conserva Ajuste en blancos posteriores. Limpia brea al concluir cadena o combate; control del máster para Fuego sin Presión.
+- TarGroundEffect: textura procedural Canvas2D compartida de 256px, reflejos viscosos lentos, pausa con documento oculto y movimiento reducido; no añade contextos WebGL ni modifica la visión del humo.
+- Revisión aislada `output/tar-bomb-review`, puerto 4216. Flujo real de selección/colocación con confirmación simulada; runtime transaccional comprobado mediante pruebas. PC 1280 y móvil 390 sin errores de navegador. No se ha verificado en un móvil físico ni una partida real autenticada.
+
+- Validación: batería completa 153 suites / 989 pruebas aprobadas / 1 omitida. Tras cerrar el caso de contraataque de Fuego y limpieza de cola, pruebas focalizadas: 5 suites / 36 pruebas aprobadas. Build final de producción aprobado, incluido el ajuste de cola. Oficial web_game_playwright_client ejecutado y capturas inspeccionadas en `output/tar-bomb-review/skill-final` y capturas PC/móvil.
+- Contraataques Fuego: Excedente compartido sin otra tirada, excluye blanco ya resuelto y difiere su propagación si hay otra área resolviéndose; manchas incendiándose no se disparan repetidamente.
+
+- Cierre: 33 pruebas de reglas/runtime/fin de combate aprobadas tras el último ajuste. Colocación táctil comprobada a 390px sin errores. Prueba visual disponible en http://127.0.0.1:4216/.
+
+## 2026-09-23 — Retratos manchados de brea
+- Overlay SVG ligero con salpicaduras y brillo viscoso, recortado al retrato y separado de borde/corona. Intensidad por proporción de huella cubierta; no se acumulan zonas superpuestas. Transición de entrada/salida y movimiento reducido. No cambia reglas ni añade estados persistentes. Simulador 4216 actualizado para entrar/salir.
+- Validación del retrato: 19 pruebas relevantes aprobadas, build de producción correcto, capturas PC/móvil inspeccionadas. Entrada y salida táctil verificadas (opacidad 1 dentro / 0 fuera), sin errores en el simulador.
+
+## 2026-09-23 — Brea orgánica en retratos grandes
+- Sustituido SVG de gotas fijas por el material animado del suelo, compartiendo textura y bucle de dibujo; máscara procedural 512px con detalle fino, bordes suaves y menor cobertura en la cara. Conserva proporción de contacto y fundido al salir. Los retratos fuera de brea dejan de suscribirse a la animación.
+- Simulador con tamaño ampliado, pruebas de entrada/salida táctil y capturas desktop/móvil; sin errores de navegador.
+- Validación final: 19 pruebas relevantes aprobadas y build de producción correcto. Captura ampliada a 320px inspeccionada; entrada/salida táctil conserva opacidades 1/0. El aspecto no usa paths SVG ni siluetas fijas.
+
+## Brea en todo el perímetro del retrato
+- Corregido el corte heredado del borde cuadrado del charco: el retrato toma únicamente el interior opaco de la textura. Máscara radial alrededor de toda la circunferencia, independiente del tamaño; las fichas rectangulares usan su propio contorno. Conserva detalle, rostro visible y transición al salir.
+- Validación: compilación del simulador correcta, captura ampliada inspeccionada, controles táctiles de entrada/salida correctos y sin errores de navegador; cliente oficial web-game ejecutado.
+
+## Brea: recuperar reparto irregular
+- El usuario rechaza la franja alrededor de toda la circunferencia. Restaurada la máscara de manchas irregular anterior, conservando el muestreo del interior opaco de la textura que elimina los cortes cuadrados. Sin cambios de reglas, recursos o interacción.
+
+
+- Ignición de brea: presentación persistida de 5200 ms en todas las rutas de consumo (manual, ataque, explosión sin objetivos, contraataque y objetivo ausente). Canvas2D procedural compartiendo el reloj del evento; no añade daño ni terreno. Limpieza transaccional del máster y caducidad visual local. Corregida retirada accidental de brea en nextRound.
+- Simulador en puerto 4216: botón Prender brea repetible, capturas ignition-flames/embers; revisión desktop, caducidad y replay sin errores. Tests de reglas/runtime y build en output/tar-ignition-*.log.
+
+
+- 2026-09-24: Antídoto + Envenenado. Usuario confirmó aplicación ofensiva únicamente tras perder >=1 Vida. Documento: sin daño periódico, bloqueo de recuperación de Vida, no acumulable, fin de combate; Antídoto a uno mismo o Toque (misma casilla). No se implementa una regla de resurrección pendiente del documento.
+- Reutilizado panel plegable de poción con selector de destinatario, recursos y copia transaccionales; persistencia de ambos activeRun cuando procede. Revalidación fresca y recibo idempotente. Venenosa disponible en modificadores, nativa vía aliases, aplicada en ataques/contraataques y registrada. Inspector admite status/statusEffects y retira ambos formatos.
+- Efecto de retrato procedural verde compartido entre fichas; corregida acumulación alfa limpiando canvas entre fotogramas. Preview puerto4214 ?item=antidote&start=confirm; Playwright desktop1280 y mobile390: estado eliminado, Vida intacta, una copia consumida, sin errores JS. Arte del Antídoto en el preview leído de Forja (solo lectura); producción resuelve el arte del propio objeto.
+- Tests de Antídoto: self/enemy, target linked runs, stale target/move/removal, transaction failure, duplicate confirm; veneno modificación HUD ambos bandos, daño cero/positivo, contraataque, rondas y fin. Logs output/antidote-*.log.
+
+- Verificación final: 155 suites, 1012 pruebas aprobadas y 1 omitida; compilación de producción correcta. No se han desplegado cambios.
+
+
+## Presteza y Vitalidad (2026-09-27)
+
+- Implementadas con consumo transaccional y HUD de pociones, tanto para jugadores como enemigos (principal, Movimiento, Amenaza o Amenaza manual). Presteza +4 este turno y +1 base hasta final de combate; confirmado por el usuario que el +1 no se acumula. Vitalidad reemplaza su reserva por 2 bloques, absorbe antes que Vida normal, no se cura ni se acumula y persiste entre rondas hasta finalizar combate.
+- Los bloques temporales tienen color dorado, revelado sincronizado con la pocion y fases separadas de perdida temporal/normal. Registro ilustrado distingue ambos recursos. Imagen precargada para observadores.
+- El catalogo real tiene Presteza y el nombre antiguo "Balsamo de vitalidad menor"; reconocido tambien como Vitalidad sin modificar datos remotos.
+- Validacion: 220 pruebas dirigidas en 16 suites, integracion de ataque y guardado comprobada; build de produccion correcto. Playwright en 1280 y 390 px para ambos consumibles, con arte real, sin errores. Vista local: puerto 4214, ?item=haste&start=confirm o ?item=vitality&start=confirm.
+- No commit ni despliegue. Se preservan cambios previos del repositorio.
+
+### Revisión visual de pociones y Vida temporal (2026-09-27)
+
+- Unificada la fuente del +2 de la corona con los números de Vida. El inspector representa la misma reserva vidaTemporal con contador y segmentos dorados; mantiene independiente el máximo de Vida normal y actualiza consumo y retirada de la reserva.
+- Sustituida la animación reutilizada de Antídoto para estos dos consumibles: Presteza adapta Air Field y Vitalidad adapta Magic Field de TokenMagic. GLSL atribuido y con licencia en src/vendor/tokenmagic/potionFields.js y THIRD_PARTY_NOTICES.md. Efectos transitorios de 3200 ms sobre el retrato, sin cargar imágenes, con movimiento reducido y contexto WebGL compartido.
+- Validación: 57 pruebas en 5 suites, build de producción correcto, inspección de capturas desktop y móvil 390x844 para ambas pociones. Shader renderizado sin errores; tipografía del contador temporal comprobada en navegador. Evidencia y scripts en output/potion-fx-review. Vista con inspector: puerto 4214, ?item=vitality&start=confirm&zoom=3&inspector=1.
+- Pendiente únicamente valoración estética del usuario. Sin commit ni despliegue.
+
+### Estoque y competencias — 28/09/2026
+- Revisada la definición remota weapons/Estoque: tenía Crítico, Destreza y Perforante, sin competencia ni Duelista. Actualizada solo esa entrada a v0.2.40 con precondición de updateTime; copia anterior y posterior en output/estoque-catalog-*.json. No se ha reactivado la entrada eliminada sheet-weapon-estoque.
+- Confirmadas las competencias Simple y Marcial del Pícaro maestro. Corregida la falsa pérdida de rasgos cuando category contiene weapon/weapons en vez de una competencia; soporta nombres españoles e ingleses.
+- Duelista visible en el selector individual mediante displayTraits, sin transferirlo a la otra mano ni a la resolución ofensiva. La sincronización Canvas refresca inventario y loadout con la Forja conservando recursos e identidades de copias.
+- Validación: 69 pruebas en 6 suites, build de producción, cliente de develop-web-game e interacción selector → preparar → confirmar en 1280x900 y 390x844 sin errores de página. Perforante comprobado fuera y dentro de Duelo, con y sin Duelista; pérdida real de competencia respetada. Evidencias en output/estoque-review. Sin commit ni despliegue de código.
+
+### Golpe sucio del Pícaro — 28/09/2026
+- Implementado el gasto base de Astucia pendiente: Confirmar ataque tira y compromete dados; si hay Astucia y un dado original de arma Toque/Duelista/Arrojadiza, abre awaiting-cunning antes de defensa. Permite continuar gratis o pagar 1 una sola vez, repetir un dado y conservar original/nuevo en awaiting-cunning-choice. Respeta elegibilidad por mano, excluye acción/modificadores/furtivo y conserva/reemplaza únicamente la cadena crítica del dado elegido.
+- Transacción de escena + activeRun, autoridad de control/reserva remota, bloqueo de doble clic, tirada estable al reintentar y decisión guardada compartida. APIs y ventana defensiva bloqueadas hasta decidir. Brea prendida por un ataque espera la decisión para fijar la Presión compartida definitiva.
+- Ventana reutiliza arte fundido y composición del combate aprobado. Dados de Astucia en verde azulado, comparación con Presión final por opción, coste y registro explícitos. No implementa generación de Astucia, Furtivo ni habilidades de niveles posteriores.
+- Vista aislada: http://127.0.0.1:4222/?mode=cunning&start=confirm . Elegir d6, confirmar, repetir y elegir resultado. Capturas y prueba completa desktop/móvil en output/cunning-review.
+- Validación: 146 pruebas dirigidas en 11 suites; cobertura de gasto, rechazo por reserva/control/dado inválidos, defensa bloqueada, Astucia cero, no gastar, conservar original, críticos, doble clic y reintento de transacción con guardado atómico de aventura. Revisión visual final 1280x900 y 390x844 sin errores de página, con fundido continuo, botones legibles y comparación de Presión. Código local, sin commit ni despliegue.
+- Compilación de producción completada correctamente (`output/status-build.log`). Cambios locales, sin despliegue.
+- Verificado: 21 pruebas / 3 suites correctas (recursos, buffs y confirmación del escenario). Playwright ratón y móvil táctil: 2→1→0 reflejado en inspector y token, Vida normal intacta, sin errores JS; captura móvil inspeccionada. Cliente develop-web-game ejecutado.
+
+## Alineación sobre el marco rectangular (2026-09-28)
+- Solicitud: estados centrados en el borde izquierdo como Compartido; Vida inferior alineada igual que Postura superior. Anclajes a 3 unidades fuera del token, centro del trazo de selección. Sigue los bordes girados manteniendo iconos derechos. Diseño circular conservado.
+- 31 pruebas / 3 suites pasan, incluida la prueba de coronas antes obsoleta ahora actualizada al nuevo anclaje. Revisión visual PC/móvil, 0.25, 2x2, rotación y múltiples estados; cliente develop-web-game ejecutado y capturas inspeccionadas. Sin cambios de reglas.
+
+## Corrección y retirada de Vida temporal (2026-09-28)
+- Nueva petición sustituye la restricción previa del inspector: los bloques vacíos ahora permiten restaurar manualmente hasta el bloque pulsado; «Retirar extra» elimina stats.vidaTemporal y sus huecos. Mantiene Vida normal y reglas de curación automática. Respeta el guardado existente mediante Confirmar cambios.
+- 72 pruebas / 4 suites correctas, incluyendo curación automática. Playwright PC y móvil: gastar 2→1→0, restaurar 2, retirar reserva y comprobar desaparición; sin errores JS. Captura móvil inspeccionada y cliente develop-web-game ejecutado.
+
+## Vida temporal: edición discreta (2026-09-28)
+- Usuario rechaza la fila de ayuda y el botón Retirar extra. Eliminados. La cifra dorada +N existente pasa a ser el acceso para retirar la reserva, con tooltip y nombre accesible; los segmentos conservan gastar/restaurar. Sin nuevos elementos visibles.
+- 8 pruebas del inspector pasan. Revisión Playwright ratón y táctil conserva gastar/restaurar/retirar; cliente develop-web-game ejecutado.
+
+## Vendaje y Sangrado (2026-09-28)
+- Fuente: documento_maestro_ttrpg_roguelite_v0_2_40.docx, párrafos 423–430, 868 y 1764–1765; artículo Vendaje y su imagen de Forja comprobados mediante lectura del catálogo, sin escrituras remotas.
+- Vendaje integrado en HUD y flujo de consumibles: un dado sin importar el resultado, objetivo propio o criatura a Toque, consumo de una unidad, eliminación exclusiva de Sangrado, aventura enlazada y registro atómicos/idempotentes. Enemigos usan el sistema de pagos de consumibles existente. Imagen precargada y animación de entrega con tonos de lino.
+- Sangrado obliga a elegir al comienzo de la activación entre 1 Vida (temporal primero) y renunciar al Movimiento básico. Correr sigue permitido; quitar Sangrado después de elegir no devuelve ese Movimiento. No acumula; una aplicación durante la propia activación espera a la siguiente. Se elimina al terminar combate. El inspector permite aplicación/retirada; armas y modificadores Sangrado requieren daño real de Vida y respetan la supresión de rasgos. El distintivo espera a su fase del resultado. Se desactiva para perfiles Canvas el antiguo daño por gastar Velocidad del sistema de rol.
+- Elección protegida por transacción y clave de activación, control de ficha, revisión de aventura y rechazo de acuses antiguos; guarda movimiento/vida y registro juntos. Ataques, consumibles, Correr, movimiento y fin de activación esperan la elección pendiente.
+- Verificación final: 177 suites completas correctas, 1217 pruebas pasan y 1 omitida; compilación de producción correcta. Playwright escritorio 1280×900 y móvil 390×844: elección, panel ilustrado, pago, consumo único, retirada del estado y Vida intacta; sin errores JS. Capturas revisadas en output/bandage-review, cliente develop-web-game ejecutado. Prueba aislada disponible en http://127.0.0.1:4230/?item=bandage&zoom=3. No se ha desplegado ni modificado una partida real.
+
+## Efecto de Sangrado y cura de Vendaje (2026-09-28)
+- Petición: un estado visual reconocible sobre el token como Envenenado y una cura de Vendaje comparable a Presteza/Vitalidad. Añadido TokenBleedingEffect: manchas y regueros carmesí animados, textura Canvas compartida a 24 fps, círculo o máscara alfa fija de la figura; pausa con pestaña oculta, fotograma estático con movimiento reducido y limpieza al retirar estado. Respeta isPresentedBleeding para no anticipar la fase del ataque.
+- Vendaje usa modo propio del shader de campos existente: bandas luminosas entrelazadas color lino, barrido y cierre; sin botella ni imagen descargada en la animación. Mantiene la conexión entre criaturas cuando el origen es visible. El reloj del evento llega también al efecto de Sangrado: empieza a retirarlo a los 1050 ms y termina con fundido. Reaplicar interrumpe correctamente la retirada.
+- 100 pruebas / 7 suites pasan: reloj y no repetición de la cura, eliminación/recuperación del estado visual, máscaras, transferencia visible y consumo. Producción compila. Playwright confirma shader real ready, limpieza, reaplicación y ausencia de errores en círculo 2×2, figura 2×2 y móvil; consumo real revisado de nuevo en escritorio/móvil. Capturas inspeccionadas en output/bleeding-fx-review. Cliente develop-web-game ejecutado e inspeccionado.
+- Revisión repetible: http://127.0.0.1:4230/?item=bandage&combat=off&selected=0&review=bleeding&zoom=4 ; añadir cutout=1 para figura transparente. Botones Aplicar Sangrado / Ver Vendaje exclusivos de la maqueta. Pendiente únicamente de valoración estética del usuario, sin cambios en reglas ni despliegue.

@@ -7,9 +7,10 @@ import { Sword, Shield, Zap, Gem, LockKeyhole, RefreshCw } from 'lucide-react';
 import HexIcon from './HexIcon';
 import RogueliteTalentsPanel from './RogueliteTalentsPanel';
 import RogueliteInventoryCard from './RogueliteInventoryCard';
+import EquipmentHandsIndicator from './EquipmentHandsIndicator';
 import LoadingImage from './LoadingImage';
 import { db } from '../firebase';
-import { collection, getDocs, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { useCustomEquipmentImages, getCustomImage } from '../hooks/useCustomEquipmentImages';
 
 import { normalizeGlossaryWord, getGlossaryTooltipId } from '../utils/glossary';
@@ -18,7 +19,12 @@ import {
     normalizeEquippedWeaponSets,
     resolveEquippedWeaponSet,
     resolveEquippedHandOccupancy,
+    resolveEquippedItemUsages,
     resolveEquipmentHandsRequired,
+    createEquipmentTemplateId,
+    materializeEquipmentInstances,
+    resolveEquipmentInstanceId,
+    resolveBeltSlotCount,
 } from '../features/roguelite/equipmentPool';
 
 const INVENTORY_CATEGORIES = [
@@ -33,6 +39,31 @@ const normalizeInventorySearch = (value) => String(value || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
+
+const resolveItemLore = (item = {}) => (
+    item.lore || item.descripcionLore || item.flavorText || item.flavourText || ''
+);
+
+const createCatalogLookupKeys = (item = {}, category = 'objects') => {
+    const payload = item.payload && typeof item.payload === 'object' ? item.payload : item;
+    const name = payload.name || payload.nombre || item.name || item.nombre || '';
+    const explicitIds = [
+        payload.templateId,
+        payload.catalogId,
+        payload.id,
+        item.templateId,
+        item.catalogId,
+        item.id,
+    ].filter(Boolean).map((id) => `id:${String(id).trim().toLowerCase()}`);
+    const templateId = createEquipmentTemplateId({ ...item, ...payload }, category);
+    const normalizedName = normalizeInventorySearch(name).trim();
+
+    return [...new Set([
+        ...explicitIds,
+        templateId ? `id:${String(templateId).trim().toLowerCase()}` : '',
+        normalizedName ? `name:${category}:${normalizedName}` : '',
+    ].filter(Boolean))];
+};
 
 const resolveActionCost = (value) => {
     const rawValue = String(value || '').trim();
@@ -54,6 +85,10 @@ const resolveVisibleTraits = (item, handsRequired) => {
 
     return traits.filter((trait) => !/(^|\W)(dos manos|2 manos|a dos manos|two handed|two-handed)(\W|$)/i.test(trait));
 };
+
+const resolveArmorDefenseValue = (armor = {}) => String(
+    armor.defenseClass ?? armor.cd ?? armor.defensa ?? armor.defense ?? '',
+).trim();
 
 const RARITIES = [
     { id: 'comun', label: 'Común', color: 'bg-slate-600 border-slate-400 text-slate-200' },
@@ -339,64 +374,53 @@ const LoadoutView = ({
         if (!traitName) return null;
 
         const normalizedTrait = normalizeGlossaryWord(traitName);
-        const glossaryEntry = (glossary || []).find(g => normalizeGlossaryWord(g.word) === normalizedTrait);
+        const detailSeparator = traitName.indexOf(':');
+        const traitLabel = detailSeparator >= 0 ? traitName.slice(0, detailSeparator).trim() : traitName;
+        const traitDetail = detailSeparator >= 0 ? traitName.slice(detailSeparator + 1).trim() : '';
+        const normalizedLabel = normalizeGlossaryWord(traitLabel);
+        const glossaryEntry = (glossary || []).find((entry) => {
+            const normalizedWord = normalizeGlossaryWord(entry.word);
+            return normalizedWord === normalizedTrait || normalizedWord === normalizedLabel;
+        });
+
+        const content = (
+            <>
+                {traitLabel}
+                {traitDetail && <span className="noma-loadout-trait__detail">: {traitDetail}</span>}
+            </>
+        );
 
         if (glossaryEntry) {
             return (
                 <span
                     key={i}
-                    className="text-[8px] px-1.5 py-0.5 rounded bg-slate-800/90 text-[#f0e6d2] border border-slate-700 uppercase cursor-help hover:border-[#c8aa6e] transition-colors shadow-sm"
+                    className="noma-loadout-trait is-defined"
                     data-tooltip-id="trait-tooltip"
                     data-tooltip-content={glossaryEntry.info}
                     style={glossaryEntry.color ? { color: glossaryEntry.color } : {}}
                 >
-                    {traitName}
+                    {content}
                 </span>
             );
         }
 
         return (
-            <span key={i} className="text-[8px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-700 uppercase">
-                {traitName}
+            <span key={i} className="noma-loadout-trait">
+                {content}
             </span>
         );
     };
 
-    // Fetch custom items and accessories
+    // Both role-playing and roguelite sheets share the Forge catalog.
     React.useEffect(() => {
-        if (rogueliteRole === 'player') {
-            setCustomItems([]);
-            setAccessories([]);
-            return undefined;
-        }
-
-        const fetchCustomItems = async () => {
-            try {
-                const snap = await getDocs(collection(db, 'customItems'));
-                const fetched = snap.docs.map(d => d.data());
-                setCustomItems(fetched);
-            } catch (error) {
-                console.error("Error fetching custom items:", error);
-            }
-        };
-
-        const fetchAccessories = async () => { // Add fetch function
-            try {
-                const snap = await getDocs(collection(db, 'accessories'));
-                const fetched = snap.docs.map(d => {
-                    const data = d.data();
-                    return { ...data, id: data.id || d.id };
-                });
-                setAccessories(fetched);
-            } catch (error) {
-                console.error("Error fetching accessories:", error);
-            }
-        };
-
-        fetchCustomItems();
-        fetchAccessories(); // Call fetch function
-        return undefined;
-    }, [rogueliteRole]);
+        const subscribe = (name, setter) => onSnapshot(collection(db, name), snapshot => {
+            setter(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.data().id || doc.id }))
+                .filter(item => !item.deleted));
+        }, error => console.error(`Error loading ${name}:`, error));
+        const stopItems = subscribe('customItems', setCustomItems);
+        const stopAccessories = subscribe('accessories', setAccessories);
+        return () => { stopItems?.(); stopAccessories?.(); };
+    }, []);
 
     // Local editing state
     const [editingTitle, setEditingTitle] = useState('');
@@ -447,19 +471,7 @@ const LoadoutView = ({
         [selectedHandItems],
     );
 
-    // Calculate initial belt count based on equipped items as fallback
-    const initialBeltCount = useMemo(() => {
-        const indices = Object.entries(equippedItems)
-            .filter(([k, v]) => k.startsWith('belt_') && v)
-            .map(([k]) => parseInt(k.split('_')[1], 10));
-        const maxIndex = Math.max(-1, ...indices);
-        return Math.max(3, maxIndex + 1);
-    }, [equippedItems]);
-
-    // Use persisted belt slot count if available, otherwise fallback to calculated initial count
-    const beltSlotCount = useMemo(() => {
-        return dndClass.equippedItems?.beltSlotCount || initialBeltCount;
-    }, [dndClass.equippedItems?.beltSlotCount, initialBeltCount]);
+    const beltSlotCount = useMemo(() => resolveBeltSlotCount(equippedItems), [equippedItems]);
 
     // Calculate total physical load
     const totalPhysicalLoad = useMemo(() => {
@@ -581,13 +593,13 @@ const LoadoutView = ({
         };
 
         if (Array.isArray(rawEquipment)) {
-            return sortByManualOrder(rawEquipment.map((item, index) => ({
+            return sortByManualOrder(materializeEquipmentInstances(rawEquipment.map((item, index) => ({
                 ...item,
                 _category: item._category || item.category || 'objects',
                 _index: index,
                 _sourcePosition: index,
                 _inventorySourceKey: `array:${index}`,
-            })));
+            }))));
         }
 
         const list = [];
@@ -603,8 +615,27 @@ const LoadoutView = ({
                 });
             });
         });
-        return sortByManualOrder(list);
+        return sortByManualOrder(materializeEquipmentInstances(list));
     }, [rawEquipment]);
+
+    const catalogLoreByKey = useMemo(() => {
+        const index = new Map();
+        const addItems = (items, category) => {
+            (Array.isArray(items) ? items : []).forEach((entry) => {
+                const payload = entry?.payload && typeof entry.payload === 'object' ? entry.payload : entry;
+                const lore = resolveItemLore(payload) || resolveItemLore(entry);
+                if (!lore) return;
+                createCatalogLookupKeys(entry, category).forEach((key) => index.set(key, lore));
+            });
+        };
+
+        INVENTORY_CATEGORIES.forEach(({ id: category }) => {
+            addItems(equipmentCatalog?.[category], category);
+        });
+        addItems(customItems, 'objects');
+        addItems(accessories, 'accessories');
+        return index;
+    }, [equipmentCatalog, customItems, accessories]);
 
     const abilityCatalog = useMemo(() => {
         const classAbilityPool = dndClass.classEquipmentPool?.abilities;
@@ -645,12 +676,38 @@ const LoadoutView = ({
     // `equipment` is already the authoritative source for the current phase:
     // the complete class pool during preparation and the persisted run inventory
     // once an adventure is active. Do not reconstruct ownership from display names.
-    const equipment = fullEquipment;
+    const equipment = useMemo(() => fullEquipment.map((item) => {
+        if (resolveItemLore(item)) return item;
+        const category = item._category || item.category || 'objects';
+        const lore = createCatalogLookupKeys(item, category)
+            .map((key) => catalogLoreByKey.get(key))
+            .find(Boolean);
+        return lore ? { ...item, lore, descripcionLore: lore } : item;
+    }), [fullEquipment, catalogLoreByKey]);
 
     // Get available weapons and armor from inventory
     const inventoryWeapons = useMemo(() => {
         return equipment.filter(item => item._category === 'weapons');
     }, [equipment]);
+
+    const inventoryCopyCounts = useMemo(() => {
+        const counts = new Map();
+        equipment.forEach((item) => {
+            const category = item._category || item.category || 'objects';
+            const key = `${category}:${createEquipmentTemplateId(item, category)}`;
+            counts.set(key, (counts.get(key) || 0) + 1);
+        });
+        return counts;
+    }, [equipment]);
+
+    const getInventoryCopyCount = (item) => {
+        const category = item._category || item.category || 'objects';
+        return inventoryCopyCounts.get(
+            `${category}:${createEquipmentTemplateId(item, category)}`,
+        ) || 1;
+    };
+
+    const getWeaponUsages = (item) => resolveEquippedItemUsages(equippedItems, item);
 
     const inventoryArmor = useMemo(() => {
         return equipment.filter(item => item._category === 'armor');
@@ -678,6 +735,9 @@ const LoadoutView = ({
                 item.rasgos,
                 item.trait,
                 item.description,
+                item.descripcion,
+                item.lore,
+                item.descripcionLore,
                 item.damage,
                 item.dano,
                 item.range,
@@ -1069,6 +1129,9 @@ const LoadoutView = ({
 
                                             const objectImage = getObjectImage(item, customEquipmentImages);
                                             const isWeapon = item._category === 'weapons' || item.itemType === 'weapon';
+                                            const equipmentUsages = isWeapon
+                                                ? getWeaponUsages(item)
+                                                : [];
                                             const handsRequired = isWeapon ? resolveEquipmentHandsRequired(item) : null;
                                             const supportsActionCost = item._category === 'weapons' || item._category === 'abilities';
                                             const actionCost = supportsActionCost
@@ -1114,6 +1177,8 @@ const LoadoutView = ({
                                                         visibleTraits={visibleTraits}
                                                         glossary={glossary}
                                                         proficiencyWarning={rogueliteRole !== 'legacy' ? proficiencyWarning : null}
+                                                        equipmentUsages={equipmentUsages}
+                                                        copyCount={getInventoryCopyCount(item)}
                                                         canDrag={canReorder}
                                                         onDragPointerDown={canReorder ? (event) => beginInventoryReorder(event, item) : undefined}
                                                         onDragKeyDown={canReorder ? (event) => {
@@ -1174,8 +1239,8 @@ const LoadoutView = ({
                                         </div>
                                         <div key={`weapon-set-${selectedWeaponSet}`} className="grid grid-cols-2 gap-6 noma-weapon-slots-container">
                                             {[
-                                                { key: 'mainHand', label: 'Mano Hábil', badge: 'HÁBIL', badgeClass: 'bg-green-900/40 text-green-400' },
-                                                { key: 'offHand', label: 'Mano Torpe', badge: 'TORPE', badgeClass: 'bg-red-900/40 text-red-400' }
+                                                { key: 'offHand', label: 'Mano Torpe', badge: 'TORPE', badgeClass: 'is-off-hand' },
+                                                { key: 'mainHand', label: 'Mano Hábil', badge: 'HÁBIL', badgeClass: 'is-main-hand' }
                                             ].map(({ key, label, badge, badgeClass }) => {
                                                 const isOccupiedByTwoHanded = handOccupancy?.blockedSlot === key;
                                                 const occupyingItem = isOccupiedByTwoHanded ? handOccupancy.item : null;
@@ -1185,9 +1250,6 @@ const LoadoutView = ({
                                                 const rarityColors = equippedItem ? getRarityColors(equippedItem, rarityColorMap) : null;
 
                                                 const weaponImage = equippedItem ? getObjectImage(equippedItem, customEquipmentImages) : null;
-                                                const occupyingWeaponImage = occupyingItem
-                                                    ? getObjectImage(occupyingItem, customEquipmentImages)
-                                                    : null;
 
                                                 return (
                                                     <div key={key} className={`relative group ${isSlotActive ? 'z-50' : 'z-10'}`}>
@@ -1200,12 +1262,10 @@ const LoadoutView = ({
                                                             }}
                                                             role={isOccupiedByTwoHanded ? 'status' : undefined}
                                                             aria-disabled={isOccupiedByTwoHanded || undefined}
-                                                            aria-label={isOccupiedByTwoHanded
-                                                                ? `${label} ocupada por ${occupyingItem?.name || 'arma a dos manos'}`
-                                                                : undefined}
-                                                            className={`h-52 border-2 rounded-lg flex flex-col items-center justify-center transition-all cursor-pointer relative overflow-hidden p-3
+                                                            aria-label={isOccupiedByTwoHanded ? `${label} ocupada por ${occupyingItem.name}` : undefined}
+                                                            className={`noma-loadout-hand-slot h-52 border-2 rounded-lg flex flex-col items-center justify-center transition-all cursor-pointer relative overflow-hidden p-3
                                                                 ${isOccupiedByTwoHanded
-                                                                    ? 'cursor-not-allowed border-[#c8aa6e]/30 bg-[#0b1120]'
+                                                                    ? 'cursor-default border-[#c8aa6e]/30 bg-[#0b1120]'
                                                                     : equippedItem
                                                                     ? proficiencyWarning
                                                                         ? 'border-orange-500/50'
@@ -1218,24 +1278,23 @@ const LoadoutView = ({
                                                         >
                                                             {isOccupiedByTwoHanded ? (
                                                                 <>
-                                                                    {occupyingWeaponImage && (
+                                                                    {getObjectImage(occupyingItem, customEquipmentImages) && (
                                                                         <LoadingImage
-                                                                            src={occupyingWeaponImage}
+                                                                            src={getObjectImage(occupyingItem, customEquipmentImages)}
                                                                             alt=""
                                                                             aria-hidden="true"
-                                                                            imageClassName="absolute inset-0 h-full w-full scale-105 object-cover opacity-20 grayscale"
+                                                                            imageClassName="absolute inset-0 h-full w-full object-cover opacity-25 grayscale"
                                                                             skeletonClassName="bg-[#0b1120]"
                                                                             showFailureFallback={false}
                                                                         />
                                                                     )}
-                                                                    <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(11,17,32,0.7),rgba(11,17,32,0.94))]"></div>
-                                                                    <LockKeyhole className="relative z-10 mb-3 h-7 w-7 text-[#c8aa6e]/80" />
-                                                                    <span className="relative z-10 text-center font-['Cinzel'] text-[11px] font-bold uppercase tracking-[0.18em] text-[#d8c18d]">
-                                                                        Arma a dos manos
-                                                                    </span>
-                                                                    <span className="relative z-10 mt-2 max-w-full truncate px-3 text-center text-[10px] uppercase tracking-[0.12em] text-slate-500">
-                                                                        Ocupada por {occupyingItem?.name}
-                                                                    </span>
+                                                                    <div className="absolute inset-0 bg-gradient-to-t from-[#0b1120]/95 via-[#0b1120]/60 to-[#0b1120]/30" />
+                                                                    <div className="noma-hand-occupied-content">
+                                                                        <EquipmentHandsIndicator usages={[{ hand: 'both', weaponSetIndex: selectedWeaponSet }]} />
+                                                                        <span className="noma-hand-occupied-content__label">A dos manos</span>
+                                                                        <span className="noma-hand-occupied-content__name">{occupyingItem.name}</span>
+                                                                        <span className="noma-hand-occupied-content__hint">Mano de apoyo</span>
+                                                                    </div>
                                                                 </>
                                                             ) : equippedItem ? (
                                                                 <>
@@ -1296,27 +1355,30 @@ const LoadoutView = ({
                                                                     </span>
 
                                                                     {/* Stats */}
-                                                                    <div className="flex flex-wrap justify-center gap-x-3 gap-y-0.5 mt-2 text-[10px] relative z-10">
+                                                                    <dl className="noma-loadout-weapon-stats">
                                                                         {(equippedItem.damage || equippedItem.dano) && (
-                                                                            <span className="text-red-300">
-                                                                                <span className="text-slate-500">Daño:</span> {equippedItem.damage || equippedItem.dano}
-                                                                            </span>
+                                                                            <div>
+                                                                                <dt>Daño</dt>
+                                                                                <dd className="noma-loadout-weapon-stats__damage">{equippedItem.damage || equippedItem.dano}</dd>
+                                                                            </div>
                                                                         )}
                                                                         {(equippedItem.range || equippedItem.alcance) && (
-                                                                            <span className="text-slate-300">
-                                                                                <span className="text-slate-500">Alc:</span> {equippedItem.range || equippedItem.alcance}
-                                                                            </span>
+                                                                            <div>
+                                                                                <dt>Alcance</dt>
+                                                                                <dd>{equippedItem.range || equippedItem.alcance}</dd>
+                                                                            </div>
                                                                         )}
                                                                         {(equippedItem.consumption || equippedItem.consumo) && (
-                                                                            <span className="text-yellow-300">
-                                                                                <span className="text-slate-500">Coste:</span> {equippedItem.consumption || equippedItem.consumo}
-                                                                            </span>
+                                                                            <div>
+                                                                                <dt>Coste</dt>
+                                                                                <dd className="noma-loadout-weapon-stats__cost">{equippedItem.consumption || equippedItem.consumo}</dd>
+                                                                            </div>
                                                                         )}
-                                                                    </div>
+                                                                    </dl>
 
                                                                     {/* Traits */}
                                                                     {(equippedItem.traits || equippedItem.rasgos || equippedItem.trait) && (
-                                                                        <div className="flex flex-wrap justify-center gap-1 mt-2 relative z-10">
+                                                                        <div className="noma-loadout-traits">
                                                                             {(equippedItem.traits || equippedItem.rasgos || equippedItem.trait).toString().split(',').slice(0, 3).map((t, i) => renderTrait(t, i))}
                                                                         </div>
                                                                     )}
@@ -1335,9 +1397,11 @@ const LoadoutView = ({
                                                                             e.stopPropagation();
                                                                             handleUnequipItem(key);
                                                                         }}
-                                                                        className="absolute top-2 left-2 p-1 bg-red-500/20 hover:bg-red-500/40 rounded text-red-400 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                                                                        className="noma-loadout-slot-remove"
+                                                                        aria-label={`Desequipar ${equippedItem.name}`}
+                                                                        title={`Desequipar ${equippedItem.name}`}
                                                                     >
-                                                                        <FiX className="w-3 h-3" />
+                                                                        <FiX aria-hidden="true" />
                                                                     </button>
                                                                 </>
                                                             ) : (
@@ -1352,15 +1416,13 @@ const LoadoutView = ({
                                                         {isOccupiedByTwoHanded && (
                                                             <div
                                                                 aria-hidden="true"
-                                                                className={`pointer-events-none absolute top-1/2 z-20 h-px w-6 -translate-y-1/2 bg-gradient-to-r from-[#c8aa6e]/20 via-[#c8aa6e] to-[#c8aa6e]/20 ${key === 'offHand' ? '-left-6' : '-right-6'}`}
-                                                            >
-                                                                <span className={`absolute top-1/2 h-2 w-2 -translate-y-1/2 rotate-45 border border-[#c8aa6e] bg-[#0b1120] ${key === 'offHand' ? '-left-1' : '-right-1'}`}></span>
-                                                            </div>
+                                                                data-testid="two-handed-connector"
+                                                                data-connector-direction={key === 'offHand' ? 'right' : 'left'}
+                                                                className={`noma-two-handed-connector ${key === 'offHand' ? 'is-right' : 'is-left'}`}
+                                                            />
                                                         )}
-
-                                                        {/* Hand Badge */}
-                                                        <div className="absolute top-2 right-2">
-                                                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${isOccupiedByTwoHanded ? 'bg-[#c8aa6e]/10 text-[#c8aa6e]/70' : badgeClass}`}>
+                                                        <div className="noma-hand-slot-marker">
+                                                            <span className={`noma-hand-slot-marker__role ${isOccupiedByTwoHanded ? 'is-occupied' : badgeClass}`}>
                                                                 {isOccupiedByTwoHanded ? 'OCUPADA' : badge}
                                                             </span>
                                                         </div>
@@ -1378,14 +1440,13 @@ const LoadoutView = ({
                                                                 </div>
                                                                 {inventoryWeapons.length > 0 ? (
                                                                     inventoryWeapons.map((weapon, idx) => {
-                                                                        const isAlreadyEquipped =
-                                                                            (selectedHandItems.mainHand && selectedHandItems.mainHand._index === weapon._index) ||
-                                                                            (selectedHandItems.offHand && selectedHandItems.offHand._index === weapon._index);
+                                                                        const weaponUsages = getWeaponUsages(weapon);
+                                                                        const isAlreadyEquipped = weaponUsages.length > 0;
                                                                         const warning = getWeaponProficiencyWarning(weapon);
 
                                                                         return (
                                                                             <button
-                                                                                key={weapon.id || weapon.name || idx}
+                                                                                key={resolveEquipmentInstanceId(weapon) || weapon.id || weapon.name || idx}
                                                                                 onClick={() => handleEquipItem(key, weapon)}
                                                                                 disabled={isAlreadyEquipped || Boolean(warning)}
                                                                                 title={warning || undefined}
@@ -1425,8 +1486,8 @@ const LoadoutView = ({
                                                                                         <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />
                                                                                         No equipable
                                                                                     </span>
-                                                                                ) : isAlreadyEquipped && (
-                                                                                    <span className="text-[10px] text-slate-500 uppercase">Equipado</span>
+                                                                                ) : (
+                                                                                    <EquipmentHandsIndicator usages={weaponUsages} />
                                                                                 )}
                                                                             </button>
                                                                         );
@@ -1460,6 +1521,10 @@ const LoadoutView = ({
                                                 const proficiencyWarning = equippedArmor ? getArmorProficiencyWarning(equippedArmor) : null;
                                                 const isSlotActive = activeSlotSelector === 'body';
                                                 const rarityColors = equippedArmor ? getRarityColors(equippedArmor, rarityColorMap) : null;
+                                                const armorDefense = equippedArmor ? resolveArmorDefenseValue(equippedArmor) : '';
+                                                const armorTraits = equippedArmor
+                                                    ? resolveVisibleTraits(equippedArmor, 1)
+                                                    : [];
 
                                                 // Helper to get armor image
                                                 const getArmorImage = (armorName) => {
@@ -1491,7 +1556,7 @@ const LoadoutView = ({
                                                                 e.stopPropagation();
                                                                 setActiveSlotSelector(isSlotActive ? null : 'body');
                                                             }}
-                                                            className={`h-32 border-2 rounded-lg flex flex-col items-center justify-center transition-all cursor-pointer relative overflow-hidden p-3
+                                                            className={`noma-armor-slot-card border-2 rounded-lg flex flex-col items-center justify-center transition-all cursor-pointer relative overflow-hidden p-3
                                                                 ${equippedArmor
                                                                     ? proficiencyWarning
                                                                         ? 'border-orange-500/50'
@@ -1559,21 +1624,38 @@ const LoadoutView = ({
                                                                     )}
 
                                                                     {/* Name */}
-                                                                    <span className="text-[#f0e6d2] font-['Cinzel'] text-sm uppercase tracking-wider text-center px-2 font-bold relative z-10">
+                                                                    <span className="noma-armor-slot-card__name text-[#f0e6d2] font-['Cinzel'] text-sm uppercase tracking-wider text-center px-2 font-bold relative z-10">
                                                                         {equippedArmor.name}
                                                                     </span>
 
-                                                                    {/* Stats */}
-                                                                    {(equippedArmor.defense || equippedArmor.defensa) && (
-                                                                        <span className="text-[10px] text-blue-300 mt-1 relative z-10">
-                                                                            <span className="text-slate-500">Defensa:</span> {equippedArmor.defense || equippedArmor.defensa}
-                                                                        </span>
+                                                                    {/* Passive defense threshold */}
+                                                                    {armorDefense && (
+                                                                        <div
+                                                                            className="noma-armor-defense-readout"
+                                                                            role="img"
+                                                                            aria-label={`CD ${armorDefense}: pierdes un bloque de Vida por cada ${armorDefense} de Presión`}
+                                                                        >
+                                                                            <div className="noma-armor-defense-emblem" aria-hidden="true">
+                                                                                <Shield />
+                                                                                <span className="noma-armor-defense-emblem__value">
+                                                                                    <small>CD</small>
+                                                                                    <strong>{armorDefense}</strong>
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="noma-armor-defense-rule" aria-hidden="true">
+                                                                                <span>Defensa pasiva</span>
+                                                                                <p>
+                                                                                    <strong>1 bloque</strong>
+                                                                                    <small>cada {armorDefense} de Presión</small>
+                                                                                </p>
+                                                                            </div>
+                                                                        </div>
                                                                     )}
 
-                                                                    {/* Traits */}
-                                                                    {(equippedArmor.traits || equippedArmor.rasgos || equippedArmor.trait) && (
-                                                                        <div className="flex flex-wrap justify-center gap-1 mt-1 relative z-10">
-                                                                            {(equippedArmor.traits || equippedArmor.rasgos || equippedArmor.trait).toString().split(',').slice(0, 3).map((t, i) => renderTrait(t, i))}
+                                                                    {/* Passive protections */}
+                                                                    {armorTraits.length > 0 && (
+                                                                        <div className="noma-loadout-traits noma-armor-protections">
+                                                                            {armorTraits.slice(0, 3).map((trait, index) => renderTrait(trait, index))}
                                                                         </div>
                                                                     )}
 
@@ -1583,9 +1665,11 @@ const LoadoutView = ({
                                                                             e.stopPropagation();
                                                                             handleUnequipItem('body');
                                                                         }}
-                                                                        className="absolute top-2 right-2 p-1 bg-red-500/20 hover:bg-red-500/40 rounded text-red-400 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                                                                        className="noma-loadout-slot-remove"
+                                                                        aria-label={`Desequipar ${equippedArmor.name}`}
+                                                                        title={`Desequipar ${equippedArmor.name}`}
                                                                     >
-                                                                        <FiX className="w-3 h-3" />
+                                                                        <FiX aria-hidden="true" />
                                                                     </button>
 
                                                                     {/* Proficiency Warning */}
@@ -1619,6 +1703,7 @@ const LoadoutView = ({
                                                                     inventoryArmor.map((armor, idx) => {
                                                                         const isAlreadyEquipped = equippedItems.body && equippedItems.body._index === armor._index;
                                                                         const warning = getArmorProficiencyWarning(armor);
+                                                                        const armorOptionDefense = resolveArmorDefenseValue(armor);
 
                                                                         return (
                                                                             <button
@@ -1647,7 +1732,7 @@ const LoadoutView = ({
                                                                                 <div className="flex-1 min-w-0">
                                                                                     <div className="text-sm text-[#f0e6d2] font-medium truncate">{armor.name}</div>
                                                                                     <div className="flex gap-2 text-[10px]">
-                                                                                        {armor.defense && <span className="text-blue-300">Defensa: {armor.defense}</span>}
+                                                                                        {armorOptionDefense && <span className="text-blue-300">CD {armorOptionDefense}</span>}
                                                                                         {armor.category && <span className="text-slate-500">{armor.category}</span>}
                                                                                     </div>
                                                                                     {warning && (
@@ -2064,7 +2149,7 @@ const LoadoutView = ({
 
                                                                     {/* Traits */}
                                                                     {(equippedAccessory.traits || equippedAccessory.rasgos || equippedAccessory.trait) && (
-                                                                        <div className="flex flex-wrap justify-center gap-1 mt-1 relative z-10">
+                                                                        <div className="noma-loadout-traits noma-loadout-traits--compact">
                                                                             {(equippedAccessory.traits || equippedAccessory.rasgos || equippedAccessory.trait).toString().split(',').slice(0, 3).map((t, i) => renderTrait(t, i))}
                                                                         </div>
                                                                     )}

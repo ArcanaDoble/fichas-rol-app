@@ -1,0 +1,6 @@
+/* Approved dual-weapon composition, shared by preparation and incoming attacks. */
+.combat-dual-weapon-art { position: absolute; inset: 0; }
+.combat-dual-weapon-art > div { position: absolute; inset-block: 0; width: 57%; }
+.combat-dual-weapon-art > div:first-child { left: 0; mask-image: linear-gradient(90deg, #000 66%, transparent); }
+.combat-dual-weapon-art > div:last-child { right: 0; mask-image: linear-gradient(270deg, #000 66%, transparent); }
+.combat-dual-weapon-art img { width: 100%; height: 100%; object-fit: cover; object-position: 56% 42%; }

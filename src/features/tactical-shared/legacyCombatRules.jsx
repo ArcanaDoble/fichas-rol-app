@@ -1,3 +1,4 @@
+import { getTerrainMovementCost } from './tarTerrain';
 import React from 'react';
 import { DEFAULT_STATUS_EFFECTS, PRONE_STATUS_IDS } from '../../utils/statusEffects';
 import {
@@ -1020,13 +1021,15 @@ export const getMobileTacticalMoveOptions = (token, items = [], config = {}, ran
 
     for (let dx = -range; dx <= range; dx += 1) {
         for (let dy = -range; dy <= range; dy += 1) {
-            const cost = Math.max(Math.abs(dx), Math.abs(dy));
+            let cost = Math.max(Math.abs(dx), Math.abs(dy));
             if (cost <= 0 || cost > range) continue;
 
             const cell = { x: originCell.x + dx, y: originCell.y + dy };
             if (!isGridCellInsideBounds(cell, config)) continue;
 
             const nextPosition = getCombatTokenPositionForPrimaryCell(token, cell, config);
+            cost = getTerrainMovementCost({ token, from: token, to: nextPosition, items, config });
+            if (cost > range) continue;
             const occupiedCells = getTokenOccupiedCellsAtPosition(token, nextPosition, config);
             if (occupiedCells.some((occupiedCell) => !isGridCellInsideBounds(occupiedCell, config))) continue;
 

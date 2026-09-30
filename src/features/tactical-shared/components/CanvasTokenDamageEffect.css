@@ -1,0 +1,28 @@
+.noma-token-damage-effect {
+    position: absolute;
+    inset: 2px;
+    z-index: 34;
+    overflow: hidden;
+    pointer-events: none;
+    border-radius: 4px;
+    opacity: 0;
+    background: radial-gradient(circle at 43% 43%, rgba(255, 224, 195, .48), rgba(173, 54, 62, .55) 38%, rgba(89, 23, 35, .38) 73%, transparent 100%);
+    mix-blend-mode: overlay;
+    animation: noma-token-impact-wash var(--token-impact-duration, .82s) ease-out both;
+}
+.noma-token-damage-effect--round { border-radius: 50%; }
+.noma-token-damage-effect::after {
+    content: '';
+    position: absolute;
+    top: 43%;
+    left: -30%;
+    width: 160%;
+    height: 14%;
+    transform: rotate(-30deg) scaleX(.4);
+    background: linear-gradient(0deg, transparent, rgba(255, 160, 134, .24) 35%, rgba(255, 238, 212, .74) 55%, transparent);
+    filter: blur(2px);
+    animation: noma-token-impact-flare var(--token-impact-flare-duration, .55s) ease-out both;
+}
+@keyframes noma-token-impact-wash { 0% { opacity: 0; } 9% { opacity: .92; } 22% { opacity: .5; } 55% { opacity: .22; } 100% { opacity: 0; } }
+@keyframes noma-token-impact-flare { 0% { opacity: 0; transform: rotate(-30deg) translateX(-28%) scaleX(.4); } 20% { opacity: .9; } 100% { opacity: 0; transform: rotate(-30deg) translateX(15%) scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .noma-token-damage-effect { animation: none; display: none; } }

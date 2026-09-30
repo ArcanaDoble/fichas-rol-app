@@ -57,6 +57,23 @@ const createClassSheet = (overrides = {}) => ({
   ...overrides,
 });
 
+test('Forge rapier changes refresh equipped and inventory copies without resetting runtime resources or restoring dropped items', () => {
+  const rapier = { id: 'Estoque', templateId: 'Estoque', instanceId: 'copy-rapier', name: 'Estoque', dano: 'd6', rasgos: ['Crítico'], quantity: 1 };
+  const sheet = createClassSheet({ equipment: { weapons: [rapier] }, equippedItems: { mainHand: rapier } });
+  const token = syncCanvasTokenWithSheet({ id: 'rogue' }, sheet);
+  token.stats.vida.current = 3;
+  token.stats.recurso.current = 1;
+  const catalogs = { armas: [{ id: 'Estoque', nombre: 'Estoque', dano: '1d6 Físico', alcance: 'Cercano', competence: 'Marcial', handsRequired: 1, rasgos: ['Perforante', 'Duelista'] }] };
+  const synced = syncCanvasTokenWithSheet(token, sheet, catalogs);
+  expect(synced.equippedItems[0]).toMatchObject({ instanceId: 'copy-rapier', rasgos: ['Perforante', 'Duelista'], competence: 'Marcial', canvasSlot: 'mainHand' });
+  expect(synced.inventory[0]).toMatchObject({ instanceId: 'copy-rapier', rasgos: ['Perforante', 'Duelista'], quantity: 1 });
+  expect(synced.stats).toEqual(token.stats);
+  expect(synced.runRevision).toBe(token.runRevision);
+  const dropped = syncCanvasTokenWithSheet({ ...token, inventory: [], equipmentLoadout: { mainHand: null, weaponSets: [{ mainHand: null, offHand: null }] } }, sheet, catalogs);
+  expect(dropped.inventory).toEqual([]);
+  expect(dropped.equippedItems).toEqual([]);
+});
+
 describe('Canvas Roguelite class adapter', () => {
   it('creates the five editable Canvas statistics from the class profile', () => {
     expect(createRogueliteTokenStats(createClassSheet())).toEqual({
@@ -291,4 +308,42 @@ describe('Canvas Roguelite class adapter', () => {
     expect(synced.equippedItems).toEqual([]);
     expect(synced.equipmentLoadout.mainHand).toBeNull();
   });
+
+  it('keeps an explicitly emptied runtime inventory empty while a Canvas transfer is pending', () => {
+    const sheet = createClassSheet();
+    const synced = syncCanvasTokenWithSheet({
+      id: 'token-1',
+      profileType: 'rogueliteClass',
+      linkedClassId: 'barbarian',
+      inventory: [],
+      equipmentLoadout: {
+        activeWeaponSet: 0,
+        weaponSets: [{ mainHand: null, offHand: null }],
+        belt_0: null,
+      },
+      runtimeDirty: true,
+    }, sheet, {}, { preserveTokenState: true });
+
+    expect(synced.inventory).toEqual([]);
+    expect(synced.runtimeDirty).toBe(true);
+  });
+});
+
+
+describe('legacy weapon set synchronization', () => {
+  const axe = { name: 'Hacha', damage: '1d8', consumption: '🟡', type: 'weapon' };
+  const bow = { name: 'Arco', damage: '1d6', consumption: '🟡', type: 'weapon' };
+  test.each([0, 1])('only flattens weapons from active set %i, never loadout metadata', (activeWeaponSet) => {
+    const synced = syncLegacyTokenWithSheet({}, { equippedItems: {
+      mainHand: axe, offHand: null, activeWeaponSet, beltSlotCount: 2,
+      weaponSets: [{ mainHand: axe, offHand: null }, { mainHand: bow, offHand: null }],
+    } }, {}, { skipArmorSync: true });
+    expect(synced.equippedItems).toEqual([activeWeaponSet === 0 ? axe : bow]);
+  });
+});
+
+
+test('class mechanics retain the class name instead of an opaque template identifier', () => {
+  const token = syncCanvasTokenWithSheet({ id: 'hero' }, createClassSheet({ name: 'Guerrero', templateId: 'opaque-template-id' }));
+  expect(token.classIdentity).toBe('Guerrero');
 });

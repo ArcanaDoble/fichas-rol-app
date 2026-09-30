@@ -2,6 +2,8 @@ import {
   EQUIPMENT_CATEGORIES,
   normalizeEquippedWeaponSets,
   normalizeRogueliteEquipmentPool,
+  reconcileEquippedItemsWithInventory,
+  resolveEquipmentInstanceId,
 } from './equipmentPool';
 
 export const ROGUELITE_ACTIVE_RUN_VERSION = 2;
@@ -34,7 +36,7 @@ const createStat = (current, maximum, extra = {}) => {
   };
 };
 
-const resolveItemCategory = (item = {}) => {
+export const resolveItemCategory = (item = {}) => {
   const explicit = String(item._category || '').toLowerCase();
   if (EQUIPMENT_CATEGORIES.includes(explicit)) return explicit;
 
@@ -56,8 +58,20 @@ const normalizeRunInventory = (inventory) => {
 };
 
 const resolveInventoryItemId = (item = {}) => String(
-  item.templateId || item.catalogId || item.id || item.runItemId || item.name || item.nombre || '',
+  resolveEquipmentInstanceId(item)
+  || item.templateId || item.catalogId || item.id || item.name || item.nombre || '',
 ).trim();
+
+const resolveInventoryTrackingIds = (item = {}) => [
+  resolveInventoryItemId(item),
+  item.templateId,
+  item.catalogId,
+  item.id,
+].map((value) => String(value || '').trim()).filter(Boolean);
+
+const trackingIdsContainItem = (trackingIds, item) => (
+  resolveInventoryTrackingIds(item).some((id) => trackingIds.has(id))
+);
 
 const resolveInventoryIdentityKeys = (item) => {
   if (!item) return [];
@@ -65,7 +79,7 @@ const resolveInventoryIdentityKeys = (item) => {
     return [String(item).trim().toLowerCase()].filter(Boolean);
   }
   return [
-    item.templateId, item.catalogId, item.id, item.runItemId, item.name, item.nombre,
+    item.instanceId, item.runItemId, item.templateId, item.catalogId, item.id, item.name, item.nombre,
     item.payload?.templateId, item.payload?.catalogId, item.payload?.id,
     item.payload?.name, item.payload?.nombre,
   ]
@@ -84,32 +98,7 @@ const inventoryItemsMatch = (left, right) => {
 };
 
 export const pruneRogueliteEquippedItemsToInventory = (equippedItems = {}, inventory = {}) => {
-  const normalizedInventory = normalizeRunInventory(inventory);
-  const inventoryItems = EQUIPMENT_CATEGORIES.flatMap((category) => normalizedInventory[category]);
-  const keepIfOwned = (item) => (
-    item && inventoryItems.some((inventoryItem) => inventoryItemsMatch(item, inventoryItem))
-      ? item
-      : null
-  );
-  const normalizedLoadout = normalizeEquippedWeaponSets(equippedItems);
-  const weaponSets = normalizedLoadout.weaponSets.map((weaponSet) => ({
-    ...weaponSet,
-    mainHand: keepIfOwned(weaponSet.mainHand),
-    offHand: keepIfOwned(weaponSet.offHand),
-  }));
-  const prunedLoadout = {
-    ...normalizedLoadout,
-    weaponSets,
-    body: keepIfOwned(normalizedLoadout.body),
-    accessory_1: keepIfOwned(normalizedLoadout.accessory_1),
-    accessory_2: keepIfOwned(normalizedLoadout.accessory_2),
-  };
-
-  Object.keys(prunedLoadout).forEach((slot) => {
-    if (slot.startsWith('belt_')) prunedLoadout[slot] = keepIfOwned(prunedLoadout[slot]);
-  });
-
-  return normalizeEquippedWeaponSets(prunedLoadout);
+  return reconcileEquippedItemsWithInventory(equippedItems, normalizeRunInventory(inventory));
 };
 
 const resolveInventoryTemplateIds = (inventory) => (
@@ -128,12 +117,12 @@ const mergeInventorySources = (...sources) => {
   sources.forEach((source) => {
     const normalized = normalizeRunInventory(source);
     EQUIPMENT_CATEGORIES.forEach((category) => {
-      const seenKeys = new Set(merged[category].flatMap(resolveInventoryIdentityKeys));
+      const seenInstanceIds = new Set(merged[category].map(resolveInventoryItemId));
       normalized[category].forEach((item) => {
-        const itemKeys = resolveInventoryIdentityKeys(item);
-        if (itemKeys.some((key) => seenKeys.has(key))) return;
+        const instanceId = resolveInventoryItemId(item);
+        if (instanceId && seenInstanceIds.has(instanceId)) return;
         merged[category].push(item);
-        itemKeys.forEach((key) => seenKeys.add(key));
+        if (instanceId) seenInstanceIds.add(instanceId);
       });
     });
   });
@@ -150,6 +139,7 @@ const collectEquippedItems = (value, items = [], categoryHint = null) => {
   }
 
   Object.entries(value).forEach(([slot, entry]) => {
+    if (Array.isArray(value.weaponSets) && (slot === 'mainHand' || slot === 'offHand')) return;
     const nestedCategory = ['mainHand', 'offHand'].includes(slot)
       ? 'weapons'
       : (slot === 'body'
@@ -187,15 +177,29 @@ export const createPreparedRogueliteRunInventory = (sheetData = {}) => {
     // copia del inventario. Solo usamos el loadout como origen si no existe
     // ninguna pool; así no revivimos equipo retirado al actualizar la clase.
     : mergeInventorySources(classPool, equippedItemCandidates);
-  const selectedKeys = new Set([
+  const selectedCandidates = [
     ...equippedItemCandidates,
     ...(Array.isArray(sheetData.equippedSkillIds) ? sheetData.equippedSkillIds : []),
-  ].flatMap(resolveInventoryIdentityKeys));
+  ];
+  const selectedByCategory = Object.fromEntries(
+    EQUIPMENT_CATEGORIES.map((category) => [category, new Set()]),
+  );
+
+  selectedCandidates.forEach((selectedItem) => {
+    if (selectedItem == null) return;
+    const category = typeof selectedItem === 'object'
+      ? resolveItemCategory(selectedItem)
+      : 'abilities';
+    const matchIndex = preparationCandidates[category].findIndex((inventoryItem, index) => (
+      !selectedByCategory[category].has(index)
+      && inventoryItemsMatch(selectedItem, inventoryItem)
+    ));
+    if (matchIndex >= 0) selectedByCategory[category].add(matchIndex);
+  });
+
   return normalizeRunInventory(Object.fromEntries(EQUIPMENT_CATEGORIES.map((category) => [
     category,
-    preparationCandidates[category].filter((item) => (
-      resolveInventoryIdentityKeys(item).some((key) => selectedKeys.has(key))
-    )),
+    preparationCandidates[category].filter((item, index) => selectedByCategory[category].has(index)),
   ])));
 };
 
@@ -216,7 +220,7 @@ const pruneUnpreparedBaseItems = (sheetData, activeRun) => {
     category,
     [
       ...preparedInventory[category],
-      ...inventory[category].filter((item) => !baseIds.has(resolveInventoryItemId(item))),
+      ...inventory[category].filter((item) => !trackingIdsContainItem(baseIds, item)),
     ],
   ])));
 };
@@ -259,10 +263,10 @@ export const reconcileRogueliteRunInventory = (classEquipment, activeRun = {}) =
 
   const reconciled = Object.fromEntries(EQUIPMENT_CATEGORIES.map((category) => {
     const classItems = classPool[category].filter((item) => (
-      !removedBaseIds.has(resolveInventoryItemId(item))
+      !trackingIdsContainItem(removedBaseIds, item)
     ));
     const runtimeItems = runInventory[category].filter((item) => (
-      !hasBaseSnapshot || !previousBaseIds.has(resolveInventoryItemId(item))
+      !hasBaseSnapshot || !trackingIdsContainItem(previousBaseIds, item)
     ));
     const seen = new Set();
     const items = [...classItems, ...runtimeItems].filter((item) => {
@@ -322,7 +326,7 @@ export const flattenRogueliteRunInventory = (inventory) => {
       ...clone(item),
       _category: category,
       itemType: item.itemType || CATEGORY_TYPES[category],
-      runItemId: item.runItemId
+      runItemId: resolveEquipmentInstanceId(item)
         || `${item.templateId || item.id || item.name || item.nombre || category}:${index}`,
     }))
   ));
@@ -451,7 +455,9 @@ export const createRogueliteActiveRunFromToken = (
 ) => {
   const inventory = normalizeRunInventory(token?.inventory || previousRun?.inventory);
   const equipmentLoadout = token?.equipmentLoadout || previousRun?.equippedItems || {};
-  const inventoryIds = new Set(resolveInventoryTemplateIds(inventory));
+  const inventoryIds = new Set(
+    flattenRogueliteRunInventory(inventory).flatMap(resolveInventoryTrackingIds),
+  );
   const previousBaseIds = Array.isArray(previousRun?.baseInventoryTemplateIds)
     ? previousRun.baseInventoryTemplateIds
     : [];

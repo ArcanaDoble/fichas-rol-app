@@ -14,6 +14,57 @@ const createToken = () => ({
 });
 
 describe('CanvasTokenResources', () => {
+  it.each(['rogueliteClass', 'rogueliteEnemy'])('lets %s spend, correct and remove temporary Life without changing normal Life', profileType => {
+    const original = createToken();
+    original.profileType = profileType;
+    original.stats.vidaTemporal = { current: 2, max: 2, source: 'vitality-potion' };
+    const onUpdate = jest.fn();
+    const { container, rerender } = render(<CanvasTokenResources token={original} onUpdate={onUpdate} />);
+    const applyUpdate = () => {
+      const updated = { ...original, ...onUpdate.mock.calls.at(-1)[0] };
+      expect(updated.stats.vida).toEqual(original.stats.vida);
+      rerender(<CanvasTokenResources token={updated} onUpdate={onUpdate} />);
+      return updated;
+    };
+    fireEvent.click(screen.getByRole('button', { name: 'Bloque temporal 1: quitar 1 Vida temporal' }));
+    expect(applyUpdate().stats.vidaTemporal).toEqual({ current: 1, max: 2, source: 'vitality-potion' });
+    fireEvent.click(screen.getByRole('button', { name: 'Bloque temporal 1: quitar 1 Vida temporal' }));
+    expect(applyUpdate().stats.vidaTemporal.current).toBe(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Bloque temporal 2: restaurar Vida temporal a 2' }));
+    expect(applyUpdate().stats.vidaTemporal).toEqual({ current: 2, max: 2, source: 'vitality-potion' });
+    fireEvent.click(screen.getByRole('button', { name: 'Retirar toda la Vida temporal' }));
+    expect(applyUpdate().stats).not.toHaveProperty('vidaTemporal');
+    expect(container.querySelectorAll('[data-life-temporary]')).toHaveLength(0);
+    expect(screen.queryByLabelText('Vida temporal: 0')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retirar toda la Vida temporal' })).not.toBeInTheDocument();
+  });
+  it('removes an exhausted reserve and its empty slots', () => {
+    const token = createToken();
+    token.stats.vidaTemporal = { current: 0, max: 2 };
+    const onUpdate = jest.fn();
+    render(<CanvasTokenResources token={token} onUpdate={onUpdate} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Retirar toda la Vida temporal' }));
+    expect(onUpdate.mock.calls[0][0].stats).not.toHaveProperty('vidaTemporal');
+    expect(onUpdate.mock.calls[0][0].stats.vida).toEqual(token.stats.vida);
+  });
+  it('mirrors temporary Life on the same bar without adding it to normal Life or making it healable', () => {
+    const onUpdate = jest.fn();
+    const token = createToken();
+    const { container, rerender } = render(<CanvasTokenResources token={token} onUpdate={onUpdate} />);
+    const boosted = { ...token, stats: { ...token.stats, vidaTemporal: { current: 2, max: 2 } } };
+    rerender(<CanvasTokenResources token={boosted} onUpdate={onUpdate} />);
+    expect(screen.getByLabelText('Vida temporal: 2')).toHaveTextContent('+2');
+    expect(screen.getByLabelText('Máximo de Vida: 10')).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-life-temporary][data-filled="true"]')).toHaveLength(2);
+    expect(screen.getByRole('group', { name: 'Valor actual de Vida' }).children).toHaveLength(12);
+    fireEvent.click(screen.getByRole('button', { name: 'Fijar Vida en 10' }));
+    expect(onUpdate.mock.calls.at(-1)[0].stats.vidaTemporal.current).toBe(2);
+    rerender(<CanvasTokenResources token={{ ...boosted, stats: { ...boosted.stats, vidaTemporal: { current: 1, max: 2 } } }} onUpdate={onUpdate} />);
+    expect(container.querySelectorAll('[data-life-temporary][data-filled="true"]')).toHaveLength(1);
+    expect(screen.getByLabelText('Vida temporal: 1')).toHaveTextContent('+1');
+    rerender(<CanvasTokenResources token={token} onUpdate={onUpdate} />);
+    expect(container.querySelectorAll('[data-life-temporary]')).toHaveLength(0);
+  });
   it('shows all Roguelite stats and permits editing current and maximum values', () => {
     const onUpdate = jest.fn();
     render(<CanvasTokenResources token={createToken()} onUpdate={onUpdate} />);

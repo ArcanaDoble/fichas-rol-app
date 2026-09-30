@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
-import { AnimatePresence, motion } from 'framer-motion';
-import { Gem, Package, Shield, Sword, Zap } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { Gem, Hand, Package, Shield, Sword, Zap } from 'lucide-react';
 import RogueliteInventoryCard from '../../../components/RogueliteInventoryCard';
 import { useCustomEquipmentImages } from '../../../hooks/useCustomEquipmentImages';
 import { resolveEquipmentHandsRequired } from '../../roguelite/equipmentPool';
+import './CanvasLootVisual.css';
 import { getObjectImage } from '../../tactical-shared/components/TacticalAssetImage';
 
 const FALLBACK_RARITY_COLORS = {
@@ -131,9 +132,16 @@ const CanvasLootVisual = ({
     isPrimarySelectedLoot = false,
     glossary = [],
     rarityColorMap = {},
+    pickupRecipient = null,
+    pickupBlocked = false,
+    zoom = 1,
 }) => {
+    const reducedMotion = useReducedMotion();
     const rootRef = useRef(null);
+    const hoverTimerRef = useRef(null);
     const lastTouchTimeRef = useRef(0);
+    const [isFocused, setIsFocused] = useState(false);
+    const [imageFailed, setImageFailed] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
     const [mobileDismissed, setMobileDismissed] = useState(false);
     const [tooltipPosition, setTooltipPosition] = useState(null);
@@ -166,7 +174,7 @@ const CanvasLootVisual = ({
     };
 
     // If multi-selection is active, only the primary selected loot renders the grouped portal (unless individually hovered)
-    const shouldShow = (isHovered || (isSelected && (!isMultiSelection || isPrimarySelectedLoot)))
+    const shouldShow = (isFocused || isHovered || (isSelected && (!isMultiSelection || isPrimarySelectedLoot)))
         && !isDragging
         && !mobileDismissed;
 
@@ -182,7 +190,10 @@ const CanvasLootVisual = ({
         lastTouchTimeRef.current = Date.now();
     };
 
+    useEffect(() => () => clearTimeout(hoverTimerRef.current), []);
+
     const handlePointerEnter = (e) => {
+        clearTimeout(hoverTimerRef.current);
         if (Date.now() - lastTouchTimeRef.current < 600) return;
         if (e && e.pointerType === 'touch') return;
         setIsHovered(true);
@@ -201,64 +212,66 @@ const CanvasLootVisual = ({
     };
 
     const handlePointerLeave = () => {
-        setIsHovered(false);
-        setTooltipPosition(null);
+        clearTimeout(hoverTimerRef.current);
+        hoverTimerRef.current = setTimeout(() => setIsHovered(false), 180);
     };
 
     const currentItemAccent = resolveRarityAccent(item.lootItem || item, rarityColorMap);
     const { Icon: CurrentItemIcon } = resolvePresentation(item.lootItem || {});
 
+    const groundImage = getObjectImage(item.lootItem || item, customEquipmentImages) || item.img;
+    useEffect(() => setImageFailed(false), [groundImage]);
+
     return (
         <>
             <motion.div
                 ref={rootRef}
-                initial={{ opacity: 0, scale: 0.55, y: -8 }}
+                initial={reducedMotion ? false : { opacity: 0, scale: 0.85, y: -4 }}
                 animate={{
                     opacity: isDragging ? 0.76 : 1,
                     scale: isDragging ? 1.12 : (isSelected ? 1.08 : (isHovered ? 1.05 : 1)),
                     y: 0,
                 }}
-                transition={{ type: 'spring', stiffness: 430, damping: 24 }}
-                className="relative h-full w-full select-none"
+                transition={reducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 430, damping: 24 }}
+                className="noma-ground-loot relative h-full w-full select-none"
+                data-active={isSelected || isHovered || isFocused}
+                data-dragging={isDragging}
+                data-ready={Boolean(pickupRecipient)}
+                style={{ '--loot-accent': currentItemAccent, '--loot-ui-scale': 1 / Math.max(0.2, zoom) }}
+                tabIndex={0}
+                role="button"
+                aria-expanded={shouldShow}
+                onFocus={() => { setIsFocused(true); setMobileDismissed(false); }}
+                onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setIsFocused(false); }}
+                onKeyDown={(e) => {
+                    if (e.key === 'Escape') { e.stopPropagation(); setMobileDismissed(true); }
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault(); e.stopPropagation(); setMobileDismissed(false); setIsFocused(true);
+                    }
+                }}
                 onTouchStart={handleTouchStart}
                 onMouseEnter={handlePointerEnter}
                 onMouseMove={handlePointerMove}
                 onMouseLeave={handlePointerLeave}
                 aria-label={item.name || 'Objeto en el suelo'}
             >
-                {/* Hit area expander: ensures frictionless hover/touch detection around the item */}
-                <div className="absolute -inset-3.5 z-0 pointer-events-auto" aria-hidden="true" />
-
-                {/* Visual selection indicator (Golden frame and glowing corners) */}
-                {isSelected && (
-                    <div className="absolute -inset-2 rounded-md border-2 border-[#c8aa6e] bg-[#c8aa6e]/15 shadow-[0_0_14px_rgba(200,170,110,0.65)] pointer-events-none z-20">
-                        <div className="absolute -top-1 -left-1 w-2 h-2 border-t-2 border-l-2 border-[#fff] pointer-events-none" />
-                        <div className="absolute -top-1 -right-1 w-2 h-2 border-t-2 border-r-2 border-[#fff] pointer-events-none" />
-                        <div className="absolute -bottom-1 -left-1 w-2 h-2 border-b-2 border-l-2 border-[#fff] pointer-events-none" />
-                        <div className="absolute -bottom-1 -right-1 w-2 h-2 border-b-2 border-r-2 border-[#fff] pointer-events-none" />
+                <div className="noma-ground-loot__shadow" aria-hidden="true" />
+                <div className="noma-ground-loot__frame">
+                    {groundImage && !imageFailed ? (
+                        <img src={groundImage} alt="" draggable="false" onError={() => setImageFailed(true)} />
+                    ) : (
+                        <CurrentItemIcon className="noma-ground-loot__fallback" aria-hidden="true" />
+                    )}
+                </div>
+                <div className="noma-ground-loot__rarity" aria-hidden="true" />
+                {!pickupRecipient && (isHovered || isSelected || isFocused || isDragging) && (
+                    <div className="noma-ground-loot__caption" aria-hidden="true">
+                        <span>{item.lootItem?.nombre || item.lootItem?.name || item.name || 'Objeto'}</span>
+                        <small>{isDragging
+                            ? (pickupRecipient ? `Para ${pickupRecipient.name || 'tu personaje'}` : pickupBlocked ? 'No controlas esta ficha' : 'Llévalo a tu personaje')
+                            : (item.lootItem?.rareza || item.lootItem?.rarity || 'Común')}</small>
                     </div>
                 )}
-
-                <div
-                    className="absolute left-1/2 top-[68%] h-[44%] w-[92%] -translate-x-1/2 rounded-full blur-md pointer-events-none"
-                    style={{ backgroundColor: `${currentItemAccent}48` }}
-                    aria-hidden="true"
-                />
-                <div
-                    className={`relative h-full w-full overflow-hidden border bg-[#080d18] shadow-[0_7px_18px_rgba(0,0,0,0.66)] transition-all duration-150 ${isSelected ? 'ring-2 ring-[#c8aa6e] ring-offset-2 ring-offset-black' : ''}`}
-                    style={{
-                        borderColor: currentItemAccent,
-                        clipPath: 'polygon(14% 0, 86% 0, 100% 14%, 100% 86%, 86% 100%, 14% 100%, 0 86%, 0 14%)',
-                    }}
-                >
-                    {item.img ? (
-                        <img src={item.img} alt="" className="h-full w-full object-cover pointer-events-none" draggable="false" />
-                    ) : (
-                        <CurrentItemIcon className="m-[24%] h-[52%] w-[52%] pointer-events-none" style={{ color: currentItemAccent }} aria-hidden="true" />
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-white/10 pointer-events-none" aria-hidden="true" />
-                    <div className="absolute inset-[8%] border border-white/15 pointer-events-none" aria-hidden="true" />
-                </div>
             </motion.div>
 
             {typeof document !== 'undefined' && createPortal(
@@ -271,7 +284,15 @@ const CanvasLootVisual = ({
                             exit={tooltipPosition.isMobile ? { opacity: 0, y: 12 } : { opacity: 0, x: -5, scale: 0.98 }}
                             transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
                             className={`noma-canvas-loot-tooltip fixed z-[10000] pointer-events-auto select-none ${tooltipPosition.isMobile ? 'shadow-2xl' : ''}`}
-                            style={tooltipPosition.style}
+                            style={{ ...tooltipPosition.style, maxHeight: 'calc(100vh - 32px)', overflowY: 'auto' }}
+                            onMouseEnter={handlePointerEnter}
+                            onMouseLeave={handlePointerLeave}
+                            onFocus={() => { clearTimeout(hoverTimerRef.current); setIsFocused(true); }}
+                            onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setIsFocused(false); }}
+                            onKeyDown={(e) => {
+                                e.stopPropagation();
+                                if (e.key === 'Escape') { rootRef.current?.focus(); setMobileDismissed(true); }
+                            }}
                             onMouseDown={(e) => e.stopPropagation()}
                             onPointerDown={(e) => e.stopPropagation()}
                             onClick={(e) => e.stopPropagation()}
@@ -286,7 +307,7 @@ const CanvasLootVisual = ({
                                             e.stopPropagation();
                                             setMobileDismissed(true);
                                         }}
-                                        className="absolute -top-3 -right-2 z-30 flex h-7 w-7 items-center justify-center rounded-full border border-white/20 bg-slate-900 text-slate-300 shadow-md active:scale-95 text-xs font-bold"
+                                        className="absolute top-2 right-2 z-30 flex h-7 w-7 items-center justify-center rounded-full border border-white/20 bg-slate-900 text-slate-300 shadow-md active:scale-95 text-xs font-bold"
                                         aria-label="Cerrar vista previa"
                                     >
                                         ✕
@@ -385,10 +406,11 @@ const CanvasLootVisual = ({
                                     visibleTraits={resolveTraits(lootItem, hands)}
                                     glossary={glossary}
                                 />
-                                <div className="mt-1.5 border-l border-[#c8aa6e]/60 bg-[#050810]/95 px-3 py-2 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-400 shadow-xl">
-                                    {tooltipPosition.isMobile
-                                        ? (isMultiSelection ? 'Arrastra para recoger los objetos seleccionados' : 'Arrastra la ficha sobre tu personaje para recoger')
-                                        : (isMultiSelection ? 'Arrastra sobre una ficha controlada para recoger los objetos seleccionados' : 'Arrastra sobre una ficha controlada para recoger')}
+                                <div className="noma-loot-instructions">
+                                    <Hand size={16} aria-hidden="true" />
+                                    <div><strong>Recoger del suelo</strong>
+                                        <span>Arrastra el objeto sobre tu personaje o mueve tu personaje a su casilla.</span>
+                                    </div>
                                 </div>
                             </div>
                         </motion.div>
@@ -408,6 +430,9 @@ CanvasLootVisual.propTypes = {
     isPrimarySelectedLoot: PropTypes.bool,
     glossary: PropTypes.array,
     rarityColorMap: PropTypes.object,
+    pickupRecipient: PropTypes.object,
+    pickupBlocked: PropTypes.bool,
+    zoom: PropTypes.number,
 };
 
 CanvasLootVisual.defaultProps = {

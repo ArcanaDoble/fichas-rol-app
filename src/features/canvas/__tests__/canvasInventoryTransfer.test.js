@@ -10,6 +10,7 @@ import {
     reorderCanvasInventory,
     resolveCanvasLootRecipient,
 } from '../canvasInventoryTransfer';
+import { createRogueliteActiveRunFromToken, updateRogueliteActiveRunFromProfile } from '../../roguelite/activeRun';
 
 describe('canvas inventory transfer', () => {
     test('reorders inventory without changing its items', () => {
@@ -112,7 +113,7 @@ describe('canvas inventory transfer', () => {
         expect(position.y).toBeCloseTo(4976 + (256 - 81.92) / 2);
     });
 
-    test('creates a Canvas-only pickup and adds it back without equipping it', () => {
+    test('creates a Canvas-only weapon pickup and leaves it in the inventory', () => {
         const loot = createCanvasLootSceneItem({
             item: { name: 'Estilete', type: 'weapon', isEquipped: true },
             image: '/estilete.webp',
@@ -129,6 +130,89 @@ describe('canvas inventory transfer', () => {
             isEquipped: false,
             isPrepared: false,
         }));
+    });
+
+    test('equips a collected object in the first enabled free belt slot without replacing equipment', () => {
+        const existing = { name: 'Antídoto', type: 'object', instanceId: 'antidote', quantity: 2 };
+        const sword = { name: 'Espada', type: 'weapon', instanceId: 'sword' };
+        const token = {
+            profileType: 'rogueliteClass',
+            inventory: [existing, sword],
+            equipmentLoadout: { beltSlotCount: 2, belt_0: existing, mainHand: sword },
+        };
+        const result = addCanvasLootToInventory(token, {
+            payload: { name: 'Elixir', type: 'consumable', instanceId: 'elixir', quantity: 3 },
+            canvasSlot: 'belt_7',
+            equippedSlots: ['belt_7'],
+        });
+
+        expect(result.equipmentLoadout.belt_0).toEqual(existing);
+        expect(result.equipmentLoadout.mainHand).toEqual(sword);
+        expect(result.equipmentLoadout.belt_1).toEqual(expect.objectContaining({
+            instanceId: 'elixir', quantity: 3, isEquipped: true, equippedSlots: ['belt_1'],
+        }));
+        expect(result.inventory[2].canvasSlot).toBeUndefined();
+        expect(result.equippedItems).toContainEqual(expect.objectContaining({ instanceId: 'elixir', canvasSlot: 'belt_1' }));
+        expect(token.inventory).toHaveLength(2);
+        expect(token.equipmentLoadout.belt_1).toBeUndefined();
+    });
+
+    test.each([0, 1, 3])('keeps loot unequipped when all %i enabled belt slots are occupied', (beltSlotCount) => {
+        const equipmentLoadout = { beltSlotCount };
+        for (let index = 0; index < beltSlotCount; index += 1) {
+            equipmentLoadout[`belt_${index}`] = { name: `Objeto ${index}`, type: 'object' };
+        }
+        const result = addCanvasLootToInventory({ equipmentLoadout }, { name: 'Elixir', type: 'consumable' });
+        expect(result.equipmentLoadout).toBe(equipmentLoadout);
+        expect(result.inventory[0].isEquipped).toBe(false);
+        expect(result.inventory[0].equippedSlots).toEqual([]);
+        expect(result.equipmentLoadout[`belt_${beltSlotCount}`]).toBeUndefined();
+    });
+
+    test.each(['weapon', 'armor', 'accessory', 'ability'])('does not put %s pickups in the belt', (type) => {
+        const result = addCanvasLootToInventory({ equipmentLoadout: { beltSlotCount: 3 } }, { name: 'Equipo', type });
+        expect(result.inventory[0].isEquipped).toBe(false);
+        expect(result.equipmentLoadout.belt_0).toBeUndefined();
+    });
+
+    test('leaves enemy equipment unchanged because enemies have no belt slots', () => {
+        const equippedItems = [{ name: 'Garra', type: 'weapon' }];
+        const result = addCanvasLootToInventory({ profileType: 'rogueliteEnemy', equippedItems }, { name: 'Elixir', type: 'object' });
+        expect(result.equippedItems).toBe(equippedItems);
+        expect(result.equipmentLoadout).toBeUndefined();
+        expect(result.inventory[0].isEquipped).toBe(false);
+    });
+
+    test('uses legacy visible belt capacity without extending it on pickup', () => {
+        let token = { equipmentLoadout: { belt_4: { name: 'Antídoto', type: 'object' } } };
+        for (let index = 0; index < 5; index += 1) {
+            token = addCanvasLootToInventory(token, { name: `Elixir ${index}`, type: 'object' });
+        }
+        expect(token.equipmentLoadout.belt_3.name).toBe('Elixir 3');
+        expect(token.equipmentLoadout.belt_4.name).toBe('Antídoto');
+        expect(token.equipmentLoadout.belt_5).toBeUndefined();
+        expect(token.inventory[4].isEquipped).toBe(false);
+    });
+
+    test('saves the acquired copy in its slot and allows subsequent manual belt changes', () => {
+        const first = { name: 'Elixir', type: 'object', instanceId: 'elixir-1', isEquipped: false };
+        const token = addCanvasLootToInventory({
+            id: 'hero', runId: 'run', inventory: [first], equipmentLoadout: { beltSlotCount: 2 },
+        }, { ...first, instanceId: 'elixir-2' });
+        const saved = createRogueliteActiveRunFromToken(token);
+        expect(saved.inventory.objects).toHaveLength(2);
+        expect(saved.equippedItems.belt_0.instanceId).toBe('elixir-2');
+        expect(token.inventory[0].isEquipped).toBe(false);
+
+        const profile = { id: saved.classId, owner: saved.owner, activeRun: saved, equipment: saved.inventory,
+            equippedItems: { ...saved.equippedItems, belt_0: null, belt_1: saved.equippedItems.belt_0 } };
+        const moved = updateRogueliteActiveRunFromProfile(profile);
+        expect(moved.equippedItems.belt_0).toBeNull();
+        expect(moved.equippedItems.belt_1.instanceId).toBe('elixir-2');
+        const unequipped = updateRogueliteActiveRunFromProfile({ ...profile, activeRun: moved,
+            equippedItems: { ...moved.equippedItems, belt_1: null } });
+        expect(unequipped.equippedItems.belt_1).toBeNull();
+        expect(unequipped.inventory.objects).toHaveLength(2);
     });
 
     test('preserves nested catalog identity, rarity and art through a ground transfer', () => {
@@ -279,6 +363,27 @@ describe('canvas inventory transfer', () => {
         expect(leftTarget.recipient.id).not.toEqual(rightTarget.recipient.id);
     });
 
+    test.each(['formation', 'duel'])('uses the cursor instead of an offset, oversized object in a %s', (mode) => {
+        const gridConfig = { isInfinite: true, cellWidth: 100, cellHeight: 100 };
+        const a = { id: 'a', layer: 'TOKEN', isToken: true, x: 0, y: 0, width: 50, height: 50, controlledBy: ['Ada'], teamId: 'a' };
+        const b = { ...a, id: 'b', teamId: mode === 'duel' ? 'b' : 'a' };
+        // The object covers the right portrait, but its grabbed left edge is on the left one.
+        const loot = { id: 'loot', sceneItemKind: 'canvasLoot', x: 48, y: 30, width: 60, height: 40 };
+        for (const items of [[a, b, loot], [b, loot, a]]) {
+            expect(resolveCanvasLootRecipient({ loot, worldPoint: { x: 48, y: 50 }, items, gridConfig }).recipient.id).toBe('b');
+            expect(resolveCanvasLootRecipient({ loot, worldPoint: { x: 52, y: 50 }, items, gridConfig }).recipient.id).toBe('a');
+            expect(resolveCanvasLootRecipient({ loot, worldPoint: { x: 50, y: 90 }, items, gridConfig }).recipient).toBeNull();
+        }
+    });
+
+    test('does not redirect a drop on an uncontrolled portrait to its controlled neighbour', () => {
+        const gridConfig = { isInfinite: true, cellWidth: 100, cellHeight: 100 };
+        const a = { id: 'a', layer: 'TOKEN', isToken: true, x: 0, y: 0, width: 50, height: 50, controlledBy: ['Ada'] };
+        const b = { ...a, id: 'b', controlledBy: [] };
+        const target = resolveCanvasLootRecipient({ worldPoint: { x: 25, y: 50 }, items: [a, b], gridConfig, isPlayerView: true, playerName: 'Ada' });
+        expect(target).toEqual({ recipient: null, blockedRecipient: b });
+    });
+
     test('picks up ground loot when a controlled token moves to its grid cell', () => {
         const gridConfig = { isInfinite: true, cellWidth: 50, cellHeight: 50 };
         const potionLoot = {
@@ -319,6 +424,8 @@ describe('canvas inventory transfer', () => {
         expect(result.nextToken.inventory[0].name).toBe('Poción de Vida');
         expect(result.nextToken.inventory[0].rareza).toBe('Raro');
         expect(result.nextToken.inventory[0].image).toBe('/objetos/pocion.webp');
+        expect(result.nextToken.equipmentLoadout.belt_0.name).toBe('Poción de Vida');
+        expect(result.nextToken.inventory[0].isEquipped).toBe(true);
         expect(result.nextToken.runtimeDirty).toBe(true);
         expect(result.nextItems.find((item) => item.id === 'loot-potion')).toBeUndefined();
     });

@@ -13,7 +13,7 @@ import {
   resolveRogueliteTalentCatalog,
 } from './talents';
 import {
-  normalizeEquippedWeaponSets,
+  reconcileEquippedItemsWithInventory,
   resolveRogueliteEquipmentPool,
 } from './equipmentPool';
 import {
@@ -154,8 +154,9 @@ export const createRogueliteProfileClass = (
     resource: clone(progressionStats.resource),
     classEquipmentPool: clone(equipmentPool),
     equipment: clone(equipmentPool),
-    equippedItems: normalizeEquippedWeaponSets(
+    equippedItems: reconcileEquippedItemsWithInventory(
       profileClass.equippedItems || cleanConfiguration.equippedItems,
+      equipmentPool,
     ),
     talentCatalog: clone(talentCatalog),
     equippedTalentIds: clone(equippedTalentIds),

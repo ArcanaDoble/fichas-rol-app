@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FiSearch, FiX, FiPlus, FiMinus, FiTrash2, FiChevronLeft } from 'react-icons/fi';
 import {
     Swords, Skull, Heart, Shield, Brain, Zap, Ghost,
-    EyeOff, VolumeX, Hand, XCircle, Eye, Pause, Box, Droplet,
+    EyeOff, Hand, XCircle, Eye, Pause, Box, Droplet,
     ArrowDown, Anchor, AlertCircle, Snowflake, Flame
 } from 'lucide-react';
 import { EnemyDetailView } from './EnemyDetailView';
@@ -42,18 +42,18 @@ const CONDITIONS = [
         shadowClass: 'shadow-[0_0_15px_rgba(244,63,94,0.2)]',
     },
     {
-        id: 'Ensordecido',
-        icon: VolumeX,
-        label: 'Ensordecido',
-        colorClass: 'text-teal-400',
-        bgClass: 'bg-teal-950/20',
-        borderClass: 'border-teal-900/30',
-        hoverBgClass: 'hover:bg-teal-900/30',
-        hoverBorderClass: 'hover:border-teal-800/50',
-        activeBgClass: 'bg-teal-950/50',
-        activeBorderClass: 'border-teal-500/60',
-        activeIconClass: 'text-teal-350 drop-shadow-[0_0_6px_rgba(20,184,166,0.5)]',
-        shadowClass: 'shadow-[0_0_15px_rgba(20,184,166,0.2)]',
+        id: 'Oculto',
+        icon: EyeOff,
+        label: 'Oculto',
+        colorClass: 'text-violet-300',
+        bgClass: 'bg-violet-950/20',
+        borderClass: 'border-violet-900/30',
+        hoverBgClass: 'hover:bg-violet-900/30',
+        hoverBorderClass: 'hover:border-violet-800/50',
+        activeBgClass: 'bg-violet-950/50',
+        activeBorderClass: 'border-violet-400/60',
+        activeIconClass: 'text-violet-200 drop-shadow-[0_0_6px_rgba(196,181,253,0.5)]',
+        shadowClass: 'shadow-[0_0_15px_rgba(196,181,253,0.2)]',
     },
     {
         id: 'Asustado',

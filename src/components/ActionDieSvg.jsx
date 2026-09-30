@@ -1,6 +1,27 @@
 import React, { useId } from 'react';
 
 const PALETTES = {
+  teal: {
+    accent: '#7bc7bb',
+    accentBright: '#d6f0e8',
+    accentDark: '#305e55',
+    ember: '#5ca99a',
+    numeral: '#e5f6ef',
+  },
+  arcane: {
+    accent: '#a798d6',
+    accentBright: '#e0d9ff',
+    accentDark: '#51416f',
+    ember: '#9683ce',
+    numeral: '#f0eaff',
+  },
+  amber: {
+    accent: '#e6a054',
+    accentBright: '#ffe0af',
+    accentDark: '#8a451d',
+    ember: '#e78a32',
+    numeral: '#fff0d7',
+  },
   gold: {
     accent: '#d7b867',
     accentBright: '#f4dfa4',
@@ -36,7 +57,7 @@ const normalizeFaces = (faces) => {
   return Number.isFinite(parsed) ? parsed : 6;
 };
 
-const DieGeometry = ({ faces, ids }) => {
+const DieGeometry = ({ faces, ids, connectedFaces }) => {
   const shared = {
     fill: `url(#${ids.body})`,
     stroke: `url(#${ids.metal})`,
@@ -56,6 +77,24 @@ const DieGeometry = ({ faces, ids }) => {
     strokeLinejoin: 'round',
     opacity: 0.34,
   };
+
+  if (faces === 20 && connectedFaces) {
+    return (
+      <>
+        <polygon data-d20-outline="connected" points="60,7 110,32 110,88 60,113 10,88 10,32" {...shared} />
+        <polygon data-d20-facet="upper-left" points="60,7 10,32 28,39" {...facet} fillOpacity="0.72" />
+        <polygon data-d20-facet="upper" points="60,7 28,39 92,39" {...facet} fillOpacity="0.9" />
+        <polygon data-d20-facet="upper-right" points="60,7 92,39 110,32" {...facet} fillOpacity="0.78" />
+        <polygon data-d20-facet="middle-left" points="10,32 10,88 28,39" {...facet} fillOpacity="0.62" />
+        <polygon data-d20-facet="middle-right" points="110,32 92,39 110,88" {...facet} fillOpacity="0.7" />
+        <polygon data-d20-facet="center" points="28,39 92,39 60,94" fill={`url(#${ids.body})`} stroke={`url(#${ids.metal})`} strokeWidth="2" strokeLinejoin="round" />
+        <polygon data-d20-facet="lower-left" points="28,39 10,88 60,94" {...facet} fillOpacity="0.66" />
+        <polygon data-d20-facet="lower-right" points="92,39 60,94 110,88" {...facet} fillOpacity="0.76" />
+        <polygon data-d20-facet="base-left" points="10,88 60,113 60,94" {...facet} fillOpacity="0.58" />
+        <polygon data-d20-facet="base-right" points="60,94 60,113 110,88" {...facet} fillOpacity="0.7" />
+      </>
+    );
+  }
 
   switch (faces) {
     case 4:
@@ -137,6 +176,7 @@ const ActionDieSvg = ({
   accent = 'gold',
   status = 'available',
   selected = false,
+  connectedFaces = false,
 }) => {
   const reactId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const ids = {
@@ -149,7 +189,7 @@ const ActionDieSvg = ({
   const normalizedFaces = normalizeFaces(faces);
   const palette = PALETTES[status === 'spent' ? 'slate' : accent] || PALETTES.gold;
   const displayValue = value ?? normalizedFaces;
-  const textY = normalizedFaces === 4 ? 70 : normalizedFaces === 6 ? 69 : normalizedFaces === 10 ? 43 : normalizedFaces === 12 ? 60 : 64;
+  const textY = normalizedFaces === 20 && connectedFaces ? 58 : normalizedFaces === 4 ? 70 : normalizedFaces === 6 ? 69 : normalizedFaces === 10 ? 43 : normalizedFaces === 12 ? 60 : 64;
   const textX = normalizedFaces === 6 ? 48 : normalizedFaces === 12 ? 59 : 60;
   const fontSize = String(displayValue).length > 1 ? 24 : normalizedFaces === 4 ? 33 : 35;
   const isSpent = status === 'spent';
@@ -163,6 +203,7 @@ const ActionDieSvg = ({
       role="img"
       aria-label={ariaLabel}
       data-action-die={normalizedFaces}
+      data-die-accent={isSpent ? 'slate' : accent}
     >
       <title>{ariaLabel}</title>
       <defs>
@@ -205,7 +246,7 @@ const ActionDieSvg = ({
         filter={`url(#${ids.aura})`}
       />
       <g opacity={isSpent ? 0.46 : 1} filter={selected || isCommitted ? `url(#${ids.glow})` : undefined}>
-        <DieGeometry faces={normalizedFaces} ids={ids} />
+        <DieGeometry faces={normalizedFaces} ids={ids} connectedFaces={connectedFaces} />
         <text
           x={textX}
           y={textY}

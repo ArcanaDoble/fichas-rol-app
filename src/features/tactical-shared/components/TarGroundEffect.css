@@ -1,0 +1,5 @@
+.canvas-tar-zone { position: absolute; inset: 0; pointer-events: none; }
+.canvas-tar-zone canvas { position: absolute; width: 100%; height: 100%; filter: drop-shadow(0 2px 2px #0009); }
+.canvas-tar-zone__grid { position: absolute; inset: 0; border: 1px solid #b29a6538; background: linear-gradient(90deg, transparent calc(50% - .5px), #b29a6529 50%, transparent calc(50% + .5px)), linear-gradient(0deg, transparent calc(50% - .5px), #b29a6529 50%, transparent calc(50% + .5px)); }
+.canvas-tar-zone__label { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); white-space: nowrap; font: 600 9px/1.4 Georgia, serif; letter-spacing: .08em; text-transform: uppercase; color: #d0bb8e; background: #171510e8; padding: 1px 5px; border-top: 1px solid #b29a6560; }
+.canvas-tar-zone__label span { color: #b0a99b; font-size: 8px; }

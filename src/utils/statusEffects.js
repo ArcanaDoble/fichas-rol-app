@@ -18,6 +18,8 @@ export const ICON_MAP = {
     Search, Settings, ShoppingCart, Star, Trash, User
 };
 
+export const HIDDEN_STATUS_EFFECT_ID = 'oculto';
+
 export const DEFAULT_STATUS_EFFECTS = {
     'acido': {
         label: 'Ácido',
@@ -127,14 +129,15 @@ export const DEFAULT_STATUS_EFFECTS = {
         hex: '#22c55e',
         desc: 'Por cada tiempo que gastes hasta que tu u otro personaje realice la acción de TRATAR sobre ti, pierdes un bloque de cuerpo o de mente.'
     },
-    'ensordecido': {
-        label: 'Ensordecido',
-        iconName: 'VolumeX',
-        color: 'text-rose-300',
-        bg: 'bg-rose-300/10',
-        border: 'border-rose-300/50',
-        hex: '#fda4af',
-        desc: 'No puedes oir hasta que realices la acción de ACLARAR.'
+    'oculto': {
+        label: 'Oculto',
+        imageLabel: 'Cegado',
+        iconName: 'EyeOff',
+        color: 'text-violet-300',
+        bg: 'bg-violet-300/10',
+        border: 'border-violet-300/50',
+        hex: '#c4b5fd',
+        desc: 'El token sólo es visible para quienes lo controlan y para jugadores con el mismo Team ID.'
     },
     'envenenado': {
         label: 'Envenenado',
@@ -143,7 +146,7 @@ export const DEFAULT_STATUS_EFFECTS = {
         bg: 'bg-emerald-500/10',
         border: 'border-emerald-500/50',
         hex: '#10b981',
-        desc: 'No puedes recibir curaciones hasta que tu u otro personaje realice la acción de TRATAR sobre ti.'
+        desc: 'No puedes recuperar Vida por ninguna fuente. No causa daño periódico ni se acumula. Dura hasta el final del combate o hasta que un Antídoto u otro efecto específico lo elimine.'
     },
     'herido': {
         label: 'Herido',
@@ -194,13 +197,34 @@ export const DEFAULT_STATUS_EFFECTS = {
 
 export const PRONE_STATUS_IDS = ['derribado', 'conmocionado'];
 export const NON_SELECTABLE_STATUS_EFFECT_IDS = ['conmocionado', 'ralentizado'];
+export const DEPRECATED_STATUS_EFFECT_IDS = ['ensordecido'];
+
+export const mergeStatusEffectsConfig = (configuredEffects = {}) => {
+    const activeConfiguredEffects = Object.fromEntries(
+        Object.entries(configuredEffects || {})
+            .filter(([id]) => !DEPRECATED_STATUS_EFFECT_IDS.includes(id))
+    );
+    if (Object.keys(activeConfiguredEffects).length === 0) return DEFAULT_STATUS_EFFECTS;
+
+    const orderedEffects = {};
+    Object.entries(DEFAULT_STATUS_EFFECTS).forEach(([id, defaultEffect]) => {
+        if (id === HIDDEN_STATUS_EFFECT_ID || activeConfiguredEffects[id]) {
+            orderedEffects[id] = activeConfiguredEffects[id] || defaultEffect;
+        }
+    });
+    Object.entries(activeConfiguredEffects).forEach(([id, effect]) => {
+        if (!orderedEffects[id]) orderedEffects[id] = effect;
+    });
+
+    return orderedEffects;
+};
 
 export const ESTADOS = Object.entries(DEFAULT_STATUS_EFFECTS)
     .filter(([id]) => !NON_SELECTABLE_STATUS_EFFECT_IDS.includes(id))
     .map(([id, config]) => ({
     id,
     name: config.label,
-    img: `/estados/${config.label}.webp`,
+    img: `/estados/${config.imageLabel || config.label}.webp`,
     desc: config.desc,
     hex: config.hex
 }));

@@ -458,3 +458,38 @@ describe('buildCombatEffectVisuals', () => {
     expect(speedFlyoff.x).toBeLessThanOrEqual(364);
   });
 });
+
+const canvasPositions = { targetPos: { x: 0, y: 0, width: 50, height: 50 }, attackerPos: { x: 100, y: 0, width: 50, height: 50 } };
+test('Canvas counterattack shows resist instead of false damage when no life is lost', () => {
+  const visuals = buildCombatEffectVisuals({ ...canvasPositions, effect: { canvasRoguelite: true, reactionType: 'parar', finalDamage: 0, counterDamage: 2, attackerBlocksLost: { vida: 0 }, blocksLost: { vida: 0 } } });
+  expect(visuals.flyoffs.map(f => f.text)).toEqual(expect.arrayContaining(['¡Contraataque!', '¡Resiste!']));
+  expect(visuals.flyoffs.some(f => f.type === 'damage')).toBe(false);
+});
+test('Canvas counterattack leaves the old red halo out while retaining the damage number', () => {
+  const visuals = buildCombatEffectVisuals({ ...canvasPositions, effect: { canvasRoguelite: true, reactionType: 'parar', finalDamage: 0, counterDamage: 6, attackerBlocksLost: { vida: 2 }, blocksLost: { vida: 0 } } });
+  expect(visuals.highlights).toHaveLength(0);
+  expect(visuals.flyoffs.some(f => f.type === 'damage')).toBe(true);
+});
+test('Canvas reposition has its own burst and label', () => {
+  const visuals = buildCombatEffectVisuals({ ...canvasPositions, effect: { canvasRoguelite: true, reactionType: 'parar', finalDamage: 0, counterDamage: 0, surplus: 3, excessChoice: 'reposition', blocksLost: { vida: 0 } } });
+  expect(visuals.sprints).toHaveLength(1);
+  expect(visuals.flyoffs.map(f => f.text)).toContain('¡Reposicionamiento!');
+});
+test('equal Canvas defense announces perfect block', () => {
+  const visuals = buildCombatEffectVisuals({ ...canvasPositions, effect: { canvasRoguelite: true, reactionType: 'parar', finalDamage: 0, counterDamage: 0, surplus: 0, blocksLost: { vida: 0 } } });
+  expect(visuals.flyoffs.map(f => f.text)).toContain('¡Bloqueo Perfecto!');
+});
+
+
+test.each(['target', 'attacker'])('canonical poison ids show the actual name and color for %s', side => {
+  const position = { x: 0, y: 0, width: 60, height: 60 };
+  const { flyoffs } = buildCombatEffectVisuals({
+    effect: { canvasRoguelite: true, targetId: 'hero', attackerId: 'foe',
+      reactionType: 'parar', finalDamage: 8, blocksLost: { vida: 2 },
+      statusEffectsApplied: { [side]: ['envenenado'] } },
+    targetPos: position, attackerPos: position,
+  });
+  expect(flyoffs.find(entry => entry.statusId === 'envenenado')).toMatchObject({
+    text: '\u00a1Envenenado!', color: '#10b981', tokenId: side === 'target' ? 'hero' : 'foe',
+  });
+});

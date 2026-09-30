@@ -30,6 +30,7 @@ export const CanvasSidebar = ({
     BoardMarkerVisual,
     EquipmentSectionComponent,
     TokenResourcesComponent,
+    TokenLibraryExtensionComponent,
     GRID_LINE_COLOR_PRESETS,
     PRESET_COLORS,
     accesorios,
@@ -110,6 +111,7 @@ export const CanvasSidebar = ({
     tokens,
     unlinkCharacter,
     unstackSpecificCard,
+    boardStackControls,
     updateItem,
     uploadingCard,
     uploadingToken,
@@ -251,6 +253,10 @@ export const CanvasSidebar = ({
                         setDraggedLibraryItemId, setDraggedLibraryItemType, tokens, uploadingCard, uploadingToken,
                     }} />
 
+                                {TokenLibraryExtensionComponent && activeTab === 'TOKENS' && !isPlayerView && !isBoardMode && (
+                                    <TokenLibraryExtensionComponent setShowSettings={setShowSettings} />
+                                )}
+
 
 
                                 <div className="w-full h-px bg-slate-800/50"></div>
@@ -275,7 +281,7 @@ export const CanvasSidebar = ({
                         activeTab, armaduras, armas, availableCharacters, combatRuntime, deleteItem, existingPlayers,
                         glossary, gridConfig, habilidades, handleBoardCardBackUpload, highlightText, isBoardMode,
                         isMaster, isPlayerView, lastFlipTimesRef, linkCharacter, playerName, rarityColorMap,
-                        rollBoardDie, selectedTokenIds, unlinkCharacter, unstackSpecificCard, updateItem,
+                        rollBoardDie, selectedTokenIds, unlinkCharacter, unstackSpecificCard, updateItem, boardStackControls,
                         EquipmentSectionComponent, TokenResourcesComponent, isScenePickupItem,
                     }} />
                             </div>

@@ -5,6 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { DEFAULT_STATUS_EFFECTS, PRONE_STATUS_IDS } from '../../utils/statusEffects';
+import { actionRevealsHidden, removeHiddenStatusFromToken } from './tokenVisibilityAccess';
 import {
     getSpeedConsumption, hasCombatTrait, hasNativeCombatTrait,
     normalizeCombatTraitId, rollAttack,
@@ -36,6 +37,7 @@ import {
  * public section or the shared session engine.
  */
 export const createTacticalCombatController = ({
+    canvasBasicRules = false,
     activeCombatQueueEntry,
     activeScenario,
     activeScenarioRef,
@@ -81,7 +83,7 @@ const resetAllSpeed = () => {
 
         const token = scenario.items.find(i => i.id === tokenId);
         if (!token) return;
-        const tokenIsProne = isTokenDerribado(token);
+        const tokenIsProne = canvasBasicRules ? normalizeTokenStatusIds(token.status).some(status => (typeof status === 'string' ? status : status?.id) === 'derribado') : isTokenDerribado(token);
         const proneStatusMeta = getTokenProneStatusMeta(token);
 
         // --- LÓGICA DE TARGETING / CANCELACIÓN ---
@@ -92,14 +94,14 @@ const resetAllSpeed = () => {
             return;
         }
 
-        if (tokenIsProne && actionId !== 'stand_up') {
+        if (tokenIsProne && (canvasBasicRules ? actionId === 'dash' : actionId !== 'stand_up')) {
             if (targetingState?.attackerId === tokenId) {
                 setTargetingState(null);
                 setFocusedTargetId(null);
             }
             triggerToast(
                 proneStatusMeta?.label || "Derribado",
-                `Mientras estés ${proneStatusMeta?.label?.toLowerCase() || 'derribado'} solo puedes levantarte`,
+                canvasBasicRules ? 'Debes levantarte antes de correr.' : `Mientras estés ${proneStatusMeta?.label?.toLowerCase() || 'derribado'} solo puedes levantarte`,
                 'warning'
             );
             return;
@@ -372,6 +374,9 @@ const resetAllSpeed = () => {
     };
 
     const applySangradoSpeedPenalty = (tokenLike, spentSpeed = 0, options = {}) => {
+        if (['rogueliteClass', 'rogueliteEnemy'].includes(tokenLike?.profileType)) {
+            return { token: tokenLike, lostVida: 0, preventedVida: 0 };
+        }
         const normalizedSpentSpeed = Math.max(0, Math.floor(Number(spentSpeed) || 0));
         if (!tokenLike || normalizedSpentSpeed <= 0) {
             return { token: tokenLike, lostVida: 0, preventedVida: 0 };
@@ -1297,6 +1302,9 @@ const resetAllSpeed = () => {
 
         updateTokenInList(attackerTokenBase.id, { fluidaState: nextAttackerFluidaState });
         updateTokenInList(targetTokenBase.id, { fluidaState: nextTargetFluidaState });
+        if (counterDamage > 0) {
+            finalItems = finalItems.map(item => item.id === targetTokenBase.id ? removeHiddenStatusFromToken(item) : item);
+        }
 
         const combatLogEntry = {
             sourceEventId: event.id,
@@ -1851,6 +1859,7 @@ const resetAllSpeed = () => {
             if (i.id !== tokenId) return i;
 
             let nextItem = { ...i, x: finalX, y: finalY, velocidad: (token.velocidad || 0) + finalCost };
+            if (pendingActions.some(actionRevealsHidden)) nextItem = removeHiddenStatusFromToken(nextItem);
 
              if (shouldClearFluidaOnCommit) {
                 nextItem = {

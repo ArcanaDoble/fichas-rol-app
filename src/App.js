@@ -96,6 +96,10 @@ import {
   weaponCatalogItemToStorage,
 } from './features/roguelite/catalogItem';
 import { resolveEquipmentHandsRequired } from './features/roguelite/equipmentPool';
+import {
+  clearPlayerLocalData,
+  deletePlayerData,
+} from './features/players/playerDataLifecycle';
 import { nanoid } from 'nanoid';
 const MinimapBuilder = React.lazy(() => import('./components/MinimapV2'));
 const CampaignMapView = React.lazy(() => import('./components/CampaignMapView'));
@@ -2160,11 +2164,8 @@ function App() {
   };
   const eliminarFichaJugador = async () => {
     if (!(await confirm(`¿Eliminar ficha de ${playerName}?`))) return;
-    await deleteDoc(doc(db, 'players', playerName));
-    await deleteDoc(doc(db, 'inventory', playerName));
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem(`player_${playerName}_backup`);
-    }
+    await deletePlayerData(playerName);
+    clearPlayerLocalData(playerName);
     volverAlMenu();
   };
   const guardarDatosFicha = async () => {

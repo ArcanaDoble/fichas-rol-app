@@ -1,3 +1,5 @@
+import { isCanvasPoisoned, setCanvasPoison } from '../../poisonRules';
+import { isCanvasBleeding, setCanvasBleeding } from '../../bleedingRules';
 import React from 'react';
 import { Check, ChevronDown, Circle, Eye, EyeOff, Flame, Lightbulb, Link, Lock, Map as MapIcon, Maximize, Package, PenTool, RotateCw, Settings, Sparkles, Square, Trash2, Upload, Users, X } from 'lucide-react';
 import { FiMinus, FiPlus } from 'react-icons/fi';
@@ -5,11 +7,12 @@ import EstadoSelector from '../../../../components/EstadoSelector';
 import LegacyTokenResources from '../../../../components/TokenResources';
 import { syncArmorState } from '../../../../utils/armorSystem';
 import { getCardDisplayImage } from '../../../../utils/cardImages';
-import { getCardStackIds, isCardContainerItem, isCardItem, isContainerCardsHiddenForPlayers } from '../../../../utils/cardBoard';
+import { getCardStackIds, isCardContainerItem, isCardItem, isContainerCardsHiddenForPlayers, isCardInPrivateStack } from '../../../../utils/cardBoard';
 import { isCombatTokenItem, normalizeTokenStatusIds } from '../../legacyCombatRules';
 import { CardImageWithLoader, TokenImageWithLoader } from '../TacticalAssetImage';
 import { EquipmentSection as LegacyEquipmentSection } from '../EquipmentSection';
 import { normalizeGeometryKind } from '../../geometry';
+import { getTerrainAreaDefinition } from '../../areaPlacementSystem';
 
 export const TokenInspectorPanel = ({
     BOARD_DIE_SIDES,
@@ -44,12 +47,21 @@ export const TokenInspectorPanel = ({
     selectedTokenIds,
     unlinkCharacter,
     unstackSpecificCard,
+    boardStackControls,
     updateItem,
 }) => (
     activeTab === 'INSPECTOR' && selectedTokenIds.length === 1 && (() => {
                                     const token = activeScenario.items.find(i => i.id === selectedTokenIds[0]);
+                                    const StackInspector = boardStackControls?.InspectorComponent;
                                     if (!token) return null;
                                     if (isScenePickupItem?.(token)) return null;
+                                    if (isBoardMode && isPlayerView && isCardInPrivateStack(token, activeScenario.items)) {
+                                        return <div className="space-y-3 text-sm text-slate-300">
+                                            <h4 className="font-fantasy text-[#c8aa6e]">Montón boca abajo</h4>
+                                            <p>{getCardStackIds(token).length + 1} cartas. Contenido oculto por el máster.</p>
+                                            <p>Usa el clic derecho o el botón de cartas del montón para robar.</p>
+                                        </div>;
+                                    }
                                     const tokenStackItems = isCardItem(token)
                                         ? getCardStackIds(token)
                                             .map(cardId => (activeScenario.items || []).find(stackItem => stackItem.id === cardId))
@@ -281,7 +293,7 @@ export const TokenInspectorPanel = ({
 
                                                 {token.type === 'card' && (
                                                     <div className="bg-[#0b1120] border border-[#c8aa6e]/20 rounded-lg p-3 space-y-3">
-                                                        <div className="flex items-center gap-2">
+                                                        <div className="board-card-face-actions">
                                                             <button
                                                                 onClick={() => {
                                                                     const now = Date.now();
@@ -294,19 +306,19 @@ export const TokenInspectorPanel = ({
                                                             >
                                                                 Voltear
                                                             </button>
-                                                            <label className="min-w-0 flex-1 h-9 px-3 rounded border border-slate-800 bg-[#111827] hover:border-[#c8aa6e]/40 text-slate-400 hover:text-[#f8e7b9] transition-colors cursor-pointer flex items-center justify-between gap-2">
+                                                            <label className="board-card-back-upload">
                                                                 <input
                                                                     type="file"
                                                                     accept="image/*"
-                                                                    className="hidden"
+                                                                    className="sr-only"
                                                                     onChange={(e) => {
                                                                         const file = e.target.files?.[0];
                                                                         if (file) handleBoardCardBackUpload(token.id, file);
                                                                         e.target.value = '';
                                                                     }}
                                                                 />
-                                                                <span className="truncate text-[10px] font-bold uppercase tracking-widest">
-                                                                    {token.backImage ? 'Cambiar reverso' : 'Añadir reverso'}
+                                                                <span>
+                                                                    Reverso
                                                                 </span>
                                                                 <Upload size={12} className="shrink-0 text-[#c8aa6e]" />
                                                             </label>
@@ -321,7 +333,11 @@ export const TokenInspectorPanel = ({
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        {tokenStackItems.length > 0 && (
+                                                        {isBoardMode && StackInspector && (tokenStackItems.length > 0 || token.stackKey) ? (
+                                                            <StackInspector parent={token} items={activeScenario.items} canReorder={!isPlayerView}
+                                                                busy={boardStackControls?.busy} onReorder={boardStackControls?.reorder}
+                                                                onExtract={unstackSpecificCard} onOpenMenu={boardStackControls?.openMenu} />
+                                                        ) : tokenStackItems.length > 0 && (
                                                             <div className="border-t border-[#c8aa6e]/10 pt-3 space-y-2">
                                                                 <div className="flex items-center justify-between gap-3">
                                                                     <div className="flex items-center gap-2 text-[#f8e7b9]">
@@ -471,6 +487,26 @@ export const TokenInspectorPanel = ({
                                                                 className={`w-12 h-6 rounded-full transition-all relative ${token.isCircular ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
                                                             >
                                                                 <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.isCircular ? 'left-7' : 'left-1'}`} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {isBoardMode && isMaster && !isPlayerView && isCombatTokenItem(token) && (
+                                                    <div className="pt-4 border-t border-slate-800/50 space-y-4">
+                                                        <div className="bg-[#0b1120] p-4 rounded border border-slate-800 flex items-center justify-between gap-4">
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <span className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">Incluir en iniciativa</span>
+                                                                <span className="text-[8px] text-slate-600 italic">La mano seguirá disponible aunque el token no aparezca en el orden.</span>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => updateItem(token.id, { includeInBoardInitiative: token.includeInBoardInitiative === false })}
+                                                                aria-label="Incluir token en iniciativa"
+                                                                aria-pressed={token.includeInBoardInitiative !== false}
+                                                                className={`w-12 h-6 shrink-0 rounded-full transition-all relative ${token.includeInBoardInitiative !== false ? 'bg-[#c8aa6e]' : 'bg-slate-700'}`}
+                                                            >
+                                                                <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${token.includeInBoardInitiative !== false ? 'left-7' : 'left-1'}`} />
                                                             </button>
                                                         </div>
                                                     </div>
@@ -901,6 +937,8 @@ export const TokenInspectorPanel = ({
                                                                     { id: 'rect', label: 'Zona', color: '#22c55e' },
                                                                     { id: 'circle', label: 'Círculo', color: '#60a5fa' },
                                                                     { id: 'hazard', label: 'Peligro', color: '#ef4444' },
+                                                                    { id: 'smoke', label: 'Humo', color: '#64748b' },
+                                                                    { id: 'tar', label: 'Brea', color: '#17130f' },
                                                                     { id: 'stairs', label: 'Escalera', color: '#c8aa6e' }
                                                                 ].map(option => {
                                                                     const active = normalizeGeometryKind(token) === option.id;
@@ -911,9 +949,11 @@ export const TokenInspectorPanel = ({
                                                                                 geometryKind: option.id,
                                                                                 shapeType: option.id === 'circle' ? 'circle' : option.id,
                                                                                 isCircular: option.id === 'circle',
-                                                                                name: option.id === 'hazard' ? 'Terreno Peligroso' : option.id === 'stairs' ? 'Escalera' : option.id === 'circle' ? 'Zona Circular' : 'Zona Rectangular',
+                                                                                name: option.id === 'hazard' ? 'Terreno Peligroso' : option.id === 'smoke' ? 'Humo' : option.id === 'stairs' ? 'Escalera' : option.id === 'circle' ? 'Zona Circular' : 'Zona Rectangular',
                                                                                 backgroundColor: option.color,
-                                                                                opacity: option.id === 'hazard' ? 0.1 : (token.opacity || 0.3)
+                                                                                opacity: option.id === 'hazard' ? 0.1 : option.id === 'smoke' ? 0.32 : (token.opacity || 0.3),
+                                                                                areaEffect: null,
+                                                                                ...getTerrainAreaDefinition(option.id),
                                                                             })}
                                                                             className={`px-2 py-2 rounded border text-[10px] font-bold uppercase tracking-wider transition-all ${active ? 'border-[#c8aa6e] text-[#f8e7b9] bg-[#c8aa6e]/15' : 'border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-600'}`}
                                                                         >
@@ -980,8 +1020,20 @@ export const TokenInspectorPanel = ({
                                                             <Flame size={12} /> Estados Alterados
                                                         </h4>
                                                         <EstadoSelector
-                                                            selected={normalizeTokenStatusIds(token.status || [])}
+                                                            roguelite={['rogueliteClass', 'rogueliteEnemy'].includes(token.profileType)}
+                                                            selected={[...new Set([...normalizeTokenStatusIds(token.status || []), ...(isCanvasPoisoned(token) ? ['envenenado'] : []), ...(isCanvasBleeding(token) ? ['sangrado'] : [])])]}
                                                             onToggle={(statusId) => {
+                                                                if (statusId === 'sangrado' && ['rogueliteClass', 'rogueliteEnemy'].includes(token.profileType)) {
+                                                                    const next = setCanvasBleeding(token, !isCanvasBleeding(token), combatRuntime?.combatState);
+                                                                    updateItem(token.id, { status: next.status, bleedingDeferredActivation: next.bleedingDeferredActivation,
+                                                                        ...(next.statusEffects !== undefined ? { statusEffects: next.statusEffects } : {}) });
+                                                                    return;
+                                                                }
+                                                                if (statusId === 'envenenado') {
+                                                                    const next = setCanvasPoison(token, !isCanvasPoisoned(token));
+                                                                    updateItem(token.id, { status: next.status, ...(next.statusEffects !== undefined ? { statusEffects: next.statusEffects } : {}) });
+                                                                    return;
+                                                                }
                                                                 const currentStatus = normalizeTokenStatusIds(token.status || []);
                                                                 const newStatus = currentStatus.includes(statusId)
                                                                     ? currentStatus.filter(s => s !== statusId)
