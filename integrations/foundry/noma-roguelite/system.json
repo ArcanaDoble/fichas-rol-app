@@ -1,0 +1,20 @@
+{
+  "id": "noma-roguelite",
+  "title": "NOMA · Roguelite",
+  "description": "El laboratorio jugable de NOMA: dados de acción, Presión, CD y aventura táctica.",
+  "version": "0.1.0",
+  "compatibility": { "minimum": "14", "verified": "14.361", "maximum": "14" },
+  "authors": [{ "name": "NOMA" }],
+  "esmodules": ["scripts/main.mjs"],
+  "styles": ["styles/noma.css"],
+  "languages": [{ "lang": "es", "name": "Español", "path": "lang/es.json" }, { "lang": "en", "name": "English", "path": "lang/en.json" }],
+  "documentTypes": {
+    "Actor": { "hero": {}, "enemy": {} },
+    "Item": { "weapon": {}, "armor": {}, "ability": {}, "talent": {}, "consumable": {}, "accessory": {} }
+  },
+  "socket": true,
+  "grid": { "distance": 1, "units": "casillas" },
+  "primaryTokenAttribute": "health",
+  "secondaryTokenAttribute": "resource",
+  "initiative": "1d6"
+}

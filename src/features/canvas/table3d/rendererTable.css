@@ -1,0 +1,49 @@
+.n3-world {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  isolation: isolate;
+  background: #2b241e;
+}
+.n3-world-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+  cursor: grab;
+}
+.n3-world-canvas:focus-visible {
+  outline: 1px solid #bfab7a;
+  outline-offset: -3px;
+}
+.n3-world-instructions {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.n3-world-caption,
+.n3-world-error {
+  position: absolute;
+  left: 50%;
+  bottom: max(3.3rem, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  max-width: min(86%, 36rem);
+  pointer-events: none;
+  color: #f2e5c8;
+  background: #242820ed;
+  border-block: 1px solid #927c54;
+  padding: 0.33rem 0.95rem;
+  text-align: center;
+  font:
+    500 0.9rem Georgia,
+    serif;
+}

@@ -57,6 +57,115 @@ const createClassSheet = (overrides = {}) => ({
   ...overrides,
 });
 
+const createBarrier = () => ({
+  id: 'scene-barrier', spellId: 'runic-barrier', expires: 'combat-end', negatedTraits: ['critico'],
+});
+
+describe('encounter-local Barrera on sheet synchronization', () => {
+  it('can replace portable stats without resetting encounter protection', () => {
+    const sheet = createClassSheet();
+    sheet.activeRun = createRogueliteActiveRun(sheet, { runId: 'run-1', scenarioId: 'room-1', now: 100 });
+    const token = { ...syncCanvasTokenWithSheet({ id: 'hero' }, sheet, {}, { scenarioId: 'room-1' }),
+      status: ['envenenado', 'barrera'], arcaneBarrier: createBarrier(),
+      stats: { vida: { current: 1, max: 10 }, cd: { current: 1, max: 4 } } };
+    const synced = syncCanvasTokenWithSheet(token, sheet, {}, {
+      scenarioId: 'room-1', preserveTokenState: false, preserveEncounterBarrier: true,
+    });
+
+    expect(synced.stats.vida).toEqual(expect.objectContaining({ current: 8, max: 10 }));
+    expect(synced.stats.cd).toEqual(expect.objectContaining({ current: 3, max: 4 }));
+    expect(synced.status).toContain('barrera');
+    expect(synced.arcaneBarrier).toBe(token.arcaneBarrier);
+  });
+
+  it.each(['new-run', 'new-scene', 'relink', 'explicit-reset'])('cannot keep encounter protection through %s when replacing stats', change => {
+    const sheet = createClassSheet();
+    sheet.activeRun = createRogueliteActiveRun(sheet, { runId: 'run-1', scenarioId: 'room-1', now: 100 });
+    const token = { ...syncCanvasTokenWithSheet({ id: 'hero' }, sheet, {}, { scenarioId: 'room-1' }),
+      status: ['barrera'], arcaneBarrier: createBarrier() };
+    const nextSheet = { ...sheet, activeRun: { ...sheet.activeRun } };
+    const options = { scenarioId: 'room-1', preserveTokenState: false, preserveEncounterBarrier: true };
+    if (change === 'new-run') nextSheet.activeRun.id = 'run-2';
+    if (change === 'new-scene') options.scenarioId = 'room-2';
+    if (change === 'relink') nextSheet.id = 'mage';
+    if (change === 'explicit-reset') options.preserveEncounterBarrier = false;
+    const synced = syncCanvasTokenWithSheet(token, nextSheet, {}, options);
+
+    expect(synced.status).not.toContain('barrera');
+    expect(synced.arcaneBarrier).toBeNull();
+    expect(synced.stats.cd).toEqual(token.stats.cd);
+  });
+
+  it.each([false, true])('keeps protection during a live same-scene refresh (legacy metadata only: %s)', legacy => {
+    const sheet = createClassSheet();
+    sheet.activeRun = createRogueliteActiveRun(sheet, { runId: 'run-1', scenarioId: 'room-1', now: 100 });
+    const token = { ...syncCanvasTokenWithSheet({ id: 'hero' }, sheet, {}, { scenarioId: 'room-1' }),
+      status: legacy ? ['envenenado'] : ['envenenado', 'barrera'], arcaneBarrier: createBarrier() };
+    const synced = syncCanvasTokenWithSheet(token, sheet, {}, { scenarioId: 'room-1' });
+
+    expect(synced.status).toEqual(['envenenado', 'barrera']);
+    expect(synced.arcaneBarrier).toBe(token.arcaneBarrier);
+    expect(synced.stats.cd).toBe(token.stats.cd);
+    expect(sheet.activeRun.statusEffects).not.toContain('barrera');
+  });
+
+  it('keeps a legacy same-scene token protected when run identifiers are unavailable', () => {
+    const token = { id: 'hero', profileType: 'rogueliteClass', linkedClassId: 'barbarian',
+      status: ['barrera'], arcaneBarrier: createBarrier() };
+    const synced = syncCanvasTokenWithSheet(token, createClassSheet());
+
+    expect(synced.status).toEqual(['barrera']);
+    expect(synced.arcaneBarrier).toBe(token.arcaneBarrier);
+  });
+
+  it.each(['new-run', 'new-scene', 'moved-run', 'finished-run', 'reset'])('drops protection during %s without making it permanent CD', change => {
+    const sheet = createClassSheet();
+    sheet.activeRun = createRogueliteActiveRun(sheet, { runId: 'run-1', scenarioId: 'room-1', now: 100 });
+    const token = { ...syncCanvasTokenWithSheet({ id: 'hero' }, sheet, {}, { scenarioId: 'room-1' }),
+      status: ['envenenado', 'barrera'], arcaneBarrier: createBarrier() };
+    const nextSheet = { ...sheet, activeRun: { ...sheet.activeRun } };
+    const options = {};
+    if (change === 'new-run') nextSheet.activeRun.id = 'run-2';
+    if (change === 'new-scene') options.scenarioId = 'room-2';
+    if (change === 'moved-run') nextSheet.activeRun.currentScenarioId = 'room-2';
+    if (change === 'finished-run') nextSheet.activeRun.status = 'finished';
+    if (change === 'reset') options.preserveTokenState = false;
+    const synced = syncCanvasTokenWithSheet(token, nextSheet, {}, options);
+
+    expect(synced.status).not.toContain('barrera');
+    expect(synced.arcaneBarrier).toBeNull();
+    expect(synced.stats.cd).toEqual(token.stats.cd);
+    if (change !== 'reset') expect(synced.status).toContain('envenenado');
+  });
+
+  it('does not import protection saved accidentally in a class sheet or portable run', () => {
+    const sheet = createClassSheet({ personalStatusTags: ['Sangrado', 'Barrera|Temporal'], arcaneBarrier: createBarrier() });
+    sheet.activeRun = { ...createRogueliteActiveRun(sheet, { runId: 'run-1', scenarioId: 'room-1', now: 100 }),
+      statusEffects: ['sangrado', 'barrera'], arcaneBarrier: createBarrier() };
+    const synced = syncCanvasTokenWithSheet({ id: 'new-hero' }, sheet, {}, { scenarioId: 'room-1' });
+
+    expect(synced.status).toEqual(['sangrado']);
+    expect(synced.arcaneBarrier).toBeNull();
+    expect(synced.stats.cd).toEqual(expect.objectContaining({ current: 3, max: 4 }));
+  });
+
+  it('preserves an enemy protection in its scene but never imports it from the enemy card', () => {
+    const sheet = { id: 'enemy-1', profileType: 'rogueliteEnemy', stats: { cd: { current: 2, max: 2 } },
+      status: ['envenenado', 'barrera'], arcaneBarrier: createBarrier() };
+    const unprotected = syncCanvasTokenWithSheet({ id: 'new-enemy' }, sheet, {}, { scenarioId: 'room-1' });
+    expect(unprotected.status).toEqual(['envenenado']);
+    expect(unprotected.arcaneBarrier).toBeNull();
+    const token = { ...unprotected, status: ['envenenado'], arcaneBarrier: createBarrier() };
+    const synced = syncCanvasTokenWithSheet(token, { ...sheet, status: ['aturdido'] }, {}, { scenarioId: 'room-1' });
+
+    expect(synced.status).toEqual(['aturdido', 'barrera']);
+    expect(synced.arcaneBarrier).toBe(token.arcaneBarrier);
+    expect(synced.stats.cd).toEqual({ current: 2, max: 2 });
+    expect(syncCanvasTokenWithSheet(token, sheet, {}, { scenarioId: 'room-2' }).arcaneBarrier).toBeNull();
+    expect(syncCanvasTokenWithSheet(token, sheet, {}, { scenarioId: 'room-1', preserveTokenState: false }).arcaneBarrier).toBeNull();
+  });
+});
+
 test('Forge rapier changes refresh equipped and inventory copies without resetting runtime resources or restoring dropped items', () => {
   const rapier = { id: 'Estoque', templateId: 'Estoque', instanceId: 'copy-rapier', name: 'Estoque', dano: 'd6', rasgos: ['Crítico'], quantity: 1 };
   const sheet = createClassSheet({ equipment: { weapons: [rapier] }, equippedItems: { mainHand: rapier } });

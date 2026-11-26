@@ -1,0 +1,122 @@
+[
+  {
+    "archivo": "01_Arbol_verde_A1.png",
+    "etiqueta": "Árbol verde A1",
+    "ancho": 1536,
+    "alto": 1536,
+    "origen_pack": "FA_Objects_A_v3.54.dungeondraft_pack",
+    "ruta_interna": "res://packs/FA35OB01/textures/objects/Flora/Trees/Tree_Tops/Tree_Green_A1_6x6.webp",
+    "sha256_original": "779dcc6dda9af5901f2f24f91082545809c7e59355c268f1f14d4bb5ba31aea7",
+    "bytes_png": 3411857
+  },
+  {
+    "archivo": "02_Arbol_verde_A2.png",
+    "etiqueta": "Árbol verde A2",
+    "ancho": 2048,
+    "alto": 1792,
+    "origen_pack": "FA_Objects_A_v3.54.dungeondraft_pack",
+    "ruta_interna": "res://packs/FA35OB01/textures/objects/Flora/Trees/Tree_Tops/Tree_Green_A2_8x7.webp",
+    "sha256_original": "f2bbf15584161ddce2ec87d2f5461dc582b93aec68ec7e53ecb722d8115775a7",
+    "bytes_png": 5388106
+  },
+  {
+    "archivo": "03_Arbol_verde_B1.png",
+    "etiqueta": "Árbol verde B1",
+    "ancho": 1280,
+    "alto": 1280,
+    "origen_pack": "FA_Objects_A_v3.54.dungeondraft_pack",
+    "ruta_interna": "res://packs/FA35OB01/textures/objects/Flora/Trees/Tree_Tops/Tree_Green_B1_5x5.webp",
+    "sha256_original": "5a9b24ef0e5c26c70f3503d7d5ab51f2c7efda17cd4dd18218f13350b12871b1",
+    "bytes_png": 2757099
+  },
+  {
+    "archivo": "04_Arbol_verde_B3.png",
+    "etiqueta": "Árbol verde B3",
+    "ancho": 1280,
+    "alto": 1280,
+    "origen_pack": "FA_Objects_A_v3.54.dungeondraft_pack",
+    "ruta_interna": "res://packs/FA35OB01/textures/objects/Flora/Trees/Tree_Tops/Tree_Green_B3_5x5.webp",
+    "sha256_original": "eebc0417d0a3a45c09d1c15ce25e09a9cb559a76968f09ba1f6d2171371137a0",
+    "bytes_png": 2376453
+  },
+  {
+    "archivo": "05_Arbol_verde_C1.png",
+    "etiqueta": "Árbol verde C1",
+    "ancho": 1280,
+    "alto": 1280,
+    "origen_pack": "FA_Objects_A_v3.54.dungeondraft_pack",
+    "ruta_interna": "res://packs/FA35OB01/textures/objects/Flora/Trees/Tree_Tops/Tree_Green_C1_5x5.webp",
+    "sha256_original": "e6c10cac630c361028d5ccf75e80e8adfa5baf9d9dc5bd92bec876eaa531f5f3",
+    "bytes_png": 2671872
+  },
+  {
+    "archivo": "06_Arbol_verde_D1.png",
+    "etiqueta": "Árbol verde D1",
+    "ancho": 1280,
+    "alto": 1280,
+    "origen_pack": "FA_Objects_A_v3.54.dungeondraft_pack",
+    "ruta_interna": "res://packs/FA35OB01/textures/objects/Flora/Trees/Tree_Tops/Tree_Green_D1_5x5.webp",
+    "sha256_original": "e03bf82b0d9f9dd9d9fb54278afcbf7fbc38ea73613ca335c920216cebf0bca8",
+    "bytes_png": 2953005
+  },
+  {
+    "archivo": "07_Arbol_otono_rojo.png",
+    "etiqueta": "Árbol de otoño rojo",
+    "ancho": 1280,
+    "alto": 1280,
+    "origen_pack": "FA_Objects_A_v3.54.dungeondraft_pack",
+    "ruta_interna": "res://packs/FA35OB01/textures/objects/Flora/Trees/Tree_Tops/Tree_Red_B2_5x5.webp",
+    "sha256_original": "29ad1fa8ea2313b52695fe3f64c5948c67df9a8a367f427b189be0fbe2129713",
+    "bytes_png": 2043620
+  },
+  {
+    "archivo": "08_Arbol_otono_amarillo.png",
+    "etiqueta": "Árbol de otoño amarillo",
+    "ancho": 1280,
+    "alto": 1280,
+    "origen_pack": "FA_Objects_A_v3.54.dungeondraft_pack",
+    "ruta_interna": "res://packs/FA35OB01/textures/objects/Flora/Trees/Tree_Tops/Tree_Yellow_D2_5x5.webp",
+    "sha256_original": "813aaf754b50d743dff6316aadcc2e0e782e0d982d98bfdc346a25ed67d21729",
+    "bytes_png": 3341925
+  },
+  {
+    "archivo": "09_Pino_verde.png",
+    "etiqueta": "Pino verde",
+    "ancho": 1024,
+    "alto": 1024,
+    "origen_pack": "FA_Objects_A_v3.54.dungeondraft_pack",
+    "ruta_interna": "res://packs/FA35OB01/textures/objects/Flora/Trees/Pine_Trees/Pine_Green_A1_4x4.webp",
+    "sha256_original": "746ea23ca54a87546350fb4c5235e883fdb1f12959ef3ef679e752d1727673af",
+    "bytes_png": 1216324
+  },
+  {
+    "archivo": "10_Pino_azulado.png",
+    "etiqueta": "Pino azulado",
+    "ancho": 1024,
+    "alto": 1024,
+    "origen_pack": "FA_Objects_A_v3.54.dungeondraft_pack",
+    "ruta_interna": "res://packs/FA35OB01/textures/objects/Flora/Trees/Pine_Trees/Pine_Blue_A2_4x4.webp",
+    "sha256_original": "48ca787adf0e76cb2e2f49ab9b965d9fdfb7525169dc20664b9d87b4e4dd3eeb",
+    "bytes_png": 1031313
+  },
+  {
+    "archivo": "11_Palmera_A1.png",
+    "etiqueta": "Palmera A1",
+    "ancho": 1280,
+    "alto": 1280,
+    "origen_pack": "FA_Objects_A_v3.54.dungeondraft_pack",
+    "ruta_interna": "res://packs/FA35OB01/textures/objects/Flora/Trees/Palm_Trees/Palm_Tree_Green1_A1_5x5.webp",
+    "sha256_original": "5dcd8a4113f11d98f6da7367ade53968b5e43390930b288a9eb8153a5ce7fbcd",
+    "bytes_png": 1441479
+  },
+  {
+    "archivo": "12_Palmera_C1.png",
+    "etiqueta": "Palmera C1",
+    "ancho": 1280,
+    "alto": 1280,
+    "origen_pack": "FA_Objects_A_v3.54.dungeondraft_pack",
+    "ruta_interna": "res://packs/FA35OB01/textures/objects/Flora/Trees/Palm_Trees/Palm_Tree_Green2_C1_5x5.webp",
+    "sha256_original": "83e4ed590fb4595e12493f16373c7a22a28df434b59b0a97dc7d11871459f41b",
+    "bytes_png": 1372756
+  }
+]

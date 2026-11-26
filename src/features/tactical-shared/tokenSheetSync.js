@@ -6,7 +6,7 @@ import { normalizeEquippedWeaponSets } from '../roguelite/equipmentPool';
 export const STATUS_EFFECT_IDS = [
     'acido', 'apresado', 'ardiendo', 'asfixiado', 'asustado', 'aturdido',
     'cansado', 'cegado', 'congelado', 'derribado', 'conmocionado', 'enfermo', 'oculto',
-    'envenenado', 'herido', 'iluminado', 'regeneracion', 'sangrado', 'silenciado',
+    'envenenado', 'barrera', 'iluminado', 'regeneracion', 'sangrado', 'silenciado',
 ];
 
 export const getRarityInfo = (rareza) => {

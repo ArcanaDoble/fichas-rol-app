@@ -112,18 +112,29 @@ body {
 }
 
 .noma-enemy-mode {
+  position: relative;
+  isolation: isolate;
   padding: clamp(32px, 5vw, 64px);
+  background:
+    radial-gradient(ellipse at 52% -18%, rgba(143, 111, 64, 0.16), transparent 51%),
+    radial-gradient(ellipse at 88% 70%, rgba(37, 52, 77, 0.13), transparent 45%),
+    #07090d;
+}
+
+.noma-enemy-mode::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: url('../public/interfaz/stardust.png') repeat;
+  background-size: 600px 600px;
+  content: '';
+  opacity: 0.08;
+  pointer-events: none;
 }
 
 .noma-enemy-mode__frame {
   width: min(100%, 1152px);
   margin: 0 auto;
-}
-
-.noma-enemy-mode__choices button {
-  border: 1px solid rgba(200, 170, 110, 0.32);
-  background: #0b1120;
-  color: #b7c1d1;
 }
 
 .noma-enemy-mode__header {
@@ -176,48 +187,103 @@ body {
 
 .noma-enemy-mode__choices {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
-  margin-top: 0;
-  background: rgba(200, 170, 110, 0.2);
-}
-
-.noma-enemy-mode__choices button {
-  display: grid;
-  min-height: 178px;
-  grid-template-columns: 70px minmax(0, 1fr) 20px;
-  align-items: center;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
-  padding: 25px;
-  border: 0;
+  margin-top: 0;
+}
+
+.noma-enemy-mode__choice {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 414px;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 23px 25px 21px;
+  border: 1px solid rgba(200, 170, 110, 0.28);
+  background: linear-gradient(180deg, #111827 0%, #0b111c 70%, #0a0e16 100%);
+  box-shadow: inset 0 0 0 1px rgba(236, 217, 173, 0.04), 0 10px 24px rgba(0, 0, 0, 0.2);
+  color: #b7c1d1;
+  cursor: pointer;
   text-align: left;
-  transition: background 160ms ease, color 160ms ease;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
-.noma-enemy-mode__choices button:hover,
-.noma-enemy-mode__choices button:focus-visible {
-  background: #101827;
-  color: #f1e5cd;
-  outline: 1px solid #c8aa6e;
-  outline-offset: -1px;
+.noma-enemy-mode__choice::after {
+  position: absolute;
+  inset: 5px;
+  border: 1px solid rgba(229, 209, 165, 0.08);
+  content: '';
+  pointer-events: none;
 }
 
-.noma-enemy-mode__icon {
-  display: grid;
-  width: 70px;
-  height: 70px;
-  place-items: center;
-  border: 1px solid rgba(200, 170, 110, 0.25);
-  color: #b99b5e;
+.noma-enemy-mode__art {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 64%;
+  overflow: hidden;
+  pointer-events: none;
 }
 
-.noma-enemy-mode__icon svg { width: 28px; height: 28px; }
-.noma-enemy-mode__choices small,
-.noma-enemy-mode__choices strong,
-.noma-enemy-mode__choices em { display: block; }
-.noma-enemy-mode__choices small { color: #647087; font-size: 8px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; }
-.noma-enemy-mode__choices strong { margin: 7px 0; color: #e8dcc5; font-family: Cinzel, Georgia, serif; font-size: 1.15rem; letter-spacing: 0.1em; text-transform: uppercase; }
-.noma-enemy-mode__choices em { color: #7f8da3; font-family: Georgia, serif; font-size: 0.82rem; font-style: normal; line-height: 1.5; }
+.noma-enemy-mode__art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 44%;
+  filter: saturate(0.72) brightness(0.7);
+  transition: transform 240ms ease, filter 240ms ease;
+}
+
+.noma-enemy-mode__art::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(7, 10, 17, 0.16) 0%, rgba(9, 14, 23, 0.42) 45%, #0b111c 96%);
+  content: '';
+}
+
+.noma-enemy-mode__copy { position: relative; display: block; margin-top: auto; }
+.noma-enemy-mode__copy small,
+.noma-enemy-mode__copy strong,
+.noma-enemy-mode__copy em { display: block; }
+.noma-enemy-mode__copy small { color: #c2a772; font-size: 9px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; }
+.noma-enemy-mode__copy strong { margin: 8px 0 9px; color: #f1e5cc; font-family: Cinzel, Georgia, serif; font-size: clamp(1.18rem, 1.8vw, 1.48rem); font-weight: 600; letter-spacing: 0.045em; line-height: 1.23; text-transform: uppercase; }
+.noma-enemy-mode__copy em { max-width: 30ch; color: #a1aec0; font-family: Alegreya, Georgia, serif; font-size: 0.96rem; font-style: normal; line-height: 1.38; }
+.noma-enemy-mode__entry { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 19px; padding-top: 12px; border-top: 1px solid rgba(200, 170, 110, 0.26); color: #d5b979; font-size: 9px; font-weight: 700; letter-spacing: 0.17em; text-transform: uppercase; }
+.noma-enemy-mode__entry svg { width: 16px; height: 16px; transition: transform 180ms ease; }
+
+.noma-enemy-mode__choice:hover,
+.noma-enemy-mode__choice:focus-visible {
+  transform: translateY(-4px);
+  border-color: rgba(224, 194, 134, 0.82);
+  box-shadow: inset 0 0 0 1px rgba(224, 194, 134, 0.16), 0 18px 36px rgba(0, 0, 0, 0.34);
+}
+
+.noma-enemy-mode__choice:hover .noma-enemy-mode__art img,
+.noma-enemy-mode__choice:focus-visible .noma-enemy-mode__art img { transform: scale(1.05); filter: saturate(0.85) brightness(0.84); }
+.noma-enemy-mode__choice:hover .noma-enemy-mode__entry svg,
+.noma-enemy-mode__choice:focus-visible .noma-enemy-mode__entry svg { transform: translateX(3px); }
+.noma-enemy-mode__choice:focus-visible { outline: 2px solid #e7ce96; outline-offset: 3px; }
+
+@media (max-width: 900px) {
+  .noma-enemy-mode__choices { grid-template-columns: 1fr; }
+  .noma-enemy-mode__choice { min-height: 245px; }
+  .noma-enemy-mode__art { height: 100%; }
+  .noma-enemy-mode__art::after { background: linear-gradient(90deg, #0b111c 0%, rgba(11, 17, 28, 0.91) 48%, rgba(11, 17, 28, 0.46) 100%), linear-gradient(0deg, #0b111c 0%, transparent 65%); }
+  .noma-enemy-mode__art img { object-position: center 46%; }
+  .noma-enemy-mode__copy em { max-width: 45ch; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .noma-enemy-mode__choice,
+  .noma-enemy-mode__art img,
+  .noma-enemy-mode__entry svg { transition: none; }
+  .noma-enemy-mode__choice:hover,
+  .noma-enemy-mode__choice:focus-visible,
+  .noma-enemy-mode__choice:hover .noma-enemy-mode__art img,
+  .noma-enemy-mode__choice:focus-visible .noma-enemy-mode__art img,
+  .noma-enemy-mode__choice:hover .noma-enemy-mode__entry svg,
+  .noma-enemy-mode__choice:focus-visible .noma-enemy-mode__entry svg { transform: none; }
+}
 
 .noma-rogue-bestiary {
   padding: 0 clamp(18px, 4vw, 64px) 70px;
@@ -347,6 +413,8 @@ body {
 
 .noma-rogue-bestiary__notice.is-error { border-left-color: #cc6870; background: #180d12; color: #dca0a5; }
 .noma-rogue-bestiary__notice button { margin-left: auto; color: inherit; }
+.noma-enemy-card__actions > .noma-rogue-bestiary__notice { margin: 0 0 8px; }
+.noma-enemy-card__actions > .noma-rogue-bestiary__notice > svg { flex-shrink: 0; width: 16px; }
 
 .noma-rogue-bestiary__grid {
   display: grid;
@@ -389,6 +457,36 @@ body {
 .noma-enemy-card__stage .noma-talent-stage__content { min-height: 365px; }
 .noma-enemy-card__stage .noma-talent-stage__art > svg { width: 150px; height: 150px; }
 
+/* The full illustration keeps a single square crop; the title fades into the
+   lower edge instead of forcing a face into the old panoramic text column. */
+.noma-enemy-card__stage[data-layout="square"] { min-height: 0; }
+.noma-enemy-card__illustration-space { width: 100%; aspect-ratio: 1; }
+.noma-enemy-card__stage[data-layout="square"] .noma-talent-stage__art,
+.noma-enemy-card__stage[data-layout="square"] .noma-talent-stage__veil {
+  right: 0; bottom: auto; left: 0; height: auto; aspect-ratio: 1;
+}
+.noma-enemy-card__stage[data-layout="square"] .noma-talent-stage__art { mask-image: none; -webkit-mask-image: none; }
+.noma-enemy-card__stage[data-layout="square"] .noma-talent-stage__art img {
+  object-position: center; transform: none; filter: saturate(.96) contrast(1.02); opacity: 1;
+}
+.noma-enemy-card__stage[data-layout="square"] .noma-talent-stage__veil {
+  background:
+    linear-gradient(0deg, #0d1421 0%, rgba(13,20,33,.96) 8%, rgba(13,20,33,.6) 22%, transparent 43%),
+    linear-gradient(90deg, rgba(13,20,33,.88) 0%, rgba(13,20,33,.5) 9%, rgba(13,20,33,.16) 25%, transparent 46%),
+    linear-gradient(270deg, rgba(13,20,33,.48) 0%, transparent 24%),
+    linear-gradient(180deg, rgba(7,11,19,.65), transparent 20%),
+    radial-gradient(ellipse at 100% 0%, var(--noma-talent-accent-faint), transparent 65%);
+}
+.noma-enemy-card__stage[data-layout="square"] .noma-talent-stage__content {
+  width: 100%; min-height: 0; margin-top: -21%; padding: 0 24px 28px;
+}
+.noma-enemy-card[data-allegiance="enemy"] {
+  border-color: var(--noma-talent-accent-soft);
+  background: linear-gradient(180deg, var(--noma-talent-accent-faint), transparent 24%), #0b1120;
+}
+.noma-enemy-card[data-allegiance="enemy"] .noma-talent-stage__edge { height: 3px; }
+.noma-enemy-card[data-allegiance="enemy"] span.noma-talent-stage__rarity { cursor: default; }
+
 .noma-enemy-card__identity-editor { width: 100%; }
 .noma-enemy-card__identity-editor > span {
   display: inline-flex;
@@ -428,6 +526,17 @@ body {
 .noma-enemy-stats {
   margin: -2px 0 28px;
 }
+
+.noma-campaign-allegiance { min-width: 0; margin: 0 0 22px; padding: 0; border: 0; }
+.noma-campaign-allegiance legend { margin-bottom: 9px; padding: 0; color: #bba477; font: 700 10px Lato, Arial, sans-serif; letter-spacing: 0.12em; text-transform: uppercase; }
+.noma-campaign-allegiance > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.noma-campaign-allegiance label { position: relative; display: flex; min-height: 44px; align-items: center; justify-content: center; border: 1px solid #354054; color: #aeb5c2; background: #0b1120; cursor: pointer; font: 600 13px Cinzel, Georgia, serif; transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease; }
+.noma-campaign-allegiance input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.noma-campaign-allegiance label:hover { border-color: #c8aa6e; color: #f1e6cc; }
+.noma-campaign-allegiance label[data-selected=true] { border-color: #c8aa6e; color: #ead3a4; background: #c8aa6e20; }
+.noma-campaign-allegiance label[data-allegiance=enemy][data-selected=true] { border-color: #c8857a; color: #efb6aa; background: #c2645420; }
+.noma-campaign-allegiance label:focus-within { outline: 2px solid #f1e6cc; outline-offset: 3px; }
+.noma-campaign-allegiance p { margin: 8px 0 0; color: #9ca8ba; font: 12px/1.4 Lato, Arial, sans-serif; }
 
 .noma-enemy-stats > header {
   display: flex;
@@ -693,6 +802,15 @@ body {
 .noma-rogue-ability-dialog__library-check { display: flex !important; align-items: center; gap: 9px; color: #8e9aad; font-size: .72rem; }
 
 .noma-rogue-crop-dialog__viewport { position: relative; height: min(58vh, 520px); margin: 18px 20px; background: #020407; }
+.noma-enemy-art-format { margin: 16px 20px 0; padding: 0; border: 0; min-width: 0; }
+.noma-enemy-art-format legend { margin-bottom: 8px; color: #c8aa6e; font: 600 13px Cinzel, Georgia, serif; }
+.noma-enemy-art-format > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.noma-enemy-art-format label { position: relative; display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px; border: 1px solid #354054; color: #b8c1ce; cursor: pointer; font: 600 12px Cinzel, Georgia, serif; text-align: center; }
+.noma-enemy-art-format label[data-selected="true"] { color: #ead3a4; border-color: #c8aa6e; background: #c8aa6e18; }
+.noma-enemy-art-format label:hover { border-color: #c8aa6e; }
+.noma-enemy-art-format input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.noma-enemy-art-format label:focus-within { outline: 2px solid #f1e6cc; outline-offset: 2px; }
+.noma-enemy-art-format p { margin: 8px 0 0; color: #b8c1ce; font: 13px/1.45 Lato, Arial, sans-serif; }
 .noma-rogue-crop-dialog__viewport.is-enemy-header { height: min(52vh, 430px); }
 .noma-rogue-crop-dialog__assist {
   display: grid;
@@ -806,8 +924,11 @@ body {
   .noma-enemy-mode__header h1 { font-size: 2rem; }
   .noma-enemy-mode__header p { max-width: 36rem; font-size: 0.58rem; }
   .noma-enemy-mode__choices { grid-template-columns: 1fr; }
-  .noma-enemy-mode__choices button { min-height: 145px; grid-template-columns: 56px minmax(0, 1fr) 18px; padding: 18px; }
-  .noma-enemy-mode__icon { width: 56px; height: 56px; }
+  .noma-enemy-mode__choices { gap: 12px; }
+  .noma-enemy-mode__choice { min-height: 232px; padding: 18px; }
+  .noma-enemy-mode__copy strong { font-size: 1.24rem; }
+  .noma-enemy-mode__copy em { max-width: 34ch; font-size: 0.89rem; }
+  .noma-enemy-mode__entry { margin-top: 13px; padding-top: 10px; }
   .noma-rogue-bestiary { padding: 0 10px 50px; }
   .noma-rogue-bestiary__header { position: relative; margin: 0 -10px; }
   .noma-rogue-bestiary__header-inner { min-height: 0; flex-wrap: wrap; gap: 12px; padding: 14px 12px; }
@@ -1809,6 +1930,9 @@ body.noma-canvas-inventory-dragging [data-tactical-sidebar-backdrop="true"] {
   height: auto;
 }
 
+.canvas-mist-zone { border: 1px solid rgba(201, 194, 219, .45); background: radial-gradient(ellipse, rgba(186, 183, 216, .2), transparent); }
+.canvas-mist-zone .canvas-smoke-zone__grid { opacity: .4; }
+.canvas-mist-zone .canvas-smoke-zone__label { color: #d0cde2; }
 .canvas-smoke-zone__grid {
   position: absolute;
   inset: 0;
@@ -2704,7 +2828,7 @@ body.noma-canvas-inventory-dragging [data-tactical-sidebar-backdrop="true"] {
   align-items: flex-start;
   justify-content: flex-end;
   padding: 11px 11px 0 28px;
-  background: radial-gradient(circle at 100% 0, rgba(4, 7, 11, 0.5) 0%, rgba(4, 7, 11, 0.22) 38%, transparent 72%);
+  background: radial-gradient(ellipse 100% 100% at 100% 0, rgba(4, 7, 11, 0.48) 0%, rgba(4, 7, 11, 0.25) 26%, rgba(4, 7, 11, 0.1) 52%, rgba(4, 7, 11, 0.025) 74%, transparent 100%);
   pointer-events: none;
 }
 
@@ -2887,6 +3011,88 @@ body.noma-canvas-inventory-dragging [data-tactical-sidebar-backdrop="true"] {
 
 .noma-loadout-hand-slot {
   container-type: inline-size;
+}
+
+/* Truco shares the quiet, icon-only affordance of the unequip cross. */
+.noma-loadout-weapon-trick {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  z-index: 31;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: rgba(213, 185, 126, .78);
+  opacity: .7;
+  transition: color 140ms ease, filter 140ms ease, opacity 140ms ease;
+}
+
+.noma-loadout-weapon-trick svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.65;
+  filter: drop-shadow(0 1px 2px #000);
+}
+
+.noma-loadout-weapon-trick:hover,
+.noma-loadout-weapon-trick:focus-visible {
+  color: rgba(242, 213, 152, .95);
+  opacity: 1;
+  filter: drop-shadow(0 0 3px rgba(213, 185, 126, .42));
+  outline: none;
+}
+
+.noma-loadout-weapon-trick:focus-visible::after {
+  content: '';
+  position: absolute;
+  width: 21px;
+  height: 21px;
+  border: 1px solid rgba(213, 185, 126, .5);
+  transform: rotate(45deg);
+}
+
+.noma-loadout-weapon-trick:disabled {
+  opacity: .3;
+  filter: none;
+  cursor: default;
+}
+
+.noma-loadout-hand-slot--trick-warning .noma-loadout-weapon-trick { bottom: 34px; }
+
+.noma-loadout-trick-error {
+  margin: 10px 0;
+  color: #e5ae92;
+  font-size: 14px;
+}
+
+@media (max-width: 640px), (pointer: coarse) {
+  .noma-loadout-weapon-trick { height: 44px; bottom: 6px; }
+  .noma-loadout-weapon-trick svg { width: 14px; height: 14px; }
+}
+
+@media (max-width: 640px) {
+  .noma-loadout-hand-slot--trick { padding-bottom: 48px; }
+  .noma-loadout-hand-slot--trick-warning { padding-bottom: 76px; }
+  .noma-loadout-hand-slot--trick .noma-loadout-weapon-name { margin-top: 2px; }
+  .noma-loadout-hand-slot--trick .noma-loadout-weapon-stats { margin-top: 5px; }
+  .noma-loadout-hand-slot--trick .noma-loadout-weapon-stats > div { padding: 0; }
+  .noma-loadout-hand-slot--trick .noma-loadout-traits {
+    max-width: 100%;
+    margin-top: 4px;
+    padding: 3px 0;
+    column-gap: 4px;
+    row-gap: 2px;
+  }
+  .noma-loadout-weapon-trick { bottom: 0; align-items: end; padding-bottom: 6px; }
+  .noma-loadout-hand-slot--trick .noma-loadout-trait { letter-spacing: .04em; }
+  @container (max-width: 190px) {
+    .noma-loadout-hand-slot--trick .noma-loadout-weapon-name { font-size: 12px; line-height: 1.25; }
+  }
 }
 
 .noma-loadout-weapon-stats {

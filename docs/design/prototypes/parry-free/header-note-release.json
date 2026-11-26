@@ -1,0 +1,31 @@
+{
+  "verifiedAtUtc": "2026-10-21T02:41:36.508400+00:00",
+  "release": "parry-header-note-typography",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.65282a87.js",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "de6de815f4e5a0af4991d5a54a48f478dbd3348920b67219abbb457ce564959c"
+    },
+    "main.css": {
+      "path": "/static/css/main.65749ebe.css",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "09fa64400371c165365f9cdc0f830c7ec71fda916d8765b1f7bc3143980484e9"
+    }
+  },
+  "buildLog": "output/playwright/parry-header-note-build.log",
+  "deployLog": "output/playwright/parry-header-note-deploy.log",
+  "verification": "CSS-only; original Spanish copy unchanged; Alegreya italic16px, centered, balanced two-line wrap and warm gold. Real provider checked at1280x800 and760x800.",
+  "evidence": [
+    "evidence/header-note-desktop.png",
+    "evidence/header-note-narrow.png"
+  ],
+  "productionRoomWritesForVerification": 0,
+  "firestoreRulesChanged": false
+}

@@ -523,7 +523,6 @@ const UsersView = ({ onBack }) => {
     };
 
     const PLAYER_PERMISSIONS = [
-        { key: 'canViewInitiative', label: 'Iniciativa', icon: '⚡' },
         { key: 'canViewReflexesGame', label: 'Minijuego Reflejos', icon: '🔒' },
         { key: 'canViewDiceCalculator', label: 'Calculadora Dados', icon: '🎲' },
         { key: 'canViewMinimap', label: 'Minimapa', icon: '⌚️' },

@@ -1,0 +1,35 @@
+{
+  "verifiedAtUtc": "2026-10-21T03:19:36.086641+00:00",
+  "release": "parry-original-consistent-action-arrows",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.1049795f.js",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "fa0a5cf5344dc16c9460b375bf1e6dfdf31b05a8258bc0b7a55c8a0e057e4076"
+    },
+    "main.css": {
+      "path": "/static/css/main.822319bd.css",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "130d8bb06113dba88c8fc239d876a7300838fe369c03d8653daa9a4f026d6b32"
+    }
+  },
+  "buildLog": "output/playwright/parry-action-arrows-build.log",
+  "deployLog": "output/playwright/parry-action-arrows-deploy.log",
+  "verification": "Restored original Lato arrow glyph. One shared 24px style for repeat, change rival and confirmation. Both result arrows measured 24x24px with identical 24px/24px Lato font on mobile. Visually checked at 320x740, 412x915 and 1280x800, including Ronda wrapping and alignment.",
+  "evidence": [
+    "evidence/action-arrows-detail.png",
+    "evidence/action-arrows-mobile.png",
+    "evidence/action-arrows-small-mobile.png",
+    "evidence/action-arrows-desktop.png"
+  ],
+  "supersedes": "repeat-arrow-release.json",
+  "productionRoomWritesForVerification": 0,
+  "firestoreRulesChanged": false,
+  "gameplayChanged": false
+}

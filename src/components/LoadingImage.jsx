@@ -3,12 +3,23 @@ import PropTypes from 'prop-types';
 
 const decodedImageSources = new Set();
 const pendingImagePreloads = new Map();
+// Keep decoded preload resources alive so a later image element can reuse the
+// browser's image resource, including remote art served without HTTP caching.
+const decodedPreloadImages = new Map();
+const MAX_RETAINED_PRELOADS = 32;
 export const isImagePreloaded = src => Boolean(src && decodedImageSources.has(src));
 
 // Share preparation with rendered images so a warmed source is visible on mount.
 export const preloadImage = (src) => {
   if (!src || typeof Image === 'undefined') return Promise.resolve(false);
-  if (decodedImageSources.has(src)) return Promise.resolve(true);
+  if (decodedImageSources.has(src)) {
+    const retained = decodedPreloadImages.get(src);
+    if (retained) {
+      decodedPreloadImages.delete(src);
+      decodedPreloadImages.set(src, retained);
+    }
+    return Promise.resolve(true);
+  }
   if (pendingImagePreloads.has(src)) return pendingImagePreloads.get(src);
 
   const image = new Image();
@@ -23,7 +34,16 @@ export const preloadImage = (src) => {
     image.onload = null;
     image.onerror = null;
     pendingImagePreloads.delete(src);
-    if (loaded) decodedImageSources.add(src);
+    if (loaded) {
+      decodedImageSources.add(src);
+      decodedPreloadImages.delete(src);
+      decodedPreloadImages.set(src, image);
+      if (decodedPreloadImages.size > MAX_RETAINED_PRELOADS) {
+        const oldestSource = decodedPreloadImages.keys().next().value;
+        decodedPreloadImages.delete(oldestSource);
+        decodedImageSources.delete(oldestSource);
+      }
+    }
     resolveReady(loaded);
   };
   const decode = async () => {

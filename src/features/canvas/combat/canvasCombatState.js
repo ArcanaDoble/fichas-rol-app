@@ -1,4 +1,6 @@
 import { continueCanvasExplosiveBlast } from './canvasExplosiveBlast';
+import { normalizeCombatSideKey } from '../../tactical-shared/legacyCombatRules';
+import { normalizeCampaignThreatProfile, rollCampaignThreatPool } from './campaignThreatDice';
 
 export const CANVAS_COMBAT_VERSION = 1;
 
@@ -65,16 +67,32 @@ const getEnemyInitiative = (token) => Math.max(0, asInteger(
 ));
 
 const isCombatParticipant = (token) => (
-  token?.profileType === 'rogueliteClass' || token?.profileType === 'rogueliteEnemy'
+  ['rogueliteClass', 'rogueliteEnemy', 'campaignCharacter'].includes(token?.profileType)
+);
+
+export const supportsCanvasInitiative = (token, system) => (
+  token?.profileType === 'rogueliteEnemy'
+  || token?.profileType === (system === 'campaign' ? 'campaignCharacter' : 'rogueliteClass')
+);
+
+const isEligibleForInitiative = (token, system) => (
+  supportsCanvasInitiative(token, system) && token.participatesInCombat !== false
+);
+
+export const getCanvasCombatReinforcements = (state, tokens = []) => (
+  ['setup', 'active'].includes(state?.status)
+    ? tokens.filter(token => isEligibleForInitiative(token, state.rulesSystem) && !state.participants?.[token.id])
+    : []
 );
 
 const getParticipantSide = (token) => (
   token.profileType === 'rogueliteEnemy' ? 'enemies' : 'players'
 );
 
-export const defaultEnemyActions = () => [
+export const defaultEnemyActions = (campaign = false) => [
   { id: 'movement', label: 'Movimiento', type: 'movement', status: 'available' },
   { id: 'attack', label: 'Ataque', type: 'attack', status: 'available' },
+  ...(campaign ? [{ id: 'defense', label: 'Defensa', type: 'defense', status: 'available' }] : []),
 ];
 
 export const getMovementBase = (token) => Math.max(0, asInteger(
@@ -118,11 +136,17 @@ export const getAvailableMovement = (participant) => {
 
 const createParticipant = (token, index) => {
   const side = getParticipantSide(token);
-  const profile = side === 'players' ? normalizeActionDiceProfile(token.actionDice) : [];
+  const threatProfile = normalizeCampaignThreatProfile(token.threatDice, token.threatDie);
+  const profile = side === 'players' ? normalizeActionDiceProfile(token.profileType === 'campaignCharacter'
+    ? (token.actionDice || []).filter(Boolean) : token.actionDice) : [];
   const initiativeBase = side === 'players' ? getInitiativeBase(token) : getEnemyInitiative(token);
   const movementBase = getMovementBase(token);
   return {
     tokenId: token.id,
+    ...(token.rulesSystem === 'campaign' ? {
+      rulesSystem: 'campaign', defenseRefreshed: false,
+      initiativeTeamId: normalizeCombatSideKey(token.teamId || ''),
+    } : {}),
     ...(token.stats?.movimiento?.potionBonus ? { hasteBonus: token.stats.movimiento.potionBonus } : {}),
     name: token.name || (side === 'players' ? 'Aventurero' : 'Enemigo'),
     portrait: token.portrait || token.img || '',
@@ -130,10 +154,10 @@ const createParticipant = (token, index) => {
     orderIndex: index,
     profileId: side === 'enemies' ? (token.linkedEnemyId || token.id) : (token.linkedClassId || token.id),
     initiativeBase,
-    initiative: side === 'enemies' ? initiativeBase : null,
+    initiative: side === 'enemies' || !profile.length ? initiativeBase : null,
     actionDiceProfile: profile,
     actionDice: [],
-    enemyActions: side === 'enemies' ? defaultEnemyActions() : [],
+    enemyActions: side === 'enemies' ? defaultEnemyActions(token.rulesSystem === 'campaign') : [],
     movementRuntime: {
       base: movementBase,
       statMax: getMovementStatMax(token),
@@ -145,8 +169,12 @@ const createParticipant = (token, index) => {
       history: [],
     },
     awaitingRoll: side === 'players' && profile.length > 0,
-    threatDie: side === 'enemies' && token.threatDie ? `d${normalizeDieSides(token.threatDie)}` : null,
+    threatDie: side === 'enemies' ? token.rulesSystem === 'campaign' ? threatProfile[0] || null
+      : token.threatDie ? `d${normalizeDieSides(token.threatDie)}` : null : null,
     threatValue: null,
+    ...(token.rulesSystem === 'campaign' && side === 'enemies' ? {
+      threatDiceProfile: threatProfile,
+    } : {}),
     independentInitiative: Boolean(token.independentInitiative),
   };
 };
@@ -154,6 +182,12 @@ const createParticipant = (token, index) => {
 export const sortCombatParticipants = (participants) => [...participants].sort((left, right) => {
   const initiativeDelta = (right.initiative || 0) - (left.initiative || 0);
   if (initiativeDelta !== 0) return initiativeDelta;
+  if (left.rulesSystem === 'campaign' && right.rulesSystem === 'campaign' && left.side === 'players' && right.side === 'players') {
+    for (let index = 0; index < 3; index += 1) {
+      const delta = (right.initiativeDice?.[index] || 0) - (left.initiativeDice?.[index] || 0);
+      if (delta) return delta;
+    }
+  }
   if (left.side !== right.side) return left.side === 'enemies' ? -1 : 1;
   return left.orderIndex - right.orderIndex;
 });
@@ -165,17 +199,23 @@ export const buildInitiativeBlocks = (participantsById = {}) => {
       && Number.isFinite(Number(participant.initiative)),
   ));
   const blocks = [];
+  const playerTeams = new Set(sorted.filter(p => p.side === 'players').map(p => p.initiativeTeamId).filter(Boolean));
 
   sorted.forEach((participant) => {
     const previous = blocks[blocks.length - 1];
-    const joinsPlayerBlock = previous?.side === 'players' && participant.side === 'players';
+    const teamId = participant.rulesSystem === 'campaign' ? participant.initiativeTeamId || '' : '';
+    const sameTeam = !teamId && !previous?.teamId;
+    const joinsTeamBlock = teamId && previous?.teamId === teamId
+      && !participant.independentInitiative && !previous.independentInitiative;
+    const joinsPlayerBlock = sameTeam && previous?.side === 'players' && participant.side === 'players';
     const joinsEnemyBlock = previous?.side === 'enemies'
       && participant.side === 'enemies'
+      && sameTeam
       && !participant.independentInitiative
       && previous.profileId === participant.profileId
       && previous.initiative === participant.initiative;
 
-    if (joinsPlayerBlock || joinsEnemyBlock) {
+    if (joinsTeamBlock || joinsPlayerBlock || joinsEnemyBlock) {
       previous.memberIds.push(participant.tokenId);
       previous.initiative = Math.max(previous.initiative, participant.initiative);
       return;
@@ -183,7 +223,8 @@ export const buildInitiativeBlocks = (participantsById = {}) => {
 
     blocks.push({
       id: `block-${blocks.length + 1}-${participant.side}`,
-      side: participant.side,
+      side: teamId && playerTeams.has(teamId) ? 'players' : participant.side,
+      ...(teamId ? { teamId, independentInitiative: Boolean(participant.independentInitiative) } : {}),
       profileId: participant.profileId,
       initiative: participant.initiative,
       memberIds: [participant.tokenId],
@@ -202,28 +243,56 @@ const rollEnemyThreat = (participant, random) => (
   participant.threatDie ? rollDie(participant.threatDie, random) : null
 );
 
-const openTurnPhase = (state, random = Math.random) => ({
+const prepareParticipantForTurns = (participant, round, random = Math.random) => {
+  if (participant.side !== 'enemies') return participant;
+  if (participant.rulesSystem !== 'campaign') return { ...participant, threatValue: rollEnemyThreat(participant, random) };
+  const pool = rollCampaignThreatPool(participant, random, round);
+  return { ...participant, campaignThreatDice: pool, threatValue: pool[0]?.value ?? null };
+};
+
+const activateCampaignDefense = state => {
+  const ids = state.blocks?.[state.activeBlockIndex]?.memberIds || [];
+  const participants = { ...state.participants };
+  ids.forEach(id => {
+    const p = participants[id];
+    if (p?.side !== 'enemies' || p.rulesSystem !== 'campaign' || p.defenseRefreshed) return;
+    participants[id] = { ...p, defenseRefreshed: true, enemyActions: p.enemyActions.map(action => (
+      action.id === 'defense' ? { ...action, status: 'available' } : action
+    )) };
+  });
+  return { ...state, participants };
+};
+
+const openTurnPhase = (state, random = Math.random) => activateCampaignDefense({
   ...state,
+  ...(state.requiresStart ? { requiresStart: false } : {}),
   status: 'active',
   roundPhase: 'turns',
   blocks: buildInitiativeBlocks(state.participants),
   activeBlockIndex: 0,
   participants: Object.fromEntries(Object.entries(state.participants).map(([id, participant]) => [
     id,
-    participant.side === 'enemies'
-      ? { ...participant, threatValue: rollEnemyThreat(participant, random) }
-      : participant,
+    prepareParticipantForTurns(participant, state.round, random),
   ])),
 });
 
+const syncInitiativeRoster = (current, tokens, system) => {
+  let index = Math.max(-1, ...Object.values(current).map(participant => participant.orderIndex ?? -1)) + 1;
+  return Object.fromEntries(tokens.filter(token => isEligibleForInitiative(token, system)).map(token => [
+    token.id,
+    current[token.id] || createParticipant(system === 'campaign' ? { ...token, rulesSystem: 'campaign' } : token, index++),
+  ]));
+};
+
 export const createCanvasCombatState = (tokens = [], options = {}) => {
-  const participants = Object.fromEntries(tokens
-    .filter(isCombatParticipant)
-    .map(createParticipant)
-    .map((participant) => [participant.tokenId, participant]));
+  const participants = syncInitiativeRoster({}, options.includeNonParticipants
+    ? tokens.map(token => token?.participatesInCombat === false ? { ...token, participatesInCombat: true } : token)
+    : tokens, options.rulesSystem);
   const now = options.now || Date.now();
   const initial = {
     version: CANVAS_COMBAT_VERSION,
+    ...(options.rulesSystem === 'campaign' ? { rulesSystem: 'campaign' } : {}),
+    ...(options.requiresStart ? { requiresStart: true } : {}),
     status: 'setup',
     roundPhase: 'rolling',
     round: 1,
@@ -236,11 +305,75 @@ export const createCanvasCombatState = (tokens = [], options = {}) => {
     history: [],
   };
 
-  return allPlayersReady(participants) ? openTurnPhase(initial, options.random) : initial;
+  return !initial.requiresStart && allPlayersReady(participants) ? openTurnPhase(initial, options.random) : initial;
 };
 
+export const startPreparedCanvasCombat = (state, tokens, options = {}) => {
+  if (state?.status !== 'setup' || !state.requiresStart) return state;
+  const participants = syncInitiativeRoster(state.participants, tokens, state.rulesSystem);
+  const changed = Object.keys(participants).length !== Object.keys(state.participants).length
+    || Object.keys(participants).some(id => !state.participants[id]);
+  const next = changed ? { ...state, participants, updatedAt: options.now || Date.now() } : state;
+  if (!Object.keys(participants).length || !allPlayersReady(participants)) return next;
+  return openTurnPhase({ ...next, updatedAt: options.now || Date.now() }, options.random);
+};
+
+const insertLateInitiative = (state, participant) => {
+  const blocks = state.blocks || [];
+  const block = buildInitiativeBlocks({ [participant.tokenId]: participant })[0];
+  if (!block) return state;
+  const nextIndex = Math.min(state.activeBlockIndex + 1, blocks.length);
+  const lowerInitiativeIndex = blocks.findIndex((candidate, index) => index >= nextIndex && (
+    candidate.memberIds.some(id => !candidate.actedIds.includes(id))
+    && sortCombatParticipants([state.participants[candidate.memberIds[0]], participant])[0] === participant
+  ));
+  const insertAt = lowerInitiativeIndex === -1 ? blocks.length : lowerInitiativeIndex;
+  const allied = block.teamId && Object.values(state.participants).some(other => (
+    other.side === 'players' && other.initiativeTeamId === block.teamId
+  ));
+  const next = {
+    ...state,
+    blocks: [
+      ...blocks.slice(0, insertAt),
+      { ...block, side: allied ? 'players' : block.side, id: `reinforcement-${participant.tokenId}` },
+      ...blocks.slice(insertAt),
+    ],
+  };
+  return activateCampaignDefense(next);
+};
+
+export const updateCanvasCombatMembership = (state, token, options = {}) => {
+  if (!['setup', 'active'].includes(state?.status) || !supportsCanvasInitiative(token, state.rulesSystem)) return state;
+  const current = state.participants[token.id];
+  const rolling = state.roundPhase === 'rolling';
+  const now = options.now || Date.now();
+  if (token.participatesInCombat === false) {
+    // Keep actions already granted for this round, including ongoing exchanges.
+    if (!current || (!rolling && !current.awaitingRoll)) return state;
+    const participants = { ...state.participants };
+    delete participants[token.id];
+    const next = { ...state, participants, updatedAt: now };
+    return rolling && !state.requiresStart && allPlayersReady(participants) ? openTurnPhase(next, options.random) : next;
+  }
+  if (current || (!rolling && !options.joinNow)) return state;
+  const orderIndex = Math.max(-1, ...Object.values(state.participants).map(participant => participant.orderIndex ?? -1)) + 1;
+  let participant = createParticipant(state.rulesSystem === 'campaign' ? { ...token, rulesSystem: 'campaign' } : token, orderIndex);
+  if (!rolling) {
+    participant = { ...prepareParticipantForTurns(participant, state.round, options.random), joinedRound: state.round };
+  }
+  const next = { ...state, participants: { ...state.participants, [token.id]: participant }, updatedAt: now };
+  return !rolling && !participant.awaitingRoll ? insertLateInitiative(next, participant) : next;
+};
+
+export const canAdvanceCanvasRound = state => (
+  state?.status === 'active' && state.roundPhase === 'turns'
+  && state.activeBlockIndex >= (state.blocks?.length || 0)
+  && allPlayersReady(state.participants)
+  && !state.pendingAttack && !state.explosiveBlast && !state.arcaneChain
+);
+
 export const queueCanvasAttack = (state, attack, options = {}) => {
-  if (!state || !attack?.id || state.pendingAttack) return state;
+  if (!state || !attack?.id || state.pendingAttack || state.arcaneChain) return state;
   const attacker = state.participants?.[attack.attackerId];
   const target = state.participants?.[attack.targetId];
   if (!attacker || !target) return state;
@@ -410,6 +543,7 @@ export const submitActionDice = (state, tokenId, values, options = {}) => {
       [tokenId]: {
         ...participant,
         initiative,
+        ...(participant.rulesSystem === 'campaign' && isInitiativeRoll ? { initiativeDice: [...values].sort((a, b) => b - a) } : {}),
         actionDice,
         awaitingRoll: false,
       },
@@ -427,7 +561,8 @@ export const submitActionDice = (state, tokenId, values, options = {}) => {
     ],
   };
 
-  return allPlayersReady(next.participants) ? openTurnPhase(next, options.random) : next;
+  if (state.roundPhase === 'turns') return insertLateInitiative(next, next.participants[tokenId]);
+  return !state.requiresStart && allPlayersReady(next.participants) ? openTurnPhase(next, options.random) : next;
 };
 
 export const rollParticipantActionDice = (state, tokenId, options = {}) => {
@@ -529,6 +664,7 @@ export const setEnemyActionStatus = (state, tokenId, actionId, status, options =
 };
 
 export const markParticipantActed = (state, tokenId, options = {}) => {
+  if (state?.arcaneChain) return state;
   const block = state?.blocks?.[state.activeBlockIndex];
   if (!block || !block.memberIds.includes(tokenId) || block.actedIds.includes(tokenId)) return state;
   const blocks = state.blocks.map((candidate, index) => (
@@ -545,15 +681,20 @@ export const markParticipantActed = (state, tokenId, options = {}) => {
     },
   } } : state.participants;
   const completed = blocks[state.activeBlockIndex].actedIds.length >= block.memberIds.length;
-  return {
+  let nextBlockIndex = state.activeBlockIndex;
+  if (completed) {
+    nextBlockIndex += 1;
+    // A reopened activation may sit before blocks already completed this round.
+    while (nextBlockIndex < blocks.length
+      && blocks[nextBlockIndex].memberIds.every(id => blocks[nextBlockIndex].actedIds.includes(id))) nextBlockIndex += 1;
+  }
+  return activateCampaignDefense({
     ...state,
     updatedAt: options.now || Date.now(),
     blocks,
     participants,
-    activeBlockIndex: completed
-      ? Math.min(state.activeBlockIndex + 1, blocks.length)
-      : state.activeBlockIndex,
-  };
+    activeBlockIndex: nextBlockIndex,
+  });
 };
 
 export const undoLastActivation = (state, options = {}) => {
@@ -567,6 +708,7 @@ export const undoLastActivation = (state, options = {}) => {
 };
 
 export const undoParticipantActivation = (state, tokenId, options = {}) => {
+  if (state?.status !== 'active' || state?.roundPhase !== 'turns' || state.pendingAttack || state.explosiveBlast || state.arcaneChain) return state;
   const blocks = (state?.blocks || []).map((block) => ({
     ...block,
     actedIds: [...(block.actedIds || [])],
@@ -580,6 +722,10 @@ export const undoParticipantActivation = (state, tokenId, options = {}) => {
     blocks,
     activeBlockIndex: blockIndex,
     updatedAt: options.now || Date.now(),
+    history: [...(state.history || []).slice(-39), {
+      id: `reopen-${tokenId}-${options.now || Date.now()}`, type: 'activation-reopened',
+      tokenId, round: state.round, timestamp: options.now || Date.now(),
+    }],
   };
 };
 
@@ -934,9 +1080,11 @@ export const undoParticipantMovement = (state, tokenId, options = {}) => {
 };
 
 export const startNextRound = (state, options = {}) => {
-  if (state?.pendingAttack || state?.explosiveBlast) return state;
+  if (state?.pendingAttack || state?.explosiveBlast || state?.arcaneChain) return state;
   const round = Math.max(1, asInteger(state?.round, 1)) + 1;
-  const participants = Object.fromEntries(Object.entries(state?.participants || {}).map(([id, participant]) => [
+  const roster = options.tokens ? syncInitiativeRoster(state?.participants || {}, options.tokens, state?.rulesSystem)
+    : state?.participants || {};
+  const participants = Object.fromEntries(Object.entries(roster).map(([id, participant]) => [
     id,
     participant.side === 'players'
       ? {
@@ -959,7 +1107,11 @@ export const startNextRound = (state, options = {}) => {
         ...participant,
         ...(participant.hasteTurnBonus ? { hasteTurnBonus: 0 } : {}),
         threatValue: null,
-        enemyActions: defaultEnemyActions(),
+        enemyActions: participant.rulesSystem === 'campaign'
+          ? defaultEnemyActions(true).map(action => action.id === 'defense'
+            ? (participant.enemyActions?.find(old => old.id === 'defense') || action) : action)
+          : defaultEnemyActions(),
+        ...(participant.rulesSystem === 'campaign' ? { defenseRefreshed: false } : {}),
         movementRuntime: {
           base: participant.movementRuntime?.base || getMovementBase(participant),
           statMax: participant.movementRuntime?.statMax || participant.movementRuntime?.base || getMovementStatMax(participant),
@@ -993,6 +1145,7 @@ export const finishCanvasCombat = (state, options = {}) => ({
   finishedAt: options.now || Date.now(),
   pendingAttack: null,
   explosiveBlast: null,
+  arcaneChain: null,
   queuedFireBursts: [],
   updatedAt: options.now || Date.now(),
 });
@@ -1003,22 +1156,36 @@ export const pruneCombatState = (state, tokens = []) => {
   const currentParticipants = state.participants;
   const currentIds = Object.keys(currentParticipants);
   const validIds = currentIds.filter((id) => tokenIds.has(id));
+  const tokenMap = new Map(tokens.map(token => [token.id, token]));
+  let teamsChanged = false;
+  const nextParticipants = Object.fromEntries(validIds.map(id => {
+    const participant = currentParticipants[id];
+    if (state.rulesSystem !== 'campaign' && participant.rulesSystem !== 'campaign') return [id, participant];
+    const initiativeTeamId = normalizeCombatSideKey(tokenMap.get(id)?.teamId || '');
+    if (participant.initiativeTeamId === initiativeTeamId) return [id, participant];
+    teamsChanged = true;
+    return [id, { ...participant, initiativeTeamId }];
+  }));
 
   const hasOrphanedPendingAttack = Boolean(
     state.pendingAttack
     && (!tokenIds.has(state.pendingAttack.attackerId) || !tokenIds.has(state.pendingAttack.targetId)),
   );
 
-  if (validIds.length === currentIds.length && !hasOrphanedPendingAttack) {
+  if (validIds.length === currentIds.length && !hasOrphanedPendingAttack && !teamsChanged) {
     return state;
   }
 
-  const nextParticipants = Object.fromEntries(
-    validIds.map((id) => [id, currentParticipants[id]]),
-  );
-
-  const nextBlocks = buildInitiativeBlocks(nextParticipants);
-  const activeBlockIndex = Math.min(state.activeBlockIndex || 0, Math.max(0, nextBlocks.length - 1));
+  const actedIds = new Set((state.blocks || []).flatMap(block => block.actedIds || []));
+  const hasLateEntries = Object.values(nextParticipants).some(participant => participant.joinedRound === state.round);
+  const nextBlocks = teamsChanged && !hasLateEntries ? buildInitiativeBlocks(nextParticipants)
+    : (state.blocks || []).map(block => ({ ...block, memberIds: block.memberIds.filter(id => nextParticipants[id]) }))
+      .filter(block => block.memberIds.length);
+  nextBlocks.forEach(block => { block.actedIds = block.memberIds.filter(id => actedIds.has(id)); });
+  const activeIds = state.blocks?.[state.activeBlockIndex]?.memberIds.filter(id => !actedIds.has(id)) || [];
+  let activeBlockIndex = nextBlocks.findIndex(block => block.memberIds.some(id => activeIds.includes(id)));
+  if (activeBlockIndex < 0) activeBlockIndex = nextBlocks.findIndex(block => block.memberIds.some(id => !actedIds.has(id)));
+  if (activeBlockIndex < 0) activeBlockIndex = nextBlocks.length;
 
   const pruned = {
     ...state,
@@ -1028,6 +1195,7 @@ export const pruneCombatState = (state, tokens = []) => {
     pendingAttack: hasOrphanedPendingAttack ? null : state.pendingAttack,
     explosiveBlast: state.explosiveBlast && tokenIds.has(state.explosiveBlast.sourceTokenId)
       ? state.explosiveBlast : null,
+    arcaneChain: state.arcaneChain && tokenIds.has(state.arcaneChain.sourceTokenId) ? state.arcaneChain : null,
     updatedAt: Date.now(),
   };
   return hasOrphanedPendingAttack && pruned.explosiveBlast

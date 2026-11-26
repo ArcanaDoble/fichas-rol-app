@@ -22,6 +22,10 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
     const [selectedOption, setSelectedOption] = useState(null);
 
     const handleSelect = async (optionId) => {
+        if (optionId === 'parry-free') {
+            onSelect(optionId);
+            return;
+        }
         setSelectedOption(optionId);
         await new Promise(resolve => setTimeout(resolve, 300));
         onSelect(optionId);
@@ -29,12 +33,12 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
 
     const menuOptions = [
         {
-            id: 'initiative',
-            title: 'Sistema de Velocidad',
-            description: 'Control total del combate con iniciativa y gestión de participantes.',
-            color: 'cyan',
-            icon: FiZap,
-            features: ['Control Master', 'Tiempo Real', 'Turnos'],
+            id: 'parry-free',
+            title: 'Parry libre',
+            description: 'Elecciones secretas de ataque y parada para jugar en mesa.',
+            color: 'amber',
+            icon: FiUsers,
+            features: ['Campaña', 'Zonas secretas', 'Sin Canvas'],
             isNew: false,
         },
         {
@@ -62,6 +66,15 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
             color: 'amber',
             icon: FiUsers,
             features: ['Catálogo', 'Filtros', 'DnD'],
+            isNew: true,
+        },
+        {
+            id: 'canvas3d',
+            title: 'Canvas 3D',
+            description: 'Dirige una mesa compartida de Roguelike con fichas, equipo y dados físicos.',
+            color: 'amber',
+            icon: FiCompass,
+            features: ['Roguelike', 'Hasta 4 jugadores'],
             isNew: true,
         },
         {
@@ -158,17 +171,6 @@ const MasterMenu = ({ onSelect, onBackToMain }) => {
 
     // Mapa de colores para estilos dinámicos
     const colorStyles = {
-        cyan: {
-            text: 'text-cyan-400',
-            groupHoverText: 'group-hover:text-cyan-400',
-            border: 'border-cyan-800',
-            groupHoverBorder: 'group-hover:border-cyan-400',
-            bg: 'from-cyan-500/10',
-            badge: 'bg-cyan-200 text-cyan-950',
-            iconColor: 'text-cyan-700 group-hover:text-cyan-400',
-            footerText: 'text-cyan-700 group-hover:text-cyan-400/80',
-            radialGradient: 'from-cyan-500/10'
-        },
         rose: {
             text: 'text-rose-400',
             groupHoverText: 'group-hover:text-rose-400',

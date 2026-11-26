@@ -1,7 +1,5 @@
-import { getPlayerCanvasVisionTokens, isCanvasTokenHiddenFromViewer, canTokenSeeThroughSmoke, getCanvasRenderItemsForViewer } from './tokenVisibilityAccess';
-import { calculateShadowPoints } from './spatial';
-import { isPointVisible } from '../../utils/visibility';
-import { getCombatRenderPlacement } from './legacyCombatRules';
+import { getPlayerCanvasVisionTokens, isCanvasTokenHiddenFromViewer, getCanvasRenderItemsForViewer } from './tokenVisibilityAccess';
+import { canTokenSeeCanvasTarget } from './canvasVision';
 
 export const isCanvasAntidoteEffect = effect => effect?.eventType === 'item-use' && ['remove-poison', 'remove-bleeding'].includes(effect.effect);
 export const isCanvasNonHealingPotionEffect = effect => effect?.eventType === 'item-use' && ['remove-poison', 'remove-bleeding', 'haste', 'temporary-life'].includes(effect.effect);
@@ -32,22 +30,6 @@ export const createLiveItemEffectGate = ({ now = Date.now() } = {}) => {
     };
 };
 
-const center = token => ({ x: Number(token.x || 0) + Number(token.width || 0) / 2,
-    y: Number(token.y || 0) + Number(token.height || 0) / 2 });
-const isInWallShadow = (origin, point, wall, interaction, selected) => {
-    if (wall.type !== 'wall' || wall.wallType === 'window' || (wall.wallType === 'door' && wall.isOpen)) return false;
-    let { x1, y1, x2, y2 } = wall;
-    const original = interaction.active && selected.includes(wall.id) && interaction.originalPositions?.[wall.id];
-    if (original) {
-        const dx = wall.x - original.x, dy = wall.y - original.y;
-        x1 -= dx; x2 -= dx; y1 -= dy; y2 -= dy;
-    }
-    // Use the very same polygons (including the corner nudge) as shadow-mask in TacticalViewport.
-    const polygon = calculateShadowPoints(origin.x, origin.y, x1, y1, x2, y2)
-        .split(' ').map(pair => { const [x, y] = pair.split(',').map(Number); return { x, y }; });
-    return isPointVisible(point, polygon);
-};
-
 // This overlay sits above fog. Never infer visibility merely from receiving a log.
 export const canShowCanvasItemEffect = ({ token, items = [], viewer = {}, gridConfig = {}, interaction = {} }) => {
     if (!token || isCanvasTokenHiddenFromViewer(token, items, viewer)) return false;
@@ -59,13 +41,7 @@ export const canShowCanvasItemEffect = ({ token, items = [], viewer = {}, gridCo
     // The master's overview deliberately retains the whole scene under dim fog.
     if (!viewer.isPlayerView && focused.length === 0) return true;
     const observers = focused.length ? focused : perspectives;
-    const point = center({ ...token, ...getCombatRenderPlacement(token, getCanvasRenderItemsForViewer(items, viewer), gridConfig) });
-    return observers.some(observer => {
-        const original = interaction.active && selected.includes(observer.id) && interaction.originalPositions?.[observer.id];
-        const source = original ? { ...observer, x: original.x, y: original.y } : observer;
-        if (!canTokenSeeThroughSmoke(source, token, items)) return false;
-        const origin = center(source), radius = Number(observer.visionRadius) || 300;
-        return Math.hypot(point.x - origin.x, point.y - origin.y) < radius
-            && !items.some(wall => isInWallShadow(origin, point, wall, interaction, selected));
-    });
+    const renderItems = getCanvasRenderItemsForViewer(items, viewer);
+    return observers.some(observer => canTokenSeeCanvasTarget({ observer, target: token,
+        items, renderItems, gridConfig, interaction, selectedTokenIds: selected }));
 };

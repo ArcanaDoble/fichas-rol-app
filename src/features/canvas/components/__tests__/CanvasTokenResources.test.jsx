@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import CanvasTokenResources from '../CanvasTokenResources';
 
 const createToken = () => ({
@@ -13,7 +13,122 @@ const createToken = () => ({
   },
 });
 
+const withBarrier = token => ({
+  ...token,
+  status: ['envenenado', 'barrera'],
+  arcaneBarrier: {
+    id: 'barrier-cast', spellId: 'runic-barrier', expires: 'combat-end',
+    negatedTraits: ['critico'],
+  },
+});
+
 describe('CanvasTokenResources', () => {
+  it.each(['rogueliteClass', 'rogueliteEnemy'])('shows %s Barrera as one additional gold CD block without changing base CD', profileType => {
+    const token = withBarrier({ ...createToken(), profileType });
+    const { container } = render(<CanvasTokenResources token={token} onUpdate={jest.fn()} />);
+
+    expect(screen.getByLabelText('CD temporal: 1')).toHaveTextContent('+1');
+    expect(screen.getByLabelText('Máximo de CD: 4')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Valor actual de CD' }).children).toHaveLength(5);
+    const temporaryBlock = container.querySelector('[data-cd-temporary]');
+    expect(temporaryBlock).toHaveStyle({ backgroundColor: '#dfc885', borderColor: '#dfc885' });
+    expect(temporaryBlock).toHaveAttribute('aria-pressed', 'true');
+    expect(temporaryBlock).toHaveAttribute('title', '+1 CD temporal · Barrera');
+    expect(screen.queryByText(/Barrera · CD/)).not.toBeInTheDocument();
+    expect(token.stats.cd).toEqual({ current: 3, max: 4, label: 'CD', color: '#c8c6be' });
+  });
+
+  it.each(['Retirar Barrera', 'Retirar Barrera: +1 CD temporal'])('removes all Barrera protection using "%s" even when Life is zero', control => {
+    const token = withBarrier(createToken());
+    token.stats.vida.current = 0;
+    token.stats.vidaTemporal = { current: 2, max: 2 };
+    const onUpdate = jest.fn();
+    const { container, rerender } = render(<CanvasTokenResources token={token} onUpdate={onUpdate} />);
+
+    fireEvent.click(screen.getByRole('button', { name: control, exact: true }));
+
+    expect(onUpdate).toHaveBeenCalledWith({ status: ['envenenado'], arcaneBarrier: null });
+    const nextToken = { ...token, ...onUpdate.mock.calls[0][0] };
+    expect(nextToken.stats).toBe(token.stats);
+    expect(nextToken.stats.cd).toEqual(token.stats.cd);
+    expect(nextToken.stats.vidaTemporal).toEqual({ current: 2, max: 2 });
+    rerender(<CanvasTokenResources token={nextToken} onUpdate={onUpdate} />);
+    expect(container.querySelectorAll('[data-cd-temporary]')).toHaveLength(0);
+    expect(screen.queryByLabelText('CD temporal: 1')).not.toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Valor actual de CD' }).children).toHaveLength(4);
+  });
+
+  it('keeps the gold protection block available with no base CD', () => {
+    const token = withBarrier(createToken());
+    token.stats.cd = { current: 0, max: 0 };
+    const onUpdate = jest.fn();
+    render(<CanvasTokenResources token={token} onUpdate={onUpdate} />);
+
+    expect(screen.getByLabelText('Máximo de CD: 0')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Valor actual de CD' }).children).toHaveLength(1);
+    expect(screen.queryByText('Sin cd')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retirar Barrera: +1 CD temporal' }));
+    expect(onUpdate).toHaveBeenCalledWith({ status: ['envenenado'], arcaneBarrier: null });
+  });
+
+  it('retains one temporary CD bonus when base CD is corrected manually', () => {
+    const token = withBarrier(createToken());
+    const onUpdate = jest.fn();
+    const { container, rerender } = render(<CanvasTokenResources token={token} onUpdate={onUpdate} />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Fijar CD en 2' })[0]);
+    expect(onUpdate).toHaveBeenLastCalledWith({
+      stats: expect.objectContaining({ cd: expect.objectContaining({ current: 2, max: 4 }) }),
+    });
+    const corrected = { ...token, ...onUpdate.mock.calls.at(-1)[0] };
+    rerender(<CanvasTokenResources token={corrected} onUpdate={onUpdate} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Aumentar máximo de CD' }));
+    const extended = { ...corrected, ...onUpdate.mock.calls.at(-1)[0] };
+    rerender(<CanvasTokenResources token={extended} onUpdate={onUpdate} />);
+
+    expect(extended.stats.cd).toEqual({ current: 2, max: 5, label: 'CD', color: '#c8c6be' });
+    expect(extended.arcaneBarrier).toBe(token.arcaneBarrier);
+    expect(extended.status).toBe(token.status);
+    expect(screen.getByLabelText('CD temporal: 1')).toHaveTextContent('+1');
+    expect(container.querySelectorAll('[data-cd-temporary]')).toHaveLength(1);
+    expect(screen.getByRole('group', { name: 'Valor actual de CD' }).children).toHaveLength(6);
+  });
+
+  it('shows a manually applied Barrera status without inventing repeated bonus blocks', () => {
+    const token = { ...createToken(), status: ['barrera', 'barrera'] };
+    const onUpdate = jest.fn();
+    const { container } = render(<CanvasTokenResources token={token} onUpdate={onUpdate} />);
+
+    expect(screen.getByLabelText('CD temporal: 1')).toHaveTextContent('+1');
+    expect(container.querySelectorAll('[data-cd-temporary]')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Retirar Barrera: +1 CD temporal' }));
+    expect(onUpdate).toHaveBeenCalledWith({ status: [], arcaneBarrier: null });
+  });
+
+  it.each([[false, 1450], [true, 600]])('reveals temporary CD with projectile arrival (reduced motion: %s)', (reducedMotion, arrivalMs) => {
+    jest.useFakeTimers();
+    jest.setSystemTime(1000000);
+    try {
+      const token = { ...withBarrier(createToken()), id: 'protected-token' };
+      const barrierPresentation = { reducedMotion, effect: {
+        id: 'barrier-cast', spellId: 'runic-barrier', targetId: token.id,
+        presentationStartedAt: Date.now(),
+      } };
+      const { container } = render(<CanvasTokenResources token={token} onUpdate={jest.fn()} barrierPresentation={barrierPresentation} />);
+
+      expect(screen.queryByLabelText('CD temporal: 1')).not.toBeInTheDocument();
+      expect(container.querySelectorAll('[data-cd-temporary]')).toHaveLength(0);
+      act(() => jest.advanceTimersByTime(arrivalMs - 1));
+      expect(container.querySelectorAll('[data-cd-temporary]')).toHaveLength(0);
+      act(() => jest.advanceTimersByTime(1));
+      expect(screen.getByLabelText('CD temporal: 1')).toHaveTextContent('+1');
+      expect(container.querySelectorAll('[data-cd-temporary]')).toHaveLength(1);
+      expect(screen.getByLabelText('Máximo de CD: 4')).toBeInTheDocument();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it.each(['rogueliteClass', 'rogueliteEnemy'])('lets %s spend, correct and remove temporary Life without changing normal Life', profileType => {
     const original = createToken();
     original.profileType = profileType;

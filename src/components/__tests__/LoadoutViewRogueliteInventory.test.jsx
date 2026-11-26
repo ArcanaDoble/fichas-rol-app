@@ -1,6 +1,8 @@
 import React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import LoadoutView from '../LoadoutView';
+import { equipCampaignProtection, getCampaignEquipmentState } from '../../features/campaign/campaignEquipment';
+import { activateWeaponSet } from '../../features/roguelite/equipmentPool';
 
 jest.mock('../../firebase', () => ({ db: {} }));
 jest.mock('../../utils/storage', () => ({ uploadDataUrl: jest.fn() }));
@@ -389,6 +391,35 @@ test('unequipping a two-handed weapon in the off hand releases the visible suppo
 
 });
 
+test.each([0, '0', 1])('campaign equipment displays its own defense of %p even when character RD differs', (defense) => {
+  const outfit = { name: 'Atuendo de Yuuzu', itemType: 'armor', defense };
+  render(<LoadoutView
+    dndClass={createClass({
+      campaignArmorRd: 2,
+      equipment: { ...equipment, armor: [outfit] },
+      equippedItems: { body: outfit },
+    })}
+    equipmentCatalog={{ weapons: [], armor: [], abilities: [] }}
+    rogueliteRole="campaign"
+  />);
+  const readout = screen.getByRole('img', { name: `Reducción de daño: ${defense}` });
+  expect(within(readout).getByText(String(defense))).toBeInTheDocument();
+  expect(within(readout).queryByText('—')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Inventario' }));
+  const card = screen.getAllByTestId('inventory-item-card').find((item) => within(item).queryByText('Atuendo de Yuuzu'));
+  expect(within(card).getByText('Defensa')).toBeInTheDocument();
+  expect(within(card).getByText(String(defense))).toBeInTheDocument();
+});
+
+test('campaign keeps unknown armor RD distinct from zero', () => {
+  render(<LoadoutView
+    dndClass={createClass({ campaignArmorRd: 2, equippedItems: { body: { name: 'Atuendo sin datos' } } })}
+    equipmentCatalog={{ weapons: [], armor: [], abilities: [] }}
+    rogueliteRole="campaign"
+  />);
+  expect(screen.getByRole('img', { name: 'Reducción de daño: —' })).toBeInTheDocument();
+});
+
 test('equipped armor explains its passive CD threshold and exposes up to three glossary traits', () => {
   const paddedArmor = {
     templateId: 'armor:padded',
@@ -615,4 +646,74 @@ test('role-playing inventory receives new and edited Forge objects live', () => 
   send('Updated');
   fireEvent.click(screen.getByRole('button', { name: 'Agregar' }));
   expect(onAddEquipment).toHaveBeenCalledWith(expect.objectContaining({ id: 'new-item', description: 'Updated' }), 'objects');
+});
+
+const campaignOutfit = { name: 'Atuendo de Yuuzu', itemType: 'armor', rd: 0, traits: 'Torso, Ropa', instanceId: 'outfit-copy' };
+const campaignGuards = { name: 'Guardabrazos', itemType: 'armor', rd: 1, traits: 'Armadura, Brazos, Refuerzo', instanceId: 'guards-copy' };
+const campaignCloak = { name: 'Capa de agilidad', itemType: 'accessory', instanceId: 'cloak-copy' };
+const campaignBracelet = { name: 'Brazalete negro', itemType: 'accessory', instanceId: 'bracelet-copy' };
+
+function CampaignProtectionHarness({ legacyGuards = false }) {
+  const guards = legacyGuards ? { ...campaignGuards, itemType: 'accessory' } : campaignGuards;
+  const [character, setCharacter] = React.useState(() => createClass({
+    equipment: {
+      weapons: [], armor: legacyGuards ? [campaignOutfit] : [campaignOutfit, guards],
+      accessories: legacyGuards ? [campaignCloak, guards] : [campaignCloak, campaignBracelet],
+      abilities: [], objects: [],
+    },
+    equippedItems: { body: campaignOutfit, accessory_1: campaignCloak, accessory_2: legacyGuards ? guards : campaignBracelet },
+  }));
+  return <LoadoutView
+    dndClass={character} rogueliteRole="campaign" equipmentCatalog={{}}
+    onUpdateEquipped={(slot, item) => setCharacter((previous) => {
+      const state = getCampaignEquipmentState(previous);
+      const equippedItems = slot === 'activeWeaponSet' ? activateWeaponSet(state.equippedItems, item)
+        : equipCampaignProtection(state.equippedItems, slot, item);
+      return { ...previous, ...state, equippedItems };
+    })}
+  />;
+}
+
+test('campaign equips and removes owned guards separately from outfit and both accessories', () => {
+  render(<CampaignProtectionHarness />);
+  const protection = screen.getByRole('region', { name: 'Protección equipada' });
+  expect(within(protection).getByLabelText('Reducción de daño total del equipo')).toHaveTextContent('RD total0');
+  fireEvent.click(within(protection).getByRole('button', { name: 'Equipar refuerzo' }));
+  const picker = screen.getByRole('dialog', { name: 'Seleccionar refuerzo del inventario' });
+  expect(within(picker).queryByText('Atuendo de Yuuzu')).not.toBeInTheDocument();
+  fireEvent.click(within(picker).getByRole('button', { name: /Guardabrazos/ }));
+  expect(within(protection).getByRole('button', { name: 'Cambiar refuerzo: Guardabrazos' })).toBeInTheDocument();
+  expect(within(protection).getByRole('img', { name: 'Reducción de daño: 0' })).toBeInTheDocument();
+  expect(within(protection).getByLabelText('Reducción de daño total del equipo')).toHaveTextContent('RD total1');
+  expect(screen.getByText('Capa de agilidad')).toBeInTheDocument();
+  expect(screen.getByText('Brazalete negro')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Cambiar a conjunto II' }));
+  expect(within(protection).getByRole('button', { name: 'Cambiar refuerzo: Guardabrazos' })).toBeInTheDocument();
+  fireEvent.click(within(protection).getByRole('button', { name: 'Cambiar armadura: Atuendo de Yuuzu' }));
+  expect(within(screen.getByRole('dialog', { name: 'Seleccionar armadura del inventario' })).queryByText('Guardabrazos')).not.toBeInTheDocument();
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  fireEvent.click(within(protection).getByRole('button', { name: 'Desequipar Guardabrazos' }));
+  expect(within(protection).getByLabelText('Reducción de daño total del equipo')).toHaveTextContent('RD total0');
+  expect(screen.getByText('Capa de agilidad')).toBeInTheDocument();
+  expect(screen.getByText('Brazalete negro')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Inventario' }));
+  expect(screen.getByText('Guardabrazos')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Refuerzos' })).not.toBeInTheDocument();
+});
+
+test('campaign can move tagged legacy accessory guards into protection without creating another copy', () => {
+  render(<CampaignProtectionHarness legacyGuards />);
+  fireEvent.click(screen.getByRole('button', { name: 'Equipar refuerzo' }));
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Seleccionar refuerzo del inventario' })).getByRole('button', { name: /Guardabrazos/ }));
+  expect(screen.getByRole('button', { name: 'Cambiar refuerzo: Guardabrazos' })).toBeInTheDocument();
+  expect(screen.getAllByText('Guardabrazos')).toHaveLength(1);
+  expect(screen.getByText('Capa de agilidad')).toBeInTheDocument();
+  expect(screen.getByText('Accesorio 2')).toBeInTheDocument();
+});
+
+test('roguelite retains its armor slot without a campaign reinforcement slot', () => {
+  render(<LoadoutView dndClass={createClass()} equipmentCatalog={{}} rogueliteRole="player" />);
+  expect(screen.queryByRole('region', { name: 'Protección equipada' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Equipar refuerzo' })).not.toBeInTheDocument();
 });

@@ -50,7 +50,8 @@ const getSmokeScene = (items) => {
     if (!smokeSceneCache.has(items)) {
         const areas = items.filter(isSmokeArea);
         const groups = new Map();
-        // Overlaps and shared edges form one continuous cloud; corner contact does not.
+        // Overlaps and shared edges form one continuous cloud. The two cells of
+        // a legacy extended Niebla are also one zone, including diagonal adjacency.
         areas.forEach(area => {
             if (groups.has(area)) return;
             const group = new Set([area]);
@@ -58,7 +59,10 @@ const getSmokeScene = (items) => {
                 areas.forEach(other => {
                     const dx = Math.min(current.x + current.width, other.x + other.width) - Math.max(current.x, other.x);
                     const dy = Math.min(current.y + current.height, other.y + other.height) - Math.max(current.y, other.y);
-                    if ((dx > 0 && dy >= 0) || (dy > 0 && dx >= 0)) group.add(other);
+                    const sameMist = current.areaEffect?.spellId === 'arcane-mist'
+                        && other.areaEffect?.spellId === 'arcane-mist' && current.areaEffect.cloudId
+                        && current.areaEffect.cloudId === other.areaEffect.cloudId && dx >= 0 && dy >= 0;
+                    if ((dx > 0 && dy >= 0) || (dy > 0 && dx >= 0) || sameMist) group.add(other);
                 });
             }
             group.forEach(member => groups.set(member, group));

@@ -1,0 +1,30 @@
+{
+  "verifiedAtUtc": "2026-10-21T22:40:11.387940+00:00",
+  "release": "ability-traits-commas",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.eeb4c0ad.js",
+      "sha256Matches": true,
+      "sha256": "eab59500f0d2c6a89125054da731726253b801249f2f3a6443776c2b3b671571"
+    },
+    "main.css": {
+      "path": "/static/css/main.2e3f5540.css",
+      "sha256Matches": true,
+      "sha256": "b979c32ec54903a13bcddee707a0faed4623358069738422c00dc6c6318be1f0"
+    }
+  },
+  "buildLog": "output/playwright/ability-traits-build.log",
+  "deployLog": "output/playwright/ability-traits-deploy.log",
+  "beforeTestLog": "output/playwright/ability-traits-before.log",
+  "testLog": "output/playwright/ability-traits-after.log",
+  "tests": {
+    "suitesPassed": 4,
+    "testsPassed": 20
+  },
+  "verification": "Regression reproduced character-by-character comma loss in Campaign and Roguelite. Raw draft text now retains commas and whitespace; normalized trait arrays verified on apply and reopened editing. Both regressions and related model/card/save tests pass.",
+  "productionGameWritesForVerification": 0,
+  "firestoreRulesChanged": false
+}

@@ -8,7 +8,7 @@ const EnemyBestiaryGateway = ({ onBack, armas, armaduras, habilidades, accesorio
   const [mode, setMode] = useState(null);
   if (!mode) return <EnemyModeSelector onBack={onBack} onSelect={setMode} />;
   if (mode === 'role') return <BestiaryView onBack={() => setMode(null)} />;
-  return <RogueliteBestiaryView onBack={() => setMode(null)} armas={armas} armaduras={armaduras} habilidades={habilidades} accesorios={accesorios} />;
+  return <RogueliteBestiaryView variant={mode === 'campaignNpc' ? 'campaignNpc' : 'roguelite'} onBack={() => setMode(null)} armas={armas} armaduras={armaduras} habilidades={habilidades} accesorios={accesorios} />;
 };
 
 EnemyBestiaryGateway.propTypes = {

@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "base-de-datos-noma"
-  }
+  },
+  "targets": {
+    "base-de-datos-noma": {
+      "hosting": {
+        "noma": [
+          "nomarol"
+        ],
+        "legacy": [
+          "base-de-datos-noma"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

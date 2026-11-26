@@ -19,6 +19,7 @@ export const GridConfigPanel = ({
     handleGridDraftKeyDown,
     handleImageUpload,
     isPlayerView,
+    isBoardMode = true,
     resetAllSpeed,
 }) => (
     activeTab === 'CONFIG' && !isPlayerView && (
@@ -67,6 +68,19 @@ export const GridConfigPanel = ({
                                                 <Activity className="w-3 h-3" />
                                                 Gestión de Encuentro
                                             </h4>
+
+                                            {!isBoardMode && <div className="space-y-2">
+                                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Sistema del encuentro</span>
+                                                <div className="bg-[#111827] p-1 rounded border border-slate-800 flex text-[10px] font-bold font-fantasy">
+                                                    {['roguelite', 'campaign'].map(system => <button key={system} type="button"
+                                                        aria-pressed={(gridConfig.gameSystem || 'roguelite') === system}
+                                                        onClick={() => handleConfigChange('gameSystem', system)}
+                                                        className={`flex-1 min-h-11 rounded uppercase tracking-widest transition-colors ${(gridConfig.gameSystem || 'roguelite') === system ? 'bg-[#c8aa6e] text-[#0b1120]' : 'text-slate-400 hover:bg-white/5'}`}>
+                                                        {system === 'campaign' ? 'Campaña' : 'Roguelite'}
+                                                    </button>)}
+                                                </div>
+                                                <p className="text-[10px] leading-relaxed text-slate-500">Se aplica al guardar cambios. Al alternar, se reinicia la preparación de turnos.</p>
+                                            </div>}
 
                                             <div className="flex items-center justify-between bg-[#0b1120] p-4 rounded-lg border border-[#c8aa6e]/20 shadow-lg">
                                                 <div className="flex flex-col gap-0.5">

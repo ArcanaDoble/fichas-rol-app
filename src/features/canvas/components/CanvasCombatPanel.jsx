@@ -2,8 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { Check, ChevronLeft, Dices, Flag, Footprints, RotateCcw, Shield, Swords, Undo } from 'lucide-react';
 
 import ActionDieSvg from '../../../components/ActionDieSvg';
+import { getCampaignThreatPool } from '../combat/campaignThreatDice';
 
-import { getAvailableMovement, getMovementBase, sortCombatParticipants } from '../combat/canvasCombatState';
+import { canAdvanceCanvasRound, getAvailableMovement, getCanvasCombatReinforcements, getMovementBase } from '../combat/canvasCombatState';
 import CanvasDiceTable from './CanvasDiceTable';
 
 const STATUS_ORDER = ['available', 'committed', 'spent'];
@@ -13,7 +14,7 @@ const STATUS_LABELS = {
   spent: 'Gastado',
 };
 
-const participantCanBeManaged = (participant, controlledTokenIds) => (
+const participantCanBeManaged = (participant, controlledTokenIds = []) => (
   controlledTokenIds.includes(participant.tokenId)
 );
 
@@ -36,7 +37,7 @@ const ManualRoll = ({ participant, onCancel, onSubmit }) => {
                 onChange={(event) => setValues((current) => current.map((value, valueIndex) => (
                   valueIndex === index ? Number(event.target.value) : value
                 )))}
-                className="h-9 border border-slate-700 bg-[#080d16] text-center font-mono text-sm text-[#eee5d3] outline-none focus:border-[#c8aa6e]"
+                className="min-h-11 border border-slate-700 bg-[#080d16] text-center font-mono text-sm text-[#eee5d3] outline-none focus:border-[#c8aa6e]"
                 aria-label={`Resultado de ${die}`}
               >
                 {Array.from({ length: sides }, (_, valueIndex) => valueIndex + 1).map((value) => (
@@ -48,10 +49,10 @@ const ManualRoll = ({ participant, onCancel, onSubmit }) => {
         })}
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <button type="button" onClick={onCancel} className="h-9 border border-slate-800 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500 hover:text-slate-300">
+        <button type="button" onClick={onCancel} className="min-h-11 border border-slate-800 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500 hover:text-slate-300">
           Cancelar
         </button>
-        <button type="button" onClick={() => onSubmit(values)} className="h-9 border border-[#c8aa6e]/60 bg-[#c8aa6e]/10 text-[9px] font-bold uppercase tracking-[0.14em] text-[#d8bf88] hover:bg-[#c8aa6e]/15">
+        <button type="button" onClick={() => onSubmit(values)} className="min-h-11 border border-[#c8aa6e]/60 bg-[#c8aa6e]/10 text-[9px] font-bold uppercase tracking-[0.14em] text-[#d8bf88] hover:bg-[#c8aa6e]/15">
           Confirmar
         </button>
       </div>
@@ -102,29 +103,29 @@ const SetupParticipant = ({ participant, canManage, runtime }) => {
       </div>
 
       {!isEnemy && participant.awaitingRoll && canManage && !manualOpen && (
-        <div className="mt-3 grid grid-cols-2 gap-2 pl-[52px]">
+        <div className="mt-3 grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={() => runtime.rollActionDice(participant.tokenId)}
-            className="h-9 border border-[#c8aa6e]/50 bg-[#c8aa6e]/10 text-[9px] font-bold uppercase tracking-[0.14em] text-[#d8bf88] hover:bg-[#c8aa6e]/15"
+            className="min-h-11 border border-[#c8aa6e]/50 bg-[#c8aa6e]/10 px-1 text-[9px] font-bold uppercase tracking-[0.14em] text-[#d8bf88] hover:bg-[#c8aa6e]/15"
           >
             Tirar aquí
           </button>
           <button
             type="button"
             onClick={() => setManualOpen(true)}
-            className="h-9 border border-slate-700 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 hover:border-[#c8aa6e]/40 hover:text-[#d8bf88]"
+            className="min-h-11 border border-slate-700 px-1 text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400 hover:border-[#c8aa6e]/40 hover:text-[#d8bf88]"
           >
             Anotar mesa
           </button>
         </div>
       )}
-      {manualOpen && (
+      {manualOpen && participant.awaitingRoll && (
         <ManualRoll
           participant={participant}
           onCancel={() => setManualOpen(false)}
-          onSubmit={(values) => {
-            if (runtime.submitRoll(participant.tokenId, values, 'manual')) setManualOpen(false);
+          onSubmit={async (values) => {
+            if (await runtime.submitRoll(participant.tokenId, values, 'manual')) setManualOpen(false);
           }}
         />
       )}
@@ -180,7 +181,7 @@ const ActionDie = ({ die, disabled, onChange }) => {
 const EnemyAction = ({ action, disabled, onChange, statusLabel = null, title = null }) => {
   const nextStatus = STATUS_ORDER[(STATUS_ORDER.indexOf(action.status) + 1) % STATUS_ORDER.length];
   const isMove = action.id === 'movement';
-  const Icon = action.icon || (isMove ? Footprints : Swords);
+  const Icon = action.icon || (isMove ? Footprints : action.id === 'defense' ? Shield : Swords);
   const visibleStatus = statusLabel || STATUS_LABELS[action.status];
   const tone = action.status === 'available'
     ? 'border-[#c8aa6e]/40 text-[#d8bf88] bg-[#c8aa6e]/5 hover:bg-[#c8aa6e]/10'
@@ -295,7 +296,7 @@ const RoundParticipant = ({ participant, activeBlock, participantBlock, canManag
         </div>
       </div>
 
-      {!isEnemy && (
+      {!isEnemy && !participant.campaignHiddenResources && (
         <div className="mt-3 flex gap-2">
           {participant.actionDice.map((die) => (
             <ActionDie
@@ -308,7 +309,8 @@ const RoundParticipant = ({ participant, activeBlock, participantBlock, canManag
         </div>
       )}
 
-      {isEnemy && (
+      {participant.campaignHiddenResources && <p className="mt-3 text-xs text-slate-400">Recursos reservados</p>}
+      {isEnemy && !participant.campaignHiddenResources && (
         <div className="mt-3 space-y-2">
           <div className="flex gap-2">
             {enemyActions.map((action) => (
@@ -343,7 +345,9 @@ const RoundParticipant = ({ participant, activeBlock, participantBlock, canManag
               onChange={() => runtime.activateEnemySprint?.(participant.tokenId)}
             />
           </div>
-          {participant.threatDie && (
+          {participant.rulesSystem === 'campaign' && Array.isArray(participant.campaignThreatDice) ? <div className="flex flex-wrap gap-2 text-xs text-[#d8bf88]" aria-label="Reserva de Amenaza">
+            {getCampaignThreatPool(participant).map(die => <span key={die.id}>Amenaza {die.die.toUpperCase()} · {die.status === 'spent' ? 'Gastado' : die.value}</span>)}
+          </div> : participant.threatDie && (
             <p className="text-[8px] uppercase tracking-[0.12em] text-slate-500">
               Amenaza {participant.threatDie.toUpperCase()} · <strong className="text-[#d8bf88]">{participant.threatValue ?? '—'}</strong>
             </p>
@@ -387,19 +391,32 @@ const RoundParticipant = ({ participant, activeBlock, participantBlock, canManag
   );
 };
 
-const CanvasCombatPanel = ({ activeTab, combatRuntime = {}, isPlayerView, playerName }) => {
+const CanvasCombatPanel = ({ activeScenario, activeTab, combatRuntime = {}, isPlayerView, playerName }) => {
   const [subTab, setSubTab] = useState('COMBAT'); // 'COMBAT' | 'FREE_DICE'
+  const [joiningId, setJoiningId] = useState(null);
   const state = combatRuntime?.combatState;
   const participants = useMemo(() => Object.values(state?.participants || {}).sort(
     (left, right) => left.orderIndex - right.orderIndex,
-  ), [state?.participants]);
-  const sortedParticipants = useMemo(() => (
-    sortCombatParticipants(Object.values(state?.participants || {}))
   ), [state?.participants]);
   if (activeTab !== 'ROUND') return null;
 
   const activeBlock = state?.blocks?.[state.activeBlockIndex] || null;
   const roundComplete = state?.roundPhase === 'turns' && state.activeBlockIndex >= (state.blocks?.length || 0);
+  const campaign = combatRuntime.campaignRules;
+  const pendingRolls = participants.filter(participant => participant.awaitingRoll);
+  const lateRolls = state?.roundPhase === 'turns' ? pendingRolls.filter(participant => !isPlayerView
+    || participantCanBeManaged(participant, combatRuntime.controlledTokenIds)) : [];
+  const reinforcements = campaign && !isPlayerView ? getCanvasCombatReinforcements(state, activeScenario?.items) : [];
+  const joinRound = async id => {
+    setJoiningId(id);
+    try { await combatRuntime.setCombatParticipation?.(id, true, { joinNow: true }); } finally { setJoiningId(null); }
+  };
+  const rollPending = !isPlayerView && pendingRolls.length > 0 && combatRuntime.rollAllPending && (
+    <button type="button" onClick={combatRuntime.rollAllPending}
+      className="mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 border border-[#c8aa6e]/40 bg-[#c8aa6e]/10 px-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#d8bf88] hover:bg-[#c8aa6e]/15">
+      <Dices size={13} /> Tirar todas las pendientes
+    </button>
+  );
 
   return (
     <section data-testid="canvas-combat-panel" className="space-y-4">
@@ -462,6 +479,20 @@ const CanvasCombatPanel = ({ activeTab, combatRuntime = {}, isPlayerView, player
         />
       ) : (
         <>
+          {reinforcements.length > 0 && <section className="border-b border-[#c8aa6e]/25 pb-3" aria-label="Refuerzos pendientes">
+            <h4 className="font-fantasy text-sm font-bold text-[#d8bf88]">Refuerzos pendientes</h4>
+            <p className="mt-1 text-[11px] leading-snug text-slate-400">
+              {state.roundPhase === 'rolling' ? 'Puedes preparar su iniciativa ahora.' : 'Se incorporan en la siguiente ronda.'}
+            </p>
+            {reinforcements.map(token => <div key={token.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-slate-800/60 py-2 last:border-0">
+              <span className="min-w-20 flex-1 break-words text-sm text-[#eee5d3]">{token.name || 'Ficha'}</span>
+              <button type="button" onClick={() => joinRound(token.id)} disabled={joiningId !== null}
+                className="min-h-11 shrink-0 border border-[#c8aa6e]/35 px-2 font-fantasy text-[10px] text-[#d8bf88] hover:bg-[#c8aa6e]/10 disabled:opacity-50"
+                aria-label={`${state.roundPhase === 'rolling' ? 'Preparar iniciativa de' : 'Incorporar a esta ronda a'} ${token.name || 'Ficha'}`}>
+                {state.roundPhase === 'rolling' ? 'Preparar iniciativa' : 'Incorporar a esta ronda'}
+              </button>
+            </div>)}
+          </section>}
           {!state || state.status === 'finished' ? (
             <div className="border-y border-slate-800/70 py-5">
               <p className="text-[10px] leading-relaxed text-slate-400">
@@ -481,20 +512,14 @@ const CanvasCombatPanel = ({ activeTab, combatRuntime = {}, isPlayerView, player
             <div>
               <div className="flex items-end justify-between border-b border-slate-800/70 pb-3">
                 <div>
-                  <span className="text-[8px] font-bold uppercase tracking-[0.18em] text-slate-600">Preparación</span>
+                  <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">{campaign ? 'Preparar iniciativa' : 'Preparación'}</span>
                   <h4 className="font-['Cinzel'] text-base text-[#eee5d3]">Ronda {state.round}</h4>
                 </div>
-                <span className="text-[8px] font-bold uppercase tracking-[0.14em] text-amber-500">Esperando tiradas</span>
+                <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-amber-500">
+                  {pendingRolls.length ? 'Esperando tiradas' : 'Iniciativa lista'}
+                </span>
               </div>
-              {!isPlayerView && participants.some((p) => p.awaitingRoll) && combatRuntime?.rollAllPending && (
-                <button
-                  type="button"
-                  onClick={combatRuntime.rollAllPending}
-                  className="mt-3 flex h-8 w-full items-center justify-center gap-1.5 border border-[#c8aa6e]/40 bg-[#c8aa6e]/10 text-[9px] font-bold uppercase tracking-[0.14em] text-[#d8bf88] hover:bg-[#c8aa6e]/15"
-                >
-                  <Dices size={13} /> Tirar todas las pendientes
-                </button>
-              )}
+              {rollPending}
               {participants.map((participant) => (
                 <SetupParticipant
                   key={participant.tokenId}
@@ -503,6 +528,11 @@ const CanvasCombatPanel = ({ activeTab, combatRuntime = {}, isPlayerView, player
                   runtime={combatRuntime}
                 />
               ))}
+              {!isPlayerView && state.requiresStart && <button type="button" onClick={combatRuntime.startPreparedCombat}
+                disabled={pendingRolls.length > 0 || (!participants.length && !reinforcements.length)}
+                className="mt-3 min-h-11 w-full border border-[#c8aa6e]/55 bg-[#c8aa6e] px-3 font-fantasy text-xs font-bold text-[#0b1120] hover:bg-[#dec38a] disabled:border-slate-800 disabled:bg-[#141b28] disabled:text-slate-500">
+                Empezar combate
+              </button>}
             </div>
           ) : (
             <div>
@@ -512,32 +542,35 @@ const CanvasCombatPanel = ({ activeTab, combatRuntime = {}, isPlayerView, player
                   <h4 className="font-['Cinzel'] text-base text-[#eee5d3]">Ronda {state.round}</h4>
                 </div>
                 <span className="font-mono text-[9px] text-[#d7b867]">
-                  {roundComplete ? 'Ronda resuelta' : `Bloque ${state.activeBlockIndex + 1}/${state.blocks.length}`}
+                  {roundComplete ? (pendingRolls.length ? 'Iniciativa pendiente' : 'Ronda resuelta') : `Bloque ${state.activeBlockIndex + 1}/${state.blocks.length}`}
                 </span>
               </div>
 
-              {sortedParticipants
-                .filter((participant) => participant.initiative !== null
-                  && participant.initiative !== undefined
-                  && Number.isFinite(Number(participant.initiative)))
-                .map((participant) => (
+              {lateRolls.length > 0 && <section className="mt-3 border-l-2 border-[#c8aa6e]/45 bg-[#c8aa6e]/5 px-3 pt-3" aria-label="Iniciativa de refuerzos">
+                <h4 className="font-fantasy text-sm font-bold text-[#e6d2a6]">{isPlayerView ? 'Prepara tu iniciativa' : 'Iniciativa de refuerzos'}</h4>
+                {rollPending}
+                {lateRolls.map(participant => <SetupParticipant key={participant.tokenId} participant={participant}
+                  canManage={participantCanBeManaged(participant, combatRuntime.controlledTokenIds)} runtime={combatRuntime} />)}
+              </section>}
+              {(state.blocks || []).flatMap(block => block.memberIds.map(id => state.participants?.[id]).filter(Boolean).map(participant => (
                   <RoundParticipant
                     key={participant.tokenId}
                     participant={participant}
                     activeBlock={activeBlock}
-                    participantBlock={state.blocks.find((block) => block.memberIds.includes(participant.tokenId))}
+                    participantBlock={block}
                     canManage={participantCanBeManaged(participant, combatRuntime?.controlledTokenIds)}
                     runtime={combatRuntime}
                     isPlayerView={isPlayerView}
                   />
-                ))}
+                )))}
             </div>
           )}
 
           {!isPlayerView && state && state.status !== 'finished' && (
             <div className="space-y-2 border-t border-[#c8aa6e]/20 pt-4">
               {roundComplete && (
-                <button type="button" onClick={combatRuntime?.nextRound} className="h-10 w-full border border-[#c8aa6e]/55 bg-[#c8aa6e]/10 text-[9px] font-bold uppercase tracking-[0.14em] text-[#d8bf88] hover:bg-[#c8aa6e]/15">
+                <button type="button" onClick={combatRuntime?.nextRound} disabled={campaign && !canAdvanceCanvasRound(state)}
+                  className="min-h-11 w-full border border-[#c8aa6e]/55 bg-[#c8aa6e]/10 text-[9px] font-bold uppercase tracking-[0.14em] text-[#d8bf88] hover:bg-[#c8aa6e]/15 disabled:opacity-50">
                   Siguiente ronda
                 </button>
               )}
@@ -549,9 +582,9 @@ const CanvasCombatPanel = ({ activeTab, combatRuntime = {}, isPlayerView, player
                   <Flag size={12} /> Finalizar
                 </button>
               </div>
-              <button type="button" onClick={combatRuntime?.startCombat} className="flex h-8 w-full items-center justify-center gap-2 text-[8px] font-bold uppercase tracking-[0.12em] text-slate-700 hover:text-slate-400">
+              {!campaign && <button type="button" onClick={combatRuntime?.startCombat} className="flex h-8 w-full items-center justify-center gap-2 text-[8px] font-bold uppercase tracking-[0.12em] text-slate-700 hover:text-slate-400">
                 <RotateCcw size={11} /> Reiniciar orden
-              </button>
+              </button>}
             </div>
           )}
         </>

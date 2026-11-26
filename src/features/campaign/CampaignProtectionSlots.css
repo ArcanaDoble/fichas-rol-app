@@ -1,0 +1,143 @@
+.noma-campaign-protection {
+  position: relative;
+  z-index: 10;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.noma-campaign-protection.is-selecting { z-index: 40; }
+
+.noma-campaign-protection__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  color: #c8aa6e;
+}
+
+.noma-campaign-protection__heading h3 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: 'Cinzel', serif;
+  font-size: 16px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+}
+
+.noma-campaign-protection__heading h3 svg { width: 20px; height: 20px; }
+
+.noma-campaign-protection__total { display: flex; align-items: baseline; gap: 9px; white-space: nowrap; }
+.noma-campaign-protection__total span { font: 10px 'Cinzel', serif; letter-spacing: .13em; text-transform: uppercase; }
+.noma-campaign-protection__total strong { font: 22px 'Alegreya', Georgia, serif; }
+
+.noma-campaign-protection__slots {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(146px, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.noma-campaign-protection__slot { position: relative; min-width: 0; }
+.noma-campaign-protection__slot.is-selected { z-index: 50; }
+
+.noma-campaign-protection__card {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 160px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-width: 2px;
+  border-radius: 8px;
+  background: #080b10;
+  padding: 20px 14px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.noma-campaign-protection__card.is-empty { border: 2px dashed #334155; }
+.noma-campaign-protection__card:hover { border-color: rgba(200, 170, 110, .7); }
+.noma-campaign-protection__card:focus-visible { outline: 2px solid #c8aa6e; outline-offset: 3px; }
+.is-selected > .noma-campaign-protection__card { box-shadow: 0 0 0 1px #c8aa6e, 0 0 18px rgba(200, 170, 110, .12); }
+
+.noma-campaign-protection__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: .7;
+  transition: opacity 180ms ease;
+}
+
+.noma-campaign-protection__card:hover .noma-campaign-protection__art { opacity: .85; }
+.noma-campaign-protection__fade { position: absolute; inset: 0; background: linear-gradient(0deg, rgba(0, 0, 0, .94), rgba(0, 0, 0, .38) 56%, rgba(0, 0, 0, .08)); }
+.noma-campaign-protection__content { position: relative; display: flex; width: 100%; min-width: 0; flex-direction: column; align-items: center; gap: 6px; }
+.noma-campaign-protection__category { color: #c8aa6e; font: 9px 'Cinzel', serif; letter-spacing: .14em; text-transform: uppercase; text-shadow: 0 1px 4px #000; }
+.noma-campaign-protection__name { color: #f0e6d2; font: 700 14px/1.45 'Cinzel', serif; letter-spacing: .065em; overflow-wrap: anywhere; text-transform: uppercase; text-shadow: 0 1px 2px #000, 0 0 8px #000; }
+.noma-campaign-protection__readout { display: flex; align-items: center; justify-content: center; gap: 7px; color: #e2cf9d; text-shadow: 0 1px 4px #000; }
+.noma-campaign-protection__readout > strong { font: 600 17px 'Alegreya', Georgia, serif; }
+.noma-campaign-protection__empty-icon { width: 24px; height: 24px; color: #64748b; opacity: .55; }
+.noma-campaign-protection__empty-label { color: #64748b; font: 11px 'Alegreya', Georgia, serif; }
+.is-reinforcement .noma-campaign-protection__card { align-items: center; padding: 13px 10px; }
+.is-reinforcement .noma-campaign-protection__name { font-size: 12px; letter-spacing: .045em; }
+.is-reinforcement .noma-campaign-protection__readout { align-self: stretch; }
+.is-reinforcement .noma-campaign-protection__card.is-empty { align-items: center; }
+
+.noma-campaign-protection__picker {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 60;
+  width: max(100%, 280px);
+  max-width: min(420px, calc(100vw - 40px));
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid rgba(200, 170, 110, .35);
+  border-radius: 8px;
+  background: #0b1120;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
+}
+
+.is-reinforcement .noma-campaign-protection__picker { left: auto; right: 0; }
+.noma-campaign-protection__picker-heading { padding: 10px 12px; border-bottom: 1px solid #334155; color: #94a3b8; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.noma-campaign-protection__option { display: flex; width: 100%; min-height: 60px; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid #1e293b; text-align: left; transition: background-color 150ms ease; }
+.noma-campaign-protection__option:hover:not(:disabled), .noma-campaign-protection__option:focus-visible { background: rgba(200, 170, 110, .1); outline: none; }
+.noma-campaign-protection__option:disabled { opacity: .45; cursor: not-allowed; }
+.noma-campaign-protection__option-art { display: flex; position: relative; width: 42px; height: 42px; flex-shrink: 0; align-items: center; justify-content: center; overflow: hidden; border: 1px solid #334155; border-radius: 4px; color: #c8aa6e; }
+.noma-campaign-protection__option-art > svg { width: 22px; height: 22px; }
+.noma-campaign-protection__option-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
+.noma-campaign-protection__option-copy > strong { color: #f0e6d2; font: 14px 'Alegreya', Georgia, serif; overflow-wrap: anywhere; }
+.noma-campaign-protection__option-copy > span { color: #c8aa6e; font-size: 11px; }
+.noma-campaign-protection__equipped { color: #64748b; font-size: 9px; text-transform: uppercase; }
+.noma-campaign-protection__empty-picker { padding: 16px; color: #94a3b8; font-size: 13px; text-align: center; }
+.noma-campaign-protection__empty-picker > span { display: block; margin-top: 5px; color: #64748b; font-size: 11px; }
+
+@container (max-width: 520px) {
+  .noma-campaign-protection__slots { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .is-body .noma-campaign-protection__card { border-bottom-width: 0; border-radius: 8px 8px 0 0; }
+  .is-reinforcement .noma-campaign-protection__card {
+    min-height: 70px;
+    height: auto;
+    align-items: center;
+    padding: 7px 40px;
+    border-top: 1px solid rgba(200, 170, 110, .34);
+    border-radius: 0 0 8px 8px;
+  }
+  .is-reinforcement .noma-campaign-protection__art { object-position: center 45%; }
+  .is-reinforcement .noma-campaign-protection__fade { background: linear-gradient(90deg, rgba(0, 0, 0, .85), rgba(0, 0, 0, .7) 62%, rgba(0, 0, 0, .12)); }
+  .is-reinforcement .noma-campaign-protection__content { align-items: center; gap: 2px; }
+  .is-reinforcement .noma-campaign-protection__category { font-size: 8px; }
+  .is-reinforcement .noma-campaign-protection__name { font-size: 12px; text-align: center; }
+  .is-reinforcement .noma-campaign-protection__readout > strong { font-size: 16px; line-height: 1.1; }
+  .noma-campaign-protection__picker { width: 100%; max-width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .noma-campaign-protection__card, .noma-campaign-protection__art, .noma-campaign-protection__option { transition: none; }
+}

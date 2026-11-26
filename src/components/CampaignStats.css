@@ -1,0 +1,291 @@
+.campaign-stat-row {
+  min-width: 0;
+  width: 100%;
+}
+
+.campaign-stat-header {
+  display: flex;
+  min-height: 44px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px 8px;
+  margin-bottom: 7px;
+}
+
+.campaign-stat-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  color: #f0e6d2;
+  font: 700 14px/1.25 Cinzel, Georgia, serif;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.campaign-stat-editor {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  color: #c8aa6e;
+}
+
+.campaign-stat-adjust {
+  display: inline-grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: #d7b875;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: color 120ms ease, transform 120ms ease;
+}
+
+.campaign-stat-adjust svg {
+  width: 16px;
+  height: 16px;
+  filter: drop-shadow(0 0 4px #c8aa6e38);
+}
+
+.campaign-stat-adjust:hover:not(:disabled),
+.campaign-stat-adjust:focus-visible {
+  color: #fff0c7;
+  background: radial-gradient(circle, #c8aa6e25 0, transparent 65%);
+}
+
+.campaign-stat-adjust:active:not(:disabled) { transform: scale(.86); }
+.campaign-stat-adjust:disabled { color: #536071; cursor: default; }
+
+.campaign-stat-number {
+  width: 56px;
+  min-width: 0;
+  height: 44px;
+  padding: 0 3px;
+  border: 0;
+  border-bottom: 1px solid #c8aa6e66;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+  color: #f4dfb0;
+  caret-color: #f4dfb0;
+  text-align: center;
+  font: 700 17px/1 Cinzel, Georgia, serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.campaign-stat-number::placeholder { color: #8a795d; opacity: 1; }
+.campaign-stat-number:focus-visible { border-bottom-color: #f8e7b9; box-shadow: 0 2px 0 #f8e7b966; }
+.campaign-stat-divider { width: 16px; text-align: center; color: #8d7653; font: 16px/1 Cinzel, Georgia, serif; }
+
+.campaign-stat-readout {
+  color: #d3b57a;
+  font: 700 14px/1.4 Cinzel, Georgia, serif;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.campaign-stat-readout span { padding: 0 4px; color: #806c4f; }
+
+.campaign-stat-track {
+  position: relative;
+  height: 27px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #202837 0%, #111927 55%, #0d1421 100%);
+  clip-path: polygon(0 0, calc(100% - 11px) 0, 100% 50%, calc(100% - 11px) 100%, 0 100%);
+  box-shadow: inset 0 1px #e6d6b526, inset 0 -1px #03070c;
+}
+
+.campaign-stat-track::after {
+  position: absolute;
+  inset: 1px 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, #e8d5ad55, #e8d5ad14 70%, transparent);
+  content: '';
+  pointer-events: none;
+}
+
+.campaign-stat-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  min-width: 0;
+  overflow: hidden;
+  clip-path: polygon(0 0, calc(100% - min(9px, 25%)) 0, 100% 50%, calc(100% - min(9px, 25%)) 100%, 0 100%);
+  background: linear-gradient(180deg, #edb2b7, #c67c89 52%, #814758);
+  box-shadow: inset 0 1px #ffe4e688, inset 0 -2px #3c1d2a77;
+  transition: width 240ms ease-out;
+}
+
+[data-campaign-resource='mente'] .campaign-stat-fill {
+  background: linear-gradient(180deg, #d7c8ed, #ae95d1 52%, #695681);
+  box-shadow: inset 0 1px #f7eaff88, inset 0 -2px #2f244077;
+}
+
+.campaign-stat-fill[data-filled='true']::after {
+  position: absolute;
+  top: -30%;
+  right: -3px;
+  width: 14px;
+  height: 160%;
+  background: #fff4e3a8;
+  content: '';
+  filter: blur(7px);
+  pointer-events: none;
+}
+
+.campaign-stat-vapor {
+  position: absolute;
+  inset: -54px 0 auto;
+  height: 135px;
+  background: url('../assets/fog-shader-zone.webp') 0 50% / 1200% 135px no-repeat;
+  mix-blend-mode: screen;
+  opacity: .19;
+  pointer-events: none;
+  animation: campaign-stat-vapor 4s steps(11, end) infinite alternate;
+}
+
+.campaign-stat-rule {
+  height: 1px;
+  margin-top: 10px;
+  background: linear-gradient(90deg, #3c4b5c88, #3c4b5c24 80%, transparent);
+}
+
+.campaign-stat-row--scalar { padding-top: 2px; }
+
+.campaign-stat-units {
+  display: flex;
+  min-height: 32px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.campaign-stat-unit {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.campaign-stat-units--movement .campaign-stat-unit {
+  width: 52px;
+  height: 27px;
+  clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, 0 100%, 9px 50%);
+  background: linear-gradient(180deg, #c5e2f2, #82b8df 45%, #4d809e);
+  box-shadow: inset 0 1px #e9f6ffb3, inset 0 -2px #315269;
+}
+
+.campaign-stat-units--movement .campaign-stat-unit:first-child {
+  clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, 0 100%);
+}
+
+.campaign-armor {
+  container: campaign-armor / inline-size;
+}
+
+.campaign-armor-detail {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 66px;
+  align-items: center;
+  gap: 12px;
+  min-height: 168px;
+  margin-top: 8px;
+  padding: 14px 8px 14px 208px;
+  isolation: isolate;
+}
+
+.campaign-armor-detail::after {
+  position: absolute;
+  inset: auto 0 0;
+  height: 1px;
+  background: linear-gradient(90deg, #c8aa6e70, #c8aa6e20 65%, transparent);
+  content: '';
+}
+
+.campaign-armor-image {
+  position: absolute;
+  z-index: -1;
+  inset: 0 auto 0 0;
+  width: 280px;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 20%;
+  mask-image: linear-gradient(90deg, transparent, #0005 5%, #000c 12%, #000 20%, #000 48%, #0009 68%, transparent 100%), linear-gradient(0deg, transparent, #000 12%, #000 88%, transparent);
+  mask-composite: intersect;
+}
+
+.campaign-armor-name {
+  min-width: 0;
+  color: #f0e6d2;
+  font: 700 14px/1.5 Cinzel, Georgia, serif;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+  text-shadow: 0 1px 2px #000, 0 0 8px #000000e6;
+}
+
+.campaign-armor-value {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  color: #c8aa6e;
+  font: 700 11px/1.4 Cinzel, Georgia, serif;
+  letter-spacing: .14em;
+}
+
+.campaign-armor-value .campaign-stat-number,
+.campaign-armor-readout {
+  width: 100%;
+  height: 49px;
+  padding: 0 2px;
+  border-bottom-color: transparent;
+  color: #f0e6d2;
+  text-align: center;
+  font: 700 34px/1.4 Cinzel, Georgia, serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: normal;
+}
+
+.campaign-armor-value .campaign-stat-number:hover { border-bottom-color: #c8aa6e55; }
+.campaign-armor-value .campaign-stat-number:focus-visible { border-bottom-color: #c8aa6e; }
+.campaign-armor-readout { height: auto; overflow-wrap: anywhere; }
+
+@container campaign-armor (max-width: 430px) {
+  .campaign-armor-detail { padding-left: clamp(96px, 30cqi, 140px); grid-template-columns: minmax(0, 1fr) 52px; gap: 8px; }
+  .campaign-armor-image { width: 200px; max-width: 70%; }
+  .campaign-armor-value .campaign-stat-number, .campaign-armor-readout { font-size: 30px; }
+}
+
+@container campaign-armor (max-width: 280px) {
+  .campaign-armor-detail { padding-left: 32px; }
+  .campaign-armor-name { font-size: 12px; }
+}
+
+.campaign-armor-detail--no-art { padding-left: 0; }
+
+.campaign-stat-overflow {
+  padding: 0 5px;
+  color: #d3b57a;
+  font: 700 13px/1.4 Cinzel, Georgia, serif;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.campaign-stat-empty {
+  color: #7c8797;
+  font: italic 14px/1.4 Georgia, serif;
+}
+
+@keyframes campaign-stat-vapor {
+  from { background-position: 0 50%; }
+  to { background-position: 100% 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .campaign-stat-vapor { animation: none; }
+  .campaign-stat-fill, .campaign-stat-adjust { transition: none; }
+}

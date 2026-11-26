@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import TraitsInput from '../TraitsInput';
+import { getWeaponForms, updateWeaponForm } from '../../features/roguelite/weaponForms';
 import {
   ACTION_DICE_COSTS,
   ARMOR_COMPETENCES,
@@ -175,6 +176,49 @@ export const WeaponCatalogFields = ({ value, setValue, rarities, glossary }) => 
     <DescriptionFields value={value} setValue={setValue} />
   </div>
 );
+
+export const TrickWeaponCatalogFields = ({ value, setValue, rarities, glossary, formIndex, onFormChange, baseImage }) => {
+  const forms = getWeaponForms(value, baseImage);
+  const form = forms[formIndex];
+  const [traitInputs, setTraitInputs] = useState({});
+  const change = key => next => setValue(current => updateWeaponForm(current, formIndex, { [key]: next }, baseImage));
+  // The live profile uses parsed traits; the input must retain unfinished separators and spaces.
+  const traitText = traitInputs[form.id] ?? form.rasgos.join(', ');
+  const changeTraits = next => {
+    setTraitInputs(current => ({ ...current, [form.id]: next }));
+    change('rasgos')(next);
+  };
+  return <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <TextField label="Nombre" value={value.nombre} onChange={update(setValue, 'nombre')} />
+    <RarityField value={value.rareza} onChange={update(setValue, 'rareza')} rarities={rarities} />
+    <div className="sm:col-span-2 flex min-h-[44px] flex-wrap items-center justify-between gap-2 border border-[#c8aa6e]/25 bg-black/20 px-3 py-2">
+      <span className="font-['Cinzel'] text-xs text-[#c8aa6e]">◆ Truco · Dos formas</span>
+      <button type="button" className="min-h-[32px] text-xs text-slate-500 hover:text-slate-300" onClick={() => setValue(current => ({
+        ...current, rasgos: getWeaponForms(current, baseImage)[0].rasgos.join(', '),
+      }))}>Quitar Truco</button>
+    </div>
+    <div className="sm:col-span-2 grid grid-cols-2 border-y border-[#c8aa6e]/20" role="group" aria-label="Forma que estás editando">
+      {forms.map((entry, index) => <button type="button" key={entry.id} aria-pressed={index === formIndex}
+        onClick={() => onFormChange(index)} className={`min-h-[48px] border-b-2 px-2 font-['Cinzel'] text-xs ${index === formIndex ? 'border-[#c8aa6e] text-[#e5d2a4]' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
+        {entry.label} · Forma {index + 1}
+      </button>)}
+    </div>
+    <TextField label="Nombre de esta forma" value={form.label} onChange={change('label')} />
+    <TextField label="Perfil de daño" value={form.dano} onChange={change('dano')} placeholder="2d8" />
+    <SelectField label="Alcance" value={form.alcance} onChange={change('alcance')} options={EQUIPMENT_RANGES} />
+    <SelectField label="Competencia" value={form.competence} onChange={change('competence')} options={WEAPON_COMPETENCES} />
+    <SegmentedField label="Dados de acción" value={form.actionCost} onChange={change('actionCost')} options={ACTION_DICE_COSTS.slice(1)} formatLabel={cost => `${cost} dado${cost === 1 ? '' : 's'}`} />
+    <SegmentedField label="Empuñadura" value={form.handsRequired} onChange={change('handsRequired')} options={[1, 2]} formatLabel={hands => `${hands} mano${hands === 1 ? '' : 's'}`} />
+    <Field label="Rasgos de esta forma" className="sm:col-span-2">
+      <TraitsInput value={traitText} onChange={changeTraits} glossary={glossary}
+        className="!min-h-[42px] !rounded-none !border-[#34405a] !bg-[#080d19] !px-3 !py-2 !text-sm !text-[#e8dfcf]" />
+    </Field>
+    <TextField label="Precio / valor" value={value.valor} onChange={update(setValue, 'valor')} type="number" min={0} />
+    <div className="flex flex-col justify-center text-xs text-[#bca77a]"><span className="font-['Cinzel']">Transformación · 1 DA</span><span className="mt-1 text-slate-500">Eliges el dado y se ignora su valor.</span></div>
+    <Field label="Reglas y efecto de esta forma"><textarea className={`${controlClass} min-h-[112px] font-['Alegreya']`} value={form.descripcion} onChange={event => change('descripcion')(event.target.value)} /></Field>
+    <Field label="Lore"><textarea className={`${controlClass} min-h-[112px] font-['Alegreya'] italic`} value={value.lore || ''} onChange={event => update(setValue, 'lore')(event.target.value)} /></Field>
+  </div>;
+};
 
 export const ArmorCatalogFields = ({ value, setValue, rarities, glossary }) => (
   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

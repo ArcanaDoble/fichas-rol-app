@@ -7,7 +7,7 @@ import Cropper, {
 import { FiCheck, FiCrosshair, FiImage, FiX } from 'react-icons/fi';
 import PropTypes from 'prop-types';
 import {
-  ENEMY_HEADER_ASPECT,
+  getHeaderAspect,
   focusFromHeaderCrop,
   focusFromSuggestedCrop,
   focusWithinCrop,
@@ -40,6 +40,7 @@ const cropToWebp = async (source, area, outputWidth = 768, outputHeight = 768) =
 const RogueliteAssetCropDialog = ({
   initialSource,
   initialCrop,
+  initialLayout,
   title,
   variant,
   onCancel,
@@ -49,6 +50,8 @@ const RogueliteAssetCropDialog = ({
   const focusViewportRef = useRef(null);
   const analysisRequestRef = useRef(0);
   const isEnemyHeader = variant === 'enemyHeader';
+  const [headerLayout, setHeaderLayout] = useState(initialLayout);
+  const squareHeader = isEnemyHeader && headerLayout === 'square';
   const [source, setSource] = useState(initialSource || '');
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -64,7 +67,7 @@ const RogueliteAssetCropDialog = ({
   const [focusMode, setFocusMode] = useState(false);
   const [autoState, setAutoState] = useState('idle');
   const [busy, setBusy] = useState(false);
-  const shouldAutoFrameRef = useRef(isEnemyHeader && !normalizeCropPercentages(initialCrop));
+  const shouldAutoFrameRef = useRef(isEnemyHeader && initialLayout !== 'square' && !normalizeCropPercentages(initialCrop));
 
   const applyAutomaticFrame = useCallback(async (nextSource = source) => {
     if (!nextSource || !isEnemyHeader) return;
@@ -141,9 +144,24 @@ const RogueliteAssetCropDialog = ({
       setPendingCrop(null);
       setFocusMode(false);
       setAutoState('idle');
-      shouldAutoFrameRef.current = isEnemyHeader;
+      shouldAutoFrameRef.current = isEnemyHeader && headerLayout !== 'square';
     };
     reader.readAsDataURL(file);
+  };
+
+  const changeLayout = (layout) => {
+    if (layout === headerLayout) return;
+    analysisRequestRef.current += 1;
+    setHeaderLayout(layout);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setArea(null);
+    setAreaPercentages(null);
+    setPendingCrop(null);
+    setMediaSize(null);
+    setCropSize(null);
+    setFocusMode(false);
+    setAutoState('idle');
   };
 
   const chooseFocus = async (event) => {
@@ -185,6 +203,7 @@ const RogueliteAssetCropDialog = ({
         crop: area,
         imageWidth: size.width,
         imageHeight: size.height,
+        ...(squareHeader ? { target: { x: 0.5, y: 0.42 } } : {}),
       });
       const portraitCrop = getPortraitCrop({
         imageWidth: size.width,
@@ -194,10 +213,11 @@ const RogueliteAssetCropDialog = ({
       });
       const [cropped, headerCropped] = await Promise.all([
         cropToWebp(source, portraitCrop, 768, 768),
-        cropToWebp(source, area, 1536, 768),
+        cropToWebp(source, area, squareHeader ? 1024 : 1536, squareHeader ? 1024 : 768),
       ]);
       await onConfirm({
         source,
+        headerLayout,
         cropped,
         headerCropped,
         crop: areaPercentages,
@@ -227,7 +247,16 @@ const RogueliteAssetCropDialog = ({
 
         <input ref={inputRef} type="file" accept="image/*" onChange={chooseFile} hidden />
 
-        {source && isEnemyHeader && (
+        {isEnemyHeader && <fieldset className="noma-enemy-art-format">
+          <legend>Formato de la ilustración</legend>
+          <div>{[['square', 'Ilustración completa'], ['panorama', 'Panorámica']].map(([value, label]) => <label key={value} data-selected={headerLayout === value}>
+            <input type="radio" name="enemy-art-format" value={value} checked={headerLayout === value} onChange={() => changeLayout(value)} />
+            <span>{label}</span>
+          </label>)}</div>
+          <p>{squareHeader ? 'Formato 1:1. Conserva tu imagen cuadrada y funde el texto por debajo.' : 'Formato 2:1. Mantiene la cabecera horizontal con el texto a la izquierda.'}</p>
+        </fieldset>}
+
+        {source && isEnemyHeader && !squareHeader && (
           <div className="noma-rogue-crop-dialog__assist">
             <div>
               <span>Composición asistida</span>
@@ -251,12 +280,13 @@ const RogueliteAssetCropDialog = ({
               <span>Pulsa sobre el rostro o la silueta principal</span>
             </button>
           ) : (
-            <div className={`noma-rogue-crop-dialog__viewport ${isEnemyHeader ? 'is-enemy-header' : ''}`}>
+            <div className={`noma-rogue-crop-dialog__viewport ${isEnemyHeader ? 'is-enemy-header' : ''} ${squareHeader ? 'is-square-header' : ''}`}>
               <Cropper
+                key={headerLayout}
                 image={source}
                 crop={crop}
                 zoom={zoom}
-                aspect={isEnemyHeader ? ENEMY_HEADER_ASPECT : 1}
+                aspect={isEnemyHeader ? getHeaderAspect(headerLayout) : 1}
                 onCropChange={setCrop}
                 onZoomChange={setZoom}
                 onCropComplete={(percentages, pixels) => {
@@ -270,7 +300,7 @@ const RogueliteAssetCropDialog = ({
                 setCropSize={setCropSize}
                 showGrid={!isEnemyHeader}
               />
-              {isEnemyHeader && (
+              {isEnemyHeader && !squareHeader && (
                 <div className="noma-rogue-crop-dialog__card-preview" aria-hidden="true">
                   <div><FiCrosshair /><span>Enemigo</span></div>
                   <small>Zona reservada a información</small>
@@ -307,6 +337,7 @@ const RogueliteAssetCropDialog = ({
 RogueliteAssetCropDialog.propTypes = {
   initialSource: PropTypes.string,
   initialCrop: PropTypes.shape({ x: PropTypes.number, y: PropTypes.number, width: PropTypes.number, height: PropTypes.number }),
+  initialLayout: PropTypes.oneOf(['square', 'panorama']),
   title: PropTypes.string.isRequired,
   variant: PropTypes.oneOf(['square', 'enemyHeader']),
   onCancel: PropTypes.func.isRequired,
@@ -316,6 +347,7 @@ RogueliteAssetCropDialog.propTypes = {
 RogueliteAssetCropDialog.defaultProps = {
   initialSource: '',
   initialCrop: null,
+  initialLayout: 'panorama',
   variant: 'square',
 };
 

@@ -102,6 +102,7 @@ export const IncomingAttackDice = ({ pending, threatDie }) => {
   const modifierDice = new Set(modifierProfile);
   const classResourceDice = new Set([...furyProfile, ...manaProfile]);
   const cunningIndex = pending.cunning?.choice === 'rerolled' ? pending.cunning.dieIndex : -1;
+  const weaponLabel = pending.spellId ? 'Catalizador' : pending.blastId ? 'Explosión' : 'Arma';
   return (
     <div className="combat-roll-groups">
       {!!pending.actionDice?.length && (
@@ -113,8 +114,8 @@ export const IncomingAttackDice = ({ pending, threatDie }) => {
         <RollGroup label="Base ofensiva"><div className="combat-roll-die"><strong className="combat-flat-roll">{pending.pressure.actionPressure}</strong><span>Fija</span></div></RollGroup>
       )}
       {!!pending.weaponResults?.length && !(pending.attackParts?.length > 1) && (
-        <RollGroup label={pending.blastId ? 'Explosión' : 'Arma'}>{pending.weaponResults.map((value, index) => !modifierDice.has(pending.weaponDiceProfile?.[index]) && !classResourceDice.has(pending.weaponDiceProfile?.[index])
-          ? <ResultDie key={index} faces={pending.weaponDiceProfile?.[index]?.sides || 6} value={value} label={index === cunningIndex ? 'Astucia' : pending.blastId ? 'Explosión' : 'Arma'} /> : null
+        <RollGroup label={weaponLabel}>{pending.weaponResults.map((value, index) => !modifierDice.has(pending.weaponDiceProfile?.[index]) && !classResourceDice.has(pending.weaponDiceProfile?.[index])
+          ? <ResultDie key={index} faces={pending.weaponDiceProfile?.[index]?.sides || 6} value={value} label={index === cunningIndex ? 'Astucia' : weaponLabel} /> : null
         )}</RollGroup>
       )}
       {pending.attackParts?.length > 1 && pending.attackParts.map((part, partIndex) => (

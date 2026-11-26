@@ -1,0 +1,227 @@
+{
+  "date": "2026-11-05",
+  "verifiedAt": "2026-11-05T04:48:44.340Z",
+  "changedCatalogIds": [
+    "local-01-arbol-podrido",
+    "local-02-arbol-en-llamas",
+    "local-03-arbol-calcinado-con-brasas"
+  ],
+  "catalogSize": 15,
+  "alphaPreserved": true,
+  "assets": [
+    {
+      "id": "local-01-arbol-podrido",
+      "source": "codex-clipboard-9bbe193f-d9ae-4acb-8482-8ed9b2ffe299.png",
+      "sourceSha256": "26e0610cfe9314f6ee321ef600d8d63b59c2bbb1aab63584c63d32867684a9a2",
+      "sourceBytes": 1044647,
+      "sourceDimensions": [
+        1254,
+        1254
+      ],
+      "files": [
+        {
+          "path": "/scenery/trees/local-01-arbol-podrido.webp",
+          "dimensions": [
+            1024,
+            1024
+          ],
+          "bytes": 234918,
+          "quality": 90,
+          "sha256": "96bdf1f1b4cec7511f18975a52ebe6ee083b8940cee8939809e12823e2a683f2"
+        },
+        {
+          "path": "/scenery/trees/local-01-arbol-podrido-thumb.webp",
+          "dimensions": [
+            192,
+            192
+          ],
+          "bytes": 17472,
+          "quality": 82,
+          "sha256": "76dc9798c007885bbeea22b13880f8553d13cda42f4f6b81924c916c03f01304"
+        }
+      ],
+      "contourPoints": 72,
+      "contourChanged": true
+    },
+    {
+      "id": "local-03-arbol-calcinado-con-brasas",
+      "source": "codex-clipboard-26741789-f55c-49f9-abb6-f2af57cd8d06.png",
+      "sourceSha256": "6957a5eba6a49a86f6aab13b1c32a72dad11416276fd54f1d8821c6fe83e6dbd",
+      "sourceBytes": 1076151,
+      "sourceDimensions": [
+        1254,
+        1254
+      ],
+      "files": [
+        {
+          "path": "/scenery/trees/local-03-arbol-calcinado-con-brasas.webp",
+          "dimensions": [
+            1024,
+            1024
+          ],
+          "bytes": 198078,
+          "quality": 90,
+          "sha256": "f570296a0fbd6e106524df96ec5bcef67b910d32695d381692ddd5d877e7d02d"
+        },
+        {
+          "path": "/scenery/trees/local-03-arbol-calcinado-con-brasas-thumb.webp",
+          "dimensions": [
+            192,
+            192
+          ],
+          "bytes": 13990,
+          "quality": 82,
+          "sha256": "d68dc86a79a4e6128ba2aab649fd7d8242a39992f5382ed6638b2baf1f1666de"
+        }
+      ],
+      "contourPoints": 68,
+      "contourChanged": true
+    },
+    {
+      "id": "local-02-arbol-en-llamas",
+      "source": "codex-clipboard-609c805d-0c10-413f-a21b-f0d6390b721a.png",
+      "sourceSha256": "e8b6ef90f4b398aab488b5466fdafd2d69fac06ddd2e84bd6d266c7f42d74096",
+      "sourceBytes": 1445340,
+      "sourceDimensions": [
+        1254,
+        1254
+      ],
+      "files": [
+        {
+          "path": "/scenery/trees/local-02-arbol-en-llamas.webp",
+          "dimensions": [
+            1024,
+            1024
+          ],
+          "bytes": 317708,
+          "quality": 90,
+          "sha256": "ee3824ca570a56e0463838264a8d4498b115472a176f9dbc193eb5cc09a40d6e"
+        },
+        {
+          "path": "/scenery/trees/local-02-arbol-en-llamas-thumb.webp",
+          "dimensions": [
+            192,
+            192
+          ],
+          "bytes": 20624,
+          "quality": 82,
+          "sha256": "8e60a6d69f3227d28433dcc7cd075dee668d1c85a457e2c7e6aeda82b2c8a885"
+        }
+      ],
+      "contourPoints": 70,
+      "contourChanged": true
+    }
+  ],
+  "tests": {
+    "suites": 2,
+    "passed": 18
+  },
+  "browser": {
+    "engine": "Edge",
+    "desktop": "1280x900: all three assets, rotation, size, canopy/trunk",
+    "mobile": "412x915: inspector and canopy/trunk; layer selected with keyboard"
+  },
+  "build": "success",
+  "sites": [
+    {
+      "url": "https://base-de-datos-noma.web.app",
+      "checked": [
+        {
+          "path": "/static/js/main.b85f1c82.js",
+          "bytes": 5352790,
+          "sha256": "f3c27aceaf11d92312e97ee626011df4d742144f3d15b526fdd21ad1078f8b52"
+        },
+        {
+          "path": "/static/css/main.7f40ae45.css",
+          "bytes": 709594,
+          "sha256": "59a232ba892b5a658e3423ea6554a6b6a99a382eb782833e69b8f9a1cbda1555"
+        },
+        {
+          "path": "/asset-manifest.json",
+          "bytes": 1417,
+          "sha256": "9a3d63322f7b291145c353ca89402b9296bab2c478f85a337efc11f1f6effcb9"
+        },
+        {
+          "path": "/scenery/trees/local-01-arbol-podrido.webp",
+          "bytes": 234918,
+          "sha256": "96bdf1f1b4cec7511f18975a52ebe6ee083b8940cee8939809e12823e2a683f2"
+        },
+        {
+          "path": "/scenery/trees/local-01-arbol-podrido-thumb.webp",
+          "bytes": 17472,
+          "sha256": "76dc9798c007885bbeea22b13880f8553d13cda42f4f6b81924c916c03f01304"
+        },
+        {
+          "path": "/scenery/trees/local-03-arbol-calcinado-con-brasas.webp",
+          "bytes": 198078,
+          "sha256": "f570296a0fbd6e106524df96ec5bcef67b910d32695d381692ddd5d877e7d02d"
+        },
+        {
+          "path": "/scenery/trees/local-03-arbol-calcinado-con-brasas-thumb.webp",
+          "bytes": 13990,
+          "sha256": "d68dc86a79a4e6128ba2aab649fd7d8242a39992f5382ed6638b2baf1f1666de"
+        },
+        {
+          "path": "/scenery/trees/local-02-arbol-en-llamas.webp",
+          "bytes": 317708,
+          "sha256": "ee3824ca570a56e0463838264a8d4498b115472a176f9dbc193eb5cc09a40d6e"
+        },
+        {
+          "path": "/scenery/trees/local-02-arbol-en-llamas-thumb.webp",
+          "bytes": 20624,
+          "sha256": "8e60a6d69f3227d28433dcc7cd075dee668d1c85a457e2c7e6aeda82b2c8a885"
+        }
+      ]
+    },
+    {
+      "url": "https://nomarol.web.app",
+      "checked": [
+        {
+          "path": "/static/js/main.b85f1c82.js",
+          "bytes": 5352790,
+          "sha256": "f3c27aceaf11d92312e97ee626011df4d742144f3d15b526fdd21ad1078f8b52"
+        },
+        {
+          "path": "/static/css/main.7f40ae45.css",
+          "bytes": 709594,
+          "sha256": "59a232ba892b5a658e3423ea6554a6b6a99a382eb782833e69b8f9a1cbda1555"
+        },
+        {
+          "path": "/asset-manifest.json",
+          "bytes": 1417,
+          "sha256": "9a3d63322f7b291145c353ca89402b9296bab2c478f85a337efc11f1f6effcb9"
+        },
+        {
+          "path": "/scenery/trees/local-01-arbol-podrido.webp",
+          "bytes": 234918,
+          "sha256": "96bdf1f1b4cec7511f18975a52ebe6ee083b8940cee8939809e12823e2a683f2"
+        },
+        {
+          "path": "/scenery/trees/local-01-arbol-podrido-thumb.webp",
+          "bytes": 17472,
+          "sha256": "76dc9798c007885bbeea22b13880f8553d13cda42f4f6b81924c916c03f01304"
+        },
+        {
+          "path": "/scenery/trees/local-03-arbol-calcinado-con-brasas.webp",
+          "bytes": 198078,
+          "sha256": "f570296a0fbd6e106524df96ec5bcef67b910d32695d381692ddd5d877e7d02d"
+        },
+        {
+          "path": "/scenery/trees/local-03-arbol-calcinado-con-brasas-thumb.webp",
+          "bytes": 13990,
+          "sha256": "d68dc86a79a4e6128ba2aab649fd7d8242a39992f5382ed6638b2baf1f1666de"
+        },
+        {
+          "path": "/scenery/trees/local-02-arbol-en-llamas.webp",
+          "bytes": 317708,
+          "sha256": "ee3824ca570a56e0463838264a8d4498b115472a176f9dbc193eb5cc09a40d6e"
+        },
+        {
+          "path": "/scenery/trees/local-02-arbol-en-llamas-thumb.webp",
+          "bytes": 20624,
+          "sha256": "8e60a6d69f3227d28433dcc7cd075dee668d1c85a457e2c7e6aeda82b2c8a885"
+        }
+      ]
+    }
+  ]
+}

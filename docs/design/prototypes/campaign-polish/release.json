@@ -1,0 +1,20 @@
+{
+  "verifiedAtUtc": "2026-10-20T18:56:57.8876169Z",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "release": "campaign-mobile-target-selection",
+  "mainJs": "/static/js/main.2d0377fb.js",
+  "mainCss": "/static/css/main.b2355d8a.css",
+  "testSuitesPassed": 220,
+  "testsPassed": 1540,
+  "testsSkipped": 1,
+  "publishedAssetStatus": 200,
+  "publishedCssStatus": 200,
+  "publishedManifestMatches": true,
+  "localPreviewRebuilt": true,
+  "regressionReproducedBeforeFix": true,
+  "mobileTargetRegressionTestsPassed": 3,
+  "browserVisualVerification": "not_run",
+  "verificationMethod": "React DOM touch and compatibility mouse events with real combat runtime and HUD"
+}

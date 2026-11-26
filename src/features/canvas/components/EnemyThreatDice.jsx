@@ -7,7 +7,7 @@ const THREAT_SIDES = [4, 6, 8, 10, 12, 20];
 
 const EnemyThreatDice = ({
   selection = { useStored: false, customDice: [] }, onChange, storedThreatValue, storedThreatDie,
-  disabled = false, busy = false, purpose = 'defense',
+  disabled = false, busy = false, purpose = 'defense', profileOnly = false,
 }) => {
   const isAttack = purpose === 'attack';
   const selectedLabel = isAttack ? 'En ataque' : 'En defensa';
@@ -30,9 +30,9 @@ const EnemyThreatDice = ({
   };
 
   return (
-    <section className="enemy-threat" aria-label="Dados de Amenaza">
+    <section className="enemy-threat" aria-label={profileOnly ? 'Perfil inicial de Amenaza' : 'Dados de Amenaza'}>
       <div className="enemy-threat-heading">
-        <h3>Amenaza</h3><span aria-live="polite">{total ? `${total} ${total === 1 ? 'dado' : 'dados'}` : 'Opcional'}</span>
+        <h3>{profileOnly ? 'Amenaza inicial' : 'Amenaza'}</h3><span aria-live="polite">{total ? `${total} ${total === 1 ? 'dado' : 'dados'}` : 'Opcional'}</span>
       </div>
       <div className="enemy-threat-options">
         {hasStoredThreat && (
@@ -53,7 +53,7 @@ const EnemyThreatDice = ({
             {THREAT_SIDES.map(faces => (
               <ActionDieButton key={faces} die={{ sides: faces, value: faces }} showType={false} connectedFaces={faces === 20}
                 selected={customDice.includes(faces)} disabled={disabled}
-                availableLabel="Por tirar" selectedLabel={selectedLabel}
+                availableLabel={profileOnly ? 'Añadir' : 'Por tirar'} selectedLabel={profileOnly ? 'En reserva' : selectedLabel}
                 ariaLabel={`Dado puntual d${faces}, por tirar`}
                 onClick={() => chooseCustom(faces)}
               />
@@ -70,7 +70,8 @@ const EnemyThreatDice = ({
         </div>)}
       </div>}
       <p className="enemy-threat-note">
-        {busy ? (isAttack ? 'Resolviendo ataque…' : 'Resolviendo defensa…')
+        {profileOnly ? `Reserva inicial${profile ? `: ${profile}` : ' vacía'}. Se tira y recupera al comenzar cada ronda de Campaña.`
+          : busy ? (isAttack ? 'Resolviendo ataque…' : 'Resolviendo defensa…')
           : disabled ? 'Elige equipo para añadir Amenaza.'
           : customDice.length ? `Se ${customDice.length === 1 ? 'tira' : 'tiran'} ${profile} al confirmar${storedSelected ? `; añade ${Number(storedThreatValue)} de la reserva y la consume.` : hasStoredThreat ? '; conserva la reserva.' : '.'}`
             : storedSelected ? `Añade ${Number(storedThreatValue)} ${isAttack ? 'al ataque' : 'a la defensa'} y consume la reserva.`

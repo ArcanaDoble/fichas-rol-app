@@ -9,7 +9,7 @@ import { Extension } from '@tiptap/core';
 import PropTypes from 'prop-types';
 import { createPortal } from 'react-dom';
 import { FiX, FiTrash2 } from 'react-icons/fi';
-import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import Boton from './Boton';
 import Input from './Input';
@@ -432,51 +432,6 @@ const TokenSettings = ({
     );
   }, [token.tokenSheetId, controlledBy]);
 
-  // Función para agregar el token al sistema de velocidad
-  const addToInitiativeSystem = async () => {
-    try {
-      const initiativeRef = doc(db, 'initiative', 'current');
-      const initiativeDoc = await getDoc(initiativeRef);
-
-      let participants = [];
-      if (initiativeDoc.exists()) {
-        participants = initiativeDoc.data().participants || [];
-      }
-
-      // Verificar si ya existe un participante con el mismo nombre
-      const tokenDisplayName =
-        showName && name ? name : token.name || 'Token sin nombre';
-      const existingParticipant = participants.find(
-        (p) => p.name === tokenDisplayName
-      );
-
-      if (existingParticipant) {
-        alert(
-          `Ya existe un participante llamado "${tokenDisplayName}" en el sistema de velocidad.`
-        );
-        return;
-      }
-
-      // Crear nuevo participante
-      const newParticipant = {
-        id: Date.now().toString(),
-        name: tokenDisplayName,
-        speed: 0,
-        type: controlledBy === 'master' ? 'enemy' : 'player',
-        addedBy: controlledBy === 'master' ? 'master' : controlledBy,
-      };
-
-      // Agregar al sistema
-      const updatedParticipants = [...participants, newParticipant];
-      await updateDoc(initiativeRef, { participants: updatedParticipants });
-
-      alert(`"${tokenDisplayName}" ha sido agregado al sistema de velocidad.`);
-    } catch (error) {
-      console.error('Error al agregar al sistema de velocidad:', error);
-      alert('Error al agregar al sistema de velocidad. Inténtalo de nuevo.');
-    }
-  };
-
   // Verificar permisos para jugadores
   const canEditToken =
     !isPlayerView || token.controlledBy === currentPlayerName;
@@ -724,14 +679,6 @@ const TokenSettings = ({
                     </div>
                   </div>
                 )}
-                <Boton
-                  onClick={addToInitiativeSystem}
-                  size="sm"
-                  color="green"
-                  className="mt-2"
-                >
-                  ⚡ Añadir al Sistema de Velocidad
-                </Boton>
                 <div className="flex justify-center gap-2 mt-2">
                   <Boton size="sm" onClick={() => onMoveBack?.()}>
                     Bajar capa

@@ -14,6 +14,10 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import { useCustomEquipmentImages, getCustomImage } from '../hooks/useCustomEquipmentImages';
 
 import { normalizeGlossaryWord, getGlossaryTooltipId } from '../utils/glossary';
+import { getCampaignEquipmentState, isCampaignArmorReinforcement } from '../features/campaign/campaignEquipment';
+import CampaignProtectionSlots from '../features/campaign/CampaignProtectionSlots';
+import { getWeaponForms, hasWeaponTrick, resolveWeaponForm } from '../features/roguelite/weaponForms';
+import { ArrowLeftRight } from 'lucide-react';
 import {
     normalizeEquippedHandSlots,
     normalizeEquippedWeaponSets,
@@ -89,6 +93,12 @@ const resolveVisibleTraits = (item, handsRequired) => {
 const resolveArmorDefenseValue = (armor = {}) => String(
     armor.defenseClass ?? armor.cd ?? armor.defensa ?? armor.defense ?? '',
 ).trim();
+
+const resolveCampaignArmorDefenseValue = (armor = {}) => {
+    const value = [armor.rd, armor.armaduraRd, armor.defensa, armor.defense]
+        .find((entry) => entry !== null && entry !== undefined && String(entry).trim() !== '');
+    return String(value ?? '—');
+};
 
 const RARITIES = [
     { id: 'comun', label: 'Común', color: 'bg-slate-600 border-slate-400 text-slate-200' },
@@ -345,6 +355,9 @@ const LoadoutView = ({
     onUpdateTalent,
     onUpdateProficiency,
     onUpdateEquipped,
+    onTransformWeapon,
+    weaponTrickBusy = false,
+    weaponTrickError = '',
     onUpdateResource,
     onUpdateTalentCatalog,
     onUpdateEquippedTalentIds,
@@ -450,12 +463,15 @@ const LoadoutView = ({
     // Get equipped items from dndClass (Moved up for initialization)
     const equippedItems = useMemo(
         () => {
+            if (rogueliteRole === 'campaign') return getCampaignEquipmentState({
+                equipment: dndClass.equipment, equippedItems: dndClass.equippedItems,
+            }).equippedItems;
             const source = dndClass.equippedItems || { mainHand: null, offHand: null, body: null };
             return rogueliteRole === 'legacy'
                 ? normalizeEquippedHandSlots(source)
                 : normalizeEquippedWeaponSets(source);
         },
-        [dndClass.equippedItems, rogueliteRole],
+        [dndClass.equippedItems, dndClass.equipment, rogueliteRole],
     );
     const activeWeaponSet = rogueliteRole === 'legacy'
         ? 0
@@ -715,8 +731,9 @@ const LoadoutView = ({
 
     // Get available accessories from inventory
     const inventoryAccessories = useMemo(() => {
-        return equipment.filter(item => item._category === 'accessories');
-    }, [equipment]);
+        return equipment.filter(item => item._category === 'accessories'
+            && (rogueliteRole !== 'campaign' || !isCampaignArmorReinforcement(item)));
+    }, [equipment, rogueliteRole]);
 
     const filteredInventory = useMemo(() => {
         if (rogueliteRole !== 'player') return equipment;
@@ -908,7 +925,7 @@ const LoadoutView = ({
 
     // Get proficiency warning message for weapons
     const getWeaponProficiencyWarning = (item) => {
-        if (rogueliteRole === 'legacy') return null;
+        if (rogueliteRole === 'legacy' || rogueliteRole === 'campaign') return null;
         const weaponType = getWeaponProficiencyType(item);
         if (!weaponType) return null;
         if (hasWeaponProficiency(item)) return null;
@@ -919,7 +936,7 @@ const LoadoutView = ({
 
     // Get proficiency warning message for armor
     const getArmorProficiencyWarning = (item) => {
-        if (rogueliteRole === 'legacy') return null;
+        if (rogueliteRole === 'legacy' || rogueliteRole === 'campaign') return null;
         const armorType = getArmorProficiencyType(item);
         if (!armorType) return null;
         if (hasArmorProficiency(item)) return null;
@@ -999,7 +1016,7 @@ const LoadoutView = ({
         <div className="w-full h-full min-h-screen overflow-y-auto custom-scrollbar bg-[#09090b] pb-20 md:pb-0">
             <div className="p-4 pt-12 md:p-8 lg:p-12 max-w-7xl mx-auto">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 md:mb-8 border-b border-[#c8aa6e]/20 pb-4 gap-3">
-                    <h2 className="text-2xl md:text-4xl font-['Cinzel'] text-[#f0e6d2]">MAZO INICIAL</h2>
+                    <h2 className="text-2xl md:text-4xl font-['Cinzel'] text-[#f0e6d2]">{rogueliteRole === 'campaign' ? 'EQUIPO' : 'MAZO INICIAL'}</h2>
                     <div className="flex gap-3 md:gap-4 text-xs font-bold uppercase tracking-widest text-slate-500">
                         <button
                             onClick={() => setActiveTab('loadout')}
@@ -1173,6 +1190,7 @@ const LoadoutView = ({
                                                         raritySoft={hexToRgba(rarityAccent, 0.34)}
                                                         rarityFaint={hexToRgba(rarityAccent, 0.12)}
                                                         actionCost={actionCost}
+                                                        defenseLabel={rogueliteRole === 'campaign' ? 'Defensa' : 'CD'}
                                                         handsRequired={handsRequired}
                                                         visibleTraits={visibleTraits}
                                                         glossary={glossary}
@@ -1244,7 +1262,9 @@ const LoadoutView = ({
                                             ].map(({ key, label, badge, badgeClass }) => {
                                                 const isOccupiedByTwoHanded = handOccupancy?.blockedSlot === key;
                                                 const occupyingItem = isOccupiedByTwoHanded ? handOccupancy.item : null;
-                                                const equippedItem = isOccupiedByTwoHanded ? null : selectedHandItems[key];
+                                                const equippedItem = isOccupiedByTwoHanded ? null : resolveWeaponForm(selectedHandItems[key]);
+                                                const trickForm = equippedItem && hasWeaponTrick(equippedItem)
+                                                    ? getWeaponForms(equippedItem).find(form => form.id !== equippedItem.activeFormId) : null;
                                                 const proficiencyWarning = equippedItem ? getWeaponProficiencyWarning(equippedItem) : null;
                                                 const isSlotActive = !isOccupiedByTwoHanded && activeSlotSelector === key;
                                                 const rarityColors = equippedItem ? getRarityColors(equippedItem, rarityColorMap) : null;
@@ -1263,7 +1283,7 @@ const LoadoutView = ({
                                                             role={isOccupiedByTwoHanded ? 'status' : undefined}
                                                             aria-disabled={isOccupiedByTwoHanded || undefined}
                                                             aria-label={isOccupiedByTwoHanded ? `${label} ocupada por ${occupyingItem.name}` : undefined}
-                                                            className={`noma-loadout-hand-slot h-52 border-2 rounded-lg flex flex-col items-center justify-center transition-all cursor-pointer relative overflow-hidden p-3
+                                                            className={`noma-loadout-hand-slot ${trickForm ? 'noma-loadout-hand-slot--trick' : ''} ${trickForm && proficiencyWarning ? 'noma-loadout-hand-slot--trick-warning' : ''} h-52 border-2 rounded-lg flex flex-col items-center justify-center transition-all cursor-pointer relative overflow-hidden p-3
                                                                 ${isOccupiedByTwoHanded
                                                                     ? 'cursor-default border-[#c8aa6e]/30 bg-[#0b1120]'
                                                                     : equippedItem
@@ -1350,7 +1370,7 @@ const LoadoutView = ({
 
 
                                                                     {/* Name */}
-                                                                    <span className="text-[#f0e6d2] font-['Cinzel'] text-sm uppercase tracking-wider text-center px-2 font-bold mt-1 relative z-10">
+                                                                    <span className="noma-loadout-weapon-name text-[#f0e6d2] font-['Cinzel'] text-sm uppercase tracking-wider text-center px-2 font-bold mt-1 relative z-10">
                                                                         {equippedItem.name}
                                                                     </span>
 
@@ -1371,7 +1391,7 @@ const LoadoutView = ({
                                                                         {(equippedItem.consumption || equippedItem.consumo) && (
                                                                             <div>
                                                                                 <dt>Coste</dt>
-                                                                                <dd className="noma-loadout-weapon-stats__cost">{equippedItem.consumption || equippedItem.consumo}</dd>
+                                                                                <dd className="noma-loadout-weapon-stats__cost">{trickForm ? '🟡'.repeat(equippedItem.actionCost) : equippedItem.consumption || equippedItem.consumo}</dd>
                                                                             </div>
                                                                         )}
                                                                     </dl>
@@ -1379,7 +1399,7 @@ const LoadoutView = ({
                                                                     {/* Traits */}
                                                                     {(equippedItem.traits || equippedItem.rasgos || equippedItem.trait) && (
                                                                         <div className="noma-loadout-traits">
-                                                                            {(equippedItem.traits || equippedItem.rasgos || equippedItem.trait).toString().split(',').slice(0, 3).map((t, i) => renderTrait(t, i))}
+                                                                            {(equippedItem.traits || equippedItem.rasgos || equippedItem.trait).toString().split(',').filter(t => t.trim().toLowerCase() !== 'truco').slice(0, trickForm ? 4 : 3).map((t, i) => renderTrait(t, i))}
                                                                         </div>
                                                                     )}
 
@@ -1392,6 +1412,18 @@ const LoadoutView = ({
                                                                     )}
 
                                                                     {/* Unequip Button */}
+                                                                    {trickForm && (
+                                                                        <button
+                                                                            type="button"
+                                                                            className="noma-loadout-weapon-trick"
+                                                                            disabled={!onTransformWeapon || weaponTrickBusy}
+                                                                            onClick={event => { event.stopPropagation(); onTransformWeapon?.(equippedItem); }}
+                                                                            aria-label={`Transformar ${equippedItem.name} en ${trickForm.label}`}
+                                                                            title={`Transformar en ${trickForm.label} · Guarda los cambios para aplicarlo`}
+                                                                        >
+                                                                            <ArrowLeftRight aria-hidden="true" />
+                                                                        </button>
+                                                                    )}
                                                                     <button
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
@@ -1507,7 +1539,23 @@ const LoadoutView = ({
                                         </div>
                                     </div>
 
+                                    {weaponTrickError && <p className="noma-loadout-trick-error" role="alert">{weaponTrickError}</p>}
                                     {/* 2. ARMADURA (Armor) */}
+                                    {rogueliteRole === 'campaign' ? (
+                                        <CampaignProtectionSlots
+                                            equippedItems={equippedItems}
+                                            inventoryItems={equipment}
+                                            activeSlot={activeSlotSelector}
+                                            onToggleSlot={(slot) => setActiveSlotSelector((previous) => previous === slot ? null : slot)}
+                                            onEquip={handleEquipItem}
+                                            onUnequip={handleUnequipItem}
+                                            getImage={(item) => getCustomImage(item, customEquipmentImages)
+                                                || item.image || item.imagen || item.imageUrl || item.avatar
+                                                || getObjectImage(item, customEquipmentImages)}
+                                            getRarityColors={(item) => getRarityColors(item, rarityColorMap)}
+                                            renderTrait={renderTrait}
+                                        />
+                                    ) : (
                                     <div className={`relative ${activeSlotSelector === 'body' ? 'z-40' : 'z-10'}`}>
                                         <div className="flex items-center gap-3 mb-4">
                                             <Shield className="w-5 h-5 text-[#c8aa6e]" />
@@ -1521,7 +1569,9 @@ const LoadoutView = ({
                                                 const proficiencyWarning = equippedArmor ? getArmorProficiencyWarning(equippedArmor) : null;
                                                 const isSlotActive = activeSlotSelector === 'body';
                                                 const rarityColors = equippedArmor ? getRarityColors(equippedArmor, rarityColorMap) : null;
-                                                const armorDefense = equippedArmor ? resolveArmorDefenseValue(equippedArmor) : '';
+                                                const armorDefense = equippedArmor
+                                                    ? rogueliteRole === 'campaign' ? resolveCampaignArmorDefenseValue(equippedArmor) : resolveArmorDefenseValue(equippedArmor)
+                                                    : '';
                                                 const armorTraits = equippedArmor
                                                     ? resolveVisibleTraits(equippedArmor, 1)
                                                     : [];
@@ -1633,21 +1683,25 @@ const LoadoutView = ({
                                                                         <div
                                                                             className="noma-armor-defense-readout"
                                                                             role="img"
-                                                                            aria-label={`CD ${armorDefense}: pierdes un bloque de Vida por cada ${armorDefense} de Presión`}
+                                                                            aria-label={rogueliteRole === 'campaign'
+                                                                                ? `Reducción de daño: ${armorDefense}`
+                                                                                : `CD ${armorDefense}: pierdes un bloque de Vida por cada ${armorDefense} de Presión`}
                                                                         >
                                                                             <div className="noma-armor-defense-emblem" aria-hidden="true">
                                                                                 <Shield />
                                                                                 <span className="noma-armor-defense-emblem__value">
-                                                                                    <small>CD</small>
+                                                                                    <small>{rogueliteRole === 'campaign' ? 'RD' : 'CD'}</small>
                                                                                     <strong>{armorDefense}</strong>
                                                                                 </span>
                                                                             </div>
                                                                             <div className="noma-armor-defense-rule" aria-hidden="true">
-                                                                                <span>Defensa pasiva</span>
-                                                                                <p>
-                                                                                    <strong>1 bloque</strong>
-                                                                                    <small>cada {armorDefense} de Presión</small>
-                                                                                </p>
+                                                                                <span>{rogueliteRole === 'campaign' ? 'Reducción de daño' : 'Defensa pasiva'}</span>
+                                                                                {rogueliteRole !== 'campaign' && (
+                                                                                    <p>
+                                                                                        <strong>1 bloque</strong>
+                                                                                        <small>cada {armorDefense} de Presión</small>
+                                                                                    </p>
+                                                                                )}
                                                                             </div>
                                                                         </div>
                                                                     )}
@@ -1732,7 +1786,7 @@ const LoadoutView = ({
                                                                                 <div className="flex-1 min-w-0">
                                                                                     <div className="text-sm text-[#f0e6d2] font-medium truncate">{armor.name}</div>
                                                                                     <div className="flex gap-2 text-[10px]">
-                                                                                        {armorOptionDefense && <span className="text-blue-300">CD {armorOptionDefense}</span>}
+                                                                                        {armorOptionDefense && <span className="text-blue-300">{rogueliteRole === 'campaign' ? 'Defensa' : 'CD'} {armorOptionDefense}</span>}
                                                                                         {armor.category && <span className="text-slate-500">{armor.category}</span>}
                                                                                     </div>
                                                                                     {warning && (
@@ -1767,6 +1821,8 @@ const LoadoutView = ({
                                             })()}
                                         </div>
                                     </div>
+
+                                    )}
 
                                     {/* 3. CINTURON (Belt - Consumables) */}
                                     <div className={`relative ${activeSlotSelector?.startsWith('belt_') ? 'z-40' : 'z-10'}`}>
@@ -2257,11 +2313,11 @@ const LoadoutView = ({
                     {/* Right Column: Relic Slots (Vertical Stack) */}
                     <div
                         data-testid="talents-sidebar"
-                        className={`noma-talents-shell noma-talents-shell--${rogueliteRole} flex flex-col h-fit sticky top-8 p-6 ${rogueliteRole === 'player'
+                        className={`noma-talents-shell noma-talents-shell--${rogueliteRole} flex flex-col h-fit sticky top-8 p-6 ${rogueliteRole === 'player' || rogueliteRole === 'campaign'
                             ? 'max-h-none overflow-visible'
                             : 'max-h-[850px] overflow-y-auto [&::-webkit-scrollbar]:hidden'
                             }`}
-                        style={rogueliteRole === 'player' ? undefined : { scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                        style={rogueliteRole === 'player' || rogueliteRole === 'campaign' ? undefined : { scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                     >
                         {rogueliteRole === 'legacy' && (
                             <h3 className="text-[#c8aa6e] font-['Cinzel'] text-lg tracking-widest mb-8 text-center flex items-center justify-center gap-2">
@@ -2621,6 +2677,9 @@ const LoadoutView = ({
 };
 
 LoadoutView.propTypes = {
+    onTransformWeapon: PropTypes.func,
+    weaponTrickBusy: PropTypes.bool,
+    weaponTrickError: PropTypes.string,
     dndClass: PropTypes.shape({
         equipment: PropTypes.oneOfType([
             PropTypes.arrayOf(PropTypes.shape({
@@ -2650,7 +2709,7 @@ LoadoutView.propTypes = {
         }),
         talents: PropTypes.object
     }).isRequired,
-    rogueliteRole: PropTypes.oneOf(['legacy', 'master', 'player']),
+    rogueliteRole: PropTypes.oneOf(['legacy', 'master', 'player', 'campaign']),
     equipmentCatalog: PropTypes.shape({
         weapons: PropTypes.array,
         armor: PropTypes.array,

@@ -58,6 +58,7 @@ export const CombatLogPanel = ({
     boardDiceRollLog,
     clearBoardDicePool,
     combatLog,
+    isPlayerView = false,
     isBoardMode,
     isRollingBoardDice,
     rollBoardDicePool,
@@ -350,6 +351,11 @@ export const CombatLogPanel = ({
                                                 </div>
                                             ) : (
                                                 combatLog.map((record) => {
+                                                    if (record.canvasCampaign && isPlayerView) return <article key={record.id || record.sourceEventId} className="border-b border-slate-800/50 py-4 text-[#dfcfaa]">
+                                                        <p className="font-fantasy">{record.attackerName} → {record.targetName}</p>
+                                                        <p className="text-sm">{record.weaponName} · {Number(record.finalDamage ?? record.damage) || 0} de daño</p>
+                                                        <p className="text-xs text-slate-400">{({ evadir: 'Intento de evasión', parar: 'Parry', recibir: 'Golpe recibido' })[record.reactionType] || 'Intercambio resuelto'} · Recursos del rival reservados</p>
+                                                    </article>;
                                                     if (record.bleedingChoice) return <article key={record.id || record.sourceEventId}
                                                         className="border-l-2 border-[#b76a73] pl-6 py-2 font-['Alegreya'] text-[#eee5d3]">
                                                         <p className="font-['Cinzel'] text-xs text-[#d9949b]">Sangrado · {record.targetName}</p>
@@ -360,6 +366,26 @@ export const CombatLogPanel = ({
                                                     if (record.eventType === 'item-use' && ['heal', 'remove-poison', 'remove-bleeding', 'haste', 'temporary-life'].includes(record.effect)) {
                                                         return <HealingPotionLogEntry key={record.id || record.sourceEventId} entry={record} />;
                                                     }
+                                                    if (record.eventType === 'spell-use' && record.spellId === 'runic-barrier') return <article
+                                                        key={record.id || record.sourceEventId} className="border-l-2 border-[#d8bd80] pl-6 py-2 font-['Alegreya'] text-[#eee5d3]">
+                                                        <p className="font-['Cinzel'] text-xs text-[#d8bd80]">{fixMojibakeText(record.actorName)} · Barrera rúnica</p>
+                                                        <p className="mt-2 text-lg">{fixMojibakeText(record.targetName)} obtiene +1 CD hasta el final del combate.</p>
+                                                        {record.protections?.length > 0 && <p className="text-sm text-slate-400">Neutraliza {record.protections.map(trait => ({ critico: 'Crítico', venenosa: 'Veneno', conmocion: 'Conmoción' }[trait] || trait)).join(' y ')}.</p>}
+                                                        <p className="mt-2 text-xs text-slate-400">{(record.resourcesSpent || []).map(resource => resource.label).join(' · ')}</p>
+                                                    </article>;
+                                                    if (record.eventType === 'spell-use' && record.spellId === 'arcane-mist') return <article
+                                                        key={record.id || record.sourceEventId} className="border-l-2 border-[#b6b4ce] pl-6 py-2 font-['Alegreya'] text-[#eee5d3]">
+                                                        <p className="font-['Cinzel'] text-xs text-[#d0cde2]">{fixMojibakeText(record.actorName)} · Niebla arcana</p>
+                                                        <p className="mt-2 text-lg">Humo en {record.cells?.length >= 4 ? `un área ${record.cells.length === 9 ? '3×3' : '2×2'}` : record.cells?.length === 2 ? 'dos casillas' : 'una casilla'} hasta el final del combate.</p>
+                                                        <p className="text-sm text-slate-400">Bloquea la visión entre dentro y fuera para ambos bandos.</p>
+                                                        <p className="mt-2 text-xs text-slate-400">{(record.resourcesSpent || []).map(resource => resource.label).join(' · ')}</p>
+                                                    </article>;
+                                                    if (record.eventType === 'item-use' && record.effect === 'weapon-transform') return <article
+                                                        key={record.id || record.sourceEventId} className="border-l-2 border-[#c8aa6e] py-2 pl-6 font-['Alegreya'] text-[#eee5d3]">
+                                                        <p className="font-['Cinzel'] text-xs text-[#c8aa6e]">Truco · {fixMojibakeText(record.itemName)}</p>
+                                                        <p className="mt-2 text-base">{fixMojibakeText(record.logText)}</p>
+                                                        <p className="mt-1 text-xs text-slate-400">{(record.resourcesSpent || []).map(resource => resource.label).join(' · ') || 'Preparación fuera de combate'}</p>
+                                                    </article>;
                                                     const entry = {
                                                         ...record,
                                                         attackTotal: record.attackTotal ?? record.attackPressure,
@@ -538,7 +564,7 @@ export const CombatLogPanel = ({
                                                                     </div>
                                                                     <div className="h-4 w-[1px] bg-slate-800" />
                                                                     <div className="flex items-center gap-1.5">
-                                                                        <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest opacity-60">{entry.canvasRoguelite ? 'Presión' : 'Poder'}</span>
+                                                                        <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest opacity-60">{entry.canvasCampaign ? 'Impacto' : entry.canvasRoguelite ? 'Presión' : 'Poder'}</span>
                                                                         <span className="text-[#f0e6d2] text-xs font-black">{entry.effectiveAttackTotal ?? entry.attackTotal}</span>
                                                                     </div>
                                                                 </div>
@@ -605,13 +631,13 @@ export const CombatLogPanel = ({
 
                                                             {/* Reaction Descriptive Text */}
                                                             <div className="px-1 text-[11px] leading-relaxed">
-                                                                {!entry.canvasRoguelite && entry.reactionType === 'evadir' && (
+                                                                {!entry.canvasRoguelite && !entry.canvasCampaign && entry.reactionType === 'evadir' && (
                                                                     <p className="text-slate-300">
                                                                         <span className="text-yellow-500/80 mr-1.5 italic font-bold uppercase text-[9px] tracking-wider">Evasión</span>
                                                                         Evadió {(entry.evadedDiceIds || []).length} dados e impactó con <span className="text-white font-bold">{entry.finalDamage}</span> de daño.
                                                                     </p>
                                                                 )}
-                                                                {!entry.canvasRoguelite && entry.reactionType === 'parar' && (
+                                                                {!entry.canvasRoguelite && !entry.canvasCampaign && entry.reactionType === 'parar' && (
                                                                     <p className="text-slate-300">
                                                                         <span className="text-blue-400/80 mr-1.5 italic font-bold uppercase text-[9px] tracking-wider">Parada</span>
                                                                         {entry.elusionEffect ? <span className="text-cyan-300 font-bold">Elusión retiró el dado {entry.elusionEffect.value}. </span> : null}
@@ -621,7 +647,7 @@ export const CombatLogPanel = ({
                                                                                 `Parada parcial con ${defenderWeapon}, recibió ${entry.finalDamage} de daño.`}
                                                                     </p>
                                                                 )}
-                                                                {!entry.canvasRoguelite && entry.reactionType === 'recibir' && (
+                                                                {!entry.canvasRoguelite && !entry.canvasCampaign && entry.reactionType === 'recibir' && (
                                                                     <p className="text-slate-400">
                                                                         <span className="text-red-500/80 mr-1.5 italic font-bold uppercase text-[9px] tracking-wider">Impacto</span>
                                                                         Recibió el golpe de lleno por <span className="text-white font-bold">{entry.finalDamage}</span> de daño.
@@ -629,6 +655,11 @@ export const CombatLogPanel = ({
                                                                 )}
                                                             </div>
 
+                                                            {entry.canvasCampaign && <p className="px-1 text-[11px] leading-relaxed text-slate-300">
+                                                                Campaña · {entry.campaignAttack?.zones?.join(' + ')}.
+                                                                {entry.campaignAttack?.defense === 'parry' ? ` Parry: ${entry.campaignAttack.defenseZones.join(' + ')}.` : entry.campaignAttack?.defense === 'evade' ? ' Evasión completa.' : ' Golpe recibido.'}
+                                                                {` ${entry.finalDamage} puntos de Vida perdidos.`}
+                                                            </p>}
                                                             {entry.canvasRoguelite && <p className="px-1 text-[11px] leading-relaxed text-slate-300">
                                                                 {entry.reactionType === 'parar'
                                                                     ? `${entry.defenderWeapon || 'Dados de defensa'}: ${entry.defenderTotal} de defensa. `
@@ -650,7 +681,7 @@ export const CombatLogPanel = ({
                                                                     {traitVidaBonus > 0 && <span className="text-[9px] text-amber-300 border-b border-amber-500/40 pb-0.5">-{traitVidaBonus} Vida</span>}
                                                                 </div>
                                                             ) : totalBlocks === 0 && entry.reactionType !== 'parar' && (
-                                                                <div className="px-1 pt-1 italic text-[9px] text-green-500/50 tracking-wider font-bold uppercase">Sin daño a bloques</div>
+                                                                <div className="px-1 pt-1 italic text-[9px] text-green-500/50 tracking-wider font-bold uppercase">{entry.canvasCampaign ? 'Sin daño' : 'Sin daño a bloques'}</div>
                                                             )}
                                                             {speedEffectBadges.length > 0 && (
                                                                 <div className="flex flex-wrap gap-2 px-1 pt-1">

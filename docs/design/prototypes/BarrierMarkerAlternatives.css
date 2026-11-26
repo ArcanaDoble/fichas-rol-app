@@ -1,0 +1,46 @@
+/* Isolated to the comparison fixture, never imported by the game. */
+.barrier-marker-preview-token { position: absolute; inset: 0; pointer-events: none; }
+.barrier-marker-preview-token .noma-token-status[data-status-id='arcane-barrier'] { display: none; }
+.barrier-marker-preview-token .noma-token-defense-bonus { display: none; }
+.barrier-marker-preview-token .noma-token-life-details { max-width: 220px !important; opacity: 1 !important; overflow: hidden; }
+.barrier-marker-preview-token:not([data-variant='name']) .noma-token-life-readout { opacity: 0; }
+.barrier-marker-preview-token .noma-token-life[data-selected='true'] .noma-token-life-readout,
+.barrier-marker-preview-token .group:hover .noma-token-life-readout { opacity: 1; }
+.barrier-marker-preview-token[data-variant='states'] .noma-token-status:nth-child(1) { left: var(--marker-state-outside-x) !important; top: calc(-1 * var(--marker-state-step)) !important; }
+.barrier-marker-preview-token[data-variant='states'] .noma-token-status:nth-child(2) { left: var(--marker-state-center-x) !important; top: 0 !important; }
+.barrier-marker-concept { display: block; color: #f1dfae; pointer-events: auto; }
+.barrier-marker-concept svg { width: 100%; height: 100%; overflow: visible; }
+.barrier-marker-concept text { fill: #f1dfae; font: 600 17px Alegreya, Georgia, serif; }
+.barrier-marker-concept--states { position: absolute; transform: translate(-50%, -50%); border: 1px solid #bba169; border-radius: 50%; background: #11141e; box-shadow: 0 0 0 2px #080b12, 0 2px 4px #0009; }
+.barrier-marker-concept--states text { font-size: 14px; }
+.barrier-marker-concept--crest { position: absolute; width: 34px; height: 39px; z-index: 56; transform-origin: center; filter: drop-shadow(0 2px 2px #000a); }
+.barrier-marker-preview-token[data-variant='name'] .noma-token-life-readout { padding: 0; border: 0; background: transparent; gap: 0; justify-content: flex-start; align-items: center; min-height: 32px; }
+.barrier-marker-preview-token[data-variant='name'] .noma-token-life-details { display: none; }
+.barrier-marker-preview-token[data-variant='name'] .noma-token-life[data-selected='true'] .noma-token-life-details,
+.barrier-marker-preview-token[data-variant='name'] .group:hover .noma-token-life-details { display: flex; padding: 3px 10px 4px 14px; margin-left: -9px; border: 1px solid #c8aa6e55; border-radius: 0 12px 12px 0; background: #0b0d14f5; }
+.barrier-marker-concept--name { order: -1; position: relative; z-index: 1; width: 29px; height: 34px; flex: 0 0 29px; }
+.barrier-marker-review-header { position: fixed; top: 32px; left: 0; right: 0; text-align: center; color: #ede1cd; pointer-events: none; }
+.barrier-marker-review-header h1 { font: 600 24px/1.2 Cinzel, Georgia, serif; margin: 0 0 10px; }
+.barrier-marker-review-header p { font: 18px/1.4 Alegreya, Georgia, serif; color: #cfc0a4; margin: 0; }
+.barrier-marker-review-caption { position: absolute; top: 68%; width: 30%; text-align: center; pointer-events: none; }
+.barrier-marker-review-caption h2 { font: 600 19px/1.3 Cinzel, Georgia, serif; color: #e1c88e; margin: 0 0 12px; }
+.barrier-marker-review-caption p { font: 18px/1.35 Alegreya, Georgia, serif; color: #d3c5ac; max-width: 25ch; margin: 0 auto; }
+.barrier-marker-review-controls { position: fixed; left: 0; right: 0; bottom: 22px; display: flex; flex-direction: column; align-items: center; gap: 15px; z-index: 100; }
+.barrier-marker-review-options, .barrier-marker-review-actions { display: flex; justify-content: center; gap: 0; }
+.barrier-marker-review-options { border: 1px solid #9f895962; background: #0b101c; }
+.barrier-marker-review-options button { min-height: 44px; padding: 10px 23px; color: #d9c18e; font: 600 15px/1.2 Cinzel, Georgia, serif; border-right: 1px solid #9f895962; }
+.barrier-marker-review-options button:last-child { border-right: 0; }
+.barrier-marker-review-options button[aria-pressed='true'] { color: #11131b; background: #c8aa6e; }
+.barrier-marker-review-actions { gap: 26px; }
+.barrier-marker-review-actions button { min-height: 40px; padding: 5px 8px; color: #d9cbb1; font: 16px/1.2 Alegreya, Georgia, serif; text-decoration: underline; text-decoration-color: #897952; text-underline-offset: 4px; }
+.barrier-marker-review-controls button:hover { color: #f4e3b8; background-color: #25232c; }
+.barrier-marker-review-controls button[aria-pressed='true']:hover { color: #11131b; background: #dbc18a; }
+.barrier-marker-review-controls button:focus-visible { outline: 2px solid #f1dfae; outline-offset: 3px; }
+@media (max-width: 699px) {
+    .barrier-marker-review-header { top: 22px; padding: 0 16px; }
+    .barrier-marker-review-header h1 { font-size: 20px; }
+    .barrier-marker-review-header p { font-size: 16px; }
+    .barrier-marker-review-caption { left: 10% !important; width: 80%; top: 67%; }
+    .barrier-marker-review-options button { font-size: 11px; padding: 10px 11px; }
+    .barrier-marker-review-controls { bottom: 14px; gap: 10px; }
+}

@@ -90,8 +90,8 @@ const CanvasAttackDefense = ({
         <div className="attack-defense-armor-copy">
           <h3>{armorName || (isEnemy ? target?.name : 'Protección actual')}</h3>
           {showProtection && <p>1 bloque de Vida por cada {preview.effectiveCd} de Presión restante</p>}
-          {showProtection && (preview.shieldBonus > 0 || preview.baseCd !== preview.effectiveCd) && <p className="attack-defense-armor-adjustment">
-            CD base {preview.baseCd}{preview.shieldBonus > 0 && ' · Escudo +1'}{preview.effectiveCd < preview.baseCd + (preview.shieldBonus || 0) && ' · Perforante −1'}
+          {showProtection && (preview.barrierBonus > 0 || preview.shieldBonus > 0 || preview.baseCd !== preview.effectiveCd) && <p className="attack-defense-armor-adjustment">
+            CD base {preview.baseCd}{preview.barrierBonus > 0 && ' · Barrera +1'}{preview.shieldBonus > 0 && ' · Escudo +1'}{preview.effectiveCd < preview.baseCd + (preview.shieldBonus || 0) + (preview.barrierBonus || 0) && ' · Perforante −1'}
           </p>}
         </div>
         {showProtection && <div className="attack-defense-cd"><Shield size={20} strokeWidth={1.3} aria-hidden="true" /><span>CD</span><strong>{preview.effectiveCd}</strong></div>}

@@ -1,0 +1,91 @@
+{
+  "normal_2_4_6": [
+    {
+      "enemy_blocks_lost": 2,
+      "own_blocks_lost": 1,
+      "attack_dice": [
+        4,
+        6
+      ],
+      "defense_dice": [],
+      "pool_attack": 0,
+      "pool_defense": 0
+    },
+    {
+      "enemy_blocks_lost": 1,
+      "own_blocks_lost": 0,
+      "attack_dice": [
+        4
+      ],
+      "defense_dice": [
+        6
+      ],
+      "pool_attack": 0,
+      "pool_defense": 0
+    }
+  ],
+  "pool6_paying6": [
+    {
+      "enemy_blocks_lost": 2,
+      "own_blocks_lost": 0,
+      "attack_dice": [
+        4
+      ],
+      "defense_dice": [
+        2
+      ],
+      "pool_attack": 5,
+      "pool_defense": 1
+    }
+  ],
+  "pool9_paying6_and_interpretation3": [
+    {
+      "enemy_blocks_lost": 3,
+      "own_blocks_lost": 1,
+      "attack_dice": [
+        2,
+        4
+      ],
+      "defense_dice": [],
+      "pool_attack": 9,
+      "pool_defense": 0
+    },
+    {
+      "enemy_blocks_lost": 2,
+      "own_blocks_lost": 0,
+      "attack_dice": [
+        2
+      ],
+      "defense_dice": [
+        4
+      ],
+      "pool_attack": 7,
+      "pool_defense": 2
+    }
+  ],
+  "pool5_paying2_and_interpretation3": [
+    {
+      "enemy_blocks_lost": 3,
+      "own_blocks_lost": 1,
+      "attack_dice": [
+        4,
+        6
+      ],
+      "defense_dice": [],
+      "pool_attack": 5,
+      "pool_defense": 0
+    },
+    {
+      "enemy_blocks_lost": 2,
+      "own_blocks_lost": 0,
+      "attack_dice": [
+        4
+      ],
+      "defense_dice": [
+        6
+      ],
+      "pool_attack": 5,
+      "pool_defense": 0
+    }
+  ]
+}

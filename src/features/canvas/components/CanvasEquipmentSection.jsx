@@ -7,6 +7,8 @@ import HexIcon from '../../../components/HexIcon';
 import RogueliteInventoryCard from '../../../components/RogueliteInventoryCard';
 import { useCustomEquipmentImages } from '../../../hooks/useCustomEquipmentImages';
 import { resolveEquipmentHandsRequired } from '../../roguelite/equipmentPool';
+import { resolveWeaponForm } from '../../roguelite/weaponForms';
+import { resolveFeatureSlots, resolveFeatureUsage, resolveItemIdentityKeys } from '../../roguelite/featureSlots';
 import {
   ROGUELITE_SKILL_SLOT_COUNT,
   ROGUELITE_TALENT_SLOT_COUNT,
@@ -67,20 +69,6 @@ const resolvePresentation = (item) => {
   return { label: 'Objeto', Icon: Package, hands: null };
 };
 
-const resolveItemIdentityKeys = (item) => [
-  item?.templateId,
-  item?.catalogId,
-  item?.id,
-  item?.runItemId,
-  item?.name,
-  item?.nombre,
-  item?.payload?.templateId,
-  item?.payload?.catalogId,
-  item?.payload?.id,
-]
-  .map((value) => String(value || '').trim().toLowerCase())
-  .filter(Boolean);
-
 const isPreparedAbility = (item) => {
   const type = String(item?.type || item?.itemType || item?._category || '').toLowerCase();
   return Boolean(item?.isPrepared && (type.includes('abil') || type.includes('habil') || type.includes('power')));
@@ -114,34 +102,6 @@ const resolveFeatureTraits = (entry) => {
   return (Array.isArray(rawTraits) ? rawTraits : String(rawTraits).split(','))
     .map((trait) => String(trait || '').trim())
     .filter(Boolean);
-};
-
-const resolveFeatureSlots = ({ slots, ids, entries, count }) => {
-  const sourceSlots = Array.isArray(slots) ? slots : [];
-  const sourceIds = Array.isArray(ids) ? ids : [];
-  const sourceEntries = Array.isArray(entries) ? entries : [];
-
-  return Array.from({ length: count }, (_, index) => {
-    if (sourceSlots[index] && typeof sourceSlots[index] === 'object') return sourceSlots[index];
-    const wantedId = String(sourceIds[index] || '').trim().toLowerCase();
-    if (!wantedId) return null;
-    return sourceEntries.find((entry) => resolveItemIdentityKeys(entry).includes(wantedId))
-      || { id: sourceIds[index], name: sourceIds[index] };
-  });
-};
-
-const resolveFeatureUsage = ({ entries, slotIds, usedSlots }) => {
-  const storedIds = Array.isArray(slotIds) ? slotIds : [];
-  const storedUsage = Array.isArray(usedSlots) ? usedSlots : [];
-  return entries.map((entry, index) => {
-    if (!entry) return false;
-    const entryId = resolveItemIdentityKeys(entry)[0] || '';
-    const storedId = String(storedIds[index] || '').trim().toLowerCase();
-    if (storedId && entryId && storedId !== entryId) return false;
-    return storedUsage[index] !== undefined
-      ? Boolean(storedUsage[index])
-      : Boolean(entry.used);
-  });
 };
 
 const CanvasFeatureLedger = ({
@@ -301,13 +261,13 @@ const CanvasEquipmentSection = (props) => {
     document.body.classList.remove('noma-canvas-inventory-dropping');
   }, []);
 
-  if (token?.profileType !== 'rogueliteClass' && token?.profileType !== 'rogueliteEnemy') {
+  if (!['rogueliteClass', 'rogueliteEnemy', 'campaignCharacter'].includes(token?.profileType)) {
     return <LegacyEquipmentSection {...props} />;
   }
 
   const inventoryItems = Array.isArray(token.inventory) ? token.inventory : equippedItems;
   inventoryRef.current = inventoryItems;
-  const isClassToken = token.profileType === 'rogueliteClass';
+  const isClassToken = ['rogueliteClass', 'campaignCharacter'].includes(token.profileType);
   const spellEntries = isClassToken
     ? inventoryItems
       .map((item, index) => ({ item, index }))
@@ -377,7 +337,8 @@ const CanvasEquipmentSection = (props) => {
   };
 
   const renderInventoryCard = (rawItem, index, options = {}) => {
-    const item = { ...rawItem, name: rawItem.name || rawItem.nombre };
+    const activeItem = resolveWeaponForm(rawItem);
+    const item = { ...activeItem, name: activeItem.name || activeItem.nombre };
     const { label, Icon, hands } = resolvePresentation(item);
     const rarityKey = String(item.rareza || item.rarity || 'común').toLowerCase();
     const accent = options.accent

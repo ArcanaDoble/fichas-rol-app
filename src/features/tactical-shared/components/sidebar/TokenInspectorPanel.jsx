@@ -11,8 +11,13 @@ import { getCardStackIds, isCardContainerItem, isCardItem, isContainerCardsHidde
 import { isCombatTokenItem, normalizeTokenStatusIds } from '../../legacyCombatRules';
 import { CardImageWithLoader, TokenImageWithLoader } from '../TacticalAssetImage';
 import { EquipmentSection as LegacyEquipmentSection } from '../EquipmentSection';
-import { normalizeGeometryKind } from '../../geometry';
+import { CALTROPS_HAZARD_ART, normalizeGeometryKind } from '../../geometry';
 import { getTerrainAreaDefinition } from '../../areaPlacementSystem';
+import { isTreeScenery } from '../../scenery';
+import { TreeInspectorPanel } from './TreeInspectorPanel';
+import { HazardAppearanceControl } from './HazardAppearanceControl';
+import { TokenVisionBlockerControl } from './TokenVisionBlockerControl';
+import { clearArcaneBarrier, getArcaneBarrierStatusIds, hasArcaneBarrier, reconcileArcaneBarrierUpdate } from '../../../../utils/arcaneBarrierStatus';
 
 export const TokenInspectorPanel = ({
     BOARD_DIE_SIDES,
@@ -54,6 +59,8 @@ export const TokenInspectorPanel = ({
                                     const token = activeScenario.items.find(i => i.id === selectedTokenIds[0]);
                                     const StackInspector = boardStackControls?.InspectorComponent;
                                     if (!token) return null;
+                                    if (isTreeScenery(token)) return isPlayerView ? null : <TreeInspectorPanel
+                                        item={token} gridConfig={gridConfig} updateItem={updateItem} deleteItem={deleteItem} />;
                                     if (isScenePickupItem?.(token)) return null;
                                     if (isBoardMode && isPlayerView && isCardInPrivateStack(token, activeScenario.items)) {
                                         return <div className="space-y-3 text-sm text-slate-300">
@@ -67,6 +74,9 @@ export const TokenInspectorPanel = ({
                                             .map(cardId => (activeScenario.items || []).find(stackItem => stackItem.id === cardId))
                                             .filter(Boolean)
                                         : [];
+                                    const geometryKind = token.type === 'geometry' ? normalizeGeometryKind(token) : null;
+                                    const canChooseHazardArt = !isBoardMode && isMaster && !isPlayerView;
+                                    const showCaltrops = !isBoardMode && geometryKind === 'hazard' && token.hazardArtId === CALTROPS_HAZARD_ART.id;
 
                                     return (
                                         <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -679,6 +689,10 @@ export const TokenInspectorPanel = ({
                                                                 </div>
                                                             )}
 
+                                                            {!isBoardMode && isMaster && !isPlayerView && (
+                                                                <TokenVisionBlockerControl key={token.id} token={token} updateItem={updateItem} />
+                                                            )}
+
                                                             <div className="w-full h-px bg-slate-800/30 my-2"></div>
 
                                                             {/* VISIÓN EN LA OSCURIDAD */}
@@ -790,9 +804,13 @@ export const TokenInspectorPanel = ({
 
                                                 {/* RECURSOS Y ATRIBUTOS (Solo si NO es una luz ni un muro ni geometria) */}
                                                 {isCombatTokenItem(token) && (
-                                                    <div className="pt-4 border-t border-slate-800/50">
+                                                    <div className="space-y-4 pt-4 border-t border-slate-800/50">
+                                                        {!isBoardMode && isMaster && !isPlayerView && combatRuntime?.renderParticipationControl?.(token)}
                                                         <TokenResourcesComponent
                                                             token={token}
+                                                            isPlayerView={isPlayerView}
+                                                            canSeeCampaignResources={combatRuntime?.campaignCanSeeResources?.(token) || false}
+                                                            barrierPresentation={combatRuntime?.spellPresentation}
                                                             movementRuntime={combatRuntime?.combatState?.participants?.[token.id]?.movementRuntime || null}
                                                             onUpdate={(updates, meta = {}) => {
                                                                 if (
@@ -941,7 +959,8 @@ export const TokenInspectorPanel = ({
                                                                     { id: 'tar', label: 'Brea', color: '#17130f' },
                                                                     { id: 'stairs', label: 'Escalera', color: '#c8aa6e' }
                                                                 ].map(option => {
-                                                                    const active = normalizeGeometryKind(token) === option.id;
+                                                                    const active = geometryKind === option.id;
+                                                                    const persistHazardType = canChooseHazardArt && !active && (option.id === 'hazard' || showCaltrops);
                                                                     return (
                                                                         <button
                                                                             key={option.id}
@@ -954,7 +973,7 @@ export const TokenInspectorPanel = ({
                                                                                 opacity: option.id === 'hazard' ? 0.1 : option.id === 'smoke' ? 0.32 : (token.opacity || 0.3),
                                                                                 areaEffect: null,
                                                                                 ...getTerrainAreaDefinition(option.id),
-                                                                            })}
+                                                                            }, persistHazardType)}
                                                                             className={`px-2 py-2 rounded border text-[10px] font-bold uppercase tracking-wider transition-all ${active ? 'border-[#c8aa6e] text-[#f8e7b9] bg-[#c8aa6e]/15' : 'border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-600'}`}
                                                                         >
                                                                             {option.label}
@@ -964,8 +983,15 @@ export const TokenInspectorPanel = ({
                                                             </div>
                                                         </div>
 
+                                                        {canChooseHazardArt && geometryKind === 'hazard' && (
+                                                            <HazardAppearanceControl
+                                                                showCaltrops={showCaltrops}
+                                                                onChange={hazardArtId => updateItem(token.id, { hazardArtId }, true, 'Se ha guardado el aspecto de la zona.')}
+                                                            />
+                                                        )}
+
                                                         {/* Opacidad del bloque */}
-                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 space-y-4">
+                                                        {!showCaltrops && <div className="bg-[#0b1120] p-3 rounded border border-slate-800 space-y-4">
                                                             <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
                                                                 <span className="text-slate-500">Transparencia</span>
                                                                 <span className="text-[#c8aa6e] font-mono">{Math.round((token.opacity || 0.4) * 100)}%</span>
@@ -977,7 +1003,7 @@ export const TokenInspectorPanel = ({
                                                                 onChange={(e) => updateItem(token.id, { opacity: Number(e.target.value) })}
                                                                 className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#c8aa6e]"
                                                             />
-                                                        </div>
+                                                        </div>}
 
                                                         {/* Snap Toggle para Tapete */}
                                                         <div className="bg-[#0b1120] p-3 rounded border border-slate-800 flex items-center justify-between">
@@ -994,7 +1020,7 @@ export const TokenInspectorPanel = ({
                                                         </div>
 
                                                         {/* Color de Fondo */}
-                                                        <div className="bg-[#0b1120] p-3 rounded border border-slate-800 space-y-4">
+                                                        {!showCaltrops && <div className="bg-[#0b1120] p-3 rounded border border-slate-800 space-y-4">
                                                             <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
                                                                 <span className="text-slate-500">Tono del Área</span>
                                                                 <div className="w-4 h-4 rounded-full border border-white/20" style={{ backgroundColor: token.backgroundColor }}></div>
@@ -1009,7 +1035,7 @@ export const TokenInspectorPanel = ({
                                                                     />
                                                                 ))}
                                                             </div>
-                                                        </div>
+                                                        </div>}
                                                     </div>
                                                 )}
 
@@ -1020,21 +1046,30 @@ export const TokenInspectorPanel = ({
                                                             <Flame size={12} /> Estados Alterados
                                                         </h4>
                                                         <EstadoSelector
+                                                            allowBarrier={!isBoardMode}
                                                             roguelite={['rogueliteClass', 'rogueliteEnemy'].includes(token.profileType)}
-                                                            selected={[...new Set([...normalizeTokenStatusIds(token.status || []), ...(isCanvasPoisoned(token) ? ['envenenado'] : []), ...(isCanvasBleeding(token) ? ['sangrado'] : [])])]}
+                                                            selected={[...new Set([...(isBoardMode ? normalizeTokenStatusIds(token.status || []) : getArcaneBarrierStatusIds(token)), ...(isCanvasPoisoned(token) ? ['envenenado'] : []), ...(isCanvasBleeding(token) ? ['sangrado'] : [])])]}
                                                             onToggle={(statusId) => {
+                                                                const stateToken = isBoardMode ? token : { ...token, status: getArcaneBarrierStatusIds(token) };
+                                                                if (statusId === 'barrera' && !isBoardMode) {
+                                                                    const patch = hasArcaneBarrier(token)
+                                                                        ? { status: clearArcaneBarrier(token).status || [], arcaneBarrier: null }
+                                                                        : reconcileArcaneBarrierUpdate(token, { status: [...normalizeTokenStatusIds(token.status || []), 'barrera'] });
+                                                                    updateItem(token.id, patch);
+                                                                    return;
+                                                                }
                                                                 if (statusId === 'sangrado' && ['rogueliteClass', 'rogueliteEnemy'].includes(token.profileType)) {
-                                                                    const next = setCanvasBleeding(token, !isCanvasBleeding(token), combatRuntime?.combatState);
+                                                                    const next = setCanvasBleeding(stateToken, !isCanvasBleeding(token), combatRuntime?.combatState);
                                                                     updateItem(token.id, { status: next.status, bleedingDeferredActivation: next.bleedingDeferredActivation,
                                                                         ...(next.statusEffects !== undefined ? { statusEffects: next.statusEffects } : {}) });
                                                                     return;
                                                                 }
                                                                 if (statusId === 'envenenado') {
-                                                                    const next = setCanvasPoison(token, !isCanvasPoisoned(token));
+                                                                    const next = setCanvasPoison(stateToken, !isCanvasPoisoned(token));
                                                                     updateItem(token.id, { status: next.status, ...(next.statusEffects !== undefined ? { statusEffects: next.statusEffects } : {}) });
                                                                     return;
                                                                 }
-                                                                const currentStatus = normalizeTokenStatusIds(token.status || []);
+                                                                const currentStatus = normalizeTokenStatusIds(stateToken.status || []);
                                                                 const newStatus = currentStatus.includes(statusId)
                                                                     ? currentStatus.filter(s => s !== statusId)
                                                                     : [...currentStatus, statusId];

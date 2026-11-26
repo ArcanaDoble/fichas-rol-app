@@ -23,6 +23,13 @@ yarn-debug.log*
 yarn-error.log*
 
 # Local development, previews and deployment caches
+/.env
+/.codex-attachments/
+/.codex-remote-attachments/
+/.impeccable/review/
+/tmp-bbva-mail-image.png
+/NUL
+__pycache__/
 /output/
 /tmp/
 /.playwright-cli/

@@ -27,11 +27,13 @@ import { isBoardLightItem, selectAnimatedBoardLightIds } from '../../utils/board
 
 import { MIN_GRID_CELL_SIZE, DEFAULT_GRID_CONFIG, normalizeGridConfig, getFiniteMapDimensions, getGridPixelDimensions, getExactBackgroundGridPresets, getBackgroundGridPresetIndex } from './grid';
 import { isBoardDieItem, isCombatTokenItem, getCardCenter, isPointInsideExpandedItem, getDefaultTokenDimensions, getReactionBudgetForEvent, getReactionSpeedSpentByEvent, isValidSelectionBox } from './legacyCombatRules';
-import { WORLD_SIZE, snapWorldPositionToGrid, getCenteredSpawnPosition } from './spatial';
+import { WORLD_SIZE, snapWorldPositionToWallEndpoints, getCenteredSpawnPosition } from './spatial';
 
 
 import { syncTokenWithSheet } from './tokenSheetSync';
 import { canControlToken } from './tokenControlUtils';
+import { rebasePendingAfterForcedMovement } from './forcedMovement';
+import { placeClipboardItems } from './clipboardPlacement';
 import { createSceneItemRenderer } from './components/createSceneItemRenderer';
 import { useCanvasHealingPresentationEvents } from './canvasHealingPresentation';
 import { useCanvasDamagePresentation } from './canvasDamagePresentation';
@@ -212,9 +214,11 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         useFeatureController,
         WorkspaceShell,
         sceneItemVisuals = {},
-        syncTokenWithSheet: syncModeTokenWithSheet = syncTokenWithSheet,
+        syncTokenWithSheet: syncBaseModeTokenWithSheet = syncTokenWithSheet,
         loadRuntimeSheet,
         persistRuntimeItems,
+        prepareScenarioSave,
+        validateEntry,
         didGainPlayerSharedVision,
         allowPlayerTokenHoverInspection = false,
         SharedPointerOverlay,
@@ -238,9 +242,22 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
     const [scenarios, setScenarios] = useState([]);
     const [activeScenario, setActiveScenario] = useState(null);
     const [globalActiveId, setGlobalActiveId] = useState(null);
-    const [availableCharacters, setAvailableCharacters] = useState([]);
+    const [availableCharacterSources, setAvailableCharacters] = useState([]);
+    const [campaignSheets, setCampaignSheets] = useState({});
+    const availableCharacters = useMemo(() => availableCharacterSources.map(character => (
+        !isBoardMode && !character._isTemplate ? { ...character, profileType: 'campaignCharacter', systemId: 'campaign-parry', campaignSheet: campaignSheets[character.id] } : character
+    )), [availableCharacterSources, campaignSheets, isBoardMode]);
     const activeScenarioRef = useRef(null);
     useEffect(() => { activeScenarioRef.current = activeScenario; }, [activeScenario]);
+    const syncModeTokenWithSheet = useCallback((token, sheet, catalogs, options = {}) => (
+        syncBaseModeTokenWithSheet(token, sheet, catalogs, { ...options, rulesSystem: activeScenarioRef.current?.rulesSystem || 'roguelite' })
+    ), [syncBaseModeTokenWithSheet]);
+    useEffect(() => {
+        if (isBoardMode) return undefined;
+        return onSnapshot(collection(db, 'campaignCharacterSheets'), snapshot => {
+            setCampaignSheets(Object.fromEntries(snapshot.docs.map(entry => [entry.id, entry.data()])));
+        });
+    }, [isBoardMode]);
     const lastRemoteScenarioItemsRef = useRef([]);
     const localUnsavedEditsRef = useRef({}); // { [itemId]: { [key]: value } }
     const localUnsavedConfigEditsRef = useRef({}); // { [configKey]: value }
@@ -350,7 +367,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
     const [itemToDelete, setItemToDelete] = useState(null);
     const [pendingImageFile, setPendingImageFile] = useState(null); // Archivo real para subir a Storage
     const [isSaving, setIsSaving] = useState(false); // Estado de guardado en progreso
-    const [clipboard, setClipboard] = useState([]); // Portapapeles para copiar/pegar tokens
+    const clipboardRef = useRef([]); // Available immediately, including quick consecutive shortcuts.
 
     // Helper para normalizar coordenadas de eventos (Mouse vs Touch)
     const getEventCoords = (e, identifier = null) => {
@@ -720,8 +737,20 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
 
     // Refs para gestión de eventos directos (performance)
     const containerRef = useRef(null);
+    const clipboardPointerRef = useRef(null);
     const dragStartRef = useRef({ x: 0, y: 0 });
     // No longer needed: const transformRef = useRef(transform);
+
+    useEffect(() => {
+        clipboardPointerRef.current = null;
+        const trackPointer = event => {
+            clipboardPointerRef.current = event.target instanceof Node && containerRef.current?.contains(event.target)
+                ? { x: event.clientX, y: event.clientY } : null;
+        };
+        // Capture also sees moves over tokens whose handlers stop propagation.
+        window.addEventListener('mousemove', trackPointer, true);
+        return () => window.removeEventListener('mousemove', trackPointer, true);
+    }, [activeScenario?.id]);
 
     // --- Gestión de Notificaciones (Auto-hide) ---
     useEffect(() => {
@@ -894,6 +923,14 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                         });
 
                         if (movedExternally) {
+                            if (livePendingTurnState) {
+                                const rebased = rebasePendingAfterForcedMovement(livePendingTurnState,
+                                    remoteItemMap.get(livePendingTurnState.tokenId), localItemMap.get(livePendingTurnState.tokenId));
+                                if (rebased !== livePendingTurnState) {
+                                    pendingTurnStateRef.current = rebased;
+                                    setPendingTurnState(rebased);
+                                }
+                            }
                             console.warn("⚠ Master movió fichas en drag. Cancelando.");
                             draggedTokenIdRef.current = null;
                             setDraggedTokenId(null);
@@ -928,9 +965,12 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                         });
 
                         if (movedExternally) {
-                            pendingTurnStateRef.current = null;
-                            setPendingTurnState(null);
-                            triggerToast("Turno Reiniciado", "El Master ha movido tu ficha", 'warning');
+                            const rebased = rebasePendingAfterForcedMovement(livePendingTurnState, remoteItem, localCurrent);
+                            const forced = rebased !== livePendingTurnState;
+                            pendingTurnStateRef.current = forced ? rebased : null;
+                            setPendingTurnState(forced ? rebased : null);
+                            triggerToast(forced ? "Ficha desplazada" : "Turno Reiniciado",
+                                forced ? "El máster ha cambiado tu posición. Tu turno y tus recursos se conservan." : "El Master ha movido tu ficha", 'warning');
                             hasConflict = true;
                         }
                     }
@@ -1008,7 +1048,11 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                                 ...itemWithEdits,
                                 x: localItem.x,
                                 y: localItem.y,
-                                rotation: localItem.rotation
+                                rotation: localItem.rotation,
+                                ...(localItem.type === 'wall' ? {
+                                    x1: localItem.x1, y1: localItem.y1, x2: localItem.x2, y2: localItem.y2,
+                                    width: localItem.width, height: localItem.height,
+                                } : {})
                             };
                         }
 
@@ -1060,8 +1104,10 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                     const rollsChanged = mode === 'canvas' && (
                         JSON.stringify(remoteData.canvasRolls || []) !== JSON.stringify(current.canvasRolls || [])
                     );
+                    const rulesSystemChanged = mode === 'canvas'
+                        && (remoteData.rulesSystem || 'roguelite') !== (current.rulesSystem || 'roguelite');
 
-                    if (itemsChanged || lastModifiedChanged || configChanged || scenarioFieldsChanged || combatStateChanged || practiceCombatChanged || rollsChanged) {
+                    if (itemsChanged || lastModifiedChanged || configChanged || scenarioFieldsChanged || combatStateChanged || practiceCombatChanged || rollsChanged || rulesSystemChanged) {
                         console.log("Sincronizando tablero con datos remotos (Merging local locks)...");
                         return {
                             ...current,
@@ -1070,9 +1116,11 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                             name: nextName,
                             allowedPlayers: nextAllowedPlayers,
                             ...(mode === 'canvas' ? {
+                                rulesSystem: remoteData.rulesSystem || 'roguelite',
                                 canvasCombat: remoteData.canvasCombat || null,
                                 canvasPracticeCombat: remoteData.canvasPracticeCombat || null,
                                 canvasRolls: remoteData.canvasRolls || current.canvasRolls || [],
+                                canvasSpellEffect: remoteData.canvasSpellEffect || null,
                             } : {}),
                             ...(synchronizedConfig ? { config: synchronizedConfig } : {}),
                         };
@@ -1504,35 +1552,13 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         )) || null;
     };
 
-    const snapToWallEndpoints = (worldPos, customSnapActive = null) => {
-        let snappedPos = { ...worldPos };
-
-        const shouldSnap = customSnapActive !== null ? customSnapActive : gridConfig.snapToGrid;
-
-        // 1. Snap a la rejilla si está activo
-        if (shouldSnap) {
-            snappedPos = snapWorldPositionToGrid(snappedPos, gridConfig);
-        }
-
-        // 2. Snap a otros muros (prioritario sobre la rejilla si está cerca)
-        let minDistance = 15 / zoom; // Distancia de magnetismo
-        if (activeScenario?.items) {
-            activeScenario.items.filter(i => i.type === 'wall').forEach(wall => {
-                const d1 = Math.hypot(worldPos.x - wall.x1, worldPos.y - wall.y1);
-                const d2 = Math.hypot(worldPos.x - wall.x2, worldPos.y - wall.y2);
-                if (d1 < minDistance) {
-                    snappedPos = { x: wall.x1, y: wall.y1 };
-                    minDistance = d1;
-                }
-                if (d2 < minDistance) {
-                    snappedPos = { x: wall.x2, y: wall.y2 };
-                    minDistance = d2;
-                }
-            });
-        }
-
-        return snappedPos;
-    }
+    const snapToWallEndpoints = (worldPos, customSnapActive = null, excludeWallId = null) => (
+        snapWorldPositionToWallEndpoints(worldPos, activeScenarioRef.current?.items || [], gridConfig, {
+            zoom,
+            snapToGrid: customSnapActive ?? gridConfig.snapToGrid,
+            excludeWallId,
+        })
+    );
 
     // Efecto para listeners globales de mouse/touch up/move para evitar que se pierda el drag al salir del div
     useEffect(() => {
@@ -1679,6 +1705,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                     name: data.name,
                     lastModified: data.lastModified,
                     config: data.config,
+                    rulesSystem: data.rulesSystem || 'roguelite',
                     preview: data.preview,
                     ownerId: data.ownerId,
                     allowedPlayers: data.allowedPlayers
@@ -1724,31 +1751,40 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
     // --- KEYBOARD SHORTCUTS (Copy/Paste/Delete) ---
     useEffect(() => {
         const handleKeyDown = async (e) => {
-            if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+            if (e.target.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
+            const key = String(e.key || '').toLowerCase();
 
             // COPY (Ctrl+C)
-            if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
-                if (selectedTokenIds.length > 0 && activeScenario?.items) {
-                    const tokensToCopy = activeScenario.items.filter(item => selectedTokenIds.includes(item.id));
+            if ((e.ctrlKey || e.metaKey) && key === 'c') {
+                const currentScenario = activeScenarioRef.current || activeScenario;
+                if (selectedTokenIds.length > 0 && currentScenario?.items) {
+                    const tokensToCopy = currentScenario.items.filter(item => selectedTokenIds.includes(item.id));
                     if (tokensToCopy.length > 0) {
-                        setClipboard(tokensToCopy);
+                        e.preventDefault();
+                        clipboardRef.current = tokensToCopy;
                         console.log("Tokens copiados al portapapeles:", tokensToCopy.length);
                     }
                 }
             }
 
             // PASTE (Ctrl+V)
-            if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+            if ((e.ctrlKey || e.metaKey) && key === 'v') {
                 const currentScenario = activeScenarioRef.current || activeScenario;
+                const clipboard = clipboardRef.current;
                 if (clipboard.length > 0 && currentScenario) {
                     e.preventDefault();
-                    const newTokens = clipboard.map(originalItem => {
+                    const viewport = containerRef.current?.getBoundingClientRect();
+                    const pointer = clipboardPointerRef.current;
+                    const point = pointer
+                        ? divToWorld(pointer.x, pointer.y)
+                        : viewport
+                            ? divToWorld(viewport.left + viewport.width / 2, viewport.top + viewport.height / 2)
+                            : { x: WORLD_SIZE / 2, y: WORLD_SIZE / 2 };
+                    const newTokens = placeClipboardItems(clipboard, point, gridConfig).map(originalItem => {
                         const newId = crypto.randomUUID();
                         return {
                             ...originalItem,
                             id: newId,
-                            x: (originalItem.x || 0) + 40,
-                            y: (originalItem.y || 0) + 40,
                             stats: JSON.parse(JSON.stringify(originalItem.stats || {})),
                             attributes: JSON.parse(JSON.stringify(originalItem.attributes || {})),
                             status: [...(originalItem.status || [])]
@@ -1796,7 +1832,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [activeScenario, selectedTokenIds, clipboard, scenarioCollectionName]);
+    }, [activeScenario, selectedTokenIds, scenarioCollectionName, zoom, offset, gridConfig]);
 
     // Auto-create player token when entering with character data
     const autoTokenScenarioReservationRef = useRef(null);
@@ -1805,10 +1841,11 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
     // para evitar que un jugador con datos locales antiguos sobrescriba los tokens del Master.
     useEffect(() => {
         if (!isPlayerView || !characterData || !activeScenario?.id) return;
-        if (autoTokenScenarioReservationRef.current === activeScenario.id) return;
+        const entryKey = `${activeScenario.id}:${activeScenario.rulesSystem || 'roguelite'}`;
+        if (autoTokenScenarioReservationRef.current === entryKey) return;
         // Reservar la creación antes de iniciar la lectura asíncrona. En desarrollo,
         // React puede ejecutar el efecto dos veces y no debe duplicar el token.
-        autoTokenScenarioReservationRef.current = activeScenario.id;
+        autoTokenScenarioReservationRef.current = entryKey;
 
         const characterName = characterData.name || playerName;
         const scenarioId = activeScenario.id;
@@ -1826,6 +1863,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                     return;
                 }
                 const freshData = freshSnap.data();
+                validateEntry?.(freshData, runtimeSheet);
                 const freshItems = freshData.items || [];
                 lastConfirmedServerItems = freshItems;
 
@@ -1833,6 +1871,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                 const isRogueliteClassLaunch = runtimeSheet.profileType === 'rogueliteClass';
                 const existingToken = freshItems.find((item) => {
                     if (!item.controlledBy?.includes(playerName)) return false;
+                    if (runtimeSheet.profileType === 'campaignCharacter') return item.linkedCharacterId === runtimeSheet.id;
                     if (isRogueliteClassLaunch) {
                         const activeRunId = runtimeSheet.activeRun?.id;
                         const belongsToActiveRun = !activeRunId || !item.runId || item.runId === activeRunId;
@@ -1864,7 +1903,8 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                         accesorios,
                     }, isRogueliteClassLaunch
                         ? { scenarioId, preserveTokenState: Number(runtimeSheet.activeRun?.revision || 0) <= Number(existingToken.runRevision || 0) }
-                        : { scenarioId });
+                        : { scenarioId, preserveMovement: Boolean(freshData.canvasCombat?.participants?.[existingToken.id]),
+                            preserveTokenState: existingToken.runtimeDirty === true });
 
                     if (JSON.stringify(syncedToken) !== JSON.stringify(existingToken)) {
                         console.log('[SafeSync] Sincronizando token existente al entrar:', characterName);
@@ -1953,7 +1993,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                 console.error(' [SafeSync] Error en sincronización segura:', err);
                 triggerToast(
                     'TOKEN NO SINCRONIZADO',
-                    'Firebase no confirmó el token. Vuelve a entrar con «Jugar aventura» para reintentarlo.',
+                    err?.message || 'Firebase no confirmó el token. Vuelve a entrar con «Jugar aventura» para reintentarlo.',
                     'error',
                 );
             }
@@ -1964,6 +2004,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         isPlayerView,
         characterData,
         activeScenario?.id,
+        activeScenario?.rulesSystem,
         playerName,
         gridConfig,
         armas,
@@ -1978,7 +2019,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
     // ⚠ CRITICAL: Lee datos frescos del servidor antes de escribir para evitar sobrescrituras.
     useEffect(() => {
         const handleSyncEvent = async (e) => {
-            const { name, sheet } = e.detail || {};
+            const { name, sheet, preserveTokenState } = e.detail || {};
             const currentScenario = activeScenarioRef.current;
 
             if (!name || !sheet || !currentScenario?.id) return;
@@ -2012,7 +2053,8 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
                         }, {
                             scenarioId: currentScenario.id,
                             preserveTokenState: sheet.profileType === 'rogueliteClass'
-                                ? Number(sheet.activeRun?.revision || 0) <= Number(item.runRevision || 0) : undefined,
+                                ? Number(sheet.activeRun?.revision || 0) <= Number(item.runRevision || 0) : preserveTokenState,
+                            preserveMovement: Boolean(freshData.canvasCombat?.participants?.[item.id]),
                         });
                         if (JSON.stringify(synced) !== JSON.stringify(item)) {
                             hasChanges = true;
@@ -2081,6 +2123,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         pendingImageFile,
         persistQueueRef,
         persistRuntimeItems,
+        prepareScenarioSave,
         playerName,
         recentLocalWritesRef,
         registerLocalConfigDraft,
@@ -2145,6 +2188,8 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         handleSharedPointerLeave,
         handleSharedPointerMove,
     } = useFeatureController({
+        activeLayer,
+        targetingState,
         getLocalSyncActorId,
         activeBoardHandTokenId,
         activeScenario,
@@ -2181,6 +2226,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         safePersistItems,
         scenarioCollectionName,
         selectedTokenIds,
+        showHiddenTokens,
         setActiveScenario,
         setBoardDiceExplosive,
         setBoardDicePool,
@@ -2326,6 +2372,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         activeLayer,
         activeScenario,
         activeScenarioRef,
+        lastRemoteScenarioItemsRef,
         applySangradoSpeedPenalty,
         boardCardHandTransferRef,
         cardPreviewSuppressTouchEndRef,
@@ -2397,6 +2444,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
     });
 
     const {
+        addTreeToCanvas,
         addTokenToCanvas,
         consumeMobileMoveTemplateEvent,
         shouldUseMobileTacticalMove,
@@ -2419,6 +2467,9 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         addLightToCanvas,
         addAreaToCanvas,
     } = createCanvasTokenController({
+        setActiveLayer,
+        setActiveTab,
+        createImageToken: modeDefinition.createImageToken,
         accesorios,
         activeLayer,
         activeScenario,
@@ -2668,8 +2719,8 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
         [activeScenarioItems, visionItems, isBoardMode, isPlayerView, playerName, selectedTokenIds]
     );
     const timelineTokens = useMemo(
-        () => buildTimelineTokens(viewerVisibleScenarioItems, { combatState: activeScenario?.canvasCombat }),
-        [viewerVisibleScenarioItems, activeScenario?.canvasCombat, buildTimelineTokens]
+        () => buildTimelineTokens(viewerVisibleScenarioItems, { combatState: combatRuntime?.combatState || activeScenario?.canvasCombat }),
+        [viewerVisibleScenarioItems, activeScenario?.canvasCombat, combatRuntime?.combatState, buildTimelineTokens]
     );
     const previousPlayerVisionItemsRef = useRef({ scenarioId: null, items: [] });
 
@@ -2766,7 +2817,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
             boardCardMenu, boardCardActionBusy, closeBoardCardMenu, openBoardCardMenu, runBoardCardAction, boardStackControls,
             accesorios, activeBoardHandTokenId, activeCombatAnimations: presentedCombatAnimations, activeCombatQueueEntry, activeLayer, activeScenario,
             activeTab, addAreaToCanvas, addBoardDieToBoard, addBoardMarkerToBoard, addCardContainerToBoard, addCardToBoard,
-            addCardToHand, addDeckToBoard, addLightToCanvas, addTokenToCanvas, adjustBoardDiceCount, animatedBoardLightIds,
+            addCardToHand, addDeckToBoard, addLightToCanvas, addTokenToCanvas, addTreeToCanvas, adjustBoardDiceCount, animatedBoardLightIds,
             applyBackgroundGridPreset, armaduras, armas, availableCharacters, backgroundGridPresets, bleed,
             boardDecks, boardDiceExplosive, boardDicePool, boardDiceRollLog, boardLights, canUseBoardMobileTacticalMove,
             BOARD_DICE_ROLL_SIDES, BOARD_DIE_SIDES, BoardDieVisual, BoardMarkerVisual,
@@ -2792,7 +2843,7 @@ const TacticalSectionCore = ({ modeDefinition, onBack, currentUserId = 'user-dm'
             rollBoardDie, rotatingTokenId, saveCurrentScenario, scenarios, sectionTitle, selectedTokenIds,
             selectionBoxOverlayRect, setActiveLayer, setActiveScenario, setActiveTab, setDragOverLibraryItemId, setDraggedLibraryItemId,
             setDraggedLibraryItemType, setGlobalActiveScenario, setIsDrawingWall, setItemToDelete, setMobileMoveHoverCellKey, setSelectedTokenIds,
-            setShowHiddenTokens, setShowMasterCombatHUD, setShowSettings, setSweepHoverSide, setViewMode, setZoom, shouldUseMobileTacticalMove,
+            setShowHiddenTokens, setShowMasterCombatHUD, setShowSettings, setSweepHoverSide, setViewMode, setZoom, setOffset, shouldUseMobileTacticalMove,
             showHiddenTokens, showMasterCombatHUD, showSettings, showToast, sweepHoverSide, targetingState, timelineTokens,
             toastMessage, toastSubMessage, toastType, toggleBoardDiceExplosive, toggleBoardDiceRollDie, toggleHandCardFace,
             tokenOriginalPos, tokens, triggerToast, unlinkCharacter, unstackSpecificCard, updateItem,

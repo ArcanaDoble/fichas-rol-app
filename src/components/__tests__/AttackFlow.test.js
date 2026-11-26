@@ -23,10 +23,10 @@ jest.mock('firebase/firestore', () => ({
 jest.mock('../../firebase', () => ({ db: {} }));
 
 jest.mock('../DefenseModal', () => jest.fn(() => null));
-jest.mock('../../utils/initiative', () => ({ addSpeedForToken: jest.fn() }));
+jest.mock('../../utils/tokenResources', () => ({ consumeStatForToken: jest.fn() }));
 
-const { addDoc, onSnapshot, updateDoc, getDoc } = require('firebase/firestore');
-const { addSpeedForToken } = require('../../utils/initiative');
+const { addDoc, onSnapshot, updateDoc, getDoc, doc } = require('firebase/firestore');
+const { consumeStatForToken } = require('../../utils/tokenResources');
 
 function ListenerDemo({ playerName = 'p2', userType = 'player' }) {
   const [req, setReq] = React.useState(null);
@@ -52,6 +52,7 @@ function ListenerDemo({ playerName = 'p2', userType = 'player' }) {
 describe('Attack flow', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    getDoc.mockResolvedValue({ exists: () => false });
     localStorage.setItem(
       'tokenSheets',
       JSON.stringify({ '1': { id: '1', weapons: [{ nombre: 'Espada', alcance: 'Toque', dano: '1d4' }], poderes: [] } })
@@ -72,7 +73,10 @@ describe('Attack flow', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: /lanzar/i }));
     await waitFor(() => expect(addDoc).toHaveBeenCalled());
-    expect(addSpeedForToken).toHaveBeenCalled();
+    expect(consumeStatForToken).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'a' }), 'ingenio', 0, undefined,
+    );
+    expect(doc.mock.calls.some((args) => args[1] === 'initiative')).toBe(false);
   });
 
   test('opens defense modal for targeted player', () => {

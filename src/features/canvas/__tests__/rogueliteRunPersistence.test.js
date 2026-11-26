@@ -121,6 +121,45 @@ describe('Canvas run persistence selection', () => {
     ]);
   });
 
+  test.each([false, true])('newer personal stats preserve the same-encounter Barrera (metadata-only legacy: %s)', legacy => {
+    const barrier = { id: 'barrier-1', spellId: 'runic-barrier', expires: 'combat-end', negatedTraits: ['critico'] };
+    const token = makeToken({ runRevision: 2, runScenarioId: 'room-1',
+      stats: { vida: { current: 3, max: 8 }, cd: { current: 2, max: 4 } },
+      status: legacy ? ['envenenado'] : ['envenenado', 'barrera'], arcaneBarrier: barrier,
+      inventory: [], equipmentLoadout: {} });
+    const sword = { name: 'Espada nueva', templateId: 'sword', instanceId: 'sword-1', itemType: 'weapon' };
+    const profile = { id: 'barbarian', owner: 'Ada', profileType: 'rogueliteClass', activeRun: {
+      id: 'run-1', version: 2, revision: 3, currentScenarioId: 'room-1',
+      stats: { vida: { current: 7, max: 8 }, cd: { current: 3, max: 4 } },
+      statusEffects: ['sangrado'], inventory: { weapons: [sword] }, equippedItems: { mainHand: sword },
+    } };
+    const synced = syncCanvasTokenWithRuntimeProfile(token, profile, 'room-1');
+
+    expect(synced.runRevision).toBe(3);
+    expect(synced.stats.vida.current).toBe(7);
+    expect(synced.stats.cd).toEqual({ current: 3, max: 4 });
+    expect(synced.status).toEqual(['sangrado', 'barrera']);
+    expect(synced.arcaneBarrier).toBe(barrier);
+    expect(synced.equippedItems[0]).toMatchObject({ name: 'Espada nueva', canvasSlot: 'mainHand' });
+    expect(profile.activeRun.statusEffects).toEqual(['sangrado']);
+    expect(token.stats.cd.current).toBe(2);
+  });
+
+  test('profile refresh does not retain Barrera from a different scene and supports an explicit encounter reset', () => {
+    const token = makeToken({ runRevision: 2, runScenarioId: 'room-1', status: ['barrera'],
+      arcaneBarrier: { id: 'barrier-1', spellId: 'runic-barrier', expires: 'combat-end' } });
+    const activeRun = { id: 'run-1', version: 2, revision: 3, currentScenarioId: 'room-2',
+      stats: token.stats, statusEffects: [], inventory: {}, equippedItems: {} };
+
+    const nextScene = syncCanvasTokenWithRuntimeProfile(token, { activeRun }, 'room-2');
+    expect(nextScene.status).not.toContain('barrera');
+    expect(nextScene.arcaneBarrier).toBeNull();
+    const reset = syncCanvasTokenWithRuntimeProfile(token, { activeRun: { ...activeRun, currentScenarioId: 'room-1' } },
+      'room-1', { preserveEncounterBarrier: false });
+    expect(reset.status).not.toContain('barrera');
+    expect(reset.arcaneBarrier).toBeNull();
+  });
+
   test('ignores stale or unrelated personal run snapshots', () => {
     const token = makeToken({ runRevision: 4 });
 

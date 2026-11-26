@@ -1,10 +1,19 @@
 import { getCustomImage } from '../hooks/useCustomEquipmentImages';
+import { hasWeaponTrick, resolveWeaponForm } from '../features/roguelite/weaponForms';
 
 export const resolveEquipmentImage = (item = {}, customImages = null) => {
+  if (hasWeaponTrick(item)) return resolveWeaponForm(item).image || null;
   const explicit = item.img || item.image || item.imagen || item.imageUrl || item.imageSource || item.art || item.icon;
   if (explicit) return explicit;
   const custom = getCustomImage(item, customImages);
   if (custom) return custom;
+
+  // Preserve the approved legacy artwork when the master spell uses its canonical name.
+  const identity = String(item.name || item.nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  if (identity === 'barrera runica') {
+    const legacy = getCustomImage({ name: 'Barrera arcana' }, customImages);
+    if (legacy) return legacy;
+  }
 
   const name = String(item.name || item.nombre || '').toLowerCase();
   const mappings = [

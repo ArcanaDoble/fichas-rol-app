@@ -15,6 +15,8 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { FreeParryProvider, useFreeParry } from './features/parry-free/FreeParryProvider';
+import { parryViewerId } from './features/parry-free/freeParryProtocol';
 import { BsDice6 } from 'react-icons/bs';
 import { GiFist, GiCrossedSwords, GiShield, GiSpellBook } from 'react-icons/gi';
 import { FaFire, FaBolt, FaSnowflake, FaRadiationAlt } from 'react-icons/fa';
@@ -66,8 +68,8 @@ import { syncArmorState } from './utils/armorSystem';
 import DiceCalculator from './components/DiceCalculator';
 import BarraReflejos from './components/BarraReflejos';
 import { CharacterListView } from './components/CharacterListView';
-import InitiativeTracker from './components/InitiativeTracker';
 import CanvasSection from './components/CanvasSection';
+import Canvas3DEntry from './features/canvas/table3d/Canvas3DEntry';
 import BoardSection from './components/BoardSection';
 import CardBuilder from './components/CardBuilder';
 import DeckBuilderView from './components/DeckBuilderView';
@@ -1141,9 +1143,7 @@ function App() {
   );
 
   // Google Sheets ID
-  const sheetId =
-    process.env.REACT_APP_GOOGLE_SHEETS_ID ||
-    '1Fc46hHjCWRXCEnHl3ZehzMEcxewTYaZEhd-v-dnFUjs';
+  const sheetId = process.env.REACT_APP_GOOGLE_SHEETS_ID;
 
   // Datos de prueba temporales mientras arreglamos Google Sheets
   const datosPruebaArmas = React.useMemo(
@@ -1966,6 +1966,26 @@ function App() {
 
   // Calculadora de dados
   const [showDiceCalculator, setShowDiceCalculator] = useState(false);
+  const freeParry = useFreeParry();
+  const configureFreeParry = freeParry?.configure;
+  useEffect(() => {
+    if (!configureFreeParry) return;
+    const master = userType === 'master' && authenticated;
+    const player = userType === 'player' && nameEntered;
+    configureFreeParry({
+      viewer:master || player ? {
+        controllerId:parryViewerId(master, playerName),
+        controller:master ? 'Máster' : 'Jugador',
+        name:master ? 'Máster' : playerName,
+      } : null,
+      players:existingPlayers,
+    });
+  }, [configureFreeParry, userType, authenticated, nameEntered, playerName, existingPlayers]);
+  const openFreeParry = freeParry?.open;
+  const handleMasterSelection = useCallback(view => {
+    if (view === 'parry-free') openFreeParry?.();
+    else setChosenView(view);
+  }, [openFreeParry]);
   // Minijuego Barra-Reflejos
   const [showBarraReflejos, setShowBarraReflejos] = useState(false);
   const [minigamePlayerName, setMinigamePlayerName] = useState('');
@@ -1981,21 +2001,15 @@ function App() {
   }, []);
 
 
-  // Sistema de Iniciativa
-  const [showInitiativeTracker, setShowInitiativeTracker] = useState(false);
   // Minimapa para jugadores
   const [showPlayerMinimap, setShowPlayerMinimap] = useState(false);
   // Canvas para jugadores
   const [showPlayerCanvas, setShowPlayerCanvas] = useState(false);
+  const [playerTable3D, setPlayerTable3D] = useState(null);
   const [showPlayerBoard, setShowPlayerBoard] = useState(false);
   const [showPlayerBestiary, setShowPlayerBestiary] = useState(false);
   const [showPlayerClassList, setShowPlayerClassList] = useState(false);
   const [showClassMinimap, setShowClassMinimap] = useState(false);
-
-  const handleLaunchSpeedSystem = useCallback((name) => {
-    setMinigamePlayerName(name || playerName || 'Jugador');
-    setShowInitiativeTracker(true);
-  }, [playerName]);
 
   const handleLaunchMinimap = useCallback((name) => {
     if (name) {
@@ -2158,8 +2172,8 @@ function App() {
     setNewClaveError('');
     setShowDiceCalculator(false);
     setShowBarraReflejos(false);
-    setShowInitiativeTracker(false);
     setShowPlayerCanvas(false);
+    setPlayerTable3D(null);
     setShowPlayerBoard(false);
   };
   const eliminarFichaJugador = async () => {
@@ -3810,28 +3824,6 @@ function App() {
             />
           </div>
         )}
-        {showInitiativeTracker && (
-          <div className="fixed inset-0 z-[9999] bg-[#0b1120] overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
-            <InitiativeTracker
-              playerName={minigamePlayerName || playerName || 'Jugador'}
-              isMaster={userType === 'master' && authenticated}
-              glossary={glossary}
-              playerEquipment={playerData ? {
-                weapons: playerData.weapons,
-                armaduras: playerData.armaduras,
-                poderes: playerData.poderes,
-              } : null}
-              armas={armas}
-              armaduras={armaduras}
-              habilidades={habilidades}
-              enemies={enemies}
-              onBack={() => {
-                setShowInitiativeTracker(false);
-                setMinigamePlayerName('');
-              }}
-            />
-          </div>
-        )}
         {showClassMinimap && (
           <div className="fixed inset-0 z-[9999] bg-[#0b1120] overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
             <React.Suspense fallback={<div className="min-h-screen bg-gray-900 text-gray-100 p-4">Cargando Minimapa…</div>}>
@@ -3852,7 +3844,7 @@ function App() {
         )}
       </>
     ),
-    [showVersionBlock, remoteVersion, tooltipElements, showBarraReflejos, showDiceCalculator, showInitiativeTracker, showClassMinimap, minigamePlayerName, playerName, authenticated, glossary, playerData, armas, armaduras, habilidades, userType]
+    [showVersionBlock, remoteVersion, tooltipElements, showBarraReflejos, showDiceCalculator, showClassMinimap, minigamePlayerName, playerName, userType]
   );
 
   const dadoIcono = () => <BsDice6 className="inline" />;
@@ -4246,7 +4238,6 @@ function App() {
         onBack={() => setShowPlayerClassList(false)}
         onLaunchMinigame={handleLaunchMinigame}
         onLaunchDiceCalculator={handleLaunchDiceCalculator}
-        onLaunchSpeedSystem={handleLaunchSpeedSystem}
         onLaunchMinimap={handleLaunchMinimap}
         armas={armas}
         armaduras={armaduras}
@@ -4268,6 +4259,10 @@ function App() {
   }
 
   // FICHA JUGADOR
+  if (userType === 'player' && nameEntered && playerTable3D) {
+    return <Canvas3DEntry mode="player" owner={playerName} initialCharacter={playerTable3D.character}
+      onBack={() => { window.history.replaceState(null,'','/'); setPlayerTable3D(null); }}/>;
+  }
   if (userType === 'player' && nameEntered) {
     return withTooltips(
       <div className="min-h-screen bg-[#0b1120]">
@@ -4350,7 +4345,6 @@ function App() {
                 initialOwnedCharacterCount={playerLibraryPreload?.playerName === playerName ? playerLibraryPreload.ownedCharacterCount : null}
                 onLaunchMinigame={handleLaunchMinigame}
                 onLaunchDiceCalculator={handleLaunchDiceCalculator}
-                onLaunchSpeedSystem={handleLaunchSpeedSystem}
                 onLaunchMinimap={handleLaunchMinimap}
                 onLaunchCanvas={handleLaunchCanvas}
                 onLaunchBoard={handleLaunchBoard}
@@ -4391,10 +4385,10 @@ function App() {
             initialOwnedCharacterCount={playerLibraryPreload?.playerName === playerName ? playerLibraryPreload.ownedCharacterCount : null}
             onLaunchMinigame={handleLaunchMinigame}
             onLaunchDiceCalculator={handleLaunchDiceCalculator}
-            onLaunchSpeedSystem={handleLaunchSpeedSystem}
             onLaunchMinimap={handleLaunchMinimap}
             onLaunchCanvas={handleLaunchCanvas}
             onLaunchBoard={handleLaunchBoard}
+            onLaunchCanvas3D={character => setPlayerTable3D({ character })}
             onBack={() => {
               setNameEntered(false);
               setPlayerName('');
@@ -4431,15 +4425,6 @@ function App() {
                 className="bg-purple-600 hover:bg-purple-700 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl"
               >
                 🔒
-              </Boton>
-            )}
-            {/* Botón de sistema de iniciativa */}
-            {(playerData.permissions?.canViewInitiative !== false) && (
-              <Boton
-                onClick={() => setShowInitiativeTracker(true)}
-                className="bg-green-600 hover:bg-green-700 text-white w-10 h-10 text-lg rounded-lg flex items-center justify-center sm:w-12 sm:h-12 sm:text-xl"
-              >
-                ⚡
               </Boton>
             )}
             {/* Botón de minimapa */}
@@ -5385,18 +5370,7 @@ function App() {
   // MODO MÁSTER
   if (userType === 'master' && authenticated && !chosenView) {
     return withTooltips(
-      <MasterMenu onSelect={setChosenView} onBackToMain={volverAlMenu} />
-    );
-  }
-  if (userType === 'master' && authenticated && chosenView === 'initiative') {
-    return withTooltips(
-      <InitiativeTracker
-        playerName="Master"
-        isMaster={true}
-        enemies={enemies}
-        glossary={glossary}
-        onBack={() => setChosenView(null)}
-      />
+      <MasterMenu onSelect={handleMasterSelection} onBackToMain={volverAlMenu} />
     );
   }
   if (userType === 'master' && authenticated && chosenView === 'classes') {
@@ -5412,7 +5386,6 @@ function App() {
         onBack={() => setChosenView(null)}
         onLaunchMinigame={handleLaunchMinigame}
         onLaunchDiceCalculator={handleLaunchDiceCalculator}
-        onLaunchSpeedSystem={handleLaunchSpeedSystem}
         onLaunchMinimap={handleLaunchMinimap}
       />
     );
@@ -7011,22 +6984,6 @@ function App() {
       <UsersView onBack={() => setChosenView(null)} />
     );
   }
-  if (userType === 'master' && authenticated && chosenView === 'initiative') {
-    return withTooltips(
-      <div className="min-h-screen bg-gray-900 text-gray-100">
-        <InitiativeTracker
-          onBack={() => setChosenView(null)}
-          isMaster={true}
-          playerName="Máster"
-          enemies={enemies}
-          glossary={glossary}
-          armas={armas}
-          armaduras={armaduras}
-          habilidades={habilidades}
-        />
-      </div>
-    );
-  }
   if (userType === 'master' && authenticated && chosenView === 'enemies') {
     return withTooltips(
       <EnemyBestiaryGateway
@@ -7096,7 +7053,6 @@ function App() {
             rarityColorMap={rarityColorMap}
             knownPlayers={existingPlayers}
             onLaunchDiceCalculator={handleLaunchDiceCalculator}
-            onLaunchSpeedSystem={handleLaunchSpeedSystem}
             onLaunchMinigame={handleLaunchMinigame}
             onLaunchMinimap={handleLaunchMinimap}
           />
@@ -7115,9 +7071,12 @@ function App() {
     );
   }
   if (userType === 'master' && authenticated && !chosenView) {
-    return <MasterMenu onSelect={setChosenView} onBackToMain={volverAlMenu} />;
+    return <MasterMenu onSelect={handleMasterSelection} onBackToMain={volverAlMenu} />;
   }
 
+  if (userType === 'master' && authenticated && chosenView === 'canvas3d') {
+    return <Canvas3DEntry mode="master" onBack={() => { window.history.replaceState(null,'','/'); setChosenView(null); }}/>;
+  }
   // Canvas tactico unico del proyecto.
   if (userType === 'master' && authenticated && chosenView === 'canvas') {
     return (
@@ -7713,7 +7672,7 @@ function App() {
 const AppWithProviders = () => {
   return (
     <ToastProvider>
-      <App />
+      <FreeParryProvider><App /></FreeParryProvider>
     </ToastProvider>
   );
 };

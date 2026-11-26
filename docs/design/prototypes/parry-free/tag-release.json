@@ -1,0 +1,26 @@
+{
+  "verifiedAtUtc": "2026-10-20T21:03:14.516460+00:00",
+  "release": "campaign-parry-replaces-speed-tag",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.86e8f16d.js",
+      "httpStatus": 200,
+      "sha256Matches": true
+    },
+    "main.css": {
+      "path": "/static/css/main.c1bc538b.css",
+      "httpStatus": 200,
+      "sha256Matches": true
+    }
+  },
+  "testSuitesPassed": 2,
+  "testsPassed": 6,
+  "testsLog": "output/playwright/parry-tag-tests.log",
+  "buildLog": "output/playwright/parry-tag-build.log",
+  "deployLog": "output/playwright/parry-tag-deploy.log",
+  "previousFullSuiteRelease": "release.json",
+  "productionGamesCreatedForVerification": 0
+}

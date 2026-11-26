@@ -6,6 +6,18 @@ const placement = { x: 200, y: 100, width: 100, height: 100, distance: 3, range:
     valid: true, cells: [{ column: 4, row: 2 }, { column: 5, row: 2 }, { column: 4, row: 3 }, { column: 5, row: 3 }] };
 const sourceToken = { x: 0, y: 150, width: 50, height: 50 };
 
+test('mist previews a complete 3×3 square with the label centered on the cloud', () => {
+    const mistPlacement = { ...placement, width: 150, height: 150, columns: 3, rows: 3,
+        cells: Array.from({ length: 9 }, (_, index) => ({ column: 4 + index % 3, row: 2 + Math.floor(index / 3) })) };
+    const { container } = render(<AreaPlacementOverlay system={{ sourceToken, placement: mistPlacement,
+        isConfirming: true, session: { definitionId: 'arcane-mist' } }} />);
+    const cells = container.querySelectorAll('.noma-area-cell');
+    expect(cells).toHaveLength(9);
+    expect(cells[4].style.left).toBe(`${100 / 3}%`);
+    expect(cells[4].style.top).toBe(`${100 / 3}%`);
+    expect(container.querySelector('.noma-area-center').style.left).not.toBe('25%');
+});
+
 test('trajectory connects the rendered source to the area center and retains both distance labels', () => {
     const system = { sourceToken, placement, isPlacing: true };
     const { container } = render(<AreaPlacementOverlay system={system} zoom={0.25} />);

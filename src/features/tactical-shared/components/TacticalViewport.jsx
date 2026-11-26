@@ -10,7 +10,7 @@ import {
     getSweepAreaCells, getSweepTargetsForCells, getTokenGridBounds,
     isCombatTokenItem,
 } from '../legacyCombatRules';
-import { WORLD_SIZE, calculateShadowPoints } from '../spatial';
+import { WORLD_SIZE } from '../spatial';
 import {
     getCanvasSmokePerspective,
     canPlayerAccessCanvasToken,
@@ -23,6 +23,10 @@ import SmokeVisionMask from './SmokeVisionMask';
 import SmokeOcclusion from './SmokeOcclusion';
 import { warmFogRenderer } from './FogShaderEffect';
 import { warmSmokePortraits } from '../smokePortraitPreload';
+import { getSceneBlockingSegments } from '../scenery';
+import { TreeCanopySurfaces } from './TreeCanopySurfaces';
+import { TokenVisionSurfaces } from './TokenVisionSurfaces';
+import { getCanvasShadowPoints, getCanvasVisionBlockingSegments } from '../canvasVision';
 
 /** Visual surface for map layers, tactical overlays and scene items. */
 export const CanvasViewport = ({
@@ -45,6 +49,7 @@ export const CanvasViewport = ({
     finiteMapHeight,
     finiteMapWidth,
     focusedTargetId,
+    forcedMovement,
     getBoardMobileTacticalMoveOptions,
     getCanvasMobileTacticalMoveOptions,
     gridConfig,
@@ -109,6 +114,9 @@ export const CanvasViewport = ({
             },
         }
         : tokenOriginalPos;
+    const shadowInteraction = {
+        active: Boolean(draggedTokenId || rotatingTokenId || resizingTokenId), originalPositions: sightOrigins,
+    };
     React.useEffect(() => warmFogRenderer(), []);
     React.useEffect(() => {
         warmSmokePortraits(activeScenario?.items || []);
@@ -121,9 +129,13 @@ export const CanvasViewport = ({
     return (
 <div
                             ref={containerRef}
+                            tabIndex={-1}
                             data-tactical-viewport="true"
-                            className={`absolute inset-0 w-full h-full touch-none ${(isCanvasPointerActive || itemUseSystem?.isPlacing) ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
+                            className={`absolute inset-0 w-full h-full touch-none focus:outline-none ${(isCanvasPointerActive || itemUseSystem?.isPlacing) ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
                             onMouseDownCapture={(event) => {
+                                if (!event.target.closest?.('input, textarea, select, button, [contenteditable]:not([contenteditable="false"])')) {
+                                    event.currentTarget.focus({ preventScroll: true });
+                                }
                                 if (itemUseSystem?.handlePointerDown?.(event)) return;
                                 if (!itemUseSystem?.isPlacing) handleSharedPointerDown?.(event);
                             }}
@@ -239,7 +251,7 @@ export const CanvasViewport = ({
 
                                 {/* --- CONTENIDO DEL CANVAS (Tokens, Dibujos, etc.) --- */}
                                 {/* Los items se renderizan aquí, entre el fondo y la niebla superior */}
-                                <div className="absolute inset-0 z-10 pointer-events-none" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
+                                <div className={`absolute inset-0 ${isBoardMode ? 'z-10' : ''} pointer-events-none`} style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
                                     {canvasRenderItemGroups.lights.map(item => renderItemJSX(item))}
                                     {canvasRenderItemGroups.others.map(item => renderItemJSX(item))}
                                 </div>
@@ -281,6 +293,9 @@ export const CanvasViewport = ({
                                             : getCombatRenderPlacement(itemUseSystem.trajectorySource, activeScenario?.items || [], gridConfig)),
                                     } : null} />
 
+                                {itemUseSystem?.renderEffects?.(zoom)}
+
+
                                 {SharedPointerOverlay && (
                                     <SharedPointerOverlay
                                         pointers={canvasPointers}
@@ -295,6 +310,7 @@ export const CanvasViewport = ({
                                     const token = selectedTokenId
                                         ? items.find(item => item.id === selectedTokenId)
                                         : null;
+                                    if (forcedMovement?.isActive(token?.id)) return null;
                                     const isCanvasMobileMove = shouldUseMobileTacticalMove(token, items);
                                     const isBoardMobileMove = canUseBoardMobileTacticalMove(token);
                                     if (!isCanvasMobileMove && !isBoardMobileMove) return null;
@@ -326,7 +342,7 @@ export const CanvasViewport = ({
                                     const tokenCenterY = token.y + ((Number(token.height) || gridConfig.cellHeight || 50) / 2);
 
                                     return (
-                                        <div className="absolute inset-0 z-[15] pointer-events-none" style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
+                                        <div className={`absolute inset-0 ${isBoardMode ? 'z-[15]' : 'z-[35]'} pointer-events-none`} style={{ width: WORLD_SIZE, height: WORLD_SIZE }}>
                                              {/* Capa de Fondos de Celda Uniformes (Sin solapamientos de color) */}
                                              {Array.from(reachableCells.values()).map((cell) => {
                                                  const rect = getGridCellWorldRect(cell, gridConfig);
@@ -636,6 +652,14 @@ export const CanvasViewport = ({
                                                 }}
                                             />
                                         )}
+                                        {!isBoardMode && <TreeCanopySurfaces items={sightItems} gridConfig={gridConfig}
+                                            isPlayerView={isPlayerView} playerName={playerName} selectedTokenIds={selectedTokenIds}
+                                            bounds={smokeBounds} smokePerspective={smokePerspective} zoom={zoom} />}
+                                        {!isBoardMode && <TokenVisionSurfaces items={sightItems} gridConfig={gridConfig}
+                                            isPlayerView={isPlayerView} playerName={playerName} selectedTokenIds={selectedTokenIds}
+                                            showHiddenTokens={showHiddenTokens} bounds={smokeBounds} smokePerspective={smokePerspective}
+                                            draggedTokenId={draggedTokenId} pendingTokenId={isPlayerView ? pendingTurnState?.tokenId : null}
+                                            shadowInteraction={shadowInteraction} />}
                                     </svg>
                                 </div>
 
@@ -1181,37 +1205,19 @@ export const CanvasViewport = ({
                                                 const originalSource = sightOrigins[source.id];
                                                 const lx = ((isSourceInteracting && originalSource) ? originalSource.x : source.x) + source.width / 2;
                                                 const ly = ((isSourceInteracting && originalSource) ? originalSource.y : source.y) + source.height / 2;
-                                                const walls = sightItems.filter(i =>
-                                                    i && i.type === 'wall' &&
-                                                    !(i.wallType === 'door' && i.isOpen) &&
-                                                    i.wallType !== 'window'
-                                                );
+                                                const sightSource = isSourceInteracting && originalSource
+                                                    ? { ...source, x: originalSource.x, y: originalSource.y } : source;
+                                                const walls = isBoardMode ? getSceneBlockingSegments(sightItems, { observer: sightSource })
+                                                    : getCanvasVisionBlockingSegments(sightItems, { observer: sightSource, gridConfig });
 
                                                 return (
                                                     <mask id={`shadow-mask-${source.id}-${maskVersion}`} key={`shadow-mask-${source.id}-${maskVersion}`}>
                                                         <rect {...smokeBounds} fill="white" />
                                                         <SmokeOcclusion source={source} x={lx} y={ly} items={sightItems}
                                                             perspective={smokePerspective} bounds={smokeBounds} maskId={`smoke-shadow-${source.id}-${maskVersion}`} />
-                                                        {walls.map(wall => {
-                                                            const isWallInteracting = (draggedTokenId || rotatingTokenId || resizingTokenId) && selectedTokenIds.includes(wall.id);
-                                                            const originalWall = sightOrigins[wall.id];
-
-                                                            let x1 = wall.x1, y1 = wall.y1, x2 = wall.x2, y2 = wall.y2;
-                                                            if (isWallInteracting && originalWall) {
-                                                                const dx = wall.x - originalWall.x;
-                                                                const dy = wall.y - originalWall.y;
-                                                                x1 -= dx; y1 -= dy;
-                                                                x2 -= dx; y2 -= dy;
-                                                            }
-
-                                                            return (
-                                                                <polygon
-                                                                    key={`shadow-${source.id}-${wall.id}`}
-                                                                    points={calculateShadowPoints(lx, ly, x1, y1, x2, y2)}
-                                                                    fill="black"
-                                                                />
-                                                            );
-                                                        })}
+                                                        {walls.map(wall => <polygon key={`shadow-${source.id}-${wall.id}`}
+                                                            points={getCanvasShadowPoints({ x: lx, y: ly }, wall, shadowInteraction, selectedTokenIds)}
+                                                            fill="black" />)}
                                                     </mask>
                                                 );
                                             })}

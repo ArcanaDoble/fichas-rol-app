@@ -1,10 +1,12 @@
 import React from 'react';
 import { DEFAULT_STATUS_EFFECTS, ICON_MAP } from '../../../utils/statusEffects';
+import { useArcaneBarrierPresentation } from '../useArcaneBarrierPresentation';
 import './TokenStatusBadges.css';
 
-export default function TokenStatusBadges({ statusIds, width, height, zoom = 1, rotation = 0, isCircular }) {
-    const effects = statusIds.map(id => ({ id, ...DEFAULT_STATUS_EFFECTS[id] }));
-    if (!effects.length) return null;
+export default function TokenStatusBadges({ statusIds = [], width, height, zoom = 1, rotation = 0, isCircular, tokenId, arcaneBarrier, barrierPresentation }) {
+    const { visible: barrierVisible } = useArcaneBarrierPresentation({ id: tokenId, arcaneBarrier, status: statusIds }, barrierPresentation);
+    const effects = statusIds.filter(id => id !== 'barrera').map(id => ({ id, ...DEFAULT_STATUS_EFFECTS[id] }));
+    if (!effects.length && !barrierVisible) return null;
 
     const safeZoom = Math.max(0.05, Number(zoom) || 1);
     const angle = rotation * Math.PI / 180;
@@ -27,6 +29,10 @@ export default function TokenStatusBadges({ statusIds, width, height, zoom = 1, 
         id: 'overflow', label: remaining.map(effect => effect.label).join(' · '),
         hex: '#c8aa6e', count: remaining.length,
     }] : shown;
+    // A public spell marker has its own place, preserving the condition capacity
+    // and overflow count. It must never disappear into the conditions' +N badge.
+    if (barrierVisible) badges.push({ id: 'barrera', hex: '#bba169',
+        label: 'Barrera rúnica · +1 CD', ariaLabel: 'Barrera rúnica: +1 CD hasta el final del combate' });
 
     return (
         <div className="noma-token-statuses" role="group" aria-label="Estados"
@@ -43,11 +49,14 @@ export default function TokenStatusBadges({ statusIds, width, height, zoom = 1, 
                 const Icon = ICON_MAP[effect.iconName] || ICON_MAP.AlertCircle;
                 return (
                     <span key={effect.id} className="noma-token-status" role="img"
-                        aria-label={effect.count ? `${effect.count} estados más: ${effect.label}` : effect.label}
+                        aria-label={effect.ariaLabel || (effect.count ? `${effect.count} estados más: ${effect.label}` : effect.label)}
                         title={effect.label} data-status-id={effect.id}
                         style={{ '--status-color': effect.hex || '#c8aa6e', width: size, height: size,
                             left: x, top: y }}>
-                        {effect.count ? <span className="noma-token-status__count">+{effect.count}</span>
+                        {effect.id === 'barrera' ? <svg className="noma-token-status__barrier" viewBox="0 0 32 32" aria-hidden="true">
+                            <path d="M16 5 25 8v8c0 5-4.5 9-9 12-4.5-3-9-7-9-12V8Z" fill="#141720" stroke="#dfc885" strokeWidth="1.5" />
+                            <text x="16" y="20" textAnchor="middle">+1</text>
+                        </svg> : effect.count ? <span className="noma-token-status__count">+{effect.count}</span>
                             : <Icon aria-hidden="true" size={size * 0.64} strokeWidth={2.1} />}
                     </span>
                 );

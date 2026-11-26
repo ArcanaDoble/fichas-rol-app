@@ -18,6 +18,7 @@ import {
     resolveHiddenDetectionAlongMovement,
 } from './tokenVisibilityAccess';
 import { createAreaSceneItem, getTerrainAreaDefinition } from './areaPlacementSystem';
+import { createTreeScenery, getTreeAsset } from './scenery';
 
 /** Frozen token and item commands shared by the legacy tactical host. */
 export const createCanvasTokenController = ({
@@ -59,6 +60,8 @@ export const createCanvasTokenController = ({
     selectedTokenIds,
     setActiveBoardHandTokenId,
     setActiveScenario,
+    setActiveLayer,
+    setActiveTab,
     setCombatOccupancyFeedback,
     setDragVisualOrigin,
     setDraggedTokenId,
@@ -76,8 +79,27 @@ export const createCanvasTokenController = ({
     triggerToast,
     updateItem,
     zoom,
+    createImageToken = token => token,
     syncTokenWithSheet: syncModeTokenWithSheet = syncTokenWithSheet,
 }) => {
+    const addTreeToCanvas = (assetId, visionMode) => {
+        const scenario = activeScenarioRef.current || activeScenario;
+        const asset = getTreeAsset(assetId);
+        if (!scenario || !asset || isPlayerView || isBoardMode) return;
+        const width = (Number(gridConfig.cellWidth) || 50) * 2;
+        const height = (Number(gridConfig.cellHeight) || 50) * 2;
+        const centered = { x: WORLD_SIZE / 2 - offset.x / zoom - width / 2,
+            y: WORLD_SIZE / 2 - offset.y / zoom - height / 2 };
+        const position = gridConfig.snapToGrid ? snapWorldPositionToGrid(centered, gridConfig, { width, height }) : centered;
+        const tree = createTreeScenery(asset, position, gridConfig, visionMode);
+        const items = [...(scenario.items || []), tree];
+        setActiveScenario(prev => prev?.id === scenario.id ? { ...prev, items } : prev);
+        setSelectedTokenIds([tree.id]);
+        setActiveLayer?.('MAP');
+        setActiveTab?.('INSPECTOR');
+        safePersistItems(scenario.id, items, scenario.items, [tree.id]);
+    };
+
 const addTokenToCanvas = (tokenUrl) => {
         const currentScenario = activeScenarioRef.current || activeScenario;
         if (!currentScenario) return;
@@ -100,7 +122,7 @@ const addTokenToCanvas = (tokenUrl) => {
             ? snapWorldPositionToGrid(centeredSpawn, gridConfig, { width: w, height: h }, { centerInCell: true })
             : centeredSpawn;
 
-        const newToken = {
+        const newToken = createImageToken({
             id: `token-${nanoid()}`,
             x: spawnPosition.x,
             y: spawnPosition.y,
@@ -113,7 +135,7 @@ const addTokenToCanvas = (tokenUrl) => {
             status: [], // Array de IDs de estados
             hasVision: true,
             visionRadius: 300,
-        };
+        }, currentScenario);
 
         const nextItems = [...(currentScenario.items || []), newToken];
         setActiveScenario(prev => (
@@ -143,6 +165,7 @@ const addTokenToCanvas = (tokenUrl) => {
             isCombatActive &&
             activeLayer === 'TABLETOP' &&
             isMobileTacticalMoveToken(token) &&
+            !combatRuntime?.forcedMovement?.isActive(token?.id) &&
             !blocksMovementWhileProne(token) &&
             canCombatTokenActNow(token, items, currentScenario)
         );
@@ -315,6 +338,14 @@ const addTokenToCanvas = (tokenUrl) => {
             return;
         }
 
+        if (scenario.rulesSystem === 'campaign' && combatRuntime?.combatState?.participants?.[tokenId]) {
+            setMobileMoveHoverCellKey(null);
+            return combatRuntime.confirmMovement(tokenId, {
+                from: { x: token.x, y: token.y }, to: nextPosition, cost: stepCost,
+                revealedTokenIds: hiddenResolution.revealedTokenIds,
+            });
+        }
+
         setActiveScenario(prev => prev ? { ...prev, items: nextItems } : prev);
         setSelectedTokenIds([tokenId]);
         lastSelectedIdRef.current = tokenId;
@@ -450,11 +481,16 @@ const addTokenToCanvas = (tokenUrl) => {
         const isTouch = e.type.startsWith('touch');
         const interactionTime = Date.now();
 
+        // Even an ignored compatibility mouse event still belongs to the token.
+        // Letting it bubble would cancel the target in the Canvas background
+        // handler just after the touch had opened the weapon selector.
+        e.stopPropagation();
         if (
             !isTouch &&
             lastTouchTokenInteractionRef.current.id === token.id &&
             interactionTime - lastTouchTokenInteractionRef.current.time < 500
         ) {
+            if (e.cancelable) e.preventDefault();
             return;
         }
 
@@ -462,7 +498,6 @@ const addTokenToCanvas = (tokenUrl) => {
             lastTouchTokenInteractionRef.current = { id: token.id, time: interactionTime };
         }
 
-        e.stopPropagation(); // Evitar que el canvas inicie pan
         const isScenePickup = Boolean(isScenePickupItem?.(token));
 
         if (isBoardDieItem(token) && ACTIVE_BOARD_DIE_ROLL_IDS.has(token.id)) {
@@ -577,9 +612,13 @@ const addTokenToCanvas = (tokenUrl) => {
 
             const isMultiSelectModifier = Boolean(e.shiftKey || e.ctrlKey || e.metaKey);
             let newSelection = [...selectedTokenIds];
+            const isForcedMove = !isBoardMode && !isPlayerView && combatRuntime?.forcedMovement?.isActive(token.id);
 
             // Si el token NO está ya seleccionado, lo añadimos (si Shift/Ctrl) o lo seleccionamos en exclusiva
-            if (!selectedTokenIds.includes(token.id)) {
+            if (isForcedMove) {
+                newSelection = [token.id];
+                if (selectedTokenIds.length !== 1 || selectedTokenIds[0] !== token.id) setSelectedTokenIds(newSelection);
+            } else if (!selectedTokenIds.includes(token.id)) {
                 if (isMultiSelectModifier) {
                     newSelection.push(token.id);
                 } else {
@@ -594,7 +633,7 @@ const addTokenToCanvas = (tokenUrl) => {
                 return; // No iniciamos drag si estamos deseleccionando
             }
 
-            if (isCombatActive && activeLayer === 'TABLETOP' && currentScenario) {
+            if (!isForcedMove && isCombatActive && activeLayer === 'TABLETOP' && currentScenario) {
                 const hasProneTokenInSelection = currentScenario.items.some(item =>
                     newSelection.includes(item.id) && blocksMovementWhileProne(item)
                 );
@@ -603,11 +642,15 @@ const addTokenToCanvas = (tokenUrl) => {
                         newSelection.includes(item.id) && blocksMovementWhileProne(item)
                     );
                     const proneStatusMeta = getTokenProneStatusMeta(selectedProneToken);
-                    triggerToast(
-                        proneStatusMeta?.label || "Derribado",
-                        `No puedes desplazar una ficha con el estado ${proneStatusMeta?.label?.toLowerCase() || 'derribado'} mientras el combate está activo`,
-                        'warning'
-                    );
+                    // Selection exposes the master's forced-movement action;
+                    // it does not attempt an ordinary move or lift the token.
+                    if (isPlayerView || !combatRuntime?.forcedMovement?.canBegin(selectedProneToken)) {
+                        triggerToast(
+                            proneStatusMeta?.label || "Derribado",
+                            `No puedes desplazar una ficha con el estado ${proneStatusMeta?.label?.toLowerCase() || 'derribado'} mientras el combate está activo`,
+                            'warning'
+                        );
+                    }
                     return;
                 }
             }
@@ -631,6 +674,8 @@ const addTokenToCanvas = (tokenUrl) => {
                 isTouch &&
                 isMobile &&
                 !isBoardMode &&
+                (isPlayerView || currentScenario?.rulesSystem !== 'campaign') &&
+                !isForcedMove &&
                 isCombatActive &&
                 activeLayer === 'TABLETOP' &&
                 isMobileTacticalMoveToken(token)
@@ -694,7 +739,7 @@ const addTokenToCanvas = (tokenUrl) => {
                                 gridConfig
                             );
                         } else {
-                            originals[i.id] = { x: i.x, y: i.y };
+                            originals[i.id] = i.type === 'wall' ? getItemInteractionSnapshot(i) : { x: i.x, y: i.y };
                             visualOrigins[i.id] = getCombatRenderPlacementAtPosition(
                                 i,
                                 { x: i.x, y: i.y },
@@ -926,6 +971,7 @@ const addTokenToCanvas = (tokenUrl) => {
         const spawnY = WORLD_SIZE / 2;
         const side = gridConfig.cellWidth * 2 || 100;
         const isHazard = shape === 'hazard';
+        const height = !isBoardMode && isHazard ? (gridConfig.cellHeight * 2 || side) : side;
         const terrainDefinition = getTerrainAreaDefinition(shape);
         const isStairs = shape === 'stairs';
 
@@ -948,9 +994,9 @@ const addTokenToCanvas = (tokenUrl) => {
             geometryKind: shape,
             name: isHazard ? 'Terreno Peligroso' : isStairs ? 'Escalera' : shape === 'rect' ? 'Zona Rectangular' : 'Zona Circular',
             x: spawnX - side / 2,
-            y: spawnY - side / 2,
+            y: spawnY - height / 2,
             width: isStairs ? side * 2 : side,
-            height: isStairs ? side : side,
+            height,
             backgroundColor: isHazard ? '#ef4444' : isStairs ? '#c8aa6e' : shape === 'rect' ? '#22c55e' : '#60a5fa',
             opacity: isHazard ? 0.1 : 0.3,
             rotation: 0,
@@ -967,6 +1013,7 @@ const addTokenToCanvas = (tokenUrl) => {
     };
 
     return {
+        addTreeToCanvas,
         addTokenToCanvas,
         consumeMobileMoveTemplateEvent,
         shouldUseMobileTacticalMove,

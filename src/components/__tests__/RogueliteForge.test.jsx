@@ -1,5 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const mockFirestore = {
   collection: jest.fn(),
@@ -95,6 +96,54 @@ describe('RogueliteForge', () => {
       { nombre: 'Ancestral', color: '#64748b' },
     ));
     expect(onRaritiesChanged).toHaveBeenCalled();
+  });
+
+  test('Truco edits and saves two independent profiles and previews', async () => {
+    const cane = { id: 'trick', nombre: 'Bastón enroscado', dano: '1d12', rasgos: ['Truco'],
+      trickForms: [
+        { id: 'primary', label: 'Estoque', dano: '1d12', alcance: 'Cercano', rasgos: ['Perforante'], image: '/cane.png' },
+        { id: 'secondary', label: 'Látigo', dano: '2d4', alcance: 'Intermedio', rasgos: ['Sin guardia'], image: '/whip.png' },
+      ] };
+    render(<RogueliteForge armas={[cane]} onBack={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Editar Bastón enroscado' }));
+    expect(screen.getAllByTestId('inventory-item-card')).toHaveLength(2);
+    const tabs = within(screen.getByRole('group', { name: 'Forma que estás editando' }));
+    fireEvent.click(tabs.getByRole('button', { name: 'Látigo · Forma 2' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Perfil de daño' }), { target: { value: '2d6' } });
+    fireEvent.click(tabs.getByRole('button', { name: 'Estoque · Forma 1' }));
+    expect(screen.getByRole('textbox', { name: 'Perfil de daño' })).toHaveValue('1d12');
+    fireEvent.click(screen.getByRole('button', { name: /Guardar/ }));
+    await waitFor(() => expect(mockFirestore.setDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ collectionName: 'weapons', id: 'trick' }),
+      expect.objectContaining({ trickForms: [expect.objectContaining({ dano: '1d12', image: '/cane.png' }),
+        expect.objectContaining({ dano: '2d6', image: '/whip.png', rasgos: ['Sin guardia'] })] }),
+    ));
+  });
+
+  test('Truco keeps typed commas and spaces while editing traits in each form', async () => {
+    const cane = { id: 'trick', nombre: 'Bastón enroscado', rasgos: ['Truco'],
+      trickForms: [
+        { id: 'primary', label: 'Estoque', dano: '1d12', rasgos: [] },
+        { id: 'secondary', label: 'Látigo', dano: '2d4', rasgos: [] },
+      ] };
+    render(<RogueliteForge armas={[cane]} onBack={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Editar Bastón enroscado' }));
+    const input = screen.getByRole('textbox', { name: 'Rasgos de esta forma' });
+    userEvent.type(input, 'Perforante, Torso, ');
+    expect(input).toHaveValue('Perforante, Torso, ');
+    userEvent.type(input, 'Crítico');
+    const tabs = within(screen.getByRole('group', { name: 'Forma que estás editando' }));
+    fireEvent.click(tabs.getByRole('button', { name: 'Látigo · Forma 2' }));
+    userEvent.type(screen.getByRole('textbox', { name: 'Rasgos de esta forma' }), 'Crítico, Sangrado, Sin guardia, ');
+    expect(screen.getByRole('textbox', { name: 'Rasgos de esta forma' })).toHaveValue('Crítico, Sangrado, Sin guardia, ');
+    fireEvent.click(tabs.getByRole('button', { name: 'Estoque · Forma 1' }));
+    expect(screen.getByRole('textbox', { name: 'Rasgos de esta forma' })).toHaveValue('Perforante, Torso, Crítico');
+    fireEvent.click(screen.getByRole('button', { name: /Guardar/ }));
+    await waitFor(() => expect(mockFirestore.setDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ collectionName: 'weapons', id: 'trick' }),
+      expect.objectContaining({ trickForms: [expect.objectContaining({ rasgos: ['Perforante', 'Torso', 'Crítico'] }),
+        expect.objectContaining({ rasgos: ['Crítico', 'Sangrado', 'Sin guardia'] })] }),
+    ));
   });
 
   test('crea la escala inicial una sola vez y deja un marcador persistente', async () => {

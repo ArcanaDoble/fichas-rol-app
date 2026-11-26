@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import CanvasCombatPanel from '../CanvasCombatPanel';
 import { createCanvasCombatState, markParticipantActed, submitActionDice } from '../../combat/canvasCombatState';
@@ -35,7 +35,7 @@ describe('CanvasCombatPanel', () => {
     expect(screen.getByText(/Iniciativa y dados de acción/i)).toBeInTheDocument();
   });
 
-  it('shows the exact dice profile inherited from the class and accepts table results', () => {
+  it('shows the exact dice profile inherited from the class and accepts table results', async () => {
     const runtime = createRuntime(createCanvasCombatState([token]));
     render(<CanvasCombatPanel activeTab="ROUND" combatRuntime={runtime} isPlayerView />);
 
@@ -44,7 +44,7 @@ describe('CanvasCombatPanel', () => {
     fireEvent.change(screen.getByLabelText('Resultado de d8'), { target: { value: '7' } });
     fireEvent.change(screen.getByLabelText('Resultado de d6'), { target: { value: '5' } });
     fireEvent.change(screen.getByLabelText('Resultado de d4'), { target: { value: '3' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Confirmar' })));
 
     expect(runtime.submitRoll).toHaveBeenCalledWith(token.id, [7, 5, 3], 'manual');
   });

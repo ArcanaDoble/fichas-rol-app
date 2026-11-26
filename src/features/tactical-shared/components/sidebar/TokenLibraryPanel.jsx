@@ -1,6 +1,7 @@
 import React from 'react';
 import { FolderOpen, Image, RotateCw, Sparkles, Trash2, Upload } from 'lucide-react';
 import { TokenImageWithLoader } from '../TacticalAssetImage';
+import { TreeLibraryPanel } from './TreeLibraryPanel';
 
 export const TokenLibraryPanel = ({
     activeTab,
@@ -8,6 +9,7 @@ export const TokenLibraryPanel = ({
     addCardToHand,
     addDeckToBoard,
     addTokenToCanvas,
+    addTreeToCanvas,
     boardDecks,
     cards,
     deleteCard,
@@ -29,6 +31,7 @@ export const TokenLibraryPanel = ({
 }) => (
     activeTab === 'TOKENS' && !isPlayerView && (
                                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                                        {!isBoardMode && addTreeToCanvas && <TreeLibraryPanel onAdd={addTreeToCanvas} />}
                                         <h4 className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
                                             <Sparkles className="w-3 h-3" />
                                             Biblioteca de Tokens

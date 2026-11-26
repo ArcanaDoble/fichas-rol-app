@@ -1,0 +1,32 @@
+{
+  "feature": "Fantasma anterior del jugador y arrastre directo del máster sin salto al origen",
+  "url": "https://base-de-datos-noma.web.app",
+  "verifiedAt": "2026-10-22T00:50:05.437Z",
+  "assets": [
+    {
+      "asset": "/static/js/main.462913e9.js",
+      "sha256": "9079d671296feebe324e77d9d59da3a38cacdec59f5c111c68f75609326ecd15",
+      "bytes": 5328560
+    },
+    {
+      "asset": "/static/css/main.057a07c9.css",
+      "sha256": "5078afd72e7e88d22b2dcc800b7971c2cc887276a2208b50cf87933914d9db71",
+      "bytes": 701011
+    }
+  ],
+  "tests": {
+    "suites": 229,
+    "passed": 1598,
+    "skipped": 1,
+    "finalFocusedPassed": 42
+  },
+  "browser": {
+    "desktop": "1280x900: player ghost at origin; confirm then finish; two master drags with 650ms write latency and frame sampling",
+    "mobile": "390x844: player ghost and two hourglass holds; two master touch drags with 650ms latency and frame sampling"
+  },
+  "buildLog": "output/playwright/movement-ghost-final-build.log",
+  "testLog": "output/playwright/movement-ghost-tests.log",
+  "focusedLog": "output/playwright/movement-ghost-final-focused.log",
+  "deployLog": "output/playwright/movement-ghost-deploy.log",
+  "supersedes": "drag-release.json"
+}

@@ -1,0 +1,36 @@
+.noma-tree-visual { position: absolute; inset: 0; pointer-events: none; }
+.noma-tree-visual > img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(4px 7px 5px rgba(0,0,0,.38)); user-select: none; }
+.noma-tree-foliage { transition: opacity 450ms cubic-bezier(.22,.61,.36,1); }
+.noma-tree-foliage[data-tree-occupied="true"] { transition-duration: 300ms; }
+@media (prefers-reduced-motion: reduce) { .noma-tree-foliage { transition: none; } }
+.noma-tree-contour { position: absolute; inset: 0; overflow: visible; }
+.noma-tree-library { padding-bottom: 20px; border-bottom: 1px solid rgba(200,170,110,.22); display: grid; gap: 12px; }
+.noma-tree-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.noma-tree-heading h4 { font-family: Cinzel, Georgia, serif; color: #e8d4aa; font-size: 14px; }
+.noma-tree-heading > span, .noma-tree-help { color: #91a0b6; font-size: 11px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.noma-tree-vision { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid rgba(200,170,110,.28); }
+.noma-tree-vision button { min-height: 40px; padding: 8px; color: #9daabd; background: #0b1120; font-family: Alegreya, Georgia, serif; font-size: 14px; transition: background 120ms, color 120ms; }
+.noma-tree-vision button + button { border-left: 1px solid rgba(200,170,110,.28); }
+.noma-tree-vision button[aria-pressed="true"] { color: #f4e2b9; background: #27241f; box-shadow: inset 0 -2px #c8aa6e; }
+.noma-tree-vision button:hover { color: #f4e2b9; }
+.noma-tree-vision button:focus-visible, .noma-tree-library__asset:focus-visible, .noma-tree-inspector input:focus-visible, .noma-tree-delete:focus-visible { outline: 2px solid #e8cb8e; outline-offset: 2px; }
+.noma-tree-library__grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
+.noma-tree-library__asset { position: relative; min-width: 0; min-height: 118px; overflow: hidden; border: 1px solid rgba(200,170,110,.17); background: #0c1220; text-align: left; }
+.noma-tree-library__asset:hover { border-color: #c8aa6e; }
+.noma-tree-library__asset img { position: absolute; inset: 2px; width: calc(100% - 4px); height: 88px; object-fit: contain; }
+.noma-tree-library__asset span { position: relative; display: block; margin-top: 74px; padding: 9px 5px 6px; background: linear-gradient(transparent, #0c1220 35%); font: 12px/1.2 Alegreya, Georgia, serif; color: #e8dcc5; }
+.noma-tree-inspector { display: grid; gap: 18px; padding-bottom: 16px; }
+.noma-tree-inspector__portrait { position: relative; height: 156px; margin: -10px -10px 0; background: radial-gradient(ellipse, #29332966, transparent 70%); }
+.noma-tree-inspector__portrait img { width: 100%; height: 100%; object-fit: contain; }
+.noma-tree-inspector__portrait > span { position: absolute; right: 0; left: 0; bottom: 0; padding-top: 20px; background: linear-gradient(transparent, #080d18); text-align: center; font: 11px Cinzel, Georgia, serif; color: #c8aa6e; }
+.noma-tree-label { display: grid; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: .06em; color: #b6c0ce; }
+.noma-tree-inspector input:not([type="range"]):not([type="checkbox"]) { min-width: 0; width: 100%; padding: 8px 10px; border: 1px solid #344052; background: #0b1120; color: #f0e6d2; font: 16px Alegreya, Georgia, serif; }
+.noma-tree-inspector input[type="range"], .noma-tree-inspector input[type="checkbox"] { accent-color: #c8aa6e; }
+.noma-tree-inspector input[type="range"] { width: 100%; min-height: 30px; }
+.noma-tree-field { display: grid; gap: 8px; }
+.noma-tree-field p { color: #91a0b6; font: 13px/1.35 Alegreya, Georgia, serif; }
+.noma-tree-size { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.noma-tree-check { display: flex; align-items: center; gap: 10px; min-height: 40px; color: #b6c0ce; font-size: 13px; }
+.noma-tree-check input { width: 18px; height: 18px; }
+.noma-tree-delete { min-height: 40px; padding: 8px; border-top: 1px solid #502d31; color: #da9298; font: 14px Alegreya, Georgia, serif; }
+@media (pointer: coarse) { .noma-tree-vision button, .noma-tree-delete, .noma-tree-check { min-height: 44px; } }

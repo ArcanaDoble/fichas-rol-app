@@ -1,0 +1,7 @@
+{
+  "TYPES": {
+    "Actor": { "hero": "Aventurero", "enemy": "Enemigo" },
+    "Item": { "weapon": "Arma", "armor": "Armadura", "ability": "Habilidad", "talent": "Talento", "consumable": "Consumible", "accessory": "Accesorio" }
+  },
+  "NOMA": { "Title": "NOMA · Roguelite" }
+}

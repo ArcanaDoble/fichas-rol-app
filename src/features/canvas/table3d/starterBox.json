@@ -1,0 +1,410 @@
+{
+  "characters": [
+    {
+      "id": "arcanista",
+      "className": "Bárbaro",
+      "name": "Bárbaro",
+      "portrait": "/canvas3d/box/barbaro.webp",
+      "life": 8,
+      "defense": 6,
+      "actionDice": [
+        8,
+        6,
+        4
+      ],
+      "isBarbarian": true,
+      "pool": [
+        {
+          "id": "sheet-weapon-daga",
+          "name": "Daga",
+          "kind": "weapon",
+          "image": "/canvas3d/box/daga.webp",
+          "hands": 1,
+          "dice": [
+            4
+          ],
+          "thrown": true,
+          "range": 0,
+          "defense": 0,
+          "critical": true,
+          "heavy": false,
+          "perforating": false
+        },
+        {
+          "id": "sheet-weapon-espadacorta",
+          "name": "Espada corta",
+          "kind": "weapon",
+          "image": "/canvas3d/box/espada-corta.webp",
+          "hands": 1,
+          "dice": [
+            8
+          ],
+          "thrown": false,
+          "range": 1,
+          "defense": 0,
+          "critical": true,
+          "heavy": false,
+          "perforating": false
+        },
+        {
+          "id": "sheet-weapon-hachademano",
+          "name": "Hacha de mano",
+          "kind": "weapon",
+          "image": "/canvas3d/box/hacha-de-mano.webp",
+          "hands": 1,
+          "dice": [
+            6
+          ],
+          "thrown": true,
+          "range": 0,
+          "defense": 0,
+          "critical": false,
+          "heavy": false,
+          "perforating": false
+        },
+        {
+          "id": "sheet-weapon-hacha",
+          "name": "Hacha de Guerra",
+          "kind": "weapon",
+          "image": "/canvas3d/visual/patio/hacha-de-guerra.webp",
+          "hands": 1,
+          "dice": [
+            8,
+            8
+          ],
+          "thrown": true,
+          "range": 1,
+          "defense": 0,
+          "critical": false,
+          "heavy": false,
+          "perforating": false
+        },
+        {
+          "id": "sheet-weapon-maza",
+          "name": "Maza",
+          "kind": "weapon",
+          "image": "",
+          "hands": 1,
+          "dice": [
+            4,
+            4
+          ],
+          "thrown": false,
+          "range": 0,
+          "defense": 0,
+          "critical": false,
+          "heavy": false,
+          "perforating": false
+        },
+        {
+          "id": "sheet-weapon-lanza",
+          "name": "Lanza",
+          "kind": "weapon",
+          "image": "/canvas3d/box/lanza.webp",
+          "hands": 1,
+          "dice": [
+            8
+          ],
+          "thrown": true,
+          "range": 2,
+          "defense": 0,
+          "critical": false,
+          "heavy": false,
+          "perforating": false
+        },
+        {
+          "id": "sheet-weapon-granespada",
+          "name": "Mandoble",
+          "kind": "weapon",
+          "image": "/canvas3d/box/mandoble.webp",
+          "hands": 2,
+          "dice": [
+            8,
+            8
+          ],
+          "thrown": false,
+          "range": 1,
+          "defense": 0,
+          "critical": true,
+          "heavy": false,
+          "perforating": false
+        },
+        {
+          "id": "sheet-armor-armaduraacolchada",
+          "name": "Armadura acolchada",
+          "kind": "armor",
+          "image": "/canvas3d/box/armadura-acolchada.webp",
+          "hands": 1,
+          "dice": [],
+          "thrown": false,
+          "range": 0,
+          "defense": 6,
+          "critical": false,
+          "heavy": false,
+          "perforating": false
+        },
+        {
+          "id": "sheet-armor-armaduradeescamas",
+          "name": "Armadura de escamas",
+          "kind": "armor",
+          "image": "/canvas3d/box/armadura-de-escamas.webp",
+          "hands": 1,
+          "dice": [],
+          "thrown": false,
+          "range": 0,
+          "defense": 7,
+          "critical": false,
+          "heavy": false,
+          "perforating": true
+        },
+        {
+          "id": "pBpt00_-8ndfFBU_C1-2s",
+          "name": "Armadura de mallas",
+          "kind": "armor",
+          "image": "/canvas3d/box/armadura-de-mallas.webp",
+          "hands": 1,
+          "dice": [],
+          "thrown": false,
+          "range": 0,
+          "defense": 7,
+          "critical": true,
+          "heavy": false,
+          "perforating": false
+        }
+      ],
+      "initiativeBase": 2
+    },
+    {
+      "id": "custom-1787406330787",
+      "className": "Pícaro",
+      "name": "Pícaro",
+      "portrait": "/canvas3d/box/picaro.webp",
+      "life": 6,
+      "defense": 6,
+      "actionDice": [
+        6,
+        6,
+        6
+      ],
+      "isBarbarian": false,
+      "pool": [
+        {
+          "id": "sheet-weapon-daga",
+          "name": "Daga",
+          "kind": "weapon",
+          "image": "/canvas3d/box/daga.webp",
+          "hands": 1,
+          "dice": [
+            4
+          ],
+          "thrown": true,
+          "range": 0,
+          "defense": 0,
+          "critical": true,
+          "heavy": false,
+          "perforating": false
+        },
+        {
+          "id": "Zf7_5JOy9SB0PxhFoQkkt",
+          "name": "Estilete",
+          "kind": "weapon",
+          "image": "/canvas3d/box/estilete.webp",
+          "hands": 1,
+          "dice": [
+            4
+          ],
+          "thrown": false,
+          "range": 0,
+          "defense": 0,
+          "critical": false,
+          "heavy": false,
+          "perforating": false
+        },
+        {
+          "id": "Estoque",
+          "name": "Estoque",
+          "kind": "weapon",
+          "image": "/canvas3d/box/estoque.webp",
+          "hands": 1,
+          "dice": [
+            6
+          ],
+          "thrown": false,
+          "range": 1,
+          "defense": 0,
+          "critical": true,
+          "heavy": false,
+          "perforating": true
+        },
+        {
+          "id": "sheet-weapon-arco",
+          "name": "Arco corto",
+          "kind": "weapon",
+          "image": "/canvas3d/box/arco-corto.webp",
+          "hands": 1,
+          "dice": [
+            8
+          ],
+          "thrown": false,
+          "range": 2,
+          "defense": 0,
+          "critical": false,
+          "heavy": false,
+          "perforating": true
+        },
+        {
+          "id": "sheet-weapon-espadacorta",
+          "name": "Espada corta",
+          "kind": "weapon",
+          "image": "/canvas3d/box/espada-corta.webp",
+          "hands": 1,
+          "dice": [
+            8
+          ],
+          "thrown": false,
+          "range": 1,
+          "defense": 0,
+          "critical": true,
+          "heavy": false,
+          "perforating": false
+        },
+        {
+          "id": "sheet-weapon-daga",
+          "name": "Daga",
+          "kind": "weapon",
+          "image": "/canvas3d/box/daga.webp",
+          "hands": 1,
+          "dice": [
+            4
+          ],
+          "thrown": true,
+          "range": 0,
+          "defense": 0,
+          "critical": true,
+          "heavy": false,
+          "perforating": false
+        },
+        {
+          "id": "Sanguinaria",
+          "name": "Sanguinaria",
+          "kind": "weapon",
+          "image": "/canvas3d/box/sanguinaria.webp",
+          "hands": 2,
+          "dice": [
+            8,
+            8
+          ],
+          "thrown": false,
+          "range": 1,
+          "defense": 0,
+          "critical": true,
+          "heavy": false,
+          "perforating": false
+        },
+        {
+          "id": "sheet-armor-armaduraacolchada",
+          "name": "Armadura acolchada",
+          "kind": "armor",
+          "image": "/canvas3d/box/armadura-acolchada.webp",
+          "hands": 1,
+          "dice": [],
+          "thrown": false,
+          "range": 0,
+          "defense": 6,
+          "critical": false,
+          "heavy": false,
+          "perforating": false
+        },
+        {
+          "id": "0Ett8V_mcWfUanXRRIPCG",
+          "name": "Poción de curación",
+          "kind": "item",
+          "image": "/canvas3d/box/pocion-de-curacion.webp",
+          "hands": 1,
+          "dice": [],
+          "thrown": false,
+          "range": 0,
+          "defense": 0,
+          "critical": false,
+          "heavy": false,
+          "perforating": false
+        },
+        {
+          "id": "0P1t6O9Iq07C2hVr93qB6",
+          "name": "Antídoto",
+          "kind": "item",
+          "image": "/canvas3d/box/antidoto.webp",
+          "hands": 1,
+          "dice": [],
+          "thrown": false,
+          "range": 0,
+          "defense": 0,
+          "critical": false,
+          "heavy": false,
+          "perforating": false
+        },
+        {
+          "id": "5gZo36G570XHrqHYcUAZJ",
+          "name": "Bombra de brea",
+          "kind": "item",
+          "image": "/canvas3d/box/bomba-de-brea.webp",
+          "hands": 1,
+          "dice": [],
+          "thrown": true,
+          "range": 0,
+          "defense": 0,
+          "critical": false,
+          "heavy": false,
+          "perforating": false
+        }
+      ],
+      "initiativeBase": 4
+    }
+  ],
+  "enemies": [
+    {
+      "id": "roguelite-enemy-BdcLbqhD3-",
+      "name": "Duende",
+      "image": "/canvas3d/box/enemigo-duende.webp",
+      "life": 5,
+      "defense": 4,
+      "offense": 3,
+      "dice": [
+        4
+      ]
+    },
+    {
+      "id": "roguelite-enemy--X0gT19N2s",
+      "name": "Trol",
+      "image": "/canvas3d/box/enemigo-trol.webp",
+      "life": 10,
+      "defense": 6,
+      "offense": 4,
+      "dice": [
+        4
+      ]
+    },
+    {
+      "id": "roguelite-enemy-28RrYkTm8r",
+      "name": "Ogro",
+      "image": "/canvas3d/box/enemigo-ogro.webp",
+      "life": 15,
+      "defense": 6,
+      "offense": 4,
+      "dice": [
+        4
+      ]
+    },
+    {
+      "id": "roguelite-enemy-S9MuwB4mG2",
+      "name": "Cíclope",
+      "image": "/canvas3d/box/enemigo-ciclope.webp",
+      "life": 20,
+      "defense": 6,
+      "offense": 5,
+      "dice": [
+        4
+      ]
+    }
+  ]
+}

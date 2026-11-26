@@ -1,0 +1,22 @@
+### Result
+{
+  "playerCount": 4,
+  "origins": [
+    "https://base-de-datos-noma.web.app",
+    "https://nomarol.web.app"
+  ],
+  "newWidths": [
+    1280,
+    412
+  ],
+  "masterAccess": "password screen loaded",
+  "firestoreResponseStatuses": [
+    200
+  ],
+  "pageErrors": [],
+  "productionDataWrites": false
+}
+### Ran Playwright code
+```js
+await page.evaluate('() => (window.nomaHostingSmoke)');
+```

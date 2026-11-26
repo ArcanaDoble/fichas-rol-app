@@ -1,6 +1,8 @@
 import { applyHastePotion, applyVitalityPotion, clearPotionBuffs, getBuffPotionBlockReason, describeLifeLoss } from '../../tactical-shared/potionBuffs';
 import { getCanvasCunningOption, isCanvasCunningPending, rollCanvasCunningDie, finishCanvasCunning } from './canvasCunning';
 import { resolveEquipmentImage } from '../../../utils/equipmentImages';
+import { getCanvasSystem } from '../campaignSystem';
+import { useCampaignAttackRuntime } from './useCampaignAttackRuntime';
 import { applyAttackPoison, setCanvasPoison, isCanvasPoisoned } from '../../tactical-shared/poisonRules';
 import { applyAttackBleeding, setCanvasBleeding, isCanvasBleeding, needsBleedingChoice, resolveBleedingChoice, bleedingActivationKey } from '../../tactical-shared/bleedingRules';
 import { getAntidoteBlockReason } from '../item-use/antidoteRules';
@@ -12,10 +14,18 @@ import { CANVAS_MUTABLE_PROTECTIONS, hasCanvasMutableArmor } from './canvasArmor
 import { standUpCanvasToken } from './canvasStandUp';
 import { adjustCanvasPendingAttack, hasCanvasAttackAdjustment } from './canvasAttackAdjustment';
 import { combineCanvasWeapons, getCanvasAttackOptions, resolveCanvasAttackSelection } from './canvasAttackSelection';
-import { buildCanvasCombatLog, buildCanvasHealingPotionLog } from './canvasCombatLog';
+import { buildCanvasCombatLog, buildCanvasHealingPotionLog, buildCanvasArcaneMistLog, buildCanvasArcaneBarrierLog } from './canvasCombatLog';
 import { getItemUseDefinition } from '../item-use/itemUseDefinitions';
 import { calculateExplosiveBombPressure, getExplosiveBombDistance, getExplosiveBombMaxRange, getExplosiveBombTargets, resolveExplosiveBombAreaPlacements } from '../item-use/explosiveBombRules';
 import { continueCanvasExplosiveBlast, startCanvasExplosiveBlast } from './canvasExplosiveBlast';
+import { getCanvasPreparedSpells, getCanvasSpellTurnReason, isCanvasMage, isCanvasSpellPractice, resolveCanvasFireballTargetAttack, updateCanvasMageMana, validateCanvasFireball } from '../spells/canvasSpells';
+import { resolveItemIdentityKeys } from '../../roguelite/featureSlots';
+import { useCanvasSpellPresentation } from '../spells/canvasSpellPresentation';
+import { canShowCanvasItemEffect } from '../../tactical-shared/canvasItemEffects';
+import { resolveArcaneProjectileTarget, validateCanvasArcaneProjectile } from '../spells/arcaneProjectileRules';
+import { createArcaneMistAreas, isCombatEndArcaneMist, validateCanvasArcaneMist } from '../spells/arcaneMistRules';
+import { validateCanvasArcaneBarrier } from '../spells/arcaneBarrierRules';
+import { applyArcaneBarrier, clearArcaneBarrier, hasArcaneBarrier, presentArcaneBarrierImpact } from '../spells/arcaneBarrierState';
 import { consumeHealingPotionItem, getHealingPotionBlockReason, resolveHealingPotionItem } from '../item-use/healingPotionRules';
 import { canRogueliteTokenClaimRun, createRogueliteActiveRunFromToken } from '../../roguelite/activeRun';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -23,9 +33,11 @@ import { addDoc, collection, deleteDoc, doc, runTransaction, serverTimestamp, se
 
 import { db } from '../../../firebase';
 import sanitize from '../../../utils/sanitize';
+import { buildScenarioItemChanges, mergeScenarioItemsForPersist } from '../../../utils/scenarioSync';
 import { resolveEquipmentHandsRequired } from '../../roguelite/equipmentPool';
 import {
   cancelQueuedCanvasAttack,
+  canAdvanceCanvasRound,
   consumeItemUseResource,
   createCanvasCombatState,
   finishCanvasCombat,
@@ -46,11 +58,14 @@ import {
   setParticipantMovementModifier,
   setParticipantMovementResource,
   spendActionDieForSprint,
+  startPreparedCanvasCombat,
   startNextRound,
   submitActionDice,
+  supportsCanvasInitiative,
   undoLastActivation,
   undoParticipantActivation,
   undoParticipantMovement,
+  updateCanvasCombatMembership,
 } from './canvasCombatState';
 import {
   isCanvasProne,
@@ -80,13 +95,20 @@ import {
 
 import { rollDicePool, toggleRollDieExcluded } from '../dice/canvasDiceEngine';
 import { canTokenSeeThroughSmoke, removeHiddenStatusFromToken, tokenHasHiddenStatus } from '../../tactical-shared/tokenVisibilityAccess';
-import { areTokensAllied } from '../../tactical-shared/legacyCombatRules';
+import { areTokensAllied, getCombatRenderPlacement } from '../../tactical-shared/legacyCombatRules';
 import {
   canvasInventoryItemsMatch,
   detachCanvasInventoryItem,
 } from '../canvasInventoryTransfer';
 
 const STATUS_ORDER = ['available', 'committed', 'spent'];
+const isOpenCombat = combat => ['setup', 'active'].includes(combat?.status);
+const isSameRound = (left, right) => left?.startedAt === right?.startedAt && left?.round === right?.round;
+const isSameCombatPhase = (left, right) => isSameRound(left, right) && left?.status === right?.status
+  && left?.roundPhase === right?.roundPhase
+  && left?.pendingAttack?.id === right?.pendingAttack?.id && left?.pendingAttack?.status === right?.pendingAttack?.status;
+const isSameCombatWrite = (left, right) => isSameCombatPhase(left, right)
+  && (left?.writeRevision || 0) === (right?.writeRevision || 0);
 const isItemUsePractice = (combat) => !['setup', 'active'].includes(combat?.status);
 const isHealingPotion = item => getItemUseDefinition(item)?.id === 'healing-potion';
 const isAntidote = item => getItemUseDefinition(item)?.id === 'antidote';
@@ -94,7 +116,7 @@ const isPreparedConsumable = item => ['heal', 'remove-poison', 'remove-bleeding'
 const isExplosiveBomb = item => getItemUseDefinition(item)?.id === 'explosive-bomb';
 const canUseHealingPotionInCombat = (tokenId, combat) => {
   const block = combat?.blocks?.[combat.activeBlockIndex];
-  return combat?.status === 'active' && combat.roundPhase === 'turns' && !combat.pendingAttack
+  return combat?.status === 'active' && combat.roundPhase === 'turns' && !combat.pendingAttack && !combat.arcaneChain
     && (block?.memberIds || block?.tokenIds || []).includes(tokenId)
     && !(block?.actedIds || block?.completedTokenIds || []).includes(tokenId);
 };
@@ -150,8 +172,8 @@ const getExplosiveResource = (combat, tokenId, selected, practiceResources = nul
   return null;
 };
 
-const createExplosivePracticeCombat = (items, sourceId, resources, now) => {
-  const base = createCanvasCombatState(items, { now });
+const createExplosivePracticeCombat = (items, sourceId, resources, now, rollDefenses = true) => {
+  const base = createCanvasCombatState(items, { now, includeNonParticipants: true });
   const participants = Object.fromEntries(Object.entries(base.participants).map(([id, participant]) => {
     if (participant.side === 'enemies') return [id, {
       ...participant,
@@ -162,7 +184,7 @@ const createExplosivePracticeCombat = (items, sourceId, resources, now) => {
     const profile = normalizeActionDiceProfile(token?.actionDice);
     const dice = id === sourceId
       ? resources.map(resource => ({ ...resource, practice: undefined, status: 'available' }))
-      : (profile.length ? profile : ['d6', 'd6', 'd6']).map((die, index) => ({
+      : (rollDefenses ? (profile.length ? profile : ['d6', 'd6', 'd6']) : []).map((die, index) => ({
         id: `blast-practice-${now}-${id}-${index}`, die, sides: Number(die.slice(1)),
         value: rollDiceProfile([die])[0], status: 'committed',
       }));
@@ -280,17 +302,32 @@ const syncMovementCharacteristic = (token, participant, { reset = false } = {}) 
   };
 };
 
-export const useCanvasCombatRuntime = ({
+const useRogueliteCombatRuntime = ({
   activeScenario,
   activeScenarioRef,
+  currentUserId,
   isPlayerView,
   playerName,
   gridConfig,
+  selectedTokenIds = [],
+  showHiddenTokens = false,
   safePersistItems,
   scenarioCollectionName,
   setActiveScenario,
   triggerToast,
 }) => {
+  const spellPresentation = useCanvasSpellPresentation(activeScenario?.id, activeScenario?.canvasSpellEffect);
+  const trackedSpellEffect = useMemo(() => {
+    const effect = spellPresentation.effect;
+    if (effect?.spellId !== 'runic-barrier') return effect;
+    const target = activeScenario?.items?.find(item => item.id === effect.targetId);
+    if (!target) return null;
+    const position = getCombatRenderPlacement(target, activeScenario.items, gridConfig);
+    const width = target.width || 50, height = target.height || 50;
+    if (position.x === effect.placement.x && position.y === effect.placement.y
+      && width === effect.placement.width && height === effect.placement.height) return effect;
+    return { ...effect, placement: { ...effect.placement, ...position, width, height } };
+  }, [activeScenario?.items, gridConfig, spellPresentation.effect]);
   const [attackDraft, setAttackDraft] = useState(null);
   const [practiceCombat, setPracticeCombat] = useState(null);
   const resolvingAttackRef = useRef(null);
@@ -314,11 +351,23 @@ export const useCanvasCombatRuntime = ({
   const potionUseBusyRef = useRef(new Set());
   const explosiveUseAttemptsRef = useRef(new Map());
   const explosiveUseBusyRef = useRef(new Set());
+  const spellCastAttemptsRef = useRef(new Map());
+  const spellPracticeRef = useRef(null);
+  const spellCastBusyRef = useRef(false);
+  const [isCastingSpell, setIsCastingSpell] = useState(false);
   const writeQueueRef = useRef(Promise.resolve());
+
+  useEffect(() => {
+    setAttackDraft(null);
+    itemPracticeRef.current = null;
+    potionPracticeRef.current = null;
+    spellPracticeRef.current = null;
+  }, [activeScenario?.id, activeScenario?.rulesSystem]);
 
   useEffect(() => {
     itemPracticeRef.current = null;
     potionPracticeRef.current = null;
+    spellPracticeRef.current = null;
   }, [activeScenario?.id, activeScenario?.canvasCombat?.status]);
 
   useEffect(() => {
@@ -333,7 +382,9 @@ export const useCanvasCombatRuntime = ({
     }
     const pruned = pruneCombatState(remoteCombat, activeScenario?.items || []);
     localCombatRef.current = pruned;
-  }, [activeScenario?.canvasCombat, activeScenario?.items]);
+    if (pruned !== remoteCombat) setActiveScenario(current => current?.canvasCombat === remoteCombat
+      ? { ...current, canvasCombat: pruned } : current);
+  }, [activeScenario?.canvasCombat, activeScenario?.items, setActiveScenario]);
 
   useEffect(() => {
     const remotePractice = activeScenario?.canvasPracticeCombat;
@@ -419,11 +470,74 @@ export const useCanvasCombatRuntime = ({
     return true;
   }, [activeScenario, activeScenarioRef, scenarioCollectionName, setActiveScenario, triggerToast]);
 
+  const editCampaignCombat = useCallback((scenario, edit, errorTitle = 'No se pudo sincronizar la ronda') => {
+    const operation = writeQueueRef.current.then(async () => {
+      const saved = await runTransaction(db, async transaction => {
+        const ref = doc(db, scenarioCollectionName, scenario.id);
+        const snapshot = await transaction.get(ref);
+        if (!snapshot.exists() || getCanvasSystem(snapshot.data()) !== 'campaign') return null;
+        const fresh = snapshot.data();
+        const items = fresh.items || [];
+        const current = pruneCombatState(fresh.canvasCombat, items);
+        const change = edit(current, items);
+        if (!change) return null;
+        const patch = {};
+        if (change.combat && change.combat !== current) {
+          patch.canvasCombat = { ...change.combat, writeRevision: (current?.writeRevision || 0) + 1 };
+          patch.combatModifiedAt = Math.max(Date.now(), Number(fresh.combatModifiedAt || 0) + 1);
+        }
+        let itemChanges = null;
+        if (change.items && change.items !== items) {
+          itemChanges = buildScenarioItemChanges(change.items, items);
+        }
+        if (itemChanges && (itemChanges.modifiedOrAdded.length || itemChanges.deletedIds.length)) {
+          patch.items = change.items;
+        }
+        if (!Object.keys(patch).length) return null;
+        patch.lastModified = Math.max(Date.now(), Number(fresh.lastModified || 0) + 1);
+        patch.lastModifiedBy = isPlayerView
+          ? `player:${playerName || currentUserId || 'unknown'}` : `master:${currentUserId || 'master'}`;
+        patch.lastModifiedByRole = isPlayerView ? 'player' : 'master';
+        patch.lastModifiedItemIds = itemChanges
+          ? [...itemChanges.modifiedOrAdded.map(item => item.id), ...itemChanges.deletedIds] : [];
+        transaction.update(ref, sanitize(patch));
+        return { patch, combat: patch.canvasCombat || current, previousItems: items, itemChanges };
+      });
+      if (!saved) return false;
+      if (activeScenarioRef.current?.id === scenario.id
+        && Number(activeScenarioRef.current?.lastModified || 0) <= saved.patch.lastModified) {
+        localCombatRef.current = saved.combat || null;
+        setActiveScenario(active => {
+          if (active?.id !== scenario.id || getCanvasSystem(active) !== 'campaign') return active;
+          const { patch, combat, previousItems, itemChanges } = saved;
+          if (Number(active.lastModified || 0) > patch.lastModified) return active;
+          if (!patch.items) return { ...active, ...patch, canvasCombat: combat };
+          const { modifiedOrAdded, deletedIds } = itemChanges;
+          const items = mergeScenarioItemsForPersist(active.items || [], modifiedOrAdded, deletedIds, previousItems);
+          localItemsRef.current = items;
+          return { ...active, ...patch, items, canvasCombat: combat };
+        });
+      }
+      return true;
+    }).catch(error => {
+      triggerToast(errorTitle, error?.message || 'Reinténtalo', 'warning');
+      return false;
+    });
+    writeQueueRef.current = operation;
+    return operation;
+  }, [activeScenarioRef, currentUserId, isPlayerView, playerName, scenarioCollectionName, setActiveScenario, triggerToast]);
+
   const updateCombat = useCallback((updater) => {
     const scenario = activeScenarioRef.current || activeScenario;
     if (!scenario?.id) return false;
     const current = localCombatRef.current || scenario?.canvasCombat;
     if (!current) return false;
+    if (getCanvasSystem(scenario) === 'campaign') {
+      return editCampaignCombat(scenario, (fresh, items) => {
+        if (!isSameRound(current, fresh) || !isOpenCombat(fresh)) return null;
+        return { combat: updater(fresh, items) };
+      });
+    }
     const next = updater(current);
     if (!next || next === current) return false;
 
@@ -433,8 +547,9 @@ export const useCanvasCombatRuntime = ({
     ));
 
     writeQueueRef.current = writeQueueRef.current.then(async () => {
+      if (getCanvasSystem(activeScenarioRef.current) !== getCanvasSystem(scenario)) return;
       const scenarioRef = doc(db, scenarioCollectionName, scenario.id);
-      await saveCombatDoc(scenarioRef, localCombatRef.current || next);
+      await saveCombatDoc(scenarioRef, next);
     }).catch((error) => {
       console.error('No se pudo actualizar la ronda del Canvas:', error);
       triggerToast('No se pudo sincronizar la ronda', error?.message || 'Reinténtalo', 'error');
@@ -444,6 +559,7 @@ export const useCanvasCombatRuntime = ({
   }, [
     activeScenario,
     activeScenarioRef,
+    editCampaignCombat,
     scenarioCollectionName,
     setActiveScenario,
     triggerToast,
@@ -451,6 +567,21 @@ export const useCanvasCombatRuntime = ({
 
   const persistCombatAndItems = useCallback((scenario, nextCombat, nextItems, errorTitle = 'No se pudo sincronizar la ronda', options = {}) => {
     if (!scenario?.id || !nextCombat) return false;
+    if (getCanvasSystem(scenario) === 'campaign') {
+      const current = localCombatRef.current || scenario.canvasCombat;
+      const baseItems = options.baseItems || localItemsRef.current || scenario.items || [];
+      const { modifiedOrAdded, deletedIds } = buildScenarioItemChanges(nextItems, baseItems);
+      const saved = editCampaignCombat(scenario, (fresh, items) => {
+        if (!isSameCombatWrite(current, fresh)) throw new Error('La ronda se ha actualizado. Vuelve a intentar la acción.');
+        return { combat: nextCombat, items: mergeScenarioItemsForPersist(items, modifiedOrAdded, deletedIds, baseItems) };
+      }, errorTitle);
+      if (!options.persistRuntime) return saved;
+      return saved.then(async committed => {
+        if (committed) await safePersistItems(scenario.id, nextItems, scenario.items || [],
+          options.modifiedIds || [], { persistRuntime: true });
+        return committed;
+      });
+    }
     localCombatRef.current = nextCombat;
     localItemsRef.current = nextItems;
     setActiveScenario((active) => (
@@ -460,16 +591,17 @@ export const useCanvasCombatRuntime = ({
     ));
 
     writeQueueRef.current = writeQueueRef.current.then(async () => {
+      if (getCanvasSystem(activeScenarioRef.current) !== getCanvasSystem(scenario)) return;
       const scenarioRef = doc(db, scenarioCollectionName, scenario.id);
       await updateDoc(scenarioRef, {
-        items: localItemsRef.current || nextItems,
-        canvasCombat: localCombatRef.current || nextCombat,
+        items: nextItems,
+        canvasCombat: nextCombat,
         combatModifiedAt: Date.now(),
       });
       if (options.persistRuntime) {
         await safePersistItems(
           scenario.id,
-          localItemsRef.current || nextItems,
+          nextItems,
           scenario.items || [],
           options.modifiedIds || [],
           { persistRuntime: true },
@@ -480,22 +612,62 @@ export const useCanvasCombatRuntime = ({
       triggerToast(errorTitle, error?.message || 'Reinténtalo', 'error');
     });
     return true;
-  }, [safePersistItems, scenarioCollectionName, setActiveScenario, triggerToast]);
+  }, [activeScenarioRef, editCampaignCombat, safePersistItems, scenarioCollectionName, setActiveScenario, triggerToast]);
 
   const startCombat = useCallback(() => {
     if (isPlayerView) return;
     const scenario = activeScenarioRef.current || activeScenario;
     if (!scenario?.id) return;
-    const next = createCanvasCombatState(scenario.items || []);
-    const items = (scenario.items || []).map(item => hasCanvasMutableArmor(item)
-      ? { ...item, armorProtectionChoice: null } : item);
-    persistCombatAndItems(scenario, next, items);
+    if (isOpenCombat(localCombatRef.current || scenario.canvasCombat)) return false;
+    if (getCanvasSystem(scenario) === 'campaign') {
+      return editCampaignCombat(scenario, (current, items) => {
+        if (isOpenCombat(current)) return null;
+        const combat = createCanvasCombatState(items, { rulesSystem: 'campaign', requiresStart: true });
+        if (!Object.keys(combat.participants).length) throw new Error('Habilita al menos una ficha para la iniciativa.');
+        const prepared = items.map(item => combat.participants[item.id] && hasCanvasMutableArmor(item)
+          ? { ...item, armorProtectionChoice: null } : item);
+        return { combat, items: prepared };
+      }, 'No se pudo preparar la iniciativa');
+    }
+    const next = createCanvasCombatState(scenario.items || [], { rulesSystem: getCanvasSystem(scenario) });
+    const items = (scenario.items || []).map(item => updateCanvasMageMana(hasCanvasMutableArmor(item)
+      ? { ...item, armorProtectionChoice: null } : item, 'start'));
+    persistCombatAndItems(scenario, next, items, 'No se pudo iniciar el combate', {
+      persistRuntime: true, modifiedIds: items.filter(isCanvasMage).map(item => item.id),
+    });
     triggerToast(
       'Combate preparado',
       next.roundPhase === 'rolling' ? 'Esperando las tiradas iniciales' : 'Orden de iniciativa listo',
       'success',
     );
-  }, [activeScenario, activeScenarioRef, isPlayerView, persistCombatAndItems, triggerToast]);
+  }, [activeScenario, activeScenarioRef, editCampaignCombat, isPlayerView, persistCombatAndItems, triggerToast]);
+
+  const startPreparedCombat = useCallback(() => {
+    const scenario = activeScenarioRef.current || activeScenario;
+    if (isPlayerView || !scenario?.id) return false;
+    const expected = localCombatRef.current || scenario.canvasCombat;
+    return editCampaignCombat(scenario, (current, items) => (
+      isSameRound(expected, current) ? { combat: startPreparedCanvasCombat(current, items) } : null
+    ));
+  }, [activeScenario, activeScenarioRef, editCampaignCombat, isPlayerView]);
+
+  const setCombatParticipation = useCallback((tokenId, enabled, { joinNow = false } = {}) => {
+    const scenario = activeScenarioRef.current || activeScenario;
+    if (isPlayerView || !scenario?.id) return false;
+    const expected = localCombatRef.current || scenario.canvasCombat;
+    return editCampaignCombat(scenario, (combat, items) => {
+      const token = items.find(item => item.id === tokenId);
+      if (!supportsCanvasInitiative(token, 'campaign')) return null;
+      if (joinNow && (!isOpenCombat(combat) || !isSameRound(expected, combat))) {
+        throw new Error('La ronda ha cambiado. Comprueba la iniciativa y vuelve a intentarlo.');
+      }
+      const preference = (token.participatesInCombat !== false) === enabled ? token : { ...token, participatesInCombat: enabled };
+      const next = updateCanvasCombatMembership(combat, preference, { joinNow });
+      const entrant = !combat?.participants?.[tokenId] && next?.participants?.[tokenId];
+      const updated = entrant ? syncMovementCharacteristic(preference, entrant, { reset: true }) : preference;
+      return { combat: next, items: updated === token ? items : items.map(item => item.id === tokenId ? updated : item) };
+    }, 'No se pudo cambiar la participación');
+  }, [activeScenario, activeScenarioRef, editCampaignCombat, isPlayerView]);
 
   const chooseBleeding = useCallback(async (tokenId, choice) => {
     const scenario = activeScenarioRef.current || activeScenario;
@@ -595,7 +767,8 @@ export const useCanvasCombatRuntime = ({
       return false;
     }
     try {
-      return updateCombat((current) => submitActionDice(current, tokenId, values, { source }));
+      return updateCombat((current, items) => items && !canControlToken(items.find(item => item.id === tokenId), isPlayerView, playerName)
+        ? current : submitActionDice(current, tokenId, values, { source }));
     } catch (error) {
       triggerToast('Resultado no válido', error.message, 'warning');
       return false;
@@ -612,7 +785,8 @@ export const useCanvasCombatRuntime = ({
     const participant = (localCombatRef.current || scenario?.canvasCombat)?.participants?.[tokenId];
     if (!participant) return false;
     const values = rollDiceProfile(participant.actionDiceProfile);
-    return updateCombat((current) => submitActionDice(current, tokenId, values, { source: 'digital' }));
+    return updateCombat((current, items) => items && !canControlToken(items.find(item => item.id === tokenId), isPlayerView, playerName)
+      ? current : submitActionDice(current, tokenId, values, { source: 'digital' }));
   }, [activeScenario, activeScenarioRef, isPlayerView, playerName, triggerToast, updateCombat]);
 
   const rollAllPending = useCallback(() => {
@@ -690,6 +864,10 @@ export const useCanvasCombatRuntime = ({
 
   const prepareItemUseResources = useCallback((tokenId, item) => {
     const scenario = activeScenarioRef.current || activeScenario;
+    if (getCanvasSystem(scenario) === 'campaign') {
+      triggerToast('Objeto de Campaña', 'Resuelve su efecto en mesa y ajusta los recursos desde el inspector.', 'info');
+      return [];
+    }
     const token = (localItemsRef.current || scenario?.items || []).find((candidate) => candidate.id === tokenId);
     if (!scenario?.id || !token || !canControlToken(token, isPlayerView, playerName)) return [];
     if (isPreparedConsumable(item)) {
@@ -700,7 +878,7 @@ export const useCanvasCombatRuntime = ({
         const enemy = token.profileType === 'rogueliteEnemy';
         const configured = normalizeActionDiceProfile(token.actionDice);
         const profile = configured.length ? configured : ['d6', 'd6', 'd6'];
-        const practiceCombat = createCanvasCombatState([{ ...token, actionDice: profile }], { now: id });
+        const practiceCombat = createCanvasCombatState([{ ...token, actionDice: profile }], { now: id, includeNonParticipants: true });
         const participant = practiceCombat.participants[tokenId];
         if (!participant) return [];
         if (!enemy) participant.actionDice = profile.map((die, index) => ({ id: `${id}-${index}`, die,
@@ -732,7 +910,7 @@ export const useCanvasCombatRuntime = ({
     }));
     itemPracticeRef.current = { scenarioId: scenario.id, tokenId, resources };
     return resources;
-  }, [activeScenario, activeScenarioRef, getItemUseResources, isPlayerView, playerName]);
+  }, [activeScenario, activeScenarioRef, getItemUseResources, isPlayerView, playerName, triggerToast]);
 
   const commitHealingPotionUse = useCallback(({ useId, tokenId, item, resource, targetId = tokenId }) => {
     const bandage = getItemUseDefinition(item)?.id === 'bandage';
@@ -794,7 +972,7 @@ export const useCanvasCombatRuntime = ({
           }
           if (needsBleedingChoice(freshToken, fresh.canvasCombat)) throw new Error('Resuelve Sangrado antes de actuar.');
           const freshTarget = antidote ? fresh.items?.find(candidate => candidate.id === targetId) : freshToken;
-          if (isPractice && (fresh.canvasPracticeCombat?.pendingAttack || fresh.canvasPracticeCombat?.explosiveBlast)) throw new Error('Resuelve el ataque pendiente antes de usar el consumible.');
+          if (isPractice && (fresh.canvasPracticeCombat?.pendingAttack || fresh.canvasPracticeCombat?.explosiveBlast || fresh.canvasPracticeCombat?.arcaneChain)) throw new Error('Resuelve el ataque pendiente antes de usar el consumible.');
           const blocked = antidote ? getAntidoteBlockReason(freshToken, freshTarget, fresh.items, gridConfig, { isPlayerView, playerName }, bandage) : buff ? getBuffPotionBlockReason(freshToken) : getHealingPotionBlockReason(freshToken);
           if (blocked) throw new Error(blocked);
           const located = resolveHealingPotionItem(freshToken, item);
@@ -942,7 +1120,7 @@ export const useCanvasCombatRuntime = ({
     const liveCombat = localCombatRef.current || scenario.canvasCombat;
     const isPractice = isItemUsePractice(liveCombat);
     const practice = itemPracticeRef.current;
-    if ((isPractice && (scenario.canvasPracticeCombat?.pendingAttack || scenario.canvasPracticeCombat?.explosiveBlast))
+    if ((isPractice && (scenario.canvasPracticeCombat?.pendingAttack || scenario.canvasPracticeCombat?.explosiveBlast || scenario.canvasPracticeCombat?.arcaneChain))
       || (!isPractice && (!canUseHealingPotionInCombat(tokenId, liveCombat) || liveCombat.explosiveBlast))) {
       triggerToast('Lanzamiento pendiente', 'Resuelve la acción actual antes de usar la bomba.', 'warning');
       return false;
@@ -984,7 +1162,7 @@ export const useCanvasCombatRuntime = ({
             if (itemPracticeRef.current !== practice || !practice?.resources?.some(candidate => candidate.id === resource.id)) {
               throw new Error('Los dados de prueba han cambiado.');
             }
-            if (fresh.canvasPracticeCombat?.pendingAttack || fresh.canvasPracticeCombat?.explosiveBlast) throw new Error('Hay una resolución pendiente.');
+            if (fresh.canvasPracticeCombat?.pendingAttack || fresh.canvasPracticeCombat?.explosiveBlast || fresh.canvasPracticeCombat?.arcaneChain) throw new Error('Hay una resolución pendiente.');
           } else if (!canUseHealingPotionInCombat(tokenId, fresh.canvasCombat) || fresh.canvasCombat.explosiveBlast) {
             throw new Error('Solo puedes lanzar la bomba durante tu turno, sin otra resolución pendiente.');
           }
@@ -1147,7 +1325,8 @@ export const useCanvasCombatRuntime = ({
         if (!canControlToken(token, isPlayerView, playerName)) throw new Error('No controlas esta ficha.');
         const practice = isItemUsePractice(fresh.canvasCombat);
         if (practice !== Boolean(resource.practice)) throw new Error('El combate ha cambiado. Prepara de nuevo el lanzamiento.');
-        if (fresh.canvasCombat?.pendingAttack || fresh.canvasCombat?.explosiveBlast || fresh.canvasPracticeCombat?.pendingAttack || fresh.canvasPracticeCombat?.explosiveBlast) throw new Error('Hay una resolución pendiente.');
+        if (fresh.canvasCombat?.pendingAttack || fresh.canvasCombat?.explosiveBlast || fresh.canvasCombat?.arcaneChain
+          || fresh.canvasPracticeCombat?.pendingAttack || fresh.canvasPracticeCombat?.explosiveBlast || fresh.canvasPracticeCombat?.arcaneChain) throw new Error('Hay una resolución pendiente.');
         if (!practice) {
           if (needsBleedingChoice(token, fresh.canvasCombat)) throw new Error('Resuelve primero Sangrado.');
           if (!canUseHealingPotionInCombat(tokenId, fresh.canvasCombat)) throw new Error('Solo puedes lanzar la bomba durante tu turno.');
@@ -1213,6 +1392,7 @@ export const useCanvasCombatRuntime = ({
   }, [activeScenario, activeScenarioRef, getItemUseResources, gridConfig, isPlayerView, playerName, scenarioCollectionName, setActiveScenario, triggerToast]);
 
   const commitItemUse = useCallback(({ useId, tokenId, item, resource, targetId, resolvedItems = [], placement, impactCell } = {}) => {
+    if (getCanvasSystem(activeScenarioRef.current || activeScenario) === 'campaign') return false;
     if (getItemUseDefinition(item)?.id === 'tar-bomb') return commitTarBombUse({ useId, tokenId, item, resource, placement, impactCell });
     if (isPreparedConsumable(item)) return commitHealingPotionUse({ useId, tokenId, item, resource, targetId });
     const scenario = activeScenarioRef.current || activeScenario;
@@ -1316,7 +1496,8 @@ export const useCanvasCombatRuntime = ({
         ? syncMovementCharacteristic(item, nextCombat.participants[tokenId]) : item);
       return persistCombatAndItems(scenario, nextCombat, nextItems);
     }
-    return updateCombat((current) => markParticipantActed(current, tokenId));
+    return updateCombat((current, items) => items && (!canControlToken(items.find(item => item.id === tokenId), isPlayerView, playerName)
+      || current.pendingAttack || current.explosiveBlast) ? current : markParticipantActed(current, tokenId));
   }, [activeScenario, activeScenarioRef, isPlayerView, playerName, updateCombat, persistCombatAndItems]);
 
   const setMovementModifier = useCallback((tokenId, modifier) => {
@@ -1417,6 +1598,10 @@ export const useCanvasCombatRuntime = ({
       triggerToast('No puedes correr', 'Ese dado de acción ya no está disponible.', 'warning');
       return false;
     }
+    if ((participant.movementRuntime?.sprintDieIds || [participant.movementRuntime?.sprintDieId]).includes(dieId)) {
+      triggerToast('Correr ya aplicado', 'Ese dado ya aportó su movimiento esta ronda. Reabrir el turno conserva las casillas restantes; no vuelve a sumar el mismo dado.', 'warning');
+      return false;
+    }
     const nextCombat = spendActionDieForSprint(currentCombat, tokenId, dieId);
     if (nextCombat === currentCombat) {
       triggerToast('No puedes correr', 'La ficha no está en su activación.', 'warning');
@@ -1502,17 +1687,20 @@ export const useCanvasCombatRuntime = ({
     cost = 0,
     isExceptional = false,
     itemsOverride = null,
+    revealedTokenIds = [],
   }) => {
     const scenario = activeScenarioRef.current || activeScenario;
     const currentItems = itemsOverride || localItemsRef.current || scenario?.items || [];
     const token = currentItems.find((item) => item.id === tokenId);
-    if (!canControlToken(token, isPlayerView, playerName)) return false;
+    if (!token || !canControlToken(token, isPlayerView, playerName)) return false;
 
     if (isCanvasProne(token) && !isExceptional) return false;
     const isPracticeMovement = Number(practiceCombat?.participants?.[tokenId]?.defensiveReposition?.remaining) > 0;
     const currentCombat = isPracticeMovement ? practiceCombat : (localCombatRef.current || scenario.canvasCombat);
     const participant = currentCombat?.participants?.[tokenId];
-    const numericCost = Math.max(0, Number(cost) || 0, getTerrainMovementCost({ token, from, to, items: currentItems, config: gridConfig, exceptional: isExceptional }));
+    const movementCost = (movingToken, items) => Math.max(0, Number(cost) || 0,
+      getTerrainMovementCost({ token: movingToken, from, to, items, config: gridConfig, exceptional: isExceptional }));
+    const numericCost = movementCost(token, currentItems);
     if (needsBleedingChoice(token, currentCombat)) return false;
     const availableMovement = getAvailableMovement(participant);
     if (!isExceptional && participant && numericCost > availableMovement) {
@@ -1526,29 +1714,51 @@ export const useCanvasCombatRuntime = ({
       return false;
     }
 
-    const nextCombat = currentCombat
-      ? recordParticipantMovement(currentCombat, tokenId, {
-          from,
-          to,
-          cost: numericCost,
-          isExceptional,
-          actor: isPlayerView ? (token.name || playerName) : 'Master',
-        })
-      : null;
-    const nextParticipant = nextCombat?.participants?.[tokenId];
-    const nextItems = currentItems.map((item) => {
-      if (item.id !== tokenId) return item;
-      const moved = { ...item, x: to.x, y: to.y };
-      return nextParticipant ? syncMovementCharacteristic(moved, nextParticipant) : moved;
-    });
+    const applyMovement = (combat, items, chargedCost) => {
+      const nextCombat = combat ? recordParticipantMovement(combat, tokenId, {
+        from, to, cost: chargedCost, isExceptional, actor: isPlayerView ? (token.name || playerName) : 'Master',
+      }) : null;
+      const nextItems = items.map(item => {
+        const visible = revealedTokenIds.includes(item.id) ? removeHiddenStatusFromToken(item) : item;
+        if (item.id !== tokenId) return visible;
+        return syncMovementCharacteristic({ ...visible, x: to.x, y: to.y }, nextCombat?.participants?.[tokenId]);
+      });
+      return { combat: nextCombat, items: nextItems };
+    };
 
+    if (!isPlayerView && !isPracticeMovement && isOpenCombat(currentCombat) && getCanvasSystem(scenario) === 'campaign') {
+      // Another drop may already be in flight. Price each move against its actual starting square and budget.
+      const hasActed = combat => combat.blocks?.[combat.activeBlockIndex]?.actedIds?.includes(tokenId) || false;
+      return editCampaignCombat(scenario, (fresh, items) => {
+        if (!isSameCombatPhase(currentCombat, fresh) || fresh.activeBlockIndex !== currentCombat.activeBlockIndex
+          || hasActed(currentCombat) !== hasActed(fresh) || !fresh.participants?.[tokenId]) {
+          throw new Error('El turno ha cambiado. Comprueba la posición de la ficha.');
+        }
+        const liveToken = items.find(item => item.id === tokenId);
+        if (!liveToken || liveToken.x !== from.x || liveToken.y !== from.y) {
+          throw new Error('La posición de la ficha ha cambiado.');
+        }
+        if ((!isExceptional && isCanvasProne(liveToken)) || needsBleedingChoice(liveToken, fresh)) {
+          throw new Error('El estado actual de la ficha impide este movimiento.');
+        }
+        const liveCost = movementCost(liveToken, items);
+        const remaining = getAvailableMovement(fresh.participants[tokenId]);
+        if (!isExceptional && liveCost > remaining) throw new Error(`Movimiento disponible: ${remaining}.`);
+        return applyMovement(fresh, items, liveCost);
+      }, 'Error al confirmar movimiento');
+    }
+
+    const { combat: nextCombat, items: nextItems } = applyMovement(currentCombat, currentItems, numericCost);
     if (isPracticeMovement) {
       persistPracticeCombat(nextCombat);
       localItemsRef.current = nextItems;
       setActiveScenario(current => current?.id === scenario.id ? { ...current, items: nextItems } : current);
       await safePersistItems?.(scenario.id, nextItems, currentItems, [tokenId], { persistRuntime: false });
     } else if (nextCombat) {
-      persistCombatAndItems(scenario, nextCombat, nextItems, 'Error al confirmar movimiento');
+      const baseItems = (localItemsRef.current || scenario.items || []).map(item => (
+        item.id === tokenId ? { ...item, x: from.x, y: from.y } : item
+      ));
+      return await persistCombatAndItems(scenario, nextCombat, nextItems, 'Error al confirmar movimiento', { baseItems });
     } else {
       localItemsRef.current = nextItems;
       setActiveScenario((active) => (
@@ -1565,6 +1775,7 @@ export const useCanvasCombatRuntime = ({
     activeScenario,
     activeScenarioRef,
     isPlayerView,
+    editCampaignCombat,
     persistCombatAndItems,
     playerName,
     safePersistItems,
@@ -1610,21 +1821,57 @@ export const useCanvasCombatRuntime = ({
     if (isPlayerView) return false;
     const scenario = activeScenarioRef.current || activeScenario;
     const currentCombat = localCombatRef.current || scenario?.canvasCombat;
-    if (!scenario?.id || !currentCombat) return false;
+    if (!scenario?.id || currentCombat?.status !== 'active' || currentCombat.pendingAttack || currentCombat.explosiveBlast || currentCombat.arcaneChain) return false;
+    if (getCanvasSystem(scenario) === 'campaign') {
+      return editCampaignCombat(scenario, (current, items) => {
+        if (!isSameRound(currentCombat, current) || !canAdvanceCanvasRound(current)) return null;
+        const combat = startNextRound(current, { tokens: items });
+        return { combat, items: items.map(item => combat.participants[item.id]
+          ? syncMovementCharacteristic(item, combat.participants[item.id], { reset: true }) : item) };
+      }, 'No se pudo avanzar la ronda');
+    }
     const nextCombat = startNextRound(currentCombat);
     const currentItems = localItemsRef.current || scenario.items || [];
     const nextItems = currentItems.map((item) => {
       const participant = nextCombat.participants?.[item.id];
-      return participant ? syncMovementCharacteristic(item, participant, { reset: true }) : item;
+      return participant ? updateCanvasMageMana(syncMovementCharacteristic(item, participant, { reset: true }), 'round') : item;
     });
-    return persistCombatAndItems(scenario, nextCombat, nextItems);
-  }, [activeScenario, activeScenarioRef, isPlayerView, persistCombatAndItems]);
+    return persistCombatAndItems(scenario, nextCombat, nextItems, 'No se pudo avanzar la ronda', {
+      persistRuntime: true, modifiedIds: nextItems.filter(isCanvasMage).map(item => item.id),
+    });
+  }, [activeScenario, activeScenarioRef, editCampaignCombat, isPlayerView, persistCombatAndItems]);
 
-  const undoActivation = useCallback((tokenId = null) => {
-    if (!isPlayerView) updateCombat((current) => (
-      tokenId ? undoParticipantActivation(current, tokenId) : undoLastActivation(current)
-    ));
-  }, [isPlayerView, updateCombat]);
+  const undoActivation = useCallback(async (tokenId = null) => {
+    if (isPlayerView) return false;
+    const scenario = activeScenarioRef.current || activeScenario;
+    if (!scenario?.id) return false;
+    try {
+      await writeQueueRef.current;
+      const reopened = await runTransaction(db, async transaction => {
+        const ref = doc(db, scenarioCollectionName, scenario.id);
+        const snapshot = await transaction.get(ref);
+        if (!snapshot.exists()) return null;
+        const latest = snapshot.data();
+        if (getCanvasSystem(latest) !== getCanvasSystem(scenario)) return null;
+        const current = pruneCombatState(latest.canvasCombat, latest.items || []);
+        if (!current || current.status !== 'active' || current.roundPhase !== 'turns'
+          || current.pendingAttack || current.explosiveBlast || current.arcaneChain) return null;
+        const next = tokenId ? undoParticipantActivation(current, tokenId) : undoLastActivation(current);
+        if (next === current) return null;
+        transaction.update(ref, { canvasCombat: sanitize(next), combatModifiedAt: Date.now() });
+        return next;
+      });
+      if (!reopened) return false;
+      if (activeScenarioRef.current?.id === scenario.id) {
+        localCombatRef.current = reopened;
+        setActiveScenario(current => current?.id === scenario.id ? { ...current, canvasCombat: reopened } : current);
+      }
+      return true;
+    } catch (error) {
+      triggerToast('No se pudo reabrir el turno', error?.message || 'Reinténtalo', 'error');
+      return false;
+    }
+  }, [isPlayerView, activeScenario, activeScenarioRef, scenarioCollectionName, setActiveScenario, triggerToast]);
 
   const igniteTarZone = useCallback(async zoneId => {
     if (isPlayerView) return false;
@@ -1655,20 +1902,258 @@ export const useCanvasCombatRuntime = ({
     if (isPlayerView) return false;
     const scenario = activeScenarioRef.current || activeScenario;
     const currentCombat = localCombatRef.current || scenario?.canvasCombat;
-    if (!scenario?.id || !currentCombat) return false;
+    if (!scenario?.id || !isOpenCombat(currentCombat)) return false;
+    if (getCanvasSystem(scenario) === 'campaign') {
+      return editCampaignCombat(scenario, (current, items) => {
+        if (!isSameRound(currentCombat, current) || !isOpenCombat(current)) return null;
+        const combat = finishCanvasCombat(current);
+        return { combat, items: items.filter(item => !isTarZone(item) && !isCombatEndArcaneMist(item)).map(item => (
+          combat.participants[item.id] ? syncMovementCharacteristic(item, combat.participants[item.id], { reset: true }) : item
+        )) };
+      }, 'No se pudo finalizar el combate');
+    }
+    if (currentCombat.status !== 'active') return false;
     const nextCombat = finishCanvasCombat(currentCombat);
     const currentItems = localItemsRef.current || scenario.items || [];
-    const nextItems = currentItems.filter(item => !isTarZone(item)).map((item) => {
+    const nextItems = currentItems.filter(item => !isTarZone(item) && !isCombatEndArcaneMist(item)).map((item) => {
       if (isCanvasBleeding(item)) item = { ...setCanvasBleeding(item, false), runtimeDirty: item.profileType === 'rogueliteClass' || Boolean(item.runtimeDirty) };
       if (isCanvasPoisoned(item)) item = { ...setCanvasPoison(item, false), runtimeDirty: item.profileType === 'rogueliteClass' || Boolean(item.runtimeDirty) };
       const participant = nextCombat.participants?.[item.id];
       const restored = participant ? syncMovementCharacteristic(item, participant, { reset: true }) : item;
-      return clearPotionBuffs(restored);
+      return updateCanvasMageMana(clearArcaneBarrier(clearPotionBuffs(restored)), 'end');
     });
     return persistCombatAndItems(scenario, nextCombat, nextItems, 'No se pudo finalizar el combate', {
-      persistRuntime: true, modifiedIds: currentItems.filter(item => isCanvasPoisoned(item) || isCanvasBleeding(item) || item.stats?.vidaTemporal || item.stats?.movimiento?.potionBonus).map(item => item.id),
+      persistRuntime: true, modifiedIds: currentItems.filter(item => hasArcaneBarrier(item) || isCanvasMage(item) || isCanvasPoisoned(item) || isCanvasBleeding(item) || item.stats?.vidaTemporal || item.stats?.movimiento?.potionBonus).map(item => item.id),
     });
-  }, [activeScenario, activeScenarioRef, isPlayerView, persistCombatAndItems]);
+  }, [activeScenario, activeScenarioRef, editCampaignCombat, isPlayerView, persistCombatAndItems]);
+
+  const prepareSpellUseResources = useCallback(tokenId => {
+    const scenario = activeScenarioRef.current || activeScenario;
+    if (getCanvasSystem(scenario) === 'campaign') {
+      triggerToast('Habilidad de Campaña', 'Resuelve su efecto en mesa y ajusta los recursos desde el inspector.', 'info');
+      return null;
+    }
+    const token = scenario?.items?.find(item => item.id === tokenId);
+    if (!scenario?.id || !canControlToken(token, isPlayerView, playerName) || !isCanvasSpellPractice(scenario.canvasCombat)) return null;
+    const reason = getCanvasSpellTurnReason(token, scenario.canvasCombat,
+      { practice: true, practiceCombat: scenario.canvasPracticeCombat || practiceCombat });
+    if (reason) { triggerToast('Conjuro no disponible', reason, 'warning'); return null; }
+    const id = `spell-practice-${tokenId}-${++itemPracticeSequenceRef.current}`;
+    const configured = normalizeActionDiceProfile(token.actionDice);
+    const profile = configured.length ? configured : ['d6', 'd6', 'd6'];
+    const resources = profile.map((die, index) => ({ id: `${id}-${index}`, die, sides: Number(die.slice(1)),
+      value: rollDiceProfile([die])[0], status: 'available' }));
+    spellPracticeRef.current = { id, scenarioId: scenario.id, tokenId, resources };
+    return spellPracticeRef.current;
+  }, [activeScenario, activeScenarioRef, isPlayerView, playerName, practiceCombat, triggerToast]);
+
+  const castPreparedSpell = useCallback(async ({ castId, tokenId, slotIndex, catalystId, actionDieId,
+    manaSpend = 0, conserve = false, point, targetId, spellId = 'fireball', chainId, finishChain = false,
+    combatStartedAt, combatRound, practice = false, practiceId } = {}) => {
+    const scenario = activeScenarioRef.current || activeScenario;
+    if (getCanvasSystem(scenario) === 'campaign') return { ok: false };
+    if (!scenario?.id || !castId || spellCastBusyRef.current) return { ok: false };
+    const key = `${scenario.id}:${castId}`;
+    const signature = JSON.stringify({ tokenId, slotIndex, catalystId, actionDieId, manaSpend, conserve, point,
+      targetId, spellId, chainId, finishChain, combatStartedAt, combatRound, practice, practiceId });
+    const combatField = practice ? 'canvasPracticeCombat' : 'canvasCombat';
+    const previous = spellCastAttemptsRef.current.get(key);
+    if (previous && previous.signature !== signature) return { ok: false };
+    if (previous?.result) return previous.result;
+    const attempt = previous || { signature, now: Date.now(), roll: null };
+    spellCastAttemptsRef.current.set(key, attempt);
+    spellCastBusyRef.current = true;
+    setIsCastingSpell(true);
+    try {
+      await writeQueueRef.current;
+      const saved = await runTransaction(db, async transaction => {
+        const ref = doc(db, scenarioCollectionName, scenario.id);
+        const receiptRef = doc(db, scenarioCollectionName, scenario.id, 'spell_casts', castId);
+        const snapshot = await transaction.get(ref);
+        const receipt = await transaction.get(receiptRef);
+        if (!snapshot.exists()) throw new Error('La escena ya no existe.');
+        const fresh = snapshot.data();
+        const token = fresh.items?.find(item => item.id === tokenId);
+        if (!canControlToken(token, isPlayerView, playerName)) throw new Error('No controlas este Mago.');
+        if (receipt.exists()) {
+          if (receipt.data().signature !== signature) throw new Error('La confirmación pertenece a otro lanzamiento.');
+          return { result: receipt.data().result, combat: fresh[combatField], items: fresh.items,
+            lastModified: fresh.lastModified, effect: fresh.canvasSpellEffect };
+        }
+        const liveCombat = fresh.canvasCombat;
+        if (liveCombat?.startedAt !== combatStartedAt || liveCombat?.round !== combatRound)
+          throw new Error('La ronda ha cambiado. Prepara de nuevo el conjuro.');
+        let combat = chainId ? fresh[combatField] : liveCombat;
+        const chain = chainId ? combat?.arcaneChain : null;
+        if (chainId && (chain?.id !== chainId || chain.sourceTokenId !== tokenId || chain.phase !== 'choose-target'
+          || combat.pendingAttack || combat.explosiveBlast || (practice && !isCanvasSpellPractice(liveCombat))))
+          throw new Error('La Cadena arcana ya no está disponible.');
+        if (chainId && finishChain) {
+          const nextCombat = { ...combat, arcaneChain: null, updatedAt: attempt.now };
+          const result = { ok: true, castId, finished: true };
+          transaction.update(ref, sanitize({ [combatField]: nextCombat }));
+          transaction.set(receiptRef, sanitize({ signature, result, createdAt: attempt.now }));
+          return { result, combat: nextCombat, items: fresh.items, lastModified: fresh.lastModified };
+        }
+        if (practice && !chainId) {
+          const prepared = spellPracticeRef.current;
+          if (!isCanvasSpellPractice(liveCombat) || prepared?.id !== practiceId
+            || prepared?.scenarioId !== scenario.id || prepared?.tokenId !== tokenId)
+            throw new Error('El modo de prueba ha cambiado. Prepara de nuevo el conjuro.');
+          const reason = getCanvasSpellTurnReason(token, liveCombat, { practice: true, practiceCombat: fresh.canvasPracticeCombat });
+          if (reason) throw new Error(reason);
+          combat = createExplosivePracticeCombat(fresh.items, tokenId, prepared.resources, attempt.now, false);
+          combat.participants[tokenId].arcaneConservationUsed = Boolean(
+            fresh.canvasPracticeCombat?.participants?.[tokenId]?.arcaneConservationUsed);
+        } else if (!practice && isCanvasSpellPractice(liveCombat)) {
+          throw new Error('El combate ha cambiado. Prepara de nuevo el conjuro.');
+        }
+        if (needsBleedingChoice(token, combat)) throw new Error('Resuelve Sangrado antes de lanzar.');
+        const mist = spellId === 'arcane-mist';
+        const barrier = spellId === 'runic-barrier';
+        const support = mist || barrier;
+        const targetingGrid = spellId === 'arcane-projectile' || support ? { ...gridConfig, ...fresh.config } : gridConfig;
+        let selected;
+        if (chainId) {
+          const origin = fresh.items.find(item => item.id === chain.firstTargetId) || chain.origin;
+          const target = fresh.items.find(item => item.id === targetId);
+          const placement = resolveArcaneProjectileTarget({ source: token, origin, target,
+            catalyst: chain.catalyst, items: fresh.items, gridConfig: targetingGrid, excludeId: chain.firstTargetId });
+          selected = placement.valid ? { legal: true, spell: { item: chain.weapon }, catalyst: chain.catalyst,
+            profile: chain.profile, die: chain.actionDie, weapon: chain.weapon, placement, target, manaCost: 0 }
+            : { legal: false, reason: placement.reason };
+        } else {
+          const validate = barrier ? validateCanvasArcaneBarrier : mist ? validateCanvasArcaneMist : spellId === 'arcane-projectile' ? validateCanvasArcaneProjectile : validateCanvasFireball;
+          selected = validate({ token, combat, slotIndex, catalystId, actionDieId,
+            manaSpend, conserve, point, targetId, gridConfig: targetingGrid, items: fresh.items });
+        }
+        if (!selected.legal) throw new Error(selected.reason);
+        let ignition = { zoneIds: [] }, targets = [], pressure, blast;
+        if (!support) {
+          ignition = expandFireArea({ weapon: selected.weapon, cells: selected.placement.cells, items: fresh.items, gridConfig });
+          targets = spellId === 'arcane-projectile' && !ignition.zoneIds.length ? [selected.target]
+            : getExplosiveBombTargets({ items: fresh.items, gridConfig, placement: { ...selected.placement, cells: ignition.cells } });
+          if (selected.target) targets.sort((a, b) => Number(b.id === targetId) - Number(a.id === targetId));
+          if (targets.some(item => hasCanvasMutableArmor(item) && !item.armorProtectionChoice))
+            throw new Error('Una criatura del área debe elegir la protección de su Túnica antes de recibir el conjuro.');
+          if (practice && !chainId) {
+            // Keep defense rolls stable across Firestore retries and failed confirmations.
+            const participantSignature = JSON.stringify(fresh.items.map(item => [item.id, item.profileType, item.actionDice]));
+            if (attempt.practiceSignature && attempt.practiceSignature !== participantSignature)
+              throw new Error('Los dados de las criaturas han cambiado. Prepara de nuevo el conjuro.');
+            if (!attempt.practiceCombat) {
+              attempt.practiceSignature = participantSignature;
+              attempt.practiceCombat = createExplosivePracticeCombat(fresh.items, tokenId, spellPracticeRef.current.resources, attempt.now);
+              attempt.practiceCombat.participants[tokenId].arcaneConservationUsed = combat.participants[tokenId].arcaneConservationUsed;
+            }
+            combat = attempt.practiceCombat;
+          }
+          const rollSignature = JSON.stringify([selected.catalyst, selected.profile, selected.die]);
+          if (attempt.roll && attempt.roll.signature !== rollSignature) throw new Error('El Catalizador o el dado han cambiado. Prepara de nuevo el conjuro.');
+          if (!attempt.roll) {
+            const results = rollWeaponDice(selected.profile);
+            attempt.roll = { signature: rollSignature, results,
+              criticalResults: rollCriticalWeaponDice(selected.profile, results, selected.weapon) };
+          }
+          pressure = calculateCanvasAttackPressure({ attacker: token, actionDice: [selected.die],
+            weapon: selected.weapon, weaponResults: attempt.roll.results, criticalResults: attempt.roll.criticalResults });
+          const attack = { id: castId, attackerId: tokenId, attackerName: token.name || 'Mago',
+            weapon: selected.weapon, weaponName: selected.weapon.name, spellId,
+            weaponDiceProfile: selected.profile, weaponResults: attempt.roll.results, criticalResults: attempt.roll.criticalResults,
+            actionDice: [selected.die], actionDieIds: [], attackThreatDice: [], manaSpent: selected.manaCost,
+            conserved: conserve, pressure, range: { distance: selected.placement.distance, suppressTraits: false },
+            ...(chainId ? { chainId, spellCostPaid: true } : {}),
+            source: 'digital', createdAt: attempt.now };
+          blast = { id: castId, spellId, phase: 'resolving', sourceTokenId: tokenId,
+            targetIds: targets.map(item => item.id), targetNames: Object.fromEntries(targets.map(item => [item.id, item.name || 'Objetivo'])),
+            attackTemplate: attack, targetAttackTemplates: Object.fromEntries(targets.map(item => {
+              const targetAttack = resolveCanvasFireballTargetAttack(attack, item);
+              return [item.id, spellId === 'arcane-projectile' && item.id !== targetId
+                ? { ...targetAttack, weapon: { ...targetAttack.weapon, preventsActiveDefense: false, ignoresCover: false } } : targetAttack];
+            })),
+            placement: selected.placement, tarZoneIds: ignition.zoneIds, createdAt: attempt.now };
+        }
+        let paid = chainId ? combat : consumeItemUseResource(combat, tokenId, { ...selected.die, kind: 'action-die' }, { now: attempt.now });
+        if (!chainId && paid === combat) throw new Error('El dado ya no está disponible.');
+        if (!chainId && conserve) paid = { ...paid, participants: { ...paid.participants, [tokenId]: { ...paid.participants[tokenId], arcaneConservationUsed: true } } };
+        if (spellId === 'arcane-projectile') paid = { ...paid, arcaneChain: !chainId && manaSpend ? {
+          id: castId, phase: 'awaiting-impact', sourceTokenId: tokenId, firstTargetId: targetId,
+          origin: { id: targetId, x: selected.target.x, y: selected.target.y, width: selected.target.width, height: selected.target.height },
+          catalyst: selected.catalyst, profile: selected.profile, weapon: selected.weapon, actionDie: selected.die,
+          practice, combatStartedAt, combatRound,
+        } : null };
+        const nextCombat = support ? paid : startCanvasExplosiveBlast(paid, blast);
+        const slots = getCanvasPreparedSpells(token);
+        let nextToken = { ...token,
+          usedSkillSlots: slots.map(spell => Boolean(spell?.used) || (!chainId && !conserve && spell?.slotIndex === slotIndex)),
+          usedSkillSlotIds: slots.map(spell => spell ? resolveItemIdentityKeys(spell.item)[0] || null : null),
+          stats: { ...token.stats, recurso: { ...token.stats?.recurso, current: Number(token.stats?.recurso?.current || 0) - selected.manaCost } },
+          runtimeDirty: true, canvasRuntimeRevision: Number(token.canvasRuntimeRevision || 0) + 1 };
+        if (!support) nextToken = removeHiddenStatusFromToken(nextToken);
+        const profileRef = token.linkedClassOwner && token.linkedClassId && token.runId
+          ? doc(db, 'players', token.linkedClassOwner, 'rogueliteClasses', token.linkedClassId) : null;
+        const profile = profileRef ? await transaction.get(profileRef) : null;
+        const run = profile?.exists() ? profile.data().activeRun : null;
+        if (run && (!canRogueliteTokenClaimRun(token, run, scenario.id) || Number(run.revision || 0) > Number(token.runRevision || 0)))
+          throw new Error('La aventura está sincronizándose. Inténtalo de nuevo.');
+        if (profileRef) {
+          const revision = Math.max(Number(run?.revision) || 0, Number(token.runRevision) || 0) + 1;
+          nextToken = { ...nextToken, runRevision: revision };
+          transaction.set(profileRef, sanitize({ activeRun: { ...createRogueliteActiveRunFromToken(nextToken, run,
+            { scenarioId: scenario.id, revision, now: attempt.now }), sourceCanvasRuntimeRevision: nextToken.canvasRuntimeRevision } }), { merge: true });
+        }
+        let items = (support || targets.length ? fresh.items : presentTarIgnition(fresh.items, ignition.zoneIds))
+          .map(item => item.id === tokenId ? nextToken : item);
+        const committedAt = Date.now();
+        if (mist) items = [...items, ...createArcaneMistAreas({ placement: selected.placement, castId, tokenId, now: committedAt })];
+        if (barrier) items = items.map(item => item.id === targetId ? applyArcaneBarrier(item,
+          { castId, sourceTokenId: tokenId, catalystId, protections: selected.protections, now: committedAt }) : item);
+        const lastModified = Math.max(committedAt, Number(fresh.lastModified || 0) + 1);
+        const result = { ok: true, castId, ...(barrier ? { targetId, targetName: selected.target.name, protections: selected.protections }
+          : mist ? { cells: selected.placement.cells.length } : { pressure: pressure.total }) };
+        const origin = chainId ? fresh.items.find(item => item.id === chain.firstTargetId) || chain.origin : token;
+        const effect = { id: castId, spellId, sourceTokenId: tokenId,
+          sourcePosition: { x: origin.x, y: origin.y, width: origin.width, height: origin.height,
+            ...getCombatRenderPlacement(origin, fresh.items, gridConfig) },
+          placement: selected.placement, ...(barrier ? { targetId } : {}), startedAt: committedAt };
+        transaction.update(ref, sanitize({ items, [combatField]: nextCombat, lastModified,
+          canvasSpellEffect: effect }));
+        transaction.set(receiptRef, sanitize({ signature, result, createdAt: attempt.now }));
+        if (mist) transaction.set(doc(db, 'combat_log', `mist-${scenario.id}-${castId}`), {
+          ...sanitize(buildCanvasArcaneMistLog({ scenarioId: scenario.id, castId, token, spell: selected.spell.item,
+            actionDie: selected.die, manaCost: selected.manaCost, conserve, placement: selected.placement, now: committedAt })),
+          timestamp: serverTimestamp(),
+        });
+        if (barrier) transaction.set(doc(db, 'combat_log', `barrier-${scenario.id}-${castId}`), {
+          ...sanitize(buildCanvasArcaneBarrierLog({ scenarioId: scenario.id, castId, token, target: selected.target,
+            actionDie: selected.die, manaCost: selected.manaCost, conserve, protections: selected.protections, now: committedAt })),
+          timestamp: serverTimestamp(),
+        });
+        return { result, combat: nextCombat, items, lastModified, effect };
+      });
+      if (practice) { setPracticeCombat(saved.combat); spellPracticeRef.current = null; }
+      else localCombatRef.current = saved.combat;
+      localItemsRef.current = saved.items;
+      setActiveScenario(current => current?.id === scenario.id ? { ...current, items: saved.items,
+        [combatField]: saved.combat, lastModified: saved.lastModified,
+        ...(saved.effect ? { canvasSpellEffect: saved.effect } : {}) } : current);
+      attempt.result = saved.result;
+      triggerToast(spellId === 'runic-barrier' ? 'Barrera rúnica' : spellId === 'arcane-mist' ? 'Niebla arcana' : spellId === 'fireball' ? 'Bola de fuego' : 'Proyectil arcano', saved.result.finished
+        ? 'Cadena terminada.' : spellId === 'arcane-mist' ? `Humo en un área ${saved.result.cells === 9 ? '3×3' : '2×2'} hasta el final del combate.`
+          : spellId === 'runic-barrier' ? `${saved.result.targetName || 'Objetivo'} · +1 CD hasta el final del combate.`
+          : `${saved.result.pressure} de Presión${spellId === 'arcane-projectile' ? ' · Sin defensa activa.' : ' · Cada criatura resuelve su defensa.'}`, 'success');
+      return saved.result;
+    } catch (error) {
+      if (!attempt.roll) spellCastAttemptsRef.current.delete(key);
+      triggerToast('Conjuro no lanzado', error.message || 'Inténtalo de nuevo.', 'warning');
+      return { ok: false };
+    } finally { spellCastBusyRef.current = false; setIsCastingSpell(false); }
+  }, [activeScenario, activeScenarioRef, gridConfig, isPlayerView, playerName, scenarioCollectionName, setActiveScenario, triggerToast]);
+
+  const castFireball = useCallback(options => castPreparedSpell({ ...options, spellId: 'fireball' }), [castPreparedSpell]);
+  const castArcaneProjectile = useCallback(options => castPreparedSpell({ ...options, spellId: 'arcane-projectile' }), [castPreparedSpell]);
+  const castArcaneMist = useCallback(options => castPreparedSpell({ ...options, spellId: 'arcane-mist' }), [castPreparedSpell]);
+  const castArcaneBarrier = useCallback(options => castPreparedSpell({ ...options, spellId: 'runic-barrier' }), [castPreparedSpell]);
 
   const beginAttackDraft = useCallback(({ attackerId, targetId, weapon }) => {
     const scenario = activeScenarioRef.current || activeScenario;
@@ -1677,14 +2162,14 @@ export const useCanvasCombatRuntime = ({
     const liveCombat = localCombatRef.current || scenario?.canvasCombat;
     const isPractice = !liveCombat || liveCombat.status !== 'active';
     const unresolvedPractice = practiceCombat || scenario?.canvasPracticeCombat;
-    if (isPractice && (unresolvedPractice?.pendingAttack || unresolvedPractice?.explosiveBlast)) {
+    if (isPractice && (unresolvedPractice?.pendingAttack || unresolvedPractice?.explosiveBlast || unresolvedPractice?.arcaneChain)) {
       triggerToast('Resolución pendiente', 'Resuelve la explosión o la defensa antes de preparar otro ataque.', 'warning');
       return false;
     }
     if (needsBleedingChoice(attacker, liveCombat)) return false;
     let currentCombat = liveCombat;
     if (isPractice) {
-      currentCombat = createCanvasCombatState(scenario?.items || [], { now: Date.now() });
+      currentCombat = createCanvasCombatState(scenario?.items || [], { now: Date.now(), includeNonParticipants: true });
       Object.values(currentCombat.participants || {}).forEach((candidate) => {
         if (candidate.side !== 'players' || !candidate.awaitingRoll) return;
         currentCombat = rollParticipantActionDice(currentCombat, candidate.tokenId);
@@ -1706,7 +2191,7 @@ export const useCanvasCombatRuntime = ({
     }
     const participant = currentCombat?.participants?.[attackerId];
 
-    if (currentCombat.pendingAttack || currentCombat.explosiveBlast) {
+    if (currentCombat.pendingAttack || currentCombat.explosiveBlast || currentCombat.arcaneChain) {
       triggerToast('Ataque pendiente', 'Resuelve la defensa anterior antes de iniciar otro ataque.', 'warning');
       return false;
     }
@@ -1810,7 +2295,7 @@ export const useCanvasCombatRuntime = ({
     const currentCombat = attackDraft?.practice
       ? practiceCombat
       : (localCombatRef.current || scenario?.canvasCombat);
-    if (!attackDraft || !currentCombat || currentCombat.pendingAttack) return false;
+    if (!attackDraft || !currentCombat || currentCombat.pendingAttack || currentCombat.arcaneChain) return false;
     if (!attackDraft.practice && needsBleedingChoice((localItemsRef.current || scenario.items || []).find(item => item.id === attackDraft.attackerId), currentCombat)) return false;
 
     const attacker = (scenario?.items || []).find((item) => item.id === attackDraft.attackerId);
@@ -2122,6 +2607,10 @@ export const useCanvasCombatRuntime = ({
     const participant = currentCombat?.participants?.[pending?.targetId];
     if (!scenario?.id || !pending || !target || isCanvasCunningPending(pending) || pending.status === 'defense-rolled' || pending.status === 'awaiting-adjustment'
       || !canControlToken(target, isPlayerView, playerName)) return false;
+    if (pending.weapon?.preventsActiveDefense) {
+      triggerToast('Sin defensa activa', 'Proyectil arcano no permite gastar acciones ni Amenaza para defenderse.', 'warning');
+      return false;
+    }
 
     const eligibility = getEnemyActiveDefenseEligibility({ token: target, participant });
     if (!eligibility.eligible) {
@@ -2263,6 +2752,10 @@ export const useCanvasCombatRuntime = ({
       : (localCombatRef.current || scenario?.canvasCombat);
     const pending = currentCombat?.pendingAttack;
     if (!pending || !scenario?.id || isCanvasCunningPending(pending) || pending.status === 'awaiting-adjustment') return false;
+    if (pending.weapon?.preventsActiveDefense && (defenseDieIds.length || pending.status === 'defense-rolled')) {
+      triggerToast('Sin defensa activa', 'Proyectil arcano se resuelve contra la CD y la protección pasiva.', 'warning');
+      return false;
+    }
 
     if (resolvingAttackRef.current === pending.id) return false;
     const attacker = (scenario.items || []).find((item) => item.id === pending.attackerId);
@@ -2429,7 +2922,7 @@ export const useCanvasCombatRuntime = ({
 
     resolvingAttackRef.current = pending.id;
     const nextTarget = {
-      ...applyAttackBleeding(applyAttackPoison(target, pending.weapon, resolution, pending.range?.suppressTraits), pending.weapon, resolution, pending.range?.suppressTraits, currentCombat),
+      ...presentArcaneBarrierImpact(applyAttackBleeding(applyAttackPoison(target, pending.weapon, resolution, pending.range?.suppressTraits), pending.weapon, resolution, pending.range?.suppressTraits, currentCombat), pending.id, now),
       ...(resolution.lifeLost > 0 ? { canvasDamageEffect: {
         id: pending.id, previousLife: Number(target.stats?.vida?.current), nextLife: resolution.nextLife,
         ...(resolution.temporaryLifeLost > 0 ? { previousTemporaryLife: target.stats.vidaTemporal.current, nextTemporaryLife: resolution.nextTemporaryLife } : {}),
@@ -2453,7 +2946,7 @@ export const useCanvasCombatRuntime = ({
       }
       if (counterResolution && item.id === attacker.id) {
         return removeHiddenStatusFromToken({
-          ...applyAttackBleeding(applyAttackPoison(attacker, resolvedCounterWeapon, counterResolution), resolvedCounterWeapon, counterResolution, false, currentCombat),
+          ...presentArcaneBarrierImpact(applyAttackBleeding(applyAttackPoison(attacker, resolvedCounterWeapon, counterResolution), resolvedCounterWeapon, counterResolution, false, currentCombat), `${pending.id}-counter`, now),
           ...(counterResolution.lifeLost > 0 ? { canvasDamageEffect: {
             id: pending.id, previousLife: Number(attacker.stats?.vida?.current), nextLife: counterResolution.nextLife,
             ...(counterResolution.temporaryLifeLost > 0 ? { previousTemporaryLife: attacker.stats.vidaTemporal.current, nextTemporaryLife: counterResolution.nextTemporaryLife } : {}),
@@ -2477,7 +2970,7 @@ export const useCanvasCombatRuntime = ({
         : current
     ));
     localItemsRef.current = nextItems;
-    if (isPractice) persistPracticeCombat(resolvedCombat.pendingAttack || resolvedCombat.explosiveBlast
+    if (isPractice) persistPracticeCombat(resolvedCombat.pendingAttack || resolvedCombat.explosiveBlast || resolvedCombat.arcaneChain
       || options.excessChoice === 'reposition' ? resolvedCombat : null);
     else {
       updateCombat(() => resolvedCombat);
@@ -2675,12 +3168,23 @@ export const useCanvasCombatRuntime = ({
   const hasPracticeReposition = Object.values(practiceCombat?.participants || {}).some(participant => Number(participant.defensiveReposition?.remaining) > 0);
   return {
     combatState: practiceCombat?.pendingAttack || attackDraft?.practice || hasPracticeReposition ? practiceCombat : combatState,
+    spellPresentation: { ...spellPresentation, effect: trackedSpellEffect,
+      sourceAppearance: spellPresentation.effect?.spellId === 'runic-barrier'
+        ? activeScenario?.items?.find(item => item.id === spellPresentation.effect.sourceTokenId) : undefined,
+      sourceVisible: !['arcane-mist', 'runic-barrier'].includes(spellPresentation.effect?.spellId)
+      || canShowCanvasItemEffect({ token: activeScenario?.items?.find(item => item.id === spellPresentation.effect.sourceTokenId),
+        items: activeScenario?.items || [], viewer: { isPlayerView, playerName, selectedTokenIds, showHiddenTokens }, gridConfig }),
+      targetVisible: spellPresentation.effect?.spellId !== 'runic-barrier'
+        || canShowCanvasItemEffect({ token: activeScenario?.items?.find(item => item.id === spellPresentation.effect.targetId),
+          items: activeScenario?.items || [], viewer: { isPlayerView, playerName, selectedTokenIds, showHiddenTokens }, gridConfig }) },
     attackDraft,
     isConfirmingAttack,
     pendingAttack: practiceCombat?.pendingAttack || combatState?.pendingAttack || null,
     canvasRolls,
     controlledTokenIds,
     startCombat,
+    startPreparedCombat,
+    setCombatParticipation,
     chooseArmorProtection,
     chooseBleeding,
     isResolvingBleeding,
@@ -2701,6 +3205,12 @@ export const useCanvasCombatRuntime = ({
     commitExplosiveBombImpact,
     commitExplosiveBombUse,
     explosiveBlast: practiceCombat?.explosiveBlast || combatState?.explosiveBlast || null,
+    castFireball,
+    castArcaneProjectile,
+    castArcaneMist,
+    castArcaneBarrier,
+    prepareSpellUseResources,
+    isCastingSpell,
     completeActivation,
     setMovementModifier,
     reconcileMovementResource,
@@ -2747,4 +3257,10 @@ export const useCanvasCombatRuntime = ({
     rollEnemyDefense,
     resolvePendingAttack,
   };
+};
+
+export const useCanvasCombatRuntime = options => {
+  const base = useRogueliteCombatRuntime(options);
+  const campaign = useCampaignAttackRuntime({ ...options, base });
+  return getCanvasSystem(options.activeScenario) === 'campaign' ? { ...base, ...campaign } : base;
 };

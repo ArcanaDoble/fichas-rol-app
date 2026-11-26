@@ -6,6 +6,14 @@ import { CombatLogPanel } from './CombatLogPanel';
 const base = { id: 'log', attackerName: 'Bárbaro', targetName: 'Duende', weaponName: 'Mandoble', blocksLost: { vida: 1 }, finalDamage: 7 };
 const show = entry => render(<CombatLogPanel activeTab="COMBAT_LOG" combatLog={[{ ...base, ...entry }]} isBoardMode={false} />);
 
+test('weapon transformations show the form change and payment without an attack result', () => {
+  const { container } = show({ eventType: 'item-use', effect: 'weapon-transform', itemName: 'Bastón enroscado',
+    logText: 'Yuuzu transforma Bastón enroscado: Látigo.', resourcesSpent: [{ label: 'd6 · Valor ignorado' }] });
+  expect(screen.getByText('Yuuzu transforma Bastón enroscado: Látigo.')).toBeInTheDocument();
+  expect(screen.getByText('d6 · Valor ignorado')).toBeInTheDocument();
+  expect(container.textContent).not.toContain('Presión');
+});
+
 test('renders surviving Canvas summary totals without inventing dice or exposing enemy CD', () => {
   const { container } = show({ canvasRoguelite: true, reactionType: 'parar', attackPressure: 17, defense: 10, effectiveCd: 7, clientTimestamp: 123456789, logText: 'CD secreta 7' });
   expect(screen.getByText('17')).toBeInTheDocument();

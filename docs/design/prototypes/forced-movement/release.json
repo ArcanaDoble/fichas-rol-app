@@ -1,0 +1,30 @@
+{
+  "feature": "Desplazamiento forzado del máster",
+  "url": "https://base-de-datos-noma.web.app",
+  "verifiedAt": "2026-10-21T23:48:47.842Z",
+  "assets": [
+    {
+      "asset": "/static/js/main.5939b286.js",
+      "sha256": "e6a80c66a9d8004ecd7e5996e31e003b1e51d4aec8082a40e4013101041af55c",
+      "bytes": 5332444
+    },
+    {
+      "asset": "/static/css/main.cea98ea1.css",
+      "sha256": "937c147c64dda657c030890565043d951886291c095a36ae6d876c1167ee646d",
+      "bytes": 702752
+    }
+  ],
+  "tests": {
+    "suites": 228,
+    "passed": 1592,
+    "skipped": 1
+  },
+  "browser": {
+    "desktop": "1280x900",
+    "mobile": "390x844",
+    "touch": "CDP: activation, pan, pinch, placement; combat unchanged"
+  },
+  "deployLog": "output/playwright/forced-movement-deploy.log",
+  "buildLog": "output/playwright/forced-movement-final-build.log",
+  "testLog": "output/playwright/forced-movement-final-tests.log"
+}

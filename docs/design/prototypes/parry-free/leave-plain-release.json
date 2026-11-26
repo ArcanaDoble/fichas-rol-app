@@ -1,0 +1,31 @@
+{
+  "verifiedAtUtc": "2026-10-21T02:38:36.686585+00:00",
+  "release": "parry-leave-plain-interaction",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.65282a87.js",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "de6de815f4e5a0af4991d5a54a48f478dbd3348920b67219abbb457ce564959c"
+    },
+    "main.css": {
+      "path": "/static/css/main.4cdff858.css",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "e9fa0ceb3978ec835a7302660d51a791a91679503eddd96339febf6bf1deaad7"
+    }
+  },
+  "buildLog": "output/playwright/parry-leave-plain-build.log",
+  "deployLog": "output/playwright/parry-leave-plain-deploy.log",
+  "verification": "CSS-only; exit control has no border, background, underline or outline, including keyboard focus. Text color changes; keyboard focus also changes weight. Real provider checked at1280x800 and412x915,44px touch height.",
+  "evidence": [
+    "evidence/leave-plain-focus-desktop.png",
+    "evidence/leave-plain-focus-mobile.png"
+  ],
+  "productionRoomWritesForVerification": 0,
+  "firestoreRulesChanged": false
+}

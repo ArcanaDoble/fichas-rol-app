@@ -74,6 +74,7 @@ const CanvasAttackPreparation = ({
   enemyWeaponOptions, canChooseEnemyWeapons,
   attackThreatSelection = { useStored: false, customDice: [] }, setAttackThreatSelection,
   attackStoredThreatValue, attackStoredThreatDie,
+  resourceSelector, confirmLabel, rollNote, actionValueOverride,
 }) => {
   const [furyChoice, setFuryChoice] = useState({ key: null, amount: 0 });
   const fury = getCanvasFuryOption(attacker, draft.attackParts?.map(part => part.weapon) || [draft.weapon]);
@@ -110,8 +111,8 @@ const CanvasAttackPreparation = ({
       displayTraits: getItemTraits(part.weapon).filter(trait => getCanvasWeaponTraits({ rasgos: [trait] }).some(id => activeTraits.has(id))),
     };
   }) : [];
-  const actionPressure = isEnemy ? Number(attacker.offenseBase ?? attacker.stats?.ofensiva?.current ?? 0)
-    : selectedActionDice.reduce((sum, id) => sum + Number(availableActionDice.find(die => die.id === id)?.value || 0), 0);
+  const actionPressure = actionValueOverride ?? (isEnemy ? Number(attacker.offenseBase ?? attacker.stats?.ofensiva?.current ?? 0)
+    : selectedActionDice.reduce((sum, id) => sum + Number(availableActionDice.find(die => die.id === id)?.value || 0), 0));
 
   return <>
     <button type="button" className="combat-close attack-preparation-close" disabled={combatRuntime.isConfirmingAttack}
@@ -202,7 +203,7 @@ const CanvasAttackPreparation = ({
         {isEnemy && canChooseEnemyWeapons && enemyWeaponOptions.length > 1 && <EnemyWeaponPicker options={enemyWeaponOptions}
           chosen={chosenWeapons} onChange={combatRuntime.setAttackWeapons} busy={combatRuntime.isConfirmingAttack} />}
 
-        {!isEnemy ? <section aria-label="Dados de acción">
+        {resourceSelector ?? (!isEnemy ? <section aria-label="Dados de acción">
           <div className="attack-preparation-dice-heading">
             <h3>{selectedActionDice.length === draft.actionCost ? 'Dados preparados' : `Elige ${draft.actionCost === 1 ? 'un dado' : `${draft.actionCost} dados`}`}</h3>
             <span aria-live="polite" aria-label={`${selectedActionDice.length} de ${draft.actionCost} dados seleccionados`}>{selectedActionDice.length}<span aria-hidden="true"> / </span>{draft.actionCost}</span>
@@ -221,7 +222,7 @@ const CanvasAttackPreparation = ({
           <EnemyThreatDice selection={attackThreatSelection} onChange={setAttackThreatSelection}
             storedThreatValue={attackStoredThreatValue} storedThreatDie={attackStoredThreatDie}
             purpose="attack" disabled={combatRuntime.isConfirmingAttack} busy={combatRuntime.isConfirmingAttack} />
-        </section>}
+        </section>)}
       </div>
     </div>
 
@@ -233,11 +234,11 @@ const CanvasAttackPreparation = ({
         </>}
       </p>}
       {combined ? <p className="attack-preparation-preview attack-preparation-preview--dual" aria-live="polite">
-        <span><strong>{actionPressure}</strong> {isEnemy ? 'de base' : 'de acción'}</span>
+        <span><strong>{actionPressure}</strong> {isEnemy && actionValueOverride == null ? 'de base' : 'de acción'}</span>
         {preparedParts.map(part => <React.Fragment key={part.weaponId}><span className="attack-preparation-sum">+</span><span className="attack-preparation-contribution"><strong>{compactDiceProfile(part.profile)}</strong> de <span className="attack-preparation-source" title={part.name}>{part.name}</span></span></React.Fragment>)}
         {extraProfile.length > 0 && <><span className="attack-preparation-sum">+</span><span><strong>{compactDiceProfile(extraProfile)}</strong> de modificadores</span></>}
       </p> : <p className="attack-preparation-preview attack-preparation-preview--dual" aria-live="polite">
-        <span><strong>{actionPressure}</strong> {isEnemy ? 'de base' : 'de acción'}</span> <span className="attack-preparation-sum">+</span> <span><strong>{damageProfile}</strong> del arma</span>
+        <span><strong>{actionPressure}</strong> {isEnemy && actionValueOverride == null ? 'de base' : 'de acción'}</span> <span className="attack-preparation-sum">+</span> <span><strong>{damageProfile}</strong> del arma</span>
         {extraProfile.length > 0 && <><span className="attack-preparation-sum">+</span><span><strong>{compactDiceProfile(extraProfile)}</strong> de modificadores</span></>}
       </p>}
       {furySpend > 0 && <p className="attack-preparation-fury-benefit">+{furySpend}d{fury.sides} de Furia · Gasta {furySpend} de Furia</p>}
@@ -246,9 +247,9 @@ const CanvasAttackPreparation = ({
         onClick={() => combatRuntime.confirmAttack(isEnemy
           ? { actionDieIds: selectedActionDice, threatSelection: attackThreatSelection }
           : { actionDieIds: selectedActionDice, threatMode: 'none', customThreatSides: 6, ...(furySpend ? { furySpend } : {}), ...(manaSpend ? { manaSpend } : {}) })}>
-        <span>{combatRuntime.isConfirmingAttack ? 'Confirmando…' : 'Confirmar ataque'}</span><ArrowRight size={20} aria-hidden="true" />
+        <span>{combatRuntime.isConfirmingAttack ? 'Confirmando…' : (confirmLabel || 'Confirmar ataque')}</span><ArrowRight size={20} aria-hidden="true" />
       </button>
-      <p className="attack-preparation-roll-note">{combined ? isEnemy && hasThreatSelection ? 'Las armas y la Amenaza se resuelven al confirmar.' : `${paired ? 'Ambas armas' : 'Las armas'} se tiran al confirmar. Una sola Presión.` : isEnemy && hasThreatSelection ? 'El arma y la Amenaza se resuelven al confirmar.' : 'El arma se tira al confirmar.'}</p>
+      <p className="attack-preparation-roll-note">{rollNote ?? (combined ? isEnemy && hasThreatSelection ? 'Las armas y la Amenaza se resuelven al confirmar.' : `${paired ? 'Ambas armas' : 'Las armas'} se tiran al confirmar. Una sola Presión.` : isEnemy && hasThreatSelection ? 'El arma y la Amenaza se resuelven al confirmar.' : 'El arma se tira al confirmar.')}</p>
     </footer>
   </>;
 };

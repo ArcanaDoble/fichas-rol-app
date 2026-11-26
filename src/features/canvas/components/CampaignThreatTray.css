@@ -1,0 +1,30 @@
+.campaign-threat-tray { container-type: inline-size; width: min(100%,384px); margin: 8px auto 10px; border-top: 1px solid #c8aa6e30; }
+.campaign-threat-heading { display: flex; justify-content: space-between; align-items: center; height: 40px; padding-inline: 5px; }
+.campaign-threat-heading h3 { margin: 0; color: #d7c093; font: italic 17px/1.2 Alegreya,Georgia,serif; }
+.campaign-threat-heading > span { color: #9c9589; font: 12px Lato,Arial,sans-serif; }
+.campaign-threat-heading > button { min-height: 44px; padding-inline: 8px; color: #b8a887; font: 12px Lato,Arial,sans-serif; }
+.campaign-threat-heading > button:hover:not(:disabled) { color: #fff0c9; }
+.campaign-threat-quick-dice { display: grid; grid-template-columns: repeat(6,minmax(44px,1fr)); gap: 2px; }
+.campaign-threat-grade { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.campaign-threat-add { position: relative; display: grid; place-items: center; width: 100%; min-width: 44px; min-height: 56px; padding: 0; background: transparent; border: 1px solid transparent; border-radius: 4px; transition: background .12s, border-color .12s; }
+.campaign-threat-add > svg { width: 60px; max-width: 100%; height: 60px; pointer-events: none; }
+.campaign-threat-add:hover:not(:disabled), .campaign-threat-grade[data-selected=true] .campaign-threat-add { border-color: #c8aa6e45; background: #c8aa6e08; }
+.campaign-threat-add:active:not(:disabled) { background: #c8aa6e20; }
+.campaign-threat-count { position: absolute; right: 1px; top: -3px; padding: 1px 3px; background: #0b1120; color: #edcf92; font: 700 11px/1.25 Lato,Arial,sans-serif; }
+.campaign-threat-remove { width: 100%; min-width: 44px; min-height: 44px; color: #d7bf8d; background: none; font: 22px/1 Lato,Arial,sans-serif; }
+.campaign-threat-remove:hover:not(:disabled) { color: #fff2d3; background: #c8aa6e10; }
+.campaign-threat-tray button:disabled { opacity: .3; cursor: default; }
+.campaign-threat-tray button:focus-visible { outline: 2px solid #edcf92; outline-offset: -2px; }
+.campaign-threat-formula { min-height: 18px; margin: 4px 0 0; text-align: center; color: #aaa08c; font: 12px/1.4 Lato,Arial,sans-serif; }
+.campaign-threat-formula strong { color: #dfc896; font-weight: 400; }
+.campaign-threat-note { margin: 5px 0 0; color: #aaa08c; font: 12px/1.4 Lato,Arial,sans-serif; text-align: center; }
+@container (max-width:273px) {
+  .campaign-threat-quick-dice { gap: 0; }
+}
+@container (max-width:263px) {
+  .campaign-threat-quick-dice { grid-template-columns: repeat(3,minmax(44px,1fr)); }
+}
+@media (max-width:360px) {
+  .campaign-threat-quick-dice { gap: 0; }
+  .campaign-threat-add > svg { width: 54px; height: 54px; }
+}

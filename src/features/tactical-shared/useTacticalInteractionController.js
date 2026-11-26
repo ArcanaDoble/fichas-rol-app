@@ -14,6 +14,7 @@ import {
 } from './legacyCombatRules';
 import { WORLD_SIZE, lineRectIntersect, linesIntersect, snapWorldPositionToGrid } from './spatial';
 import { canControlToken, isCanvasCombatRoundActive } from './tokenControlUtils';
+import { getSceneBlockingSegments, getTreeResizePatch, isPointInsideTreeTrunk, isTreeScenery } from './scenery';
 import {
     getHiddenSafeMovementPreviewItems,
     isCanvasTokenHiddenFromViewer,
@@ -21,11 +22,20 @@ import {
     resolveHiddenDetectionAlongMovement,
 } from './tokenVisibilityAccess';
 
+const translateWall = (item, original, x, y) => {
+    const origin = ['x1', 'y1', 'x2', 'y2'].every(field => Number.isFinite(original?.[field])) ? original : item;
+    const dx = x - origin.x, dy = y - origin.y;
+    const x1 = origin.x1 + dx, y1 = origin.y1 + dy, x2 = origin.x2 + dx, y2 = origin.y2 + dy;
+    // Restore bounds too if an older failed write saved only x/y, not the line.
+    return { ...item, x: Math.min(x1, x2), y: Math.min(y1, y2), x1, y1, x2, y2 };
+};
+
 /** Handles rule-neutral pointer, touch, selection and drag transactions. */
 export const useCanvasInteractionController = ({
     activeLayer,
     activeScenario,
     activeScenarioRef,
+    lastRemoteScenarioItemsRef,
     applySangradoSpeedPenalty,
     boardCardHandTransferRef,
     cardPreviewSuppressTouchEndRef,
@@ -96,6 +106,7 @@ export const useCanvasInteractionController = ({
     zoom,
 }) => {
 const lastPinchDist = useRef(null);
+    const releasedMasterDrags = useRef(new WeakSet());
     const [pickupPointer, setPickupPointer] = useState(null);
     const lastTouchPos = useRef({ x: 0, y: 0 });
     const isCanvasCombatActive = !isBoardMode && isCanvasCombatRoundActive(activeScenario);
@@ -133,7 +144,7 @@ const lastPinchDist = useRef(null);
         }
 
         if (draggedTokenId || rotatingTokenId || resizingTokenId || draggingWallHandle || selectionBox || isDrawingWall) {
-            if (e.cancelable) e.preventDefault();
+            if (e.cancelable && !combatRuntime?.forcedMovement?.isActive(draggedTokenId)) e.preventDefault();
             handleMouseMove(e);
             return;
         }
@@ -217,6 +228,7 @@ const lastPinchDist = useRef(null);
     };
 
 const handleMouseMove = (e) => {
+        if (draggedTokenId && releasedMasterDrags.current.has(tokenDragStart)) return;
         const { x: curX, y: curY } = getEventCoords(e, tokenDragStart.identifier);
 
         // --- SELECTION BOX ---
@@ -244,7 +256,7 @@ const handleMouseMove = (e) => {
 
             // Buscar el muro para ver si tiene snap individual
             const wall = currentScenario.items.find(i => i.id === draggingWallHandle.id);
-            const snappedPos = snapToWallEndpoints(worldPos, wall?.snapToGrid);
+            const snappedPos = snapToWallEndpoints(worldPos, wall?.snapToGrid, draggingWallHandle.id);
             if (
                 wall &&
                 ((draggingWallHandle.handleIndex === 1 && wall.x1 === snappedPos.x && wall.y1 === snappedPos.y) ||
@@ -307,7 +319,7 @@ const handleMouseMove = (e) => {
             const deltaY = curY - tokenScreenY;
 
             let angleDeg = (Math.atan2(deltaY, deltaX) * 180 / Math.PI) + 90;
-            if (isCardItem(token) || token.type === 'geometry') {
+            if (isCardItem(token) || (token.type === 'geometry' && !isTreeScenery(token))) {
                 angleDeg = snapCardRotationAngle(angleDeg);
             }
 
@@ -422,18 +434,9 @@ const handleMouseMove = (e) => {
 
                     // Si es un muro, desplazamos sus puntos
                     if (item.type === 'wall') {
-                        const dx = newX - item.x;
-                        const dy = newY - item.y;
-                        if (dx !== 0 || dy !== 0) hasDragPositionChange = true;
-                        return {
-                            ...item,
-                            x: newX,
-                            y: newY,
-                            x1: item.x1 + dx,
-                            y1: item.y1 + dy,
-                            x2: item.x2 + dx,
-                            y2: item.y2 + dy
-                        };
+                        const moved = translateWall(item, original, newX, newY);
+                        if (['x', 'y', 'x1', 'y1', 'x2', 'y2'].some(field => item[field] !== moved[field])) hasDragPositionChange = true;
+                        return moved;
                     }
 
                     if (item.x !== newX || item.y !== newY) hasDragPositionChange = true;
@@ -530,6 +533,15 @@ const handleMouseMove = (e) => {
             let newHeight = startHeight + deltaY;
 
             const item = currentScenario.items.find(i => i.id === resizingTokenId);
+            if (isTreeScenery(item)) {
+                const original = { ...item, ...(tokenOriginalPos[resizingTokenId] || {}), width: startWidth, height: startHeight };
+                const patch = getTreeResizePatch(original, { x: deltaX, y: deltaY }, gridConfig);
+                if (Object.entries(patch).every(([key, value]) => item[key] === value)) return;
+                setActiveScenario(prev => ({ ...prev, items: prev.items.map(candidate => (
+                    candidate.id === resizingTokenId ? { ...candidate, ...patch } : candidate
+                )) }));
+                return;
+            }
             const shouldSnap = item?.snapToGrid !== undefined ? item.snapToGrid : gridConfig.snapToGrid;
 
             if (shouldSnap) {
@@ -577,7 +589,8 @@ const handleMouseMove = (e) => {
 
     const getItemInteractionSnapshot = (item, extraFields = []) => {
         const snapshot = {};
-        ['x', 'y', 'rotation', 'width', 'height', ...extraFields].forEach(field => {
+        const wallFields = item.type === 'wall' ? ['x1', 'y1', 'x2', 'y2'] : [];
+        ['x', 'y', 'rotation', 'width', 'height', ...wallFields, ...extraFields].forEach(field => {
             if (Object.prototype.hasOwnProperty.call(item, field)) {
                 snapshot[field] = item[field];
             }
@@ -776,6 +789,12 @@ const handleMouseMove = (e) => {
                 const deltaY = (releaseY - tokenDragStart.y) / zoom;
                 const draggedItem = currentScenario.items.find(item => item.id === draggedTokenId);
 
+                // The viewport and window can both finish this gesture before React clears the drag.
+                if (!isBoardMode && !isPlayerView && activeLayer === 'TABLETOP' && isCombatTokenItem(draggedItem)) {
+                    if (releasedMasterDrags.current.has(tokenDragStart)) return;
+                    releasedMasterDrags.current.add(tokenDragStart);
+                }
+
                 // --- NUEVO: Físicas de dados ---
                 if (isBoardMode && isBoardDieItem(draggedItem) && draggedItem.dieLaunchMode) {
                     const screenDeltaX = releaseX - tokenDragStart.x;
@@ -859,10 +878,6 @@ const handleMouseMove = (e) => {
                     const movesInDragGroup = Object.prototype.hasOwnProperty.call(tokenOriginalPos, item.id);
                     if (!selectedTokenIds.includes(item.id) && !movesWithSelectedContainer && !markerMovesWithSelectedContainer && !movesInDragGroup) return item;
 
-                    if (item.type === 'wall') {
-                        return item;
-                    }
-
                     const original = tokenOriginalPos[item.id] || { x: item.x, y: item.y };
                     let newX, newY;
 
@@ -883,8 +898,32 @@ const handleMouseMove = (e) => {
                         newY = snappedPosition.y;
                     }
 
-                    return { ...item, x: newX, y: newY };
+                    return item.type === 'wall' ? translateWall(item, original, newX, newY) : { ...item, x: newX, y: newY };
                 });
+
+                if (!isBoardMode && !isPlayerView && activeLayer === 'TABLETOP'
+                    && combatRuntime?.forcedMovement?.isActive(draggedTokenId)) {
+                    const original = tokenOriginalPos[draggedTokenId];
+                    const destination = finalItems.find(item => item.id === draggedTokenId);
+                    const save = original && destination && combatRuntime.forcedMovement.commitDrag(draggedTokenId, {
+                        from: { x: original.x, y: original.y }, to: { x: destination.x, y: destination.y },
+                        originalItems: interactionOriginalItems,
+                    });
+                    setDraggedTokenId(null);
+                    setRotatingTokenId(null);
+                    setResizingTokenId(null);
+                    setTokenOriginalPos({});
+                    setDragVisualOrigin({});
+                    setCombatOccupancyFeedback(null);
+                    document.body.style.cursor = 'default';
+                    const saved = await save;
+                    if (!saved && original) {
+                        setActiveScenario(current => current ? { ...current, items: current.items.map(item => (
+                            item.id === draggedTokenId ? { ...item, x: original.x, y: original.y } : item
+                        )) } : current);
+                    }
+                    return;
+                }
 
                 if (handleModeItemDrop?.({
                     draggedItemId: draggedTokenId,
@@ -1047,9 +1086,7 @@ const handleMouseMove = (e) => {
 
             // Si estábamos arrastrando tokens en la capa de mesa, comprobar colisiones
             if (draggedTokenId && activeLayer === 'TABLETOP') {
-                const walls = currentScenario.items.filter(i =>
-                    i.type === 'wall' && !(i.wallType === 'door' && i.isOpen)
-                );
+                const walls = getSceneBlockingSegments(currentScenario.items, { kind: 'movement' });
                 let hasCollision = false;
 
                 finalItems = finalItems.map(item => {
@@ -1083,7 +1120,7 @@ const handleMouseMove = (e) => {
                                 lineRectIntersect(wall.x1, wall.y1, wall.x2, wall.y2, item.x + 2, item.y + 2, item.width - 4, item.height - 4)
                             );
 
-                            if (pathCollision || overlapCollision) {
+                            if (pathCollision || overlapCollision || isPointInsideTreeTrunk(charCenterEnd, currentScenario.items)) {
                                 hasCollision = true;
                                 return { ...item, x: original.x, y: original.y };
                             }
@@ -1207,29 +1244,31 @@ const handleMouseMove = (e) => {
                                 Math.round(Math.abs(movedToken.x - original.x) / cellW),
                                 Math.round(Math.abs(movedToken.y - original.y) / cellH),
                             );
-                        const confirmed = await combatRuntime.confirmMovement(draggedTokenId, {
+                        const save = combatRuntime.confirmMovement(draggedTokenId, {
                             from: { x: original.x, y: original.y },
                             to: { x: movedToken.x, y: movedToken.y },
                             cost,
                             itemsOverride: hiddenMovementResolution?.detected ? finalItems : null,
+                            revealedTokenIds: hiddenMovementResolution?.revealedTokenIds,
                         });
-
-                        if (!confirmed) {
-                            setActiveScenario((current) => current ? {
-                                ...current,
-                                items: current.items.map((item) => (
-                                    item.id === draggedTokenId
-                                        ? { ...item, x: original.x, y: original.y }
-                                        : item
-                                )),
-                            } : current);
-                        }
 
                         setDraggedTokenId(null);
                         setTokenOriginalPos({});
                         setDragVisualOrigin({});
                         setCombatOccupancyFeedback(null);
                         document.body.style.cursor = 'default';
+
+                        const confirmed = await save;
+                        if (!confirmed) {
+                            setActiveScenario(current => {
+                                if (current?.id !== currentScenario.id) return current;
+                                const saved = lastRemoteScenarioItemsRef?.current?.find(item => item.id === draggedTokenId) || original;
+                                return { ...current, items: current.items.map(item => (
+                                    item.id === draggedTokenId && item.x === movedToken.x && item.y === movedToken.y
+                                        ? { ...item, x: saved.x, y: saved.y } : item
+                                )) };
+                            });
+                        }
                         return;
                     }
                 }
@@ -1270,6 +1309,12 @@ const handleMouseMove = (e) => {
                 });
             }
 
+            // Lighting/map drags also need the final release geometry locally,
+            // including when no intermediate pointermove has rendered yet.
+            if (draggedTokenId && activeLayer !== 'TABLETOP') {
+                setActiveScenario(prev => prev?.id === currentScenario.id ? { ...prev, items: finalItems } : prev);
+            }
+
             // Evaluar si hubo cambios reales respecto al inicio del drag para evitar writes innecesarios que rompen previsiones de movimiento
             let shouldSaveToFirebase = false;
             if (rotatingTokenId || resizingTokenId) {
@@ -1296,7 +1341,8 @@ const handleMouseMove = (e) => {
                             fields: {
                                 x: item.x,
                                 y: item.y,
-                                rotation: item.rotation
+                                rotation: item.rotation,
+                                ...(item.type === 'wall' ? getItemInteractionSnapshot(item) : {})
                             }
                         };
                     }

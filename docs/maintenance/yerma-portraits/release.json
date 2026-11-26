@@ -1,0 +1,109 @@
+{
+  "date": "2026-11-05",
+  "verifiedAt": "2026-11-05T04:28:36.056Z",
+  "method": "Clone each live version; replace exactly three portrait assets; preserve every other file hash and Hosting config",
+  "codeChanges": false,
+  "databaseChanges": false,
+  "optimization": [
+    {
+      "source": "Yerma.jpeg",
+      "target": "public/yerma/Yerma.webp",
+      "dimensions": [
+        1007,
+        1024
+      ],
+      "sourceBytes": 114013,
+      "previousBytes": 55232,
+      "webpBytes": 79402,
+      "quality": 82,
+      "method": 6,
+      "sha256": "c97144527e35c4b1d8a458f6f5b4ab874e46fd8314e8509d5b2e7c1812d9d70b"
+    },
+    {
+      "source": "Taiga.jpeg",
+      "target": "public/yerma/Taiga.webp",
+      "dimensions": [
+        1008,
+        1024
+      ],
+      "sourceBytes": 89209,
+      "previousBytes": 51386,
+      "webpBytes": 59932,
+      "quality": 82,
+      "method": 6,
+      "sha256": "bcc0bb26e3476b649e5458ec0b4ab078ff86c994a1f0803dfabf0538368003c5"
+    },
+    {
+      "source": "Tundra (2).jpeg",
+      "target": "public/yerma/Tundra.webp",
+      "dimensions": [
+        1006,
+        1024
+      ],
+      "sourceBytes": 128676,
+      "previousBytes": 107722,
+      "webpBytes": 92842,
+      "quality": 82,
+      "method": 6,
+      "sha256": "3980df19f88dec27ca5f6ea0ed602ff63d53c8840791f91173066e0a5e24de93"
+    }
+  ],
+  "sites": [
+    {
+      "site": "base-de-datos-noma",
+      "beforeVersion": "projects/base-de-datos-noma/sites/base-de-datos-noma/versions/2f2afeb6ce773e1c",
+      "afterVersion": "projects/base-de-datos-noma/sites/base-de-datos-noma/versions/97359132d4ea0f68",
+      "fileCount": 267,
+      "changedPaths": [
+        "/yerma/Taiga.webp",
+        "/yerma/Tundra.webp",
+        "/yerma/Yerma.webp"
+      ],
+      "hostingConfigUnchanged": true
+    },
+    {
+      "site": "nomarol",
+      "beforeVersion": "projects/base-de-datos-noma/sites/nomarol/versions/76b8c480b29c21f0",
+      "afterVersion": "projects/base-de-datos-noma/sites/nomarol/versions/b13bf62210c974d0",
+      "fileCount": 267,
+      "changedPaths": [
+        "/yerma/Taiga.webp",
+        "/yerma/Tundra.webp",
+        "/yerma/Yerma.webp"
+      ],
+      "hostingConfigUnchanged": true
+    }
+  ],
+  "remote": [
+    {
+      "url": "https://base-de-datos-noma.web.app/yerma/Yerma.webp",
+      "bytes": 79402,
+      "sha256": "c97144527e35c4b1d8a458f6f5b4ab874e46fd8314e8509d5b2e7c1812d9d70b"
+    },
+    {
+      "url": "https://base-de-datos-noma.web.app/yerma/Taiga.webp",
+      "bytes": 59932,
+      "sha256": "bcc0bb26e3476b649e5458ec0b4ab078ff86c994a1f0803dfabf0538368003c5"
+    },
+    {
+      "url": "https://base-de-datos-noma.web.app/yerma/Tundra.webp",
+      "bytes": 92842,
+      "sha256": "3980df19f88dec27ca5f6ea0ed602ff63d53c8840791f91173066e0a5e24de93"
+    },
+    {
+      "url": "https://nomarol.web.app/yerma/Yerma.webp",
+      "bytes": 79402,
+      "sha256": "c97144527e35c4b1d8a458f6f5b4ab874e46fd8314e8509d5b2e7c1812d9d70b"
+    },
+    {
+      "url": "https://nomarol.web.app/yerma/Taiga.webp",
+      "bytes": 59932,
+      "sha256": "bcc0bb26e3476b649e5458ec0b4ab078ff86c994a1f0803dfabf0538368003c5"
+    },
+    {
+      "url": "https://nomarol.web.app/yerma/Tundra.webp",
+      "bytes": 92842,
+      "sha256": "3980df19f88dec27ca5f6ea0ed602ff63d53c8840791f91173066e0a5e24de93"
+    }
+  ]
+}

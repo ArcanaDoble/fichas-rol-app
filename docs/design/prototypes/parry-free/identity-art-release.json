@@ -1,0 +1,35 @@
+{
+  "verifiedAtUtc": "2026-10-21T02:20:46.563775+00:00",
+  "release": "parry-identity-portrait-background",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.65282a87.js",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "de6de815f4e5a0af4991d5a54a48f478dbd3348920b67219abbb457ce564959c"
+    },
+    "main.css": {
+      "path": "/static/css/main.a30752fd.css",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "a771585b351c1bcbbf8f57d561e350cd181bdef4927013eee249718f87ed7a11"
+    }
+  },
+  "testSuitesPassed": 2,
+  "testsPassed": 8,
+  "testsLog": "output/playwright/parry-identity-art-tests.log",
+  "buildLog": "output/playwright/parry-identity-art-build.log",
+  "deployLog": "output/playwright/parry-identity-art-deploy.log",
+  "verification": "Real provider with local memory transport at1280x800 and412x915; character portrait blended into identity background; name editing checked; missing portrait renders no frame or placeholder image.",
+  "evidence": [
+    "evidence/identity-art-desktop.png",
+    "evidence/identity-art-mobile.png",
+    "evidence/identity-art-fallback-mobile.png"
+  ],
+  "productionRoomWritesForVerification": 0,
+  "firestoreRulesChanged": false
+}

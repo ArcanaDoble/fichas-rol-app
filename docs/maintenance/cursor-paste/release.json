@@ -1,0 +1,30 @@
+{
+  "feature": "Pegar tokens y selecciones bajo el cursor del mapa",
+  "url": "https://base-de-datos-noma.web.app",
+  "verifiedAt": "2026-10-22T13:52:43.003Z",
+  "assets": [
+    {
+      "asset": "/static/js/main.4eb516bc.js",
+      "sha256": "897517a98d22243396150120702f71e826219b2f2a44078825d38b420a76bb17",
+      "bytes": 5329672
+    },
+    {
+      "asset": "/static/css/main.057a07c9.css",
+      "sha256": "5078afd72e7e88d22b2dcc800b7971c2cc887276a2208b50cf87933914d9db71",
+      "bytes": 701011
+    }
+  ],
+  "tests": {
+    "suites": 231,
+    "passed": 1605,
+    "skipped": 1,
+    "focusedPassed": 18
+  },
+  "browser": {
+    "desktop": "1280x900: two Ctrl+C/V placements inside a four-wall enclosure, including zoom and pan; exact centers and unchanged combat/resources"
+  },
+  "buildLog": "output/playwright/cursor-paste-build.log",
+  "testLog": "output/playwright/cursor-paste-tests.log",
+  "focusedLog": "output/playwright/cursor-paste-focused.log",
+  "deployLog": "output/playwright/cursor-paste-deploy.log"
+}

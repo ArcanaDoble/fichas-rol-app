@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { createElement, useCallback, useEffect, useRef, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import {
@@ -20,12 +20,17 @@ import {
     resolveCanvasInventoryItemIdentity,
 } from './canvasInventoryTransfer';
 import { useCanvasCombatRuntime } from './combat/useCanvasCombatRuntime';
+import { useCanvasForcedMovement } from './useCanvasForcedMovement';
+import { ForcedMovementButton } from './components/CanvasForcedMovement';
 import {
     mergeCanvasRogueliteRuntimeSheet,
     syncCanvasTokenWithRuntimeProfile,
 } from './rogueliteRunPersistence';
 import { useCanvasSharedPointer } from './useCanvasSharedPointer';
 import { useCanvasItemUseSystem } from './item-use/useCanvasItemUseSystem';
+import { useCanvasSpellUseSystem } from './spells/useCanvasSpellUseSystem';
+import CanvasSpellEffect from './components/CanvasSpellEffect';
+import { getCanvasSystem, syncCampaignToken } from './campaignSystem';
 
 const noop = () => undefined;
 const emptyList = () => [];
@@ -38,11 +43,15 @@ const emptyList = () => [];
 export const useCanvasFeatureController = ({
     activeScenario,
     activeScenarioRef,
+    activeLayer,
     currentUserId,
     divToWorld,
     gridConfig,
     isPlayerView,
     playerName,
+    selectedTokenIds,
+    targetingState,
+    showHiddenTokens,
     safePersistItems,
     scenarioCollectionName,
     setActiveScenario,
@@ -64,11 +73,14 @@ export const useCanvasFeatureController = ({
         runtimeSyncCallbacksRef.current = { safePersistItems, triggerToast };
     }, [safePersistItems, triggerToast]);
     const combatRuntime = useCanvasCombatRuntime({
+        currentUserId,
         activeScenario,
         activeScenarioRef,
         gridConfig,
         isPlayerView,
         playerName,
+        selectedTokenIds,
+        showHiddenTokens,
         safePersistItems,
         scenarioCollectionName,
         setActiveScenario,
@@ -84,6 +96,19 @@ export const useCanvasFeatureController = ({
         playerName,
         triggerToast,
     });
+    const spellUseSystem = useCanvasSpellUseSystem({ activeScenario, activeScenarioRef, combatRuntime,
+        divToWorld, gridConfig, isPlayerView, playerName, triggerToast });
+    const mapUseSystem = {
+        ...itemUseSystem,
+        ...(spellUseSystem.session ? spellUseSystem : {}),
+        begin: (...args) => { spellUseSystem.cancel(); return itemUseSystem.begin(...args); },
+        spellUseSystem,
+        renderEffects: zoom => createElement(CanvasSpellEffect, { presentation: combatRuntime.spellPresentation, zoom }),
+    };
+    const forcedMovement = useCanvasForcedMovement({ activeScenario, activeScenarioRef, activeLayer,
+        isPlayerView, divToWorld, gridConfig, safePersistItems, setActiveScenario, triggerToast,
+        disabled: Boolean(targetingState || combatRuntime.campaignVisible || itemUseSystem.session || spellUseSystem.session || catalogPlacementItem),
+    });
     const runtimeProfileSubscriptionKey = (activeScenario?.items || [])
         .filter((item) => (
             item?.profileType === 'rogueliteClass'
@@ -94,6 +119,45 @@ export const useCanvasFeatureController = ({
         .map((item) => `${item.linkedClassOwner}/${item.linkedClassId}/${item.runId}`)
         .sort()
         .join('|');
+
+    const campaignSubscriptionKey = (activeScenario?.items || [])
+        .filter(item => item.profileType === 'campaignCharacter' && item.linkedCharacterId)
+        .map(item => item.linkedCharacterId).sort().join('|');
+    useEffect(() => {
+        if (!campaignSubscriptionKey || getCanvasSystem(activeScenario) !== 'campaign') return undefined;
+        const unsubscribes = [];
+        const timers = new Set();
+        [...new Set(campaignSubscriptionKey.split('|'))].forEach(id => {
+            let character = null;
+            let sheet = null;
+            const sync = () => {
+                const timer = setTimeout(() => {
+                    timers.delete(timer);
+                    const scene = activeScenarioRef.current;
+                    if (!character || !sheet || scene?.id !== activeScenario.id || getCanvasSystem(scene) !== 'campaign') return;
+                    const changed = [];
+                    const items = scene.items.map(token => {
+                        if (token.linkedCharacterId !== id || token.profileType !== 'campaignCharacter' || token.runtimeDirty) return token;
+                        const next = syncCampaignToken(token, { ...character, id, campaignSheet: sheet }, {}, {
+                            preserveMovement: Boolean(scene.canvasCombat?.participants?.[token.id]),
+                        });
+                        if (JSON.stringify(next) === JSON.stringify(token)) return token;
+                        changed.push(token.id);
+                        return next;
+                    });
+                    if (changed.length) runtimeSyncCallbacksRef.current.safePersistItems(scene.id, items, scene.items, changed, { persistRuntime: false });
+                }, 0);
+                timers.add(timer);
+            };
+            unsubscribes.push(onSnapshot(doc(db, 'characters', id), snapshot => {
+                character = snapshot.exists?.() ? snapshot.data() : null; sync();
+            }));
+            unsubscribes.push(onSnapshot(doc(db, 'campaignCharacterSheets', id), snapshot => {
+                sheet = snapshot.exists?.() ? snapshot.data() : null; sync();
+            }));
+        });
+        return () => { unsubscribes.forEach(unsubscribe => unsubscribe()); timers.forEach(clearTimeout); };
+    }, [campaignSubscriptionKey, activeScenario?.id, activeScenario?.rulesSystem, activeScenarioRef]);
 
     useEffect(() => {
         const scenarioId = activeScenario?.id;
@@ -565,7 +629,7 @@ export const useCanvasFeatureController = ({
             if (!scenario?.id || !detail.sourceTokenId) return;
 
             const sourceToken = (scenario.items || []).find((item) => item.id === detail.sourceTokenId);
-            if (!sourceToken || !['rogueliteClass', 'rogueliteEnemy'].includes(sourceToken.profileType)) return;
+            if (!sourceToken || !['rogueliteClass', 'rogueliteEnemy', 'campaignCharacter'].includes(sourceToken.profileType)) return;
             const canManageInventory = !isPlayerView
                 || (Array.isArray(sourceToken.controlledBy) && sourceToken.controlledBy.includes(playerName));
             if (!canManageInventory) {
@@ -690,8 +754,9 @@ export const useCanvasFeatureController = ({
         sceneDropPreview,
         catalogPlacementItem,
         cancelCatalogPlacement,
-        combatRuntime,
-        itemUseSystem,
+        combatRuntime: { ...combatRuntime, forcedMovement: { ...forcedMovement,
+            ButtonComponent: ForcedMovementButton } },
+        itemUseSystem: mapUseSystem,
         handleBoardCardBackUpload: noop,
         addCardToBoard: noop,
         getHandCardsForToken: emptyList,

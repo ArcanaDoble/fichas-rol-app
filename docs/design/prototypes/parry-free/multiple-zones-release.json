@@ -1,0 +1,48 @@
+{
+  "verifiedAtUtc": "2026-10-21T23:21:32.281827+00:00",
+  "release": "parry-free-multiple-zones",
+  "url": "https://base-de-datos-noma.web.app",
+  "project": "base-de-datos-noma",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.a2e7ffe7.js",
+      "sha256Matches": true,
+      "sha256": "7055f0362de13ab832c9fd3efb536fbbefd324d41b118ea60086e4a31d597ccc"
+    },
+    "main.css": {
+      "path": "/static/css/main.0ee3f373.css",
+      "sha256Matches": true,
+      "sha256": "55c89fab31ec9542326c03d9aa9692228f1a4e189e524d326be7752cf499fd35"
+    }
+  },
+  "buildLog": "output/playwright/parry-multiple-final-build.log",
+  "deployLog": "output/playwright/parry-multiple-deploy.log",
+  "testLog": "output/playwright/parry-multiple-all-tests.log",
+  "finalFocusedTestLog": "output/playwright/parry-multiple-final-tests.log",
+  "tests": {
+    "suitesPassed": 227,
+    "testsPassed": 1581,
+    "testsSkipped": 1,
+    "finalFocusedTestsPassed": 23
+  },
+  "verification": [
+    "Single-zone mode preserves existing one-click selection; multiple mode toggles 1-5 zones and All toggles the full set",
+    "Same controls for attackers and defenders; selected attack is red, selected parry is blue",
+    "SHA256 commits the entire canonical zone set with 256-bit nonce, without exposing mode or count before both confirmations",
+    "Legacy single-zone commitments, local recovery and historical results remain compatible; malformed and ambiguous reveal fields rejected",
+    "Three-client integration verified hidden choices, automatic reveal, partial intersections and history",
+    "Browser verification used real room and service with local memory transport, mouse clicks on lance shafts, Space toggle, All, swap roles, visible keyboard focus and 1440/412/320px layouts",
+    "No automatic resource, equipment or damage rules added"
+  ],
+  "evidence": [
+    "evidence/multiple-zones-desktop.png",
+    "evidence/multiple-zones-mobile.png",
+    "evidence/multiple-zones-result-mobile.png",
+    "evidence/multiple-parry-mobile.png",
+    "evidence/multiple-zones-320.png"
+  ],
+  "productionGameWritesForVerification": 0,
+  "firestoreRulesChanged": false
+}

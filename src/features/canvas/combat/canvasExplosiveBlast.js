@@ -1,7 +1,7 @@
 const itemName = item => item?.name || item?.nombre || 'Bomba explosiva';
 
 export const createExplosiveBlastPendingAttack = (blast, targetId, index = 0) => blast.attackTemplate ? ({
-  ...blast.attackTemplate,
+  ...(blast.targetAttackTemplates?.[targetId] || blast.attackTemplate),
   id: `${blast.id}-target-${encodeURIComponent(targetId)}`,
   targetId, targetName: blast.targetNames?.[targetId] || 'Objetivo',
   actionDieIds: [], status: 'awaiting-defense',
@@ -63,7 +63,8 @@ export const continueCanvasExplosiveBlast = (combat, resolvedPending, items = []
   const presentIds = new Set(items.map(item => item.id));
   let nextIndex = blast.nextTargetIndex;
   while (nextIndex < blast.targetIds.length && !presentIds.has(blast.targetIds[nextIndex])) nextIndex += 1;
-  if (nextIndex >= blast.targetIds.length) return continueQueuedFire({ ...combat, explosiveBlast: null });
+  if (nextIndex >= blast.targetIds.length) return continueQueuedFire({ ...combat, explosiveBlast: null,
+    ...(combat.arcaneChain?.id === blast.id ? { arcaneChain: { ...combat.arcaneChain, phase: 'choose-target' } } : {}) });
   return {
     ...combat,
     explosiveBlast: { ...blast, nextTargetIndex: nextIndex + 1 },

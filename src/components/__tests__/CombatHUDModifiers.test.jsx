@@ -15,6 +15,16 @@ const weapons = [
 ];
 const gridConfig = { cellWidth: 50, cellHeight: 50 };
 
+test('equipping a Truco weapon does not add a Canvas transformation shortcut', () => {
+  const cane = { id: 'cane', type: 'weapon', name: 'Bastón enroscado', rasgos: ['Truco'],
+    trickForms: [{ id: 'primary', dano: '1d12' }, { id: 'secondary', dano: '2d4' }] };
+  render(<CombatHUD token={{ id: 'actor', name: 'Yuuzu', profileType: 'campaignCharacter', equippedItems: [cane] }}
+    mode="canvas" isActive onAction={jest.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Acciones' }));
+  expect(screen.getByRole('button', { name: 'Atacar' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Truco|Transformar/i })).not.toBeInTheDocument();
+});
+
 test.each([false, true])('Canvas HUD passes repeated extra dice and both manual traits to %s enemy attack', enemy => {
   const attacker = { id: 'actor', name: 'Actor', profileType: enemy ? 'rogueliteEnemy' : 'rogueliteClass', controlledBy: ['Ada'],
     x: 0, y: 0, width: 25, height: 25, status: [], equippedItems: enemy ? [] : weapons, inventory: enemy ? weapons : [] };

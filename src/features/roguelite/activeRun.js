@@ -5,6 +5,7 @@ import {
   reconcileEquippedItemsWithInventory,
   resolveEquipmentInstanceId,
 } from './equipmentPool';
+import { withoutArcaneBarrierStatus } from '../../utils/arcaneBarrierStatus';
 
 export const ROGUELITE_ACTIVE_RUN_VERSION = 2;
 
@@ -21,6 +22,17 @@ const CATEGORY_TYPES = Object.freeze({
 });
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
+
+// Barrera belongs to the encounter token, never to the portable adventure.
+const cloneAdventureRun = (run) => {
+  const snapshot = clone(run);
+  delete snapshot.arcaneBarrier;
+  snapshot.statusEffects = withoutArcaneBarrierStatus(snapshot.statusEffects);
+  if (snapshot.personalStatusTags !== undefined) {
+    snapshot.personalStatusTags = withoutArcaneBarrierStatus(snapshot.personalStatusTags);
+  }
+  return snapshot;
+};
 
 const clampNumber = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -353,7 +365,7 @@ export const createRogueliteActiveRun = (sheetData = {}, options = {}) => {
       ? existingRun.equippedItems
       : (sheetData.equippedItems || existingRun.equippedItems);
     return {
-      ...clone(existingRun),
+      ...cloneAdventureRun(existingRun),
       version: ROGUELITE_ACTIVE_RUN_VERSION,
       inventory,
       baseInventoryTemplateIds: Array.isArray(existingRun.baseInventoryTemplateIds)
@@ -380,14 +392,14 @@ export const createRogueliteActiveRun = (sheetData = {}, options = {}) => {
     revision: 0,
     currentScenarioId: options.scenarioId || null,
     stats: createRogueliteRunStats(sheetData),
-    statusEffects: Array.isArray(sheetData.personalStatusTags)
-      ? clone(sheetData.personalStatusTags)
-      : [],
+    statusEffects: withoutArcaneBarrierStatus(sheetData.personalStatusTags),
     inventory,
     baseInventoryTemplateIds: resolveInventoryTemplateIds(resolveClassEquipmentPool(sheetData)),
     removedBaseInventoryTemplateIds: [],
     equippedItems: clone(pruneRogueliteEquippedItemsToInventory(sheetData.equippedItems || {}, inventory)),
     equippedSkillIds: clone(sheetData.equippedSkillIds || []),
+    usedSkillSlots: [false, false, false],
+    usedSkillSlotIds: clone(sheetData.equippedSkillIds || []),
     activeWeaponSet: Number(sheetData.equippedItems?.activeWeaponSet) === 1 ? 1 : 0,
     money: clampNumber(sheetData.money, 0),
     createdAt: options.now ?? Date.now(),
@@ -436,7 +448,7 @@ export const rebaseRogueliteActiveRun = (activeRun, resolvedBaseProfile = {}, op
   const inventory = pruneUnpreparedBaseItems(resolvedBaseProfile, activeRun);
 
   return {
-    ...clone(activeRun),
+    ...cloneAdventureRun(activeRun),
     version: ROGUELITE_ACTIVE_RUN_VERSION,
     templateRevision: resolveRogueliteTemplateRevision(resolvedBaseProfile),
     revision: Math.max(0, Number(activeRun.revision) || 0) + 1,
@@ -464,7 +476,7 @@ export const createRogueliteActiveRunFromToken = (
   const removedBaseInventoryTemplateIds = previousBaseIds.filter((id) => !inventoryIds.has(id));
 
   return {
-    ...(previousRun ? clone(previousRun) : {}),
+    ...(previousRun ? cloneAdventureRun(previousRun) : {}),
     version: ROGUELITE_ACTIVE_RUN_VERSION,
     id: token?.runId || previousRun?.id,
     status: 'active',
@@ -475,12 +487,14 @@ export const createRogueliteActiveRunFromToken = (
     currentScenarioId: options.scenarioId || previousRun?.currentScenarioId || null,
     lastTokenId: token?.id || previousRun?.lastTokenId || null,
     stats: clone(token?.stats || previousRun?.stats || {}),
-    statusEffects: clone(token?.status || previousRun?.statusEffects || []),
+    statusEffects: withoutArcaneBarrierStatus(token?.status || previousRun?.statusEffects),
     inventory,
     baseInventoryTemplateIds: clone(previousBaseIds),
     removedBaseInventoryTemplateIds,
     equippedItems: clone(pruneRogueliteEquippedItemsToInventory(equipmentLoadout, inventory)),
     equippedSkillIds: clone(token?.equippedSkillIds || previousRun?.equippedSkillIds || []),
+    usedSkillSlots: clone(token?.usedSkillSlots || previousRun?.usedSkillSlots || []),
+    usedSkillSlotIds: clone(token?.usedSkillSlotIds || previousRun?.usedSkillSlotIds || []),
     activeWeaponSet: Number(token?.activeWeaponSet ?? equipmentLoadout.activeWeaponSet) === 1 ? 1 : 0,
     money: clampNumber(token?.money ?? previousRun?.money, 0),
     createdAt: previousRun?.createdAt || options.now || Date.now(),
@@ -496,7 +510,7 @@ export const updateRogueliteActiveRunFromProfile = (profileClass = {}, options =
   const classEquipment = resolveClassEquipmentPool(profileClass);
 
   return {
-    ...clone(activeRun),
+    ...cloneAdventureRun(activeRun),
     version: ROGUELITE_ACTIVE_RUN_VERSION,
     revision: Math.max(0, Number(activeRun.revision) || 0) + (options.incrementRevision === false ? 0 : 1),
     stats: createRogueliteRunStats(profileClass),
@@ -509,7 +523,7 @@ export const updateRogueliteActiveRunFromProfile = (profileClass = {}, options =
     equippedSkillIds: clone(profileClass.equippedSkillIds || activeRun.equippedSkillIds || []),
     activeWeaponSet: Number(profileClass.equippedItems?.activeWeaponSet) === 1 ? 1 : 0,
     money: clampNumber(profileClass.money, activeRun.money),
-    statusEffects: clone(profileClass.personalStatusTags || activeRun.statusEffects || []),
+    statusEffects: withoutArcaneBarrierStatus(profileClass.personalStatusTags || activeRun.statusEffects),
     updatedAt: options.now ?? Date.now(),
   };
 };
@@ -525,7 +539,7 @@ export const applyRogueliteActiveRunToProfile = (profileClass = {}) => {
   if (!isRogueliteActiveRun(activeRun, profileClass.id, profileClass.owner)) return profileClass;
 
   const reconciledRun = {
-    ...clone(activeRun),
+    ...cloneAdventureRun(activeRun),
     version: ROGUELITE_ACTIVE_RUN_VERSION,
     inventory: resolveActiveRunInventory(profileClass, activeRun),
     baseInventoryTemplateIds: Array.isArray(activeRun.baseInventoryTemplateIds)
@@ -544,13 +558,15 @@ export const applyRogueliteActiveRunToProfile = (profileClass = {}) => {
   const iniciativa = stats.iniciativa || {};
   const recurso = stats.recurso || {};
   const runStatusEffects = clone(reconciledRun.statusEffects || []);
-  const inheritedTags = clone(profileClass.classTags || []);
+  const inheritedTags = withoutArcaneBarrierStatus(profileClass.classTags);
   const inheritedTagNames = new Set(inheritedTags.map((tag) => (
     String(tag || '').split('|')[0].trim().toLowerCase()
   )));
+  const profileSnapshot = { ...profileClass };
+  delete profileSnapshot.arcaneBarrier;
 
   return {
-    ...profileClass,
+    ...profileSnapshot,
     activeRun: reconciledRun,
     runReference: {
       maxLife: profileClass.maxLife,
@@ -582,6 +598,8 @@ export const applyRogueliteActiveRunToProfile = (profileClass = {}) => {
     equipment: reconciledRun.inventory,
     equippedItems: clone(reconciledRun.equippedItems || profileClass.equippedItems || {}),
     equippedSkillIds: clone(reconciledRun.equippedSkillIds || profileClass.equippedSkillIds || []),
+    usedSkillSlots: clone(reconciledRun.usedSkillSlots || []),
+    usedSkillSlotIds: clone(reconciledRun.usedSkillSlotIds || []),
     money: clampNumber(reconciledRun.money, profileClass.money),
     personalStatusTags: runStatusEffects,
     tags: [

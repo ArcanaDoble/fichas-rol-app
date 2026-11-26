@@ -1,0 +1,36 @@
+{
+  "verifiedAtUtc": "2026-10-21T02:10:12.312313+00:00",
+  "release": "parry-history-three-latest",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.78271688.js",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "f266aeacddf46ec4f3a13c32d2ab9edd2a7c7a5927e3a9bd10fab200bf6fc956"
+    },
+    "main.css": {
+      "path": "/static/css/main.9a9a2ccc.css",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "1de77209fed75b1af03a15accb062626bbe67b8b7b117e62e861b87a04b6ada3"
+    }
+  },
+  "historyLimit": 3,
+  "legacyHistoryTrimmedOnRoomCommand": true,
+  "testSuitesPassed": 2,
+  "testsPassed": 10,
+  "testsLog": "output/playwright/parry-history-three-tests.log",
+  "buildLog": "output/playwright/parry-history-three-build.log",
+  "deployLog": "output/playwright/parry-history-three-deploy.log",
+  "verification": "Four exchanges through real room UI with local memory transport; latest history [4,3,2], oldest removed. Desktop1280x900 and mobile412x915. Unit coverage trims legacy21-entry history on heartbeat without discarding current round.",
+  "evidence": [
+    "evidence/history-three-desktop.png",
+    "evidence/history-three-mobile.png"
+  ],
+  "productionRoomWritesForVerification": 0,
+  "firestoreRulesChanged": false
+}

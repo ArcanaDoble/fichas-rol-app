@@ -1,0 +1,35 @@
+{
+  "verifiedAtUtc": "2026-10-21T02:14:13.111291+00:00",
+  "release": "parry-prominent-change-rival-action",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.68365002.js",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "d6a9009f0fe807193ad6fe790d4d876fe3684574d8b66b1268bbb687eb52f6bf"
+    },
+    "main.css": {
+      "path": "/static/css/main.181bd84e.css",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "56243e0335daca035150652aa5016b3b28a8da4d5e45dfada9f65edc0e1ac064"
+    }
+  },
+  "testSuitesPassed": 2,
+  "testsPassed": 11,
+  "testsLog": "output/playwright/parry-change-rival-tests.log",
+  "buildLog": "output/playwright/parry-change-rival-build.log",
+  "deployLog": "output/playwright/parry-change-rival-deploy.log",
+  "verification": "Real provider and window with local memory transport; result action visible at1280x800 and412x915; Cambiar rival focuses roster on desktop and opens Participants on mobile; next attack against Yuuzu confirmed",
+  "evidence": [
+    "evidence/change-rival-desktop.png",
+    "evidence/change-rival-mobile.png",
+    "evidence/change-rival-list-mobile.png"
+  ],
+  "productionRoomWritesForVerification": 0,
+  "firestoreRulesChanged": false
+}

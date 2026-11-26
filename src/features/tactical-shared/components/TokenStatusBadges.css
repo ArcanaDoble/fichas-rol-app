@@ -30,6 +30,18 @@
     font-weight: 600;
 }
 
+.noma-token-status[data-status-id='barrera'] {
+    background: #11141e;
+    box-shadow: 0 0 0 2px #080b12, 0 2px 4px #0009;
+}
+
+.noma-token-status__barrier { width: 100%; height: 100%; }
+.noma-token-status__barrier text {
+    fill: #f1dfae;
+    font: 600 14px Alegreya, Georgia, serif;
+    font-variant-numeric: tabular-nums;
+}
+
 @keyframes noma-status-arrive {
     from { opacity: 0; transform: translate(-50%, -50%) scale(.85); }
     to { opacity: 1; transform: translate(-50%, -50%) scale(1); }

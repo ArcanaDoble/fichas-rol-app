@@ -1,0 +1,15 @@
+.spell-preparation__effect { color: #dfc885; }
+.spell-preparation__mana .potion-preparation-blocks i { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--potion-life) 25%, transparent); }
+.spell-preparation__mana .potion-preparation-max { color: var(--potion-life); opacity: .55; }
+.spell-preparation__catalysts { display: flex; justify-content: center; gap: 8px; margin: 0 20px 12px; }
+.spell-preparation__catalysts button { flex: 1; min-height: 48px; padding: 5px; border-bottom: 1px solid #c8aa6e30; color: #b9a998; font-size: 18px; }
+.spell-preparation__catalysts button span,
+.spell-preparation__catalysts button small { display: block; }
+.spell-preparation__catalysts button small { font-size: 15px; font-style: italic; }
+.spell-preparation__catalysts button[aria-pressed="true"] { color: #f0d79b; border-color: #c8aa6e; }
+.spell-preparation__enhancements { display: flex; flex-direction: column; margin: 8px 20px 16px; }
+.spell-preparation__enhancements button { min-height: 48px; padding: 9px 12px; border-bottom: 1px solid #c8aa6e33; color: #b9b4c0; transition: background .18s ease, color .18s ease; }
+.spell-preparation__enhancements button strong { display: block; font-size: 18px; font-weight: 500; }
+.spell-preparation__enhancements button span { display: block; margin-top: 3px; font-size: 15px; font-style: italic; }
+.spell-preparation__enhancements button[aria-pressed="true"] { color: #f3d497; border-color: #c8aa6e; background: #c8aa6e18; }
+.spell-preparation__enhancements button:disabled { opacity: .45; }

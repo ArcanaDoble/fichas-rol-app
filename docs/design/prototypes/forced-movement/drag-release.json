@@ -1,0 +1,31 @@
+{
+  "feature": "Arrastre habitual, confirmación en dos pasos e icono de desplazamiento sin coste",
+  "url": "https://base-de-datos-noma.web.app",
+  "verifiedAt": "2026-10-22T00:15:23.289Z",
+  "assets": [
+    {
+      "asset": "/static/js/main.087637a7.js",
+      "sha256": "e6e02445de89bb7eccfc416bf928141152e4de4051adfd054767696ed792ed70",
+      "bytes": 5328447
+    },
+    {
+      "asset": "/static/css/main.057a07c9.css",
+      "sha256": "5078afd72e7e88d22b2dcc800b7971c2cc887276a2208b50cf87933914d9db71",
+      "bytes": 701011
+    }
+  ],
+  "tests": {
+    "suites": 228,
+    "passed": 1594,
+    "skipped": 1,
+    "finalFocusedPassed": 30
+  },
+  "browser": {
+    "desktop": "1280x900: master drag + player confirm then finish",
+    "mobile": "390x844: master touch drag + two player hourglass holds"
+  },
+  "buildLog": "output/playwright/movement-restore-final-build.log",
+  "testLog": "output/playwright/movement-restore-tests.log",
+  "deployLog": "output/playwright/movement-restore-deploy.log",
+  "supersedes": "release.json"
+}

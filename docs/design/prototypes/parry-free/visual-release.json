@@ -1,0 +1,36 @@
+{
+  "verifiedAtUtc": "2026-10-21T01:33:28.127716+00:00",
+  "release": "parry-free-duel-room-visual-refinement",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.6612fa8d.js",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "c0e900e8344ff0038cdac2b720a4db9165c80d6b0c762e76dd370d0c91e43845"
+    },
+    "main.css": {
+      "path": "/static/css/main.f95533b5.css",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "565a28681a00f0b0bb05c21ea7048843f7e2427551510b3eef5abbd362bfe11f"
+    }
+  },
+  "testSuitesPassed": 4,
+  "testsPassed": 21,
+  "testsLog": "output/playwright/parry-visual-tests.log",
+  "buildLog": "output/playwright/parry-visual-build.log",
+  "deployLog": "output/playwright/parry-visual-deploy.log",
+  "previousFullSuiteRelease": "room-release.json",
+  "review": {
+    "disposition": "ship",
+    "scope": "full local visual refinement; seven viewport/state captures and changed sources",
+    "record": "visual-review.md"
+  },
+  "browserVisualVerification": "production components and service with local in-memory transport; 1280x720, 390x844 and 320x740; keyboard and touch selection",
+  "productionRoomWritesForVerification": 0,
+  "firestoreRulesChanged": false
+}

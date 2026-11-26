@@ -17,6 +17,7 @@ const RogueliteInventoryCard = ({
     raritySoft,
     rarityFaint,
     actionCost,
+    defenseLabel = 'CD',
     handsRequired,
     visibleTraits,
     glossary,
@@ -34,7 +35,8 @@ const RogueliteInventoryCard = ({
     variant,
 }) => {
     const damage = item.damage || item.dano;
-    const defense = item.defense || item.defensa;
+    const defense = item.defense ?? item.defensa;
+    const hasDefense = defense !== null && defense !== undefined && String(defense).trim() !== '';
     const rules = getItemRulesPresentation(item);
     const range = rules.range;
     const displayedTraits = visibleTraits?.length ? visibleTraits : rules.traits;
@@ -140,7 +142,7 @@ const RogueliteInventoryCard = ({
             </header>
 
             <div className="noma-inventory-card__body">
-                {(damage || defense) && (
+                {(damage || hasDefense) && (
                     <div className="noma-inventory-card__primary-stat">
                         {damage && (
                             <div>
@@ -148,9 +150,9 @@ const RogueliteInventoryCard = ({
                                 <strong>{damage}</strong>
                             </div>
                         )}
-                        {defense && (
+                        {hasDefense && (
                             <div>
-                                <span>CD</span>
+                                <span>{defenseLabel}</span>
                                 <strong>{defense}</strong>
                             </div>
                         )}
@@ -234,6 +236,7 @@ RogueliteInventoryCard.propTypes = {
     raritySoft: PropTypes.string.isRequired,
     rarityFaint: PropTypes.string.isRequired,
     actionCost: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    defenseLabel: PropTypes.string,
     handsRequired: PropTypes.number,
     visibleTraits: PropTypes.arrayOf(PropTypes.string),
     glossary: PropTypes.arrayOf(PropTypes.object),

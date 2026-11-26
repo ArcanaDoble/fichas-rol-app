@@ -37,6 +37,68 @@ const makeSheet = () => ({
 });
 
 describe('Roguelite active run', () => {
+  test('does not import encounter Barrera from personal tags when starting an adventure', () => {
+    const sheet = { ...makeSheet(), personalStatusTags: ['sangrado', 'Barrera|Hasta el final del combate'] };
+    const run = createRogueliteActiveRun(sheet, { runId: 'run-1', scenarioId: 'room-1', now: 100 });
+
+    expect(run.statusEffects).toEqual(['sangrado']);
+    expect(run.stats.cd).toEqual(expect.objectContaining({ current: 3, max: 4 }));
+    expect(sheet.personalStatusTags).toHaveLength(2);
+  });
+
+  test('does not serialize token Barrera into the portable adventure or modify base CD', () => {
+    const previousRun = createRogueliteActiveRun(makeSheet(), { runId: 'run-1', scenarioId: 'room-1', now: 100 });
+    const token = { id: 'protected-token', runId: 'run-1', stats: previousRun.stats,
+      status: ['sangrado', 'barrera'], arcaneBarrier: { spellId: 'runic-barrier', expires: 'combat-end' } };
+    const run = createRogueliteActiveRunFromToken(token, previousRun, { scenarioId: 'room-2', now: 200 });
+
+    expect(run.statusEffects).toEqual(['sangrado']);
+    expect(run).not.toHaveProperty('arcaneBarrier');
+    expect(run.stats.cd).toEqual(token.stats.cd);
+    expect(token.status).toEqual(['sangrado', 'barrera']);
+    expect(token).toHaveProperty('arcaneBarrier');
+  });
+
+  test('sanitizes saved legacy Barrera during run import, rebase and profile edits', () => {
+    const sheet = makeSheet();
+    const contaminatedRun = { ...createRogueliteActiveRun(sheet, { runId: 'run-1', now: 100 }),
+      statusEffects: ['sangrado', 'barrera'], personalStatusTags: ['barrera', 'envenenado'],
+      arcaneBarrier: { spellId: 'runic-barrier', expires: 'combat-end' } };
+    const withRun = { ...sheet, activeRun: contaminatedRun, personalStatusTags: ['sangrado', 'barrera'] };
+    const snapshots = [
+      createRogueliteActiveRun(withRun),
+      rebaseRogueliteActiveRun(contaminatedRun, sheet),
+      updateRogueliteActiveRunFromProfile(withRun),
+      createRogueliteActiveRunFromToken({}, contaminatedRun),
+    ];
+
+    snapshots.forEach(snapshot => {
+      expect(snapshot.statusEffects).toEqual(['sangrado']);
+      expect(snapshot.personalStatusTags).toEqual(['envenenado']);
+      expect(snapshot).not.toHaveProperty('arcaneBarrier');
+      expect(snapshot.stats.cd).toEqual(expect.objectContaining({ current: 3, max: 4 }));
+    });
+    expect(contaminatedRun.statusEffects).toEqual(['sangrado', 'barrera']);
+  });
+
+  test('does not restore legacy Barrera into a personal sheet when applying a saved run', () => {
+    const sheet = makeSheet();
+    const applied = applyRogueliteActiveRunToProfile({ ...sheet,
+      classTags: ['Marcial', 'barrera'], personalStatusTags: ['barrera'],
+      arcaneBarrier: { spellId: 'runic-barrier', expires: 'combat-end' },
+      activeRun: { ...createRogueliteActiveRun(sheet, { runId: 'run-1', now: 100 }),
+        statusEffects: ['sangrado', 'barrera'], arcaneBarrier: { spellId: 'runic-barrier', expires: 'combat-end' } },
+    });
+
+    expect(applied.personalStatusTags).toEqual(['sangrado']);
+    expect(applied.tags).toEqual(['Marcial', 'sangrado']);
+    expect(applied.activeRun.statusEffects).toEqual(['sangrado']);
+    expect(applied.activeRun).not.toHaveProperty('arcaneBarrier');
+    expect(applied).not.toHaveProperty('arcaneBarrier');
+    expect(applied.defenseClass).toBe(3);
+    expect(applied.maxDefenseClass).toBe(4);
+  });
+
   test('materializes only prepared equipment and skills when the run starts', () => {
     const sheet = {
       ...makeSheet(),

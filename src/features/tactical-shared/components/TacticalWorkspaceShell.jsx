@@ -51,6 +51,7 @@ export const TacticalWorkspaceShell = ({
     addDeckToBoard,
     addLightToCanvas,
     addTokenToCanvas,
+    addTreeToCanvas,
     adjustBoardDiceCount,
     animatedBoardLightIds,
     applyBackgroundGridPreset,
@@ -243,7 +244,7 @@ export const TacticalWorkspaceShell = ({
     }, [showSettings]);
 
     return (
-        <div className={`h-screen w-screen overflow-hidden bg-[#09090b] relative font-['Lato'] select-none ${targetingState ? 'cursor-crosshair' : ''}`}>
+        <div data-tactical-workspace="true" className={`h-screen w-screen overflow-clip bg-[#09090b] relative font-['Lato'] select-none ${targetingState ? 'cursor-crosshair' : ''}`}>
             {/* --- BIBLIOTECA DE ENCUENTROS --- */}
             {viewMode === 'LIBRARY' && !activeScenario && (
                 <motion.div
@@ -438,6 +439,9 @@ export const TacticalWorkspaceShell = ({
 
                         {/* --- Botón Flotante Dados (Toggle Sidebar) --- */}
                         <button
+                            aria-label="Abrir panel del encuentro"
+                            title={combatRuntime?.hasPendingInitiative ? 'Tienes iniciativa pendiente' : undefined}
+                            aria-describedby={combatRuntime?.hasPendingInitiative ? 'canvas-initiative-pending' : undefined}
                             onClick={() => {
                                 if (CombatPanelComponent) {
                                     setActiveTab('ROUND');
@@ -449,6 +453,10 @@ export const TacticalWorkspaceShell = ({
                             className="absolute top-6 right-6 z-40 w-12 h-12 rounded-full bg-[#1a1b26] border border-[#c8aa6e]/40 text-[#c8aa6e] shadow-[0_0_15px_rgba(0,0,0,0.5)] flex items-center justify-center hover:scale-110 hover:border-[#c8aa6e] hover:text-[#f0e6d2] hover:shadow-[0_0_20px_rgba(200,170,110,0.3)] transition-all duration-300 group pointer-events-auto"
                         >
                             <BsDice6 size={24} className="group-hover:rotate-180 transition-transform duration-500" />
+                            {combatRuntime?.hasPendingInitiative && <span id="canvas-initiative-pending"
+                                className="absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full bg-[#c8aa6e] text-[11px] font-bold text-[#0b1120]">
+                                <span aria-hidden="true">!</span><span className="sr-only">Tienes iniciativa pendiente</span>
+                            </span>}
                         </button>
 
                         {/* --- Sidebar de Configuración --- */}
@@ -481,6 +489,7 @@ export const TacticalWorkspaceShell = ({
                     addCardToHand={addCardToHand}
                     addDeckToBoard={addDeckToBoard}
                     addTokenToCanvas={addTokenToCanvas}
+                    addTreeToCanvas={addTreeToCanvas}
                     adjustBoardDiceCount={adjustBoardDiceCount}
                     applyBackgroundGridPreset={applyBackgroundGridPreset}
                     armaduras={armaduras}
@@ -779,7 +788,7 @@ export const TacticalWorkspaceShell = ({
 
                                 return (
                                     <div
-                                        className="md:hidden absolute right-0 top-20 z-50 pointer-events-auto"
+                                        className={`md:hidden absolute right-0 top-20 pointer-events-auto ${isBoardMode ? 'z-50' : 'z-[49]'}`}
                                         style={{ bottom: '14.5rem' }}
                                     >
                                         <div
@@ -870,6 +879,7 @@ export const TacticalWorkspaceShell = ({
                     finiteMapHeight={finiteMapHeight}
                     finiteMapWidth={finiteMapWidth}
                     focusedTargetId={focusedTargetId}
+                    forcedMovement={combatRuntime?.forcedMovement}
                     getBoardMobileTacticalMoveOptions={getBoardMobileTacticalMoveOptions}
                     getCanvasMobileTacticalMoveOptions={getCanvasMobileTacticalMoveOptions}
                     gridConfig={gridConfig}
@@ -1060,9 +1070,6 @@ export const TacticalWorkspaceShell = ({
                         })()
                         : false;
 
-                    const hasPendingMovement = isUsablePendingTurnState(pendingTurnState)
-                        && pendingTurnState.tokenId === hudToken.id
-                        && (Number(pendingTurnState.moveCost) || 0) > 0;
                     const hudCombatParticipant = combatRuntime?.combatState?.participants?.[hudToken.id];
 
                     return (
@@ -1072,10 +1079,6 @@ export const TacticalWorkspaceShell = ({
                             onAction={(actionId, data) => handleCombatAction(hudToken.id, actionId, data)}
                             onEndTurn={async () => {
                                 if (activeScenario?.canvasCombat?.status === 'active' && combatRuntime?.completeActivation) {
-                                    if (hasPendingMovement) {
-                                        const confirmed = await handleConfirmMobileTacticalMove(null, hudToken.id);
-                                        if (!confirmed) return;
-                                    }
                                     combatRuntime.completeActivation(hudToken.id);
                                 } else {
                                     handleEndTurn(hudToken.id);
@@ -1088,6 +1091,7 @@ export const TacticalWorkspaceShell = ({
                             onCancelAction={(idx) => handleCancelAction(hudToken.id, idx)}
                             actionDice={hudCombatParticipant?.actionDice || []}
                             itemUseSession={itemUseSystem?.session}
+                            spellUseSystem={itemUseSystem?.spellUseSystem}
                             itemUseResources={itemUseSystem?.resources || []}
                             itemUseTargets={itemUseSystem?.antidoteTargets || []}
                             onSelectItemUseTarget={itemUseSystem?.selectTarget}
@@ -1283,6 +1287,7 @@ export const TacticalWorkspaceShell = ({
                                             onCancelAction={(index) => handleCancelAction(hudToken.id, index)}
                                             actionDice={hudCombatParticipant?.actionDice || []}
                                             itemUseSession={itemUseSystem?.session}
+                                            spellUseSystem={itemUseSystem?.spellUseSystem}
                                             itemUseResources={itemUseSystem?.resources || []}
                             itemUseTargets={itemUseSystem?.antidoteTargets || []}
                             onSelectItemUseTarget={itemUseSystem?.selectTarget}

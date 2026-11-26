@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Dices, Edit2, RotateCw, Settings, ShieldCheck, Sparkles, Swords } from 'lucide-react';
 
 import { FiX } from 'react-icons/fi';
@@ -40,6 +40,7 @@ export const CanvasSidebar = ({
     addCardToHand,
     addDeckToBoard,
     addTokenToCanvas,
+    addTreeToCanvas,
     adjustBoardDiceCount,
     applyBackgroundGridPreset,
     armaduras,
@@ -115,8 +116,15 @@ export const CanvasSidebar = ({
     updateItem,
     uploadingCard,
     uploadingToken,
-}) => (
-<div data-tactical-sidebar="true" className={`
+}) => {
+    const sidebarRef = useRef(null);
+    useEffect(() => {
+        if (!showSettings && sidebarRef.current?.contains(document.activeElement)) {
+            document.activeElement?.blur();
+        }
+    }, [showSettings]);
+    return (
+<div ref={sidebarRef} data-tactical-sidebar="true" inert={!showSettings} aria-hidden={!showSettings} className={`
                     absolute top-0 right-0 h-full w-full sm:w-80 z-[100]
                     bg-[#0b1120] border-l border-[#c8aa6e]/30 shadow-2xl 
                     transform transition-transform duration-300 ease-out 
@@ -229,7 +237,7 @@ export const CanvasSidebar = ({
                                 {/* --- TAB: COMBAT LOG (EVERYONE) --- */}
                                 <CombatLogPanel {...{
                         BOARD_DICE_ROLL_SIDES, activeTab, adjustBoardDiceCount, boardDiceExplosive, boardDicePool, boardDiceRollLog,
-                        clearBoardDicePool, combatLog, isBoardMode, isRollingBoardDice, rollBoardDicePool, toggleBoardDiceExplosive,
+                        clearBoardDicePool, combatLog, isBoardMode, isPlayerView, isRollingBoardDice, rollBoardDicePool, toggleBoardDiceExplosive,
                         toggleBoardDiceRollDie,
                     }} />
                                 {/* --- TAB: ACCESO (MASTER ONLY) --- */}
@@ -242,12 +250,12 @@ export const CanvasSidebar = ({
                                 <GridConfigPanel {...{
                         activeTab, applyBackgroundGridPreset, backgroundGridPresets, clearBackgroundImage, commitGridDraft, currentBackgroundGridPresetIndex,
                         fileInputRef, finiteGridHeight, finiteGridWidth, gridConfig, gridInputDrafts, handleConfigChange,
-                        handleGridDraftChange, handleGridDraftKeyDown, handleImageUpload, isPlayerView, resetAllSpeed,
+                        handleGridDraftChange, handleGridDraftKeyDown, handleImageUpload, isPlayerView, isBoardMode, resetAllSpeed,
                     }} />
 
                                 {/* --- TAB: TOKENS (MASTER ONLY) --- */}
                                 <TokenLibraryPanel {...{
-                        activeTab, addCardToBoard, addCardToHand, addDeckToBoard, addTokenToCanvas, boardDecks,
+                        activeTab, addCardToBoard, addCardToHand, addDeckToBoard, addTokenToCanvas, addTreeToCanvas, boardDecks,
                         cards, deleteCard, deleteToken, dragOverLibraryItemId, draggedLibraryItemId, draggedLibraryItemType,
                         handleCardUpload, handleReorderLibraryItem, handleTokenUpload, isBoardMode, isPlayerView, setDragOverLibraryItemId,
                         setDraggedLibraryItemId, setDraggedLibraryItemType, tokens, uploadingCard, uploadingToken,
@@ -311,4 +319,5 @@ export const CanvasSidebar = ({
                                 </div>
                             )}
                         </div>
-);
+    );
+};

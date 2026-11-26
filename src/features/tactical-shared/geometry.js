@@ -1,4 +1,10 @@
+export const CALTROPS_HAZARD_ART = {
+    id: 'caltrops',
+    image: '/scenery/hazards/abrojos.webp',
+};
+
 export const normalizeGeometryKind = (item = {}) => {
+    if (item.geometryKind === 'tree') return 'tree';
     const raw = [
         item.geometryKind,
         item.geometryType,
