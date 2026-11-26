@@ -2,7 +2,9 @@ import { createCanvasCombatController } from './createCanvasCombatController';
 import { CanvasWorkspaceShell } from './components/CanvasWorkspaceShell';
 import { useCanvasFeatureController } from './useCanvasFeatureController';
 import { buildCanvasTimelineTokens } from './canvasInitiative';
-import { syncCanvasTokenWithSheet } from './rogueliteTokenSheetSync';
+import { createCanvasImageToken } from './canvasImageToken';
+import { syncCanvasSystemToken, getCanvasSystem, isCampaignSheet } from './campaignSystem';
+import { loadCanvasSystemSheet, persistCanvasSystemItems, prepareCanvasSystemSave } from './campaignPersistence';
 import CanvasTokenResources from './components/CanvasTokenResources';
 import CanvasEquipmentSection from './components/CanvasEquipmentSection';
 import CanvasLootVisual from './components/CanvasLootVisual';
@@ -12,10 +14,6 @@ import {
     isCanvasLootItem,
     resolveCanvasLootRecipient,
 } from './canvasInventoryTransfer';
-import {
-    loadCanvasRogueliteRuntimeSheet,
-    persistCanvasRogueliteRuns,
-} from './rogueliteRunPersistence';
 import { didGainCanvasSharedVision } from './playerVisionAccess';
 
 export const CANVAS_MODE_DEFINITION = Object.freeze({
@@ -25,9 +23,16 @@ export const CANVAS_MODE_DEFINITION = Object.freeze({
     visibilityDocName: 'canvasVisibility',
     sectionTitle: 'Canvas Beta',
     buildTimelineTokens: buildCanvasTimelineTokens,
-    syncTokenWithSheet: syncCanvasTokenWithSheet,
-    loadRuntimeSheet: loadCanvasRogueliteRuntimeSheet,
-    persistRuntimeItems: persistCanvasRogueliteRuns,
+    createImageToken: createCanvasImageToken,
+    syncTokenWithSheet: syncCanvasSystemToken,
+    loadRuntimeSheet: loadCanvasSystemSheet,
+    persistRuntimeItems: persistCanvasSystemItems,
+    prepareScenarioSave: prepareCanvasSystemSave,
+    validateEntry: (scene, sheet) => {
+        if ((getCanvasSystem(scene) === 'campaign') !== isCampaignSheet(sheet)) {
+            throw new Error(`El encuentro está en modo ${getCanvasSystem(scene) === 'campaign' ? 'Campaña' : 'Roguelite'}. El máster debe guardar el modo correspondiente a tu ficha.`);
+        }
+    },
     didGainPlayerSharedVision: didGainCanvasSharedVision,
     allowPlayerTokenHoverInspection: true,
     SharedPointerOverlay: CanvasSharedPointers,

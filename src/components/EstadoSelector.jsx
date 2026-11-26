@@ -6,7 +6,7 @@ import {
   ICON_MAP, DEFAULT_STATUS_EFFECTS, NON_SELECTABLE_STATUS_EFFECT_IDS, mergeStatusEffectsConfig,
 } from '../utils/statusEffects';
 
-function EstadoSelector({ selected = [], onToggle, roguelite = false }) {
+function EstadoSelector({ selected = [], onToggle, roguelite = false, allowBarrier = true }) {
   const [effects, setEffects] = useState(DEFAULT_STATUS_EFFECTS);
   const hasConmocionadoSelected = selected.includes('conmocionado') || selected.includes(DEFAULT_STATUS_EFFECTS.conmocionado?.label);
 
@@ -23,7 +23,7 @@ function EstadoSelector({ selected = [], onToggle, roguelite = false }) {
   }, []);
 
   const visibleEffects = Object.entries(effects)
-    .filter(([id]) => !NON_SELECTABLE_STATUS_EFFECT_IDS.includes(id))
+    .filter(([id]) => !NON_SELECTABLE_STATUS_EFFECT_IDS.includes(id) && (allowBarrier || id !== 'barrera'))
     .map(([id, effect]) => {
       if (id === 'derribado' && hasConmocionadoSelected) {
         const conmocionadoEffect = effects.conmocionado || DEFAULT_STATUS_EFFECTS.conmocionado;
@@ -64,6 +64,7 @@ function EstadoSelector({ selected = [], onToggle, roguelite = false }) {
           <button
             key={`${id}-${toggleId}`}
             type="button"
+            aria-pressed={active}
             onClick={() => onToggle(toggleId)}
             style={{
               borderColor: borderColor,
@@ -97,6 +98,7 @@ function EstadoSelector({ selected = [], onToggle, roguelite = false }) {
 }
 
 EstadoSelector.propTypes = {
+  allowBarrier: PropTypes.bool,
   roguelite: PropTypes.bool,
   selected: PropTypes.arrayOf(PropTypes.string),
   onToggle: PropTypes.func.isRequired,

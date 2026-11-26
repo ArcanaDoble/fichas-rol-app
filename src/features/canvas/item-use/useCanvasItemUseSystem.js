@@ -138,6 +138,10 @@ export const useCanvasItemUseSystem = ({
             return false;
         }
         const scenario = activeScenarioRef.current || activeScenario;
+        if (scenario?.rulesSystem === 'campaign') {
+            triggerToast('Objeto de Campaña', 'Resuelve su efecto en mesa y ajusta los recursos desde el inspector.', 'info');
+            return false;
+        }
         const token = (scenario?.items || []).find((candidate) => candidate.id === tokenId);
         const itemDefinition = getItemUseDefinition(item);
         if (!itemDefinition) {

@@ -13,6 +13,41 @@ jest.mock(
 jest.mock('../../utils/storage', () => ({ uploadDataUrl: jest.fn() }));
 
 describe('RogueliteTalentsPanel overlays', () => {
+  test('campaign uses one editable list with at most three active talents', () => {
+    function CampaignFixture() {
+      const [ids, setIds] = React.useState(['a', 'b', 'c']);
+      const [catalog, setCatalog] = React.useState(['a', 'b', 'c', 'd'].map((id) => ({
+        id, name: `Talento ${id}`, description: `Descripción ${id}`,
+      })));
+      return <RogueliteTalentsPanel role="campaign" classId="yerma" resource={{}}
+        talentCatalog={catalog} equippedTalentIds={ids}
+        onCatalogChange={setCatalog} onEquippedTalentIdsChange={setIds} />;
+    }
+    render(<CampaignFixture />);
+    expect(screen.queryByText('Catálogo de talentos')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Talentos equipados')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: /Seleccionar talento para ranura/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Activar talento Talento d' })).toBeDisabled();
+    expect(screen.queryByText(/^(Activo|Inactivo)$/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Desactivar talento Talento a' }));
+    expect(screen.getByRole('button', { name: 'Editar talento Talento a' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Activar talento Talento a', pressed: true })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Editar talento Talento a' }).closest('.noma-token-feature')).toHaveClass('is-used');
+    fireEvent.click(screen.getByRole('button', { name: 'Activar talento Talento a' }));
+    expect(screen.getByRole('button', { name: 'Desactivar talento Talento a', pressed: false })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Editar talento Talento a' }).closest('.noma-token-feature')).not.toHaveClass('is-used');
+    fireEvent.click(screen.getByRole('button', { name: 'Desactivar talento Talento a' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Activar talento Talento d' }));
+    expect(screen.getByRole('button', { name: 'Desactivar talento Talento d', pressed: false })).toBeEnabled();
+    expect(screen.getByText('3 / 3 activos')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Añadir talento al personaje' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Nombre del talento' }), { target: { value: 'Nuevo talento personal' } });
+    expect(screen.getByRole('checkbox', { name: 'Talento activo' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar editor de talento' }));
+    expect(screen.getByRole('button', { name: 'Activar talento Nuevo talento personal', pressed: true })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: /^(Activar|Desactivar) talento / })).toHaveLength(5);
+  });
+
   test('reading full skill rules does not equip it and metadata stays outside the effect', () => {
     const onChange = jest.fn();
     const effect = 'Gasta un dado de acción para realizar un ataque mediante el Catalizador. ' + 'El objetivo no puede usar defensa activa. '.repeat(5);

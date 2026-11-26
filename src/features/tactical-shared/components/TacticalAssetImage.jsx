@@ -5,6 +5,10 @@ import { isImageUrlLoaded, markImageUrlLoaded } from '../../../utils/imageLoadCa
 
 export const getObjectImage = (item, customImages) => {
     if (!item) return null;
+    // Enemy abilities carry their illustration in the saved item, outside the
+    // equipment-image catalog. Read it before falling back to catalog artwork.
+    const explicitImage = item.img || item.image || item.imagen || item.imageUrl || item.imageSource || item.art;
+    if (explicitImage) return explicitImage;
     if (item.icon && (item.icon.startsWith('data:') || item.icon.startsWith('http'))) return item.icon;
 
     // Check custom uploaded images from Gestor de Equipamiento first

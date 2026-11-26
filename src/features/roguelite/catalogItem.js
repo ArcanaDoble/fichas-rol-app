@@ -1,4 +1,5 @@
 import { resolveEquipmentHandsRequired } from './equipmentPool';
+import { normalizeWeaponFormsForStorage } from './weaponForms';
 
 const clampInteger = (value, minimum, maximum, fallback = minimum) => {
   const parsed = Number.parseInt(value, 10);
@@ -201,7 +202,7 @@ export const weaponCatalogItemToStorage = (item = {}) => {
   const actionCost = parseActionDiceCost(item.actionCost ?? item.consumo, 1);
   const handsRequired = clampInteger(item.handsRequired, 1, 2, 1);
 
-  return {
+  return normalizeWeaponFormsForStorage({
     ...clean,
     actionCost,
     consumo: toLegacyActionDiceCost(actionCost),
@@ -210,7 +211,7 @@ export const weaponCatalogItemToStorage = (item = {}) => {
     rasgos: splitTraits(item.rasgos),
     rareza: String(item.rareza || '').trim(),
     ...normalizeDescriptionsForStorage(item),
-  };
+  });
 };
 
 export const armorCatalogItemToStorage = (item = {}) => {

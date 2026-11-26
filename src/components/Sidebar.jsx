@@ -167,7 +167,7 @@ const Sidebar = ({
 
                 <div className="text-center hidden lg:block">
                     <h2 className="text-xl font-['Cinzel'] font-bold text-[#f0e6d2] uppercase tracking-wider drop-shadow-md">{characterName}</h2>
-                    <p className="text-[#c8aa6e] text-[10px] font-bold tracking-[0.2em] uppercase mt-1 opacity-70">Clase de Héroe</p>
+                    <p className="text-[#c8aa6e] text-[10px] font-bold tracking-[0.2em] uppercase mt-1 opacity-70">{isPlayerMode && !isRogueliteClass ? 'Ficha de personaje' : 'Clase de Héroe'}</p>
 
                     <div className="flex justify-center gap-1 mt-3">
                         {Array.from({ length: 5 }).map((_, i) => (

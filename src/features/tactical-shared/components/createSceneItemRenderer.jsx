@@ -13,6 +13,7 @@ import {
 import { motion } from 'framer-motion';
 import TokenInventoryReceipt from './TokenInventoryReceipt';
 import CanvasTokenDamageEffect from './CanvasTokenDamageEffect';
+import CanvasTokenArcaneBarrier from './CanvasTokenArcaneBarrier';
 import TokenHUD from '../../../components/TokenHUD';
 import { CanvasTokenName } from './CanvasTokenName';
 import { DEFAULT_STATUS_EFFECTS } from '../../../utils/statusEffects';
@@ -31,7 +32,11 @@ import {
 import { CardImageWithLoader, TokenImageWithLoader } from './TacticalAssetImage';
 import TarGroundEffect from './TarGroundEffect';
 import FogShaderEffect from './FogShaderEffect';
-import { normalizeGeometryKind } from '../geometry';
+import { CALTROPS_HAZARD_ART, normalizeGeometryKind } from '../geometry';
+import { CaltropsHazardVisual } from './CaltropsHazardVisual';
+import { isTreeScenery } from '../scenery';
+import { TreeSceneryVisual } from './TreeScenery';
+import { getCanvasTreeView, isCanvasOccludedToken, TREE_OCCUPIED_OPACITY } from '../canvasVision';
 import { canControlToken } from '../tokenControlUtils';
 import {
     getCanvasRenderItemsForViewer,
@@ -105,22 +110,42 @@ export const HiddenFogEffect = ({ className = '', dataAttribute = null, source =
     </div>
 );
 
-export const renderGeometryVisual = (item = {}) => {
+export const renderGeometryVisual = (item = {}, spellPresentation, { hazardGrid, ...treeOptions } = {}) => {
     const kind = normalizeGeometryKind(item);
+    if (kind === 'tree') return <TreeSceneryVisual item={item} {...treeOptions} />;
     const color = item.backgroundColor || (kind === 'hazard' ? '#ef4444' : kind === 'stairs' ? '#c8aa6e' : '#22c55e');
     const opacity = Number.isFinite(Number(item.opacity)) ? Number(item.opacity) : (kind === 'hazard' ? 0.1 : 0.28);
     const safeId = `${item.id || 'geometry'}-${kind}`.replace(/[^a-zA-Z0-9_-]/g, '');
     if (kind === 'tar') return <TarGroundEffect />;
     if (kind === 'smoke') {
+        const mist = item.areaEffect?.spellId === 'arcane-mist';
+        const forming = mist && spellPresentation?.effect?.spellId === 'arcane-mist'
+            && spellPresentation.effect.id === item.areaEffect.cloudId && !spellPresentation.reducedMotion;
         return (
-            <div className="absolute inset-0 overflow-hidden border-2 border-slate-300/70" aria-label={item.name || 'Humo'}>
+            <div className={`absolute inset-0 overflow-hidden border-2 border-slate-300/70${mist ? ' canvas-mist-zone' : ''}`} aria-label={item.name || 'Humo'}
+                data-mist-forming={forming || undefined} style={forming ? {
+                    '--mist-delay': `${-Math.max(0, Date.now() - spellPresentation.effect.presentationStartedAt)}ms`,
+                    '--mist-arrival': spellPresentation.sourceVisible === false ? '150ms' : '1400ms',
+                } : undefined}>
                 <HiddenFogEffect className="absolute inset-0" />
                 <span className="canvas-smoke-zone__grid" />
-                <span className="canvas-smoke-zone__label">Humo</span>
+                <span className="canvas-smoke-zone__label">{mist ? 'Niebla' : 'Humo'}</span>
             </div>
         );
     }
     if (kind === 'hazard') {
+        if (hazardGrid && item.hazardArtId === CALTROPS_HAZARD_ART.id) {
+            return (
+                <CaltropsHazardVisual
+                    itemId={item.id}
+                    width={item.width}
+                    height={item.height}
+                    cellWidth={hazardGrid.cellWidth}
+                    cellHeight={hazardGrid.cellHeight}
+                />
+            );
+        }
+
         const baseOpacity = Math.max(0.3, opacity + 0.1);
         return (
             <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
@@ -257,11 +282,17 @@ const renderItemJSX = (item) => {
             ? (combatRuntime.combatState.participants?.[item.id] || null)
             : null;
         const isSelected = selectedTokenIds.includes(item.id);
-        const hasRogueliteProfile = !isBoardMode && ['rogueliteClass', 'rogueliteEnemy'].includes(item.profileType);
+        const isForcedMove = Boolean(combatRuntime?.forcedMovement?.isActive(item.id));
+        const hasRogueliteProfile = !isBoardMode && ['rogueliteClass', 'rogueliteEnemy', 'campaignCharacter'].includes(item.profileType);
         const hasRogueliteLife = hasRogueliteProfile && Number(item.stats?.vida?.max) > 0;
+        const hasArcaneBarrierReadout = !isBoardMode && item.arcaneBarrier?.spellId === 'runic-barrier'
+            && item.arcaneBarrier.expires === 'combat-end';
         const isLight = item.type === 'light';
         const isWall = item.type === 'wall';
         const isGeometry = item.type === 'geometry';
+        const isCaltrops = isGeometry && !isBoardMode && item.hazardArtId === CALTROPS_HAZARD_ART.id
+            && normalizeGeometryKind(item) === 'hazard';
+        const isTree = isTreeScenery(item);
         const isCard = isCardItem(item);
         const isCardContainer = isCardContainerItem(item);
         const isBoardMarker = isBoardMarkerItem(item);
@@ -271,6 +302,9 @@ const renderItemJSX = (item) => {
             ? (activeScenario?.items || []).filter(candidate => isScenePickupItem?.(candidate) && selectedTokenIds.includes(candidate.id))
             : (isSelected && isScenePickup ? [item] : []);
         const isToken = !isLight && !isWall && !isGeometry && !isCard && !isCardContainer && !isBoardMarker && !isBoardDie && !isScenePickup;
+        const hasEnemyBorder = isToken && item.teamId === 'enemies';
+        const isOwnMovementPreview = !isBoardMode && isToken && isPlayerView
+            && canControlToken(item, isPlayerView, playerName) && (draggedTokenId === item.id || Boolean(pendingStateForItem));
         const committedItems = visionItems || activeScenario?.items || [];
         const committedItem = committedItems.find(candidate => candidate.id === item.id) || item;
         const fogDensity = isToken ? getCanvasTokenFogDensity(committedItem, committedItems, {
@@ -284,7 +318,9 @@ const renderItemJSX = (item) => {
             ...(fogDensity >= 0.65 ? { opacity: 0.56, filter: 'grayscale(0.32) saturate(0.48) contrast(0.94)' } : {}),
         } : undefined;
         const hiddenFromPerspective = isToken
-            && isCanvasTokenHiddenFromViewer(committedItem, committedItems, { isPlayerView, playerName, selectedTokenIds });
+            && (isCanvasTokenHiddenFromViewer(committedItem, committedItems, { isPlayerView, playerName, selectedTokenIds })
+                || (!isBoardMode && isCanvasOccludedToken({ target: committedItem, items: committedItems,
+                    gridConfig, isPlayerView, playerName, selectedTokenIds })));
         const isForcedMasterHiddenPreview = !isPlayerView && showHiddenTokens && hiddenFromPerspective;
         if (hiddenFromPerspective && !isForcedMasterHiddenPreview) return null;
         const canHoverInspectToken = canUsePlayerTokenHoverInspection({
@@ -729,6 +765,7 @@ const renderItemJSX = (item) => {
                                     )
                                     : renderPlacement;
                             const hasGhostPreview = !!(
+                                (isBoardMode || !isToken || isPlayerView) &&
                                 startPlacement &&
                                 targetPlacement &&
                                 (isToken || isGeometry) &&
@@ -762,9 +799,10 @@ const renderItemJSX = (item) => {
                                                 <circle cx={startCenterX} cy={startCenterY} r="3" fill="#c8aa6e" opacity="0.5" />
                                             </svg>
                                             <div
+                                                data-token-movement-ghost={item.id}
                                                 className={`absolute top-0 left-0 z-10 pointer-events-none grayscale opacity-40 border-2 border-dashed border-[#c8aa6e]/50 ${item.isCircular ? 'rounded-full' : 'rounded-sm'} overflow-hidden`}
                                                 style={{
-                                                    transform: `translate(${startPlacement.x}px, ${startPlacement.y}px) rotate(${item.rotation}deg)`,
+                                                    transform: `translate(${startPlacement.x}px, ${startPlacement.y}px) rotate(${Number(item.rotation) || 0}deg)`,
                                                     width: `${item.width}px`,
                                                     height: `${item.height}px`,
                                                 }}
@@ -780,7 +818,8 @@ const renderItemJSX = (item) => {
                                                         }}
                                                     />
                                                 )}
-                                                {isGeometry && (
+                                                {isTree && <TreeSceneryVisual item={item} />}
+                                                {isGeometry && !isTree && (
                                                     <div
                                                         className={`w-full h-full flex items-center justify-center font-bold text-white shadow-inner uppercase text-[10px] tracking-widest break-words overflow-hidden p-2 text-center`}
                                                         style={{
@@ -841,7 +880,8 @@ const renderItemJSX = (item) => {
                                                     }}
                                                 />
                                             )}
-                                            {isGeometry && (
+                                            {isTree && <TreeSceneryVisual item={item} />}
+                                            {isGeometry && !isTree && (
                                                 <div
                                                     className={`w-full h-full flex items-center justify-center font-bold text-white shadow-inner uppercase text-[10px] tracking-widest break-words overflow-hidden p-2 text-center`}
                                                     style={{
@@ -872,6 +912,7 @@ const renderItemJSX = (item) => {
 
                 <motion.div
                     data-board-item-id={item.id}
+                    data-movement-token-preview={isOwnMovementPreview || undefined}
                     onMouseDown={(e) => {
                         if (e.button === 2) {
                             if (isBoardMode && isCard && canInteract) e.stopPropagation();
@@ -883,6 +924,10 @@ const renderItemJSX = (item) => {
                     onTouchStart={(e) => {
                         if (!canInteract) return;
                         if (isScenePickup) setShowSettings(false);
+                        if (combatRuntime?.forcedMovement?.isActive(item.id)) {
+                            handleTokenMouseDown(e, interactionItem);
+                            return;
+                        }
 
                         const now = Date.now();
                         const lastTap = lastTokenTapTimesRef?.current?.[item.id] || 0;
@@ -945,7 +990,7 @@ const renderItemJSX = (item) => {
                     animate={{
                         x: renderPlacement.x,
                         y: renderPlacement.y,
-                        scale: isBeingDragged ? 1.15 : 1,
+                        scale: isBeingDragged && !isTree ? 1.15 : 1,
                         rotate: item.rotation || 0,
                         opacity: motionOpacity,
                     }}
@@ -963,6 +1008,8 @@ const renderItemJSX = (item) => {
                         // Terrain keeps its physical stacking even while repositioning zones.
                         zIndex: isGeometry && ['tar', 'smoke'].includes(normalizeGeometryKind(item))
                             ? (normalizeGeometryKind(item) === 'smoke' ? 15 : 16)
+                            : isOwnMovementPreview
+                            ? 35
                             : isBeingDragged
                             ? 1000
                             : isLootDropTarget
@@ -987,8 +1034,8 @@ const renderItemJSX = (item) => {
                     }}
                     className="group"
                 >
-                    <div id={`token-inner-wrapper-${item.id}`} className={`w-full h-full relative ${item.isCircular ? 'rounded-full' : 'rounded-sm'} ${isLootDropTarget ? 'ring-2 ring-[#c8aa6e] ring-offset-2 ring-offset-black'  : ''} ${draggedTokenId === item.id ? (isBoardDie ? 'scale-105' : 'scale-105 shadow-2xl') : ''} ${isBoardDie ? '' : 'transition-transform'}`}>
-                        <div className={`absolute -inset-1 z-50 pointer-events-none ${isBoardDie || isScenePickup ? 'opacity-0' : 'border-2 border-[#c8aa6e]'} ${item.isCircular ? 'rounded-full' : 'rounded-sm'} transition-opacity ${isScenePickup ? '' : (isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-50')}`}>
+                    <div id={`token-inner-wrapper-${item.id}`} className={`w-full h-full relative ${item.isCircular ? 'rounded-full' : 'rounded-sm'} ${isLootDropTarget ? 'ring-2 ring-[#c8aa6e] ring-offset-2 ring-offset-black'  : ''} ${draggedTokenId === item.id && !isTree ? (isBoardDie ? 'scale-105' : 'scale-105 shadow-2xl') : ''} ${isBoardDie || isTree ? '' : 'transition-transform'}`}>
+                        <div className={`absolute -inset-1 z-50 pointer-events-none ${isBoardDie || isScenePickup ? 'opacity-0' : `border-2 ${hasEnemyBorder ? 'border-[#d1746d]' : 'border-[#c8aa6e]'}`} ${item.isCircular ? 'rounded-full' : 'rounded-sm'} transition-opacity ${isScenePickup ? '' : (isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-50')}`}>
                             {/* Indicador de Compartido (Izquierda) */}
                             {isToken && item.controlledBy?.length > 0 && (
                                 <div className="absolute -top-[1px] -left-[1px] -translate-x-1/2 -translate-y-1/2 bg-[#c8aa6e] shadow-[0_0_10px_rgba(200,170,110,0.4)] text-[#0b1120] rounded-full p-0.5 border border-white/20 flex items-center justify-center z-40 pointer-events-none">
@@ -1001,8 +1048,8 @@ const renderItemJSX = (item) => {
                                 const movementIndicator = resolveTokenMovementIndicator({
                                     item,
                                     participant: combatParticipant,
-                                    pendingState: pendingStateForItem,
-                                    originalPosition: tokenOriginalPos[item.id],
+                                    pendingState: isForcedMove ? null : pendingStateForItem,
+                                    originalPosition: isForcedMove ? null : tokenOriginalPos[item.id],
                                     items: activeScenario?.items || [],
                                     gridConfig,
                                     isPlayerView,
@@ -1034,10 +1081,13 @@ const renderItemJSX = (item) => {
                         {isToken && <TokenStatusBadges
                             statusIds={normalizeTokenStatusIds(item.status || []).filter(statusId =>
                                 DEFAULT_STATUS_EFFECTS[statusId]
+                                && (statusId !== 'barrera' || !isBoardMode)
                                 && (statusId !== 'envenenado' || isPresentedPoisoned(item, damagePresentationByToken[item.id]))
                                 && (statusId !== 'sangrado' || isPresentedBleeding(item, damagePresentationByToken[item.id])))}
                             width={item.width} height={item.height} zoom={zoom}
                             rotation={item.rotation || 0} isCircular={item.isCircular}
+                            tokenId={item.id} arcaneBarrier={!isBoardMode ? item.arcaneBarrier : undefined}
+                            barrierPresentation={combatRuntime?.spellPresentation}
                         />}
                         {isCard && cardStackCount > 0 && (
                             <div className="absolute -right-3 -top-3 z-[70] rounded-full border border-[#c8aa6e]/70 bg-black/90 px-2.5 py-1 text-[10px] font-black text-[#f8e7b9] shadow-[0_0_16px_rgba(200,170,110,0.28)] pointer-events-none">
@@ -1103,9 +1153,9 @@ const renderItemJSX = (item) => {
                             </div>
                         ) : isGeometry ? (
                             <div
-                                className={`relative w-full h-full flex items-center justify-center font-bold text-white uppercase text-[10px] tracking-widest break-words overflow-hidden p-2 text-center`}
+                                className={isTree ? 'relative w-full h-full' : 'relative w-full h-full flex items-center justify-center font-bold text-white uppercase text-[10px] tracking-widest break-words overflow-hidden p-2 text-center'}
                                 style={{
-                                    borderRadius: item.shapeType === 'circle' ? '50%' : '4px',
+                                    borderRadius: isCaltrops ? 0 : item.shapeType === 'circle' ? '50%' : '4px',
                                     border: normalizeGeometryKind(item) === 'rect' || normalizeGeometryKind(item) === 'circle'
                                         ? `2px solid ${item.backgroundColor || '#22c55e'}`
                                         : 'none',
@@ -1118,7 +1168,14 @@ const renderItemJSX = (item) => {
                                     pointerEvents: 'none'
                                 }}
                             >
-                                {renderGeometryVisual(item)}
+                                {renderGeometryVisual(item, combatRuntime?.spellPresentation, {
+                                    hazardGrid: isBoardMode ? undefined : gridConfig,
+                                    showContour: isSelected && !isPlayerView, zoom,
+                                    surfaceOverlay: !isBoardMode && Boolean(gridConfig.fogOfWar || gridConfig.ambientDarkness),
+                                    opacity: isTree && getCanvasTreeView(committedItems, {
+                                        gridConfig, isPlayerView, playerName, selectedTokenIds,
+                                    }).fadedTreeIds.has(item.id) ? TREE_OCCUPIED_OPACITY : 1,
+                                })}
                                 {(normalizeGeometryKind(item) === 'rect' || normalizeGeometryKind(item) === 'circle') && (
                                     <span style={{ opacity: 1, textShadow: '0px 0px 4px black', pointerEvents: 'none' }}>{item.name}</span>
                                 )}
@@ -1213,7 +1270,7 @@ const renderItemJSX = (item) => {
                                 <TokenImageWithLoader
                                     src={item.img}
                                     label={item.name || 'Token'}
-                                    className="w-full h-full rounded-full border-2 border-[#c8aa6e] shadow-[0_0_12px_rgba(200,170,110,0.4)]"
+                                    className={`w-full h-full rounded-full border-2 ${hasEnemyBorder ? 'border-[#d1746d] shadow-[0_0_12px_rgba(209,116,109,0.4)]' : 'border-[#c8aa6e] shadow-[0_0_12px_rgba(200,170,110,0.4)]'}`}
                                     imageClassName={`w-full h-full ${item.tokenImageFit === 'contain' ? 'object-contain' : 'object-cover'}`}
                                     imageStyle={portraitStyle}
                                 />
@@ -1229,6 +1286,7 @@ const renderItemJSX = (item) => {
                         )}
 
                         {isToken && !isBoardMode && <TokenPoisonEffect source={item.img} active={isPresentedPoisoned(item, damagePresentationByToken[item.id])} circular={Boolean(item.isCircular)} />}
+                        {isToken && !isBoardMode && <CanvasTokenArcaneBarrier token={item} presentation={combatRuntime?.spellPresentation} />}
                         {isToken && !isBoardMode && <TokenBleedingEffect source={item.img} active={isPresentedBleeding(item, damagePresentationByToken[item.id])}
                             circular={Boolean(item.isCircular)} remedyEffect={healingPresentationByToken[item.id]} />}
                         {isToken && <TokenTarStain
@@ -1262,32 +1320,36 @@ const renderItemJSX = (item) => {
                                 cellSize={Math.min(Number(gridConfig.cellWidth) || 50, Number(gridConfig.cellHeight) || 50)}
                                 isSelected={isSelected}
                                 variant={isBoardMode ? 'board' : hasRogueliteLife ? 'roguelite' : undefined}
+                                continuous={!isBoardMode && activeScenario?.rulesSystem === 'campaign'}
                                 zoom={zoom}
                                 isCircular={Boolean(item.isCircular)}
                                 rotation={item.rotation}
                                 name={item.name}
+                                hasResizeHandle={canShowResizeHandle}
                                 healingEffect={healingPresentationByToken[item.id]}
                                 damageEffect={damagePresentationByToken[item.id]}
                                 smokeVeil={smokeLifeVeil}
                                 poisoned={isPresentedPoisoned(item, damagePresentationByToken[item.id])}
                             />
                         )}
-                        {isToken && (hasRogueliteProfile || isBoardMode || !item.isCircular) && !(canShowTokenResources && (
+                        {isToken && (hasRogueliteProfile || isBoardMode || !item.isCircular || hasArcaneBarrierReadout) && !(canShowTokenResources && (
                             hasRogueliteLife || ((isBoardMode || !item.isCircular) && (Number(item.stats?.vida?.max) > 0 || Number((item.stats?.hambre || item.stats?.postura)?.max) > 0))
                         )) && (
-                            <CanvasTokenName name={item.name} height={item.height} zoom={zoom}
-                                isSelected={isSelected} isCircular={Boolean(item.isCircular)} rotation={item.rotation} />
+                            <CanvasTokenName name={item.name} width={item.width} height={item.height} zoom={zoom}
+                                isSelected={isSelected} isCircular={Boolean(item.isCircular)} rotation={item.rotation}
+                                hasResizeHandle={canShowResizeHandle} />
                         )}
 
 
                         {/* MOVEMENT DISTANCE INDICATOR */}
-                        {isToken && canInteract && (isBoardMode || combatParticipant) && (tokenOriginalPos[item.id] || (combatParticipant?.movementRuntime?.spent || 0) > 0) && (
+                        {isToken && canInteract && (isBoardMode || combatParticipant) && (tokenOriginalPos[item.id]
+                            || (pendingStateForItem?.moveCost || 0) > 0 || (combatParticipant?.movementRuntime?.spent || 0) > 0) && (
                             (() => {
                                 const original = tokenOriginalPos[item.id];
                                 const runtime = combatParticipant?.movementRuntime;
                                 const movementSpent = Math.max(0, Number(runtime?.spent) || 0);
-                                const pendingDistance = Math.max(0, Number(pendingStateForItem?.moveCost) || 0);
-                                const dragDistance = original
+                                const pendingDistance = isForcedMove ? 0 : Math.max(0, Number(pendingStateForItem?.moveCost) || 0);
+                                const dragDistance = original && !isForcedMove
                                     ? getTerrainMovementCost({ token: item, from: original, to: item, items: activeScenario?.items || [], config: gridConfig })
                                     : 0;
                                 const distance = movementSpent + (pendingStateForItem ? pendingDistance : dragDistance);
@@ -1371,7 +1433,7 @@ const renderItemJSX = (item) => {
                                     })}
                                 </div>
                             </div>
-                        ) : !isCard && !isCardContainer && !isBoardMarker && !isBoardDie && !isScenePickup && !(isToken && (hasRogueliteProfile || isBoardMode || !item.isCircular)) ? (
+                        ) : !isCard && !isCardContainer && !isBoardMarker && !isBoardDie && !isScenePickup && !(isToken && (hasRogueliteProfile || isBoardMode || !item.isCircular || hasArcaneBarrierReadout)) ? (
                             <div className={`absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap z-50 transition-opacity ${isSelected || 'group-hover:opacity-100 opacity-0'}`}>
                                 <span className="bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-full border border-slate-600 block shadow-sm backdrop-blur-sm">
                                     {item.name}
@@ -1420,6 +1482,8 @@ const renderItemJSX = (item) => {
                                 className={`absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/90 rounded-full px-2 py-1 transition-opacity z-50 shadow-xl border border-[#c8aa6e]/30 ${isSelected ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none md:group-hover:opacity-100 md:group-hover:pointer-events-auto'}`}
                                 style={isBoardMode && isCard ? { left: 'calc(50% - 2px)', width: 'max-content' } : undefined}
                             >
+                                {combatRuntime?.forcedMovement?.canBegin(item) && combatRuntime?.forcedMovement?.ButtonComponent
+                                    && React.createElement(combatRuntime.forcedMovement.ButtonComponent, { controller: combatRuntime.forcedMovement, token: item })}
                                 {isBoardMode && isCard && <button type="button" title="Acciones de cartas" aria-label="Acciones de cartas"
                                     onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
                                     onClick={e => openBoardCardMenu?.(item, e)}
@@ -1430,7 +1494,8 @@ const renderItemJSX = (item) => {
                                     type="button" title="Aplicar Fuego sin Presión" aria-label="Prender brea sin Presión"
                                     className="text-amber-300 p-1" onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}
                                     onClick={e => { e.stopPropagation(); combatRuntime?.igniteTarZone?.(item.id); }}><Flame size={14} /></button>}
-                                {!isScenePickup && !privateStackForPlayer && <button
+                                {!isScenePickup && !privateStackForPlayer
+                                    && !(isToken && !isPlayerView && !isBoardMode && combatRuntime?.forcedMovement?.ButtonComponent) && <button
                                     onMouseDown={(e) => {
                                         e.stopPropagation();
                                         if (isBoardDie) {

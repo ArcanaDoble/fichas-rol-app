@@ -1,0 +1,141 @@
+.polish-stage { background: linear-gradient(0deg,#080d1866,transparent 38%); }
+.polish-stage ::selection { background: #c8aa6e66; color: #fff5de; }
+.polish-stage .polish-dock.combat-details {
+  --polish-surface: #0b1120;
+  width: min(672px,calc(100% - 32px)); bottom: max(24px,env(safe-area-inset-bottom));
+  padding: 0; max-height: calc(58dvh - 16px); border: 1px solid #c8aa6e80; border-radius: 16px;
+  background: var(--polish-surface); box-shadow: 0 12px 24px #0007; overflow: auto;
+  scrollbar-width: thin; scrollbar-color: #8b7751 var(--polish-surface);
+}
+.polish-weapon-scene { position: relative; isolation: isolate; overflow: hidden; min-height: 106px; }
+.polish-weapon-art { position: absolute; z-index: -1; width: 76%; height: 190%; right: -4%; top: -58%; object-fit: cover; object-position: 50% 43%;
+  mask-image: linear-gradient(90deg,transparent,#000 42%),linear-gradient(0deg,transparent 1%,#000 65%); mask-composite: intersect; opacity: .74; pointer-events: none; }
+.polish-weapon-scene::after { content: ''; position: absolute; z-index: -1; inset: 0; background: linear-gradient(0deg,var(--polish-surface),transparent 70%); pointer-events: none; }
+.polish-weapon-copy { padding: 17px 24px 12px; text-shadow: 0 2px 4px #05070b; }
+.polish-duel { display: flex; gap: 9px; align-items: baseline; font: 17px/1.3 Alegreya,Georgia,serif; color: #e5cfaa; }
+.polish-duel span { font: 13px Lato,Arial,sans-serif; color: #be9e67; }
+.polish-weapon-copy h3 { margin: 7px 0 3px; font: 600 20px/1.25 Cinzel,Georgia,serif; color: #f0e6d2; }
+.polish-profile { color: #d1bf9e; font: 17px/1.35 Alegreya,Georgia,serif; }
+.polish-decision { padding: 0 22px 12px; }
+.polish-choice { margin: 4px 0 1px; color: #ecd29b; text-align: center; font: 22px/1.3 Alegreya,Georgia,serif; }
+.polish-choice small { display: inline-block; margin-left: 12px; color: #b9ac95; font: italic 14px/1.4 Alegreya,Georgia,serif; }
+.polish-help { margin: 4px 0 0; color: #b9ac95; text-align: center; font: italic 15px/1.3 Alegreya,Georgia,serif; }
+.polish-friendly { color: #d3b579; text-align: center; font: 14px/1.4 Alegreya,Georgia,serif; margin-top: 5px; }
+.polish-actions { display: flex; align-items: stretch; gap: 10px; margin: 0 18px; padding: 12px 0 16px; border-top: 1px solid #c8aa6e40; }
+.polish-stage .polish-actions { position: sticky; bottom: 0; z-index: 1; background: var(--polish-surface); }
+.polish-actions > button { flex: 1; min-width: 0; }
+.polish-actions > .attack-preparation-confirm { flex: 1.7; min-height: 60px; padding: 12px 14px; font-size: 14px; }
+.polish-secondary { min-height: 48px; padding: 8px 10px; color: #c8bda7; border: 1px solid #33415580; border-radius: 7px; background: #161f32; font: 600 12px/1.4 Cinzel,Georgia,serif; }
+.polish-secondary:hover:not(:disabled) { border-color: #c8aa6e; color: #f0e6d2; background: #202a3d; }
+.polish-wait-cancel { margin: 0 18px 16px; }
+.polish-defense-tabs { display: flex; margin: 0 18px 4px; border-bottom: 1px solid #c8aa6e40; }
+.polish-defense-tabs button { flex: 1; min-height: 44px; padding: 9px; color: #b9ac95; font: 600 14px/1.3 Cinzel,Georgia,serif; border-bottom: 2px solid transparent; }
+.polish-defense-tabs button[aria-pressed=true] { color: #ebcf91; border-bottom-color: #c8aa6e; background: linear-gradient(0deg,#c8aa6e10,transparent); }
+.polish-equipment { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 4px 0; }
+.polish-equipment button { min-height: 36px; padding: 3px 9px; color: #bdaf98; font: 16px Alegreya,Georgia,serif; border-bottom: 1px solid transparent; }
+.polish-equipment button[aria-pressed=true] { color: #e8cb8e; border-color: #c8aa6e66; }
+.polish-stage .polish-dice, .polish-preparation .polish-dice { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 16px; padding: 0; border: 0; }
+.polish-resource { display: flex; flex-direction: column; align-items: center; }
+.polish-stage .polish-dice .combat-die-choice, .polish-preparation .polish-dice .combat-die-choice { width: 104px; min-height: 88px; padding: 3px 0 0; border: 0; background: none; }
+.polish-stage .polish-dice .combat-die-choice > svg, .polish-preparation .polish-dice .combat-die-choice > svg { width: 62px; height: 62px; }
+.polish-stage .polish-dice .combat-die-status, .polish-preparation .polish-dice .combat-die-status { font: 15px/1.2 Alegreya,Georgia,serif; color: #cbb78b; white-space: nowrap; }
+.polish-stage .polish-dice .combat-die-choice::before, .polish-preparation .polish-dice .combat-die-choice::before { top: 64px; }
+.polish-fixed-note { color: #b3a78f; font: 11px/1.2 Lato,Arial,sans-serif; margin: 1px 0 8px; }
+.polish-preparation .polish-dice .combat-die-choice > svg { width: 80px; height: 80px; }
+.polish-preparation .polish-dice .combat-die-choice { min-height: 105px; }
+.polish-preparation .polish-dice .combat-die-choice::before { top: 80px; }
+.polish-preparation .polish-fixed-note { margin-top: 4px; }
+.polish-result { text-align: center; padding: 2px 0 6px; color: #d8c9ad; font: 17px/1.4 Alegreya,Georgia,serif; }
+.polish-result h3 { color: #ead3a3; font: 26px/1.25 Alegreya,Georgia,serif; margin-bottom: 7px; }
+.polish-result h3 strong { color: #e6a197; font-size: 34px; }
+.polish-result small { display: block; margin-top: 5px; color: #b9ac95; font: 12px/1.4 Lato,Arial,sans-serif; }
+.campaign-reveal-legend { display: flex; flex-wrap: wrap; gap: 4px 20px; justify-content: center; margin-bottom: 7px; }
+.campaign-reveal-legend > span { display: inline-flex; align-items: center; gap: 7px; }
+.campaign-reveal-legend i { width: 5px; height: 15px; clip-path: polygon(50% 0,100% 100%,0 100%); }
+.campaign-reveal-attack { color: #ebaaa0; }
+.campaign-reveal-attack i { background: #db5349; }
+.campaign-reveal-parry { color: #9dcbe2; }
+.campaign-reveal-parry i { background: #7ab9db; }
+.polish-stage .campaign-counter-weapons button { position: relative; isolation: isolate; overflow: hidden; min-height: 74px; padding: 12px 24px; }
+.polish-stage .campaign-counter-weapons img { position: absolute; right: 0; width: 50%; height: 120%; z-index: -1; mask-image: linear-gradient(90deg,transparent,#000 50%); opacity: .45; }
+
+.polish-rose { --lance-scale: .95; position: absolute; width: 240px; height: 240px; top: -120px; left: -120px; }
+.polish-rose-art { position: absolute; inset: 0; width: 240px; height: 240px; overflow: visible; pointer-events: none; }
+.polish-ray { transform: translate(120px,120px) rotate(var(--ray-angle)) scale(var(--lance-scale)); filter: drop-shadow(0 3px 2px #000) drop-shadow(0 1px 4px #000b); }
+.polish-lance-underlay { fill: #110e09; stroke: #080809; stroke-width: 4; }
+.polish-lance { stroke: #eadb9b; stroke-width: .75; }
+.polish-lance-bevel { fill: #473a15; opacity: .26; }
+.polish-lance-ridge { stroke: #fff3be; stroke-width: .65; opacity: .56; }
+.polish-ray[data-active=true] .polish-lance { stroke: #ee8b70; }
+.polish-ray[data-active=true] .polish-lance-bevel { fill: #570711; opacity: .36; }
+.polish-ray[data-active=true] .polish-lance-ridge { stroke: #fa8670; }
+.polish-ray[data-blocked=true] { opacity: .3; filter: drop-shadow(0 2px 2px #000); }
+.polish-ray[data-blocked=true] .polish-lance { fill: #5d5b54; stroke: #8a8574; }
+.polish-blocked-mark { stroke: #cf9280; stroke-width: 2; }
+.polish-rose-center { fill: #cbb367; stroke: #f6e0a2; stroke-width: 1.1; filter: drop-shadow(0 2px 2px #000); }
+.polish-rose-center[data-active=true] { fill: #cb3330; stroke: #ed8b6c; }
+.polish-rose-hit { position: absolute; inset: 0; width: 240px; height: 240px; padding: 0; margin: 0; border: 0; background: transparent; clip-path: var(--hit-pc); cursor: pointer; }
+.polish-rose-hit[data-zone=centro] { inset: 108px auto auto 108px; width: 24px; height: 24px; border-radius: 50%; clip-path: none; }
+.polish-rose-hit[aria-disabled=true] { cursor: not-allowed; }
+.polish-stage .polish-rose-hit:focus-visible { outline: none; }
+.polish-rose:not(.polish-evasion-rose):has(.polish-rose-hit:focus-visible) .polish-ray[data-active=true] .polish-lance { stroke: #fff2ca; stroke-width: 2; }
+.polish-evasion-rose:has(.polish-rose-hit:focus-visible) .polish-ray[data-focused=true] { opacity: 1; }
+.polish-evasion-rose:has(.polish-rose-hit:focus-visible) .polish-ray[data-focused=true] .polish-lance { stroke: #fff2ca; stroke-width: 2; }
+.polish-rose:has([data-zone=centro]:focus-visible) .polish-rose-center { stroke: #fff2ca; stroke-width: 2.5; }
+.polish-evasion-destination { position: absolute; z-index: 90; border: 1.5px solid #e7cf98; background: #c8aa6e20; box-shadow: inset 0 0 18px #c8aa6e22; pointer-events: none; }
+.polish-evasion-destination span { position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); color: #f0dfb9; background: #0b1120e8; padding: 2px 6px; font: 12px Alegreya,Georgia,serif; white-space: nowrap; }
+.polish-ray[data-guard=true] .polish-lance { stroke: #b5dcef; stroke-width: 1.2; }
+.polish-ray[data-guard=true] .polish-lance-bevel { fill: #143e5e; opacity: .23; }
+.polish-ray[data-guard=true] .polish-lance-ridge { stroke: #c9e9f7; }
+.polish-ray[data-active=true][data-guard=true] .polish-lance-bevel { fill: transparent; }
+.polish-ray[data-active=true][data-guard=true] .polish-lance-ridge { stroke: #e6dbd0; }
+.polish-revealed { pointer-events: none; }
+.polish-revealed .campaign-rose-clash { left: 110px; top: 110px; }
+.polish-revealed .polish-rose-center { fill: #cbb367; }
+.polish-revealed .polish-rose-center[data-active=true] { fill: #cb3330; }
+.polish-revealed .polish-rose-center[data-guard=true] { fill: #6ba6c8; stroke: #b5dcef; stroke-width: 1.8; }
+.polish-revealed .polish-rose-center[data-active=true][data-guard=true] { fill: #cb3330; stroke: #9bd1ed; stroke-width: 3; }
+@media (max-width:600px), (pointer:coarse) {
+  .polish-rose { --lance-scale: 1.25; }
+  .polish-rose-hit { clip-path: var(--hit-touch); }
+  .polish-rose-hit[data-zone=centro] { inset: 98px auto auto 98px; width: 44px; height: 44px; clip-path: none; }
+}
+@media (max-width:600px) {
+  .polish-stage .polish-dock.combat-details { width: calc(100% - 16px); bottom: max(8px,env(safe-area-inset-bottom)); border-radius: 12px; max-height: 58dvh; }
+  .polish-weapon-scene { min-height: 91px; }
+  .polish-weapon-copy { padding: 13px 16px 9px; }
+  .polish-weapon-copy h3 { font-size: 17px; margin-top: 5px; }
+  .polish-duel, .polish-profile { font-size: 16px; }
+  .polish-weapon-art { right: -10%; width: 85%; top: -45%; height: 175%; }
+  .polish-decision { padding: 0 12px 10px; }
+  .polish-choice { font-size: 20px; }
+  .polish-choice small { font-size: 13px; margin-left: 8px; }
+  .polish-help { font-size: 14px; }
+  .polish-actions { gap: 6px; margin-inline: 10px; padding: 10px 0; }
+  .polish-actions > .attack-preparation-confirm { flex: 1.4; min-height: 55px; padding: 10px 9px; font-size: 11px; }
+  .polish-secondary { font-size: 10px; padding-inline: 5px; }
+  .polish-defense-tabs { margin-inline: 10px; }
+  .polish-defense-tabs button { font-size: 13px; }
+  .polish-stage .polish-dice .combat-die-choice { width: 88px; min-height: 80px; }
+  .polish-stage .polish-dice .combat-die-choice > svg { width: 56px; height: 56px; }
+  .polish-stage .polish-dice { gap: 8px; }
+}
+
+@media (max-height:560px) and (min-width:601px) {
+  .polish-stage .polish-dock.combat-details { right: 12px; left: auto; transform: none; bottom: 12px; width: 340px; max-height: calc(100dvh - 24px); }
+  .polish-weapon-copy { padding: 9px 16px 7px; }
+  .polish-weapon-scene { min-height: 80px; }
+  .polish-weapon-copy h3 { font-size: 17px; }
+  .polish-profile, .polish-duel { font-size: 14px; }
+  .polish-stage .polish-dice .combat-die-choice { min-height: 70px; width: 84px; padding: 0; }
+  .polish-stage .polish-dice .combat-die-choice > svg { width: 46px; height: 46px; }
+  .polish-stage .polish-dice .combat-die-status { font-size: 13px; }
+  .polish-stage .polish-dice .combat-die-choice::before { top: 49px; }
+  .polish-fixed-note { margin: 0 0 4px; }
+  .polish-decision { padding-bottom: 7px; }
+  .polish-choice { font-size: 19px; }
+  .polish-help { font-size: 13px; }
+  .polish-actions { margin-inline: 10px; padding-block: 10px; gap: 6px; }
+  .polish-actions > .attack-preparation-confirm { font-size: 11px; padding-inline: 8px; min-height: 52px; }
+  .polish-secondary { font-size: 10px; padding: 8px 6px; }
+}

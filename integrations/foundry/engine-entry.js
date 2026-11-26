@@ -1,0 +1,11 @@
+export * from '../../src/features/canvas/combat/canvasCombatState';
+export * from '../../src/features/canvas/combat/canvasAttackRules';
+export * from '../../src/features/canvas/combat/canvasArmorRules';
+export * from '../../src/features/roguelite/classDefinition';
+export * from '../../src/features/roguelite/equipmentPool';
+export * from '../../src/features/roguelite/progression';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import ActionDieSvg from '../../src/components/ActionDieSvg';
+let svgId = 0;
+export const renderActionDie = (props) => renderToStaticMarkup(React.createElement(ActionDieSvg, props), {identifierPrefix: `noma-${++svgId}-`});

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { reserveCanvasPointerColor } from './sharedPointerColors';
 import {
     CANVAS_PING_LIFETIME_MS,
     getActiveCanvasPings,
@@ -32,6 +33,8 @@ export const useCanvasSharedPointer = ({
     const lastWriteAtRef = useRef(0);
     const localPointerRef = useRef(null);
     const mountedRef = useRef(true);
+    const colorClaimRef = useRef(null);
+    const [assignedColor, setAssignedColor] = useState(null);
     const scenarioId = activeScenario?.id || null;
     const actorId = useMemo(() => getCanvasPointerActorId({
         currentUserId,
@@ -39,10 +42,44 @@ export const useCanvasSharedPointer = ({
         playerName,
     }), [currentUserId, isPlayerView, playerName]);
     const displayName = isPlayerView ? (playerName || 'Jugador') : 'Máster';
-    const color = useMemo(
+    const fallbackColor = useMemo(
         () => getCanvasPointerColor(actorId, !isPlayerView),
         [actorId, isPlayerView],
     );
+    const reservationKey = `${scenarioCollectionName}/${scenarioId}/${actorId}`;
+    const color = assignedColor?.key === reservationKey ? assignedColor.color : fallbackColor;
+
+    useEffect(() => {
+        if (!scenarioId) return undefined;
+        const reserve = () => {
+            const claim = { key: reservationKey, color: null, promise: null };
+            colorClaimRef.current = claim;
+            claim.promise = reserveCanvasPointerColor({ scenarioCollectionName, scenarioId, actorId, isMaster: !isPlayerView });
+            claim.promise.then(nextColor => {
+                if (!mountedRef.current || colorClaimRef.current !== claim) return;
+                claim.color = nextColor;
+                setAssignedColor({ key: reservationKey, color: nextColor });
+                setLocalPointer(current => current ? { ...current, color: nextColor } : current);
+                setLocalPings(current => current.map(ping => ({ ...ping, color: nextColor })));
+            }).catch(error => console.error('No se pudo reservar el color del puntero:', error));
+        };
+        reserve();
+        window.addEventListener('online', reserve);
+        return () => {
+            window.removeEventListener('online', reserve);
+            if (colorClaimRef.current?.key === reservationKey) colorClaimRef.current = null;
+        };
+    }, [actorId, isPlayerView, reservationKey, scenarioCollectionName, scenarioId]);
+
+    const withReservedColor = useCallback((payload, publish) => {
+        const claim = colorClaimRef.current;
+        if (!claim || claim.key !== reservationKey) return;
+        const deliver = nextColor => {
+            if (mountedRef.current && colorClaimRef.current === claim) publish({ ...payload, color: nextColor });
+        };
+        if (claim.color) deliver(claim.color);
+        else claim.promise.then(deliver).catch(() => {});
+    }, [reservationKey]);
 
     useEffect(() => {
         localPointerRef.current = localPointer;
@@ -71,10 +108,16 @@ export const useCanvasSharedPointer = ({
         const reference = pointerDocRef();
         if (!reference || !payload) return;
         lastWriteAtRef.current = Date.now();
-        setDoc(reference, payload, { merge: true }).catch((error) => {
-            console.error('No se pudo compartir el puntero del Canvas:', error);
+        withReservedColor(payload, colored => {
+            // Do not publish queued movement after Ctrl was released or a newer
+            // position arrived while the unique color was being reserved.
+            const current = localPointerRef.current;
+            if (!current || current.updatedAt !== payload.updatedAt || current.x !== payload.x || current.y !== payload.y) return;
+            setDoc(reference, colored, { merge: true }).catch((error) => {
+                console.error('No se pudo compartir el puntero del Canvas:', error);
+            });
         });
-    }, [pointerDocRef]);
+    }, [pointerDocRef, withReservedColor]);
 
     const queuePointerWrite = useCallback((payload, immediate = false) => {
         queuedPointerRef.current = payload;
@@ -123,8 +166,11 @@ export const useCanvasSharedPointer = ({
             ...getActiveCanvasPings({ pings: current }, ping.createdAt),
             ping,
         ]);
-        setDoc(reference, ping).catch((error) => {
-            console.error('No se pudo compartir el ping del Canvas:', error);
+        withReservedColor(ping, colored => {
+            if (Date.now() - ping.createdAt >= CANVAS_PING_LIFETIME_MS) return;
+            setDoc(reference, colored).catch((error) => {
+                console.error('No se pudo compartir el ping del Canvas:', error);
+            });
         });
 
         const cleanupKey = `${scenarioCollectionName}/${scenarioId}/${ping.id}`;
@@ -138,7 +184,7 @@ export const useCanvasSharedPointer = ({
             }
         }, CANVAS_PING_LIFETIME_MS + 50);
         PING_CLEANUP_TIMERS.set(cleanupKey, cleanupTimer);
-    }, [pingDocRef, scenarioCollectionName, scenarioId]);
+    }, [pingDocRef, scenarioCollectionName, scenarioId, withReservedColor]);
 
     const buildPointer = useCallback((event) => {
         const worldPoint = divToWorld(event.clientX, event.clientY);
@@ -279,7 +325,7 @@ export const useCanvasSharedPointer = ({
                 // last published position (usually the most recent ping).
                 localActorId: actorId,
             }),
-            ...(localPointer ? [{ id: actorId, ...localPointer }] : []),
+            ...(localPointer ? [{ id: actorId, ...localPointer, isLocal: true }] : []),
             ...pingPointers,
         ],
         isCanvasPointerActive: Boolean(localPointer),

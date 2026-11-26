@@ -1,6 +1,7 @@
 import { getCanvasCombatItems, getCanvasWeaponActionCost } from '../features/canvas/combat/canvasAttackRules';
+import { resolveWeaponForm } from '../features/roguelite/weaponForms';
 import React, { useState, useRef, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useIsPresent, useReducedMotion } from 'framer-motion';
 import { Sword, ArrowUp, Shield, Hourglass, Backpack, Sparkles, ChevronUp, ChevronDown, Lock, X, Zap, RotateCw, Footprints, Dices } from 'lucide-react';
 import { getSpeedConsumption } from '../utils/combatSystem';
 import { getItemTraits } from '../utils/armorSystem';
@@ -11,7 +12,14 @@ import { getCardDisplayImage } from '../utils/cardImages';
 import { reorderCardItems } from '../utils/cardBoard';
 import ActionDieSvg from './ActionDieSvg';
 import CanvasPotionPreparation from '../features/canvas/components/CanvasPotionPreparation';
+import CanvasSpellPreparation from '../features/canvas/components/CanvasSpellPreparation';
+import { getCanvasPreparedSpells, getCanvasSpellAvailability, isCanvasMage } from '../features/canvas/spells/canvasSpells';
 import { resolveRogueliteEquippedItems } from '../features/canvas/rogueliteTokenSheetSync';
+import { resolveEquipmentImage } from '../utils/equipmentImages';
+import { resolveCombatHudObjects } from '../utils/combatHudObjects';
+import LoadingImage, { preloadImage } from './LoadingImage';
+
+export { resolveCombatHudObjects } from '../utils/combatHudObjects';
 
 const RANGE_MAP = {
     toque: 0,
@@ -112,89 +120,13 @@ const resolveCombatItemImage = (item, customEquipmentImages) => {
     return null;
 };
 
-const getCombatHudItemIdentityKeys = (item) => {
-    if (!item || typeof item !== 'object') return [];
-    return [
-        item.runItemId,
-        item.instanceId,
-        item.templateId,
-        item.catalogId,
-        item.id,
-        item.name,
-        item.nombre,
-        item.payload?.runItemId,
-        item.payload?.instanceId,
-        item.payload?.templateId,
-        item.payload?.catalogId,
-        item.payload?.id,
-        item.payload?.name,
-        item.payload?.nombre,
-    ]
-        .map((value) => String(value || '').trim().toLowerCase())
-        .filter(Boolean);
-};
 
-const combatHudItemsMatch = (left, right) => {
-    const leftInstance = left?.runItemId || left?.instanceId || left?.payload?.runItemId || left?.payload?.instanceId;
-    const rightInstance = right?.runItemId || right?.instanceId || right?.payload?.runItemId || right?.payload?.instanceId;
-    if (leftInstance && rightInstance) return String(leftInstance) === String(rightInstance);
-    const rightKeys = new Set(getCombatHudItemIdentityKeys(right));
-    return getCombatHudItemIdentityKeys(left).some((key) => rightKeys.has(key));
-};
-
-const isCombatHudObject = (item) => {
-    const type = [
-        item?.type,
-        item?.tipo,
-        item?.itemType,
-        item?._category,
-        item?.category,
-        item?.payload?.type,
-        item?.payload?.itemType,
-    ].map((value) => String(value || '').toLowerCase()).join(' ');
-
-    return type.includes('object')
-        || type.includes('objeto')
-        || type.includes('consum')
-        || type.includes('pocion')
-        || type.includes('poción');
-};
-
-export const resolveCombatHudObjects = (token = {}) => {
-    const sourceToken = token || {};
-    const inventoryObjects = (Array.isArray(sourceToken.inventory) ? sourceToken.inventory : [])
-        .filter(isCombatHudObject);
-    const equippedArray = Array.isArray(sourceToken.equippedItems) ? sourceToken.equippedItems : [];
-    const loadoutEquipment = resolveRogueliteEquippedItems(
-        sourceToken.equipmentLoadout
-        || (sourceToken.equippedItems && !Array.isArray(sourceToken.equippedItems) ? sourceToken.equippedItems : {})
-    ).items;
-    const loadoutBeltObjects = loadoutEquipment.filter((item) => String(item?.canvasSlot || '').startsWith('belt_'));
-    const beltObjects = [
-        ...loadoutBeltObjects,
-        ...equippedArray.filter((item) => (
-            String(item?.canvasSlot || '').startsWith('belt_')
-            && !loadoutBeltObjects.some((loadoutItem) => (
-                loadoutItem.canvasSlot === item.canvasSlot || combatHudItemsMatch(loadoutItem, item)
-            ))
-        )),
-    ]
-        .sort((left, right) => String(left.canvasSlot).localeCompare(String(right.canvasSlot), undefined, { numeric: true }));
-    const usedInventoryIndexes = new Set();
-    const mergedBeltObjects = beltObjects.map((beltItem) => {
-        const inventoryIndex = inventoryObjects.findIndex((inventoryItem, index) => (
-            !usedInventoryIndexes.has(index) && combatHudItemsMatch(beltItem, inventoryItem)
-        ));
-        if (inventoryIndex < 0) return beltItem;
-        usedInventoryIndexes.add(inventoryIndex);
-        return { ...inventoryObjects[inventoryIndex], ...beltItem };
-    });
-
-    return [
-        ...mergedBeltObjects,
-        ...inventoryObjects.filter((_, index) => !usedInventoryIndexes.has(index)),
-    ];
-};
+const HudIllustration = ({ src, name }) => <>
+    <LoadingImage key={src} src={src} alt={name} draggable={false} loading="eager" fetchPriority="high"
+        skeleton={false} showFailureFallback={false} style={{ transition: 'none' }}
+        imageClassName="absolute inset-0 h-full w-full object-cover object-center" />
+    <span aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background: 'linear-gradient(to bottom, transparent 15%, rgba(11,17,32,0.45) 45%, #0b1120 100%)' }} />
+</>;
 
 const ItemImage = ({ src, type, name }) => {
     const [status, setStatus] = React.useState(src ? (isImageUrlLoaded(src) ? 'loaded' : 'loading') : 'idle');
@@ -313,7 +245,7 @@ const HudCardImage = ({ card }) => {
     );
 };
 
-// Only the mobile potion dock changes the tab width. Keep a numeric resting
+// Only the mobile preparation docks change the tab width. Keep a numeric resting
 // width so opening and closing can interpolate without scaling their text.
 const CombatHudTabsAnchor = ({ potionOpen, children }) => {
     const anchorRef = useRef(null);
@@ -362,8 +294,10 @@ const CombatHudTabsAnchor = ({ potionOpen, children }) => {
     return <div ref={anchorRef} className="combat-hud-tabs-anchor" data-potion-open={potionOpen}>{children}</div>;
 };
 
-const CombatHudPotionFold = ({ desktopVariants, children }) => {
+const CombatHudPreparationFold = ({ desktopVariants, className = 'potion-preparation-dock', respectReducedMotion = false, children }) => {
     const [mobile, setMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+    const isPresent = useIsPresent();
+    const reducedMotion = useReducedMotion();
     React.useEffect(() => {
         const updateMobile = () => setMobile(window.innerWidth < 768);
         window.addEventListener('resize', updateMobile);
@@ -371,12 +305,17 @@ const CombatHudPotionFold = ({ desktopVariants, children }) => {
     }, []);
     // The mobile fold grows out of the tabs. Translating/scaling this dock
     // would separate its bottom edge while the tab width is changing.
-    const variants = mobile ? {
+    const dockVariants = mobile ? {
         initial: { ...desktopVariants.initial, y: 0, scale: 1 },
         animate: { ...desktopVariants.animate, y: 0, scale: 1 },
         exit: { ...desktopVariants.exit, y: 0, scale: 1 }
     } : desktopVariants;
-    return <motion.div className="potion-preparation-dock" variants={variants}
+    const variants = respectReducedMotion && reducedMotion ? {
+        initial: { height: 0, opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' },
+        animate: { height: 'auto', opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', transition: { duration: 0 } },
+        exit: { height: 0, opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', transition: { duration: 0 } }
+    } : dockVariants;
+    return <motion.div className={className} variants={variants} inert={!isPresent}
         initial="initial" animate="animate" exit="exit">{children}</motion.div>;
 };
 
@@ -418,6 +357,7 @@ const CombatHUD = ({
     onCancelItemUse = null,
     onConfirmItemUse = null,
     itemUseBusy = false,
+    spellUseSystem = null,
 }) => {
     const customEquipmentImages = useCustomEquipmentImages();
     const isBoardMode = mode === 'board';
@@ -447,7 +387,7 @@ const CombatHUD = ({
     }, [forceWeaponMenu]);
 
     React.useEffect(() => {
-        if (itemUseSession?.sourceTokenId !== token?.id || !['select-die', 'confirm'].includes(itemUseSession?.phase)) return;
+        if (['fireball', 'arcane-projectile'].includes(itemUseSession?.definitionId) || itemUseSession?.sourceTokenId !== token?.id || !['select-die', 'confirm'].includes(itemUseSession?.phase)) return;
         setActiveCategory('OBJETOS');
         setSelectedActionId('item-use');
     }, [itemUseSession?.phase, itemUseSession?.sourceTokenId, token?.id]);
@@ -455,6 +395,10 @@ const CombatHUD = ({
     React.useEffect(() => {
         if (!itemUseSession) setSelectedActionId(current => current === 'item-use' ? null : current);
     }, [itemUseSession]);
+
+    React.useEffect(() => {
+        if (spellUseSystem?.session?.sourceTokenId === token?.id) setActiveCategory('CLASE');
+    }, [spellUseSystem?.session?.sourceTokenId, token?.id]);
 
     // Mobile end-turn: hold-to-confirm pattern
     // Press down → animation starts + timer begins
@@ -527,6 +471,16 @@ const CombatHUD = ({
         return () => window.removeEventListener('resize', updateViewport);
     }, [isBoardMode]);
 
+    React.useEffect(() => {
+        if (isBoardMode || !token) return;
+        const illustratedItems = [
+            ...resolveCombatHudObjects(token),
+            ...(isCanvasMage(token) ? getCanvasPreparedSpells(token).filter(Boolean).map(spell => spell.item) : []),
+        ];
+        const sources = new Set(illustratedItems.map(item => resolveEquipmentImage(item, customEquipmentImages)).filter(Boolean));
+        sources.forEach(src => { void preloadImage(src); });
+    }, [token, customEquipmentImages, isBoardMode]);
+
     if (!token && !isBoardMode) return null;
 
     // Obtener opciones de ataque (Armas + Habilidades Ofensivas)
@@ -536,9 +490,12 @@ const CombatHUD = ({
             token?.equipmentLoadout
             || (token?.equippedItems && !Array.isArray(token.equippedItems) ? token.equippedItems : {})
         ).items;
+    const activeItems = items.map(resolveWeaponForm);
     const combatHudObjects = resolveCombatHudObjects(token);
+    const isMage = !isBoardMode && isCanvasMage(token);
+    const preparedSpells = isMage ? getCanvasPreparedSpells(token) : [];
     // Older token snapshots may contain loadout metadata misclassified as weapons.
-    let attackOptions = items.filter(i => i && String(i.name || i.nombre || '').trim()).filter(i =>
+    let attackOptions = activeItems.filter(i => i && String(i.name || i.nombre || '').trim()).filter(i =>
         i.type === 'weapon' ||
         i.type === 'ability' ||
         (i._category === 'abilities' && (i.damage || i.dano))
@@ -1446,10 +1403,20 @@ const CombatHUD = ({
 
 
 
-                        <CombatHudTabsAnchor potionOpen={selectedActionId === 'item-use' && itemUseSession?.sourceTokenId === token?.id && ['healing-potion', 'antidote', 'bandage', 'haste-potion', 'vitality-potion'].includes(itemUseSession.definitionId)}>
+                        <CombatHudTabsAnchor potionOpen={Boolean(spellUseSystem?.session?.sourceTokenId === token?.id && spellUseSystem?.session?.phase === 'prepare') || (selectedActionId === 'item-use' && itemUseSession?.sourceTokenId === token?.id && ['healing-potion', 'antidote', 'bandage', 'haste-potion', 'vitality-potion'].includes(itemUseSession.definitionId))}>
                             <AnimatePresence>
+                                {spellUseSystem?.session?.sourceTokenId === token?.id && spellUseSystem?.session?.phase === 'prepare' && (
+                                    <CombatHudPreparationFold
+                                        key="spell-preparation-fold"
+                                        className="potion-preparation-dock spell-preparation-dock"
+                                        desktopVariants={panelVariants}
+                                        respectReducedMotion
+                                    >
+                                        <CanvasSpellPreparation system={spellUseSystem} customImages={customEquipmentImages} />
+                                    </CombatHudPreparationFold>
+                                )}
                                 {selectedActionId === 'item-use' && itemUseSession?.sourceTokenId === token?.id && ['healing-potion', 'antidote', 'bandage', 'haste-potion', 'vitality-potion'].includes(itemUseSession.definitionId) && (
-                                    <CombatHudPotionFold
+                                    <CombatHudPreparationFold
                                         key="potion-preparation-fold"
                                         desktopVariants={panelVariants}
                                     >
@@ -1459,7 +1426,7 @@ const CombatHUD = ({
                                             onSelectResource={onSelectItemUseResource} onConfirm={onConfirmItemUse}
                                             onCancel={onCancelItemUse} busy={itemUseBusy} customImages={customEquipmentImages}
                                         />
-                                    </CombatHudPotionFold>
+                                    </CombatHudPreparationFold>
                                 )}
                             </AnimatePresence>
                             <div className="combat-hud-tabs flex items-center bg-[#0b1120]/90 backdrop-blur-md border border-[#c8aa6e]/30 rounded-t-xl overflow-hidden shadow-lg transform translate-y-[1px]"
@@ -1468,7 +1435,10 @@ const CombatHUD = ({
                                     <button
                                         key={cat.id}
                                         disabled={isBoardMode && isProne && cat.id !== 'ACCIONES'}
-                                        onClick={() => setActiveCategory(cat.id)}
+                                        onClick={() => {
+                                            if (cat.id !== 'CLASE' && spellUseSystem?.session?.sourceTokenId === token?.id) spellUseSystem.cancel?.();
+                                            setActiveCategory(cat.id);
+                                        }}
                                         className={`px-3 md:px-8 py-2 md:py-3 text-[10px] md:text-xs font-bold uppercase tracking-widest transition-all ${activeCategory === cat.id
                                             ? 'bg-[#c8aa6e] text-[#0b1120]'
                                             : 'text-[#c8aa6e] hover:bg-[#c8aa6e]/10'
@@ -1488,8 +1458,8 @@ const CombatHUD = ({
                         <div className="absolute inset-0 bg-gradient-to-t from-[#c8aa6e]/5 to-transparent pointer-events-none rounded-xl md:rounded-2xl"></div>
 
                         <div
-                            className="flex items-stretch gap-1.5 md:gap-4 md:justify-center overflow-x-auto overflow-y-visible scrollbar-hide h-16 md:h-24 max-w-0 min-w-full"
-                            style={{ msOverflowStyle: 'none', scrollbarWidth: 'none', justifyContent: activeCategory === 'OBJETOS' ? 'flex-start' : undefined }}
+                            className={`flex items-stretch gap-1.5 md:gap-4 md:justify-center overflow-x-auto overflow-y-visible scrollbar-hide ${activeCategory === 'OBJETOS' || (activeCategory === 'CLASE' && isMage) ? 'h-20' : 'h-16'} md:h-24 max-w-0 min-w-full`}
+                            style={{ msOverflowStyle: 'none', scrollbarWidth: 'none', justifyContent: activeCategory === 'OBJETOS' || (activeCategory === 'CLASE' && isMage) ? 'flex-start' : undefined }}
                         >
                             <style>{`
                                 .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -1540,7 +1510,16 @@ const CombatHUD = ({
                             })}
 
                             {activeCategory === 'CLASE' && (() => {
-                                const classSlots = [
+                                const classSlots = isMage ? preparedSpells.map((spell, slotIndex) => {
+                                    if (!spell) return { id: `empty-spell-${slotIndex}`, label: 'Sin conjuro',
+                                        ariaLabel: `Ranura de conjuro ${slotIndex + 1} vacía`, icon: Sparkles,
+                                        disabled: true };
+                                    const availability = getCanvasSpellAvailability(token, spellUseSystem?.combat, spell.slotIndex, spellUseSystem?.availabilityOptions);
+                                    return { id: `spell-${spell.slotIndex}`, label: spell.spellId === 'runic-barrier' ? 'Barrera rúnica' : spell.item.name || spell.item.nombre,
+                                        image: resolveEquipmentImage(spell.item, customEquipmentImages), icon: Sparkles, interactive: true,
+                                        disabled: !isActive || !availability.available, spell,
+                                        reason: availability.reason };
+                                }) : [
                                     { id: 'placeholder-left', label: 'Habilidad 1', icon: Sparkles, disabled: true },
                                     { id: 'sweep', label: 'Barrido', icon: Zap, disabled: !isActive || (isBoardMode && isProne), interactive: true },
                                     { id: 'placeholder-right', label: 'Habilidad 3', icon: Sparkles, disabled: true }
@@ -1551,7 +1530,8 @@ const CombatHUD = ({
                                         {classSlots.map((slot) => {
                                             const SlotIcon = slot.icon;
                                             const slotDisabled = slot.disabled;
-                                            const isSelected = slot.id === 'sweep' && selectedActionId === 'sweep';
+                                            const isSelected = slot.id === 'sweep' && selectedActionId === 'sweep'
+                                                || Boolean(slot.spell) && slot.spell.slotIndex === spellUseSystem?.session?.slotIndex && spellUseSystem?.session?.sourceTokenId === token?.id;
                                             const iconClass = slot.interactive
                                                 ? (slotDisabled ? 'text-slate-600' : 'text-slate-400 group-hover:text-[#c8aa6e]')
                                                 : 'text-slate-600';
@@ -1560,14 +1540,18 @@ const CombatHUD = ({
                                                 : 'text-slate-600';
 
                                             return (
-                                                <div key={slot.id} className="relative group flex-1 min-w-0">
+                                                <div key={slot.id} className="relative group min-w-0 flex-1">
                                                     <button
+                                                        type="button"
+                                                        aria-label={slot.spell ? `Lanzar ${slot.label}, copia ${slot.spell.slotIndex + 1}` : slot.ariaLabel || slot.label}
+                                                        title={slot.reason || slot.label}
                                                         onClick={() => {
                                                             if (!slot.interactive || slotDisabled) return;
+                                                            if (slot.spell) { onAction?.('use_spell', { slotIndex: slot.spell.slotIndex }); return; }
                                                             setSelectedActionId((prev) => prev === slot.id ? null : slot.id);
                                                         }}
                                                         disabled={slotDisabled}
-                                                        className={`relative flex w-full flex-col items-center justify-center h-16 md:h-24 bg-[#161f32] border rounded-lg transition-all ${
+                                                        className={`relative flex w-full flex-col items-center justify-center bg-[#161f32] border rounded-lg transition-all ${slot.image || isMage ? 'h-20 md:h-24 overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#c8aa6e]' : 'h-16 md:h-24'} ${
                                                             slot.interactive
                                                                 ? slotDisabled
                                                                     ? 'cursor-not-allowed opacity-50 border-slate-800'
@@ -1577,9 +1561,10 @@ const CombatHUD = ({
                                                                 : 'cursor-not-allowed opacity-45 border-slate-800'
                                                         }`}
                                                     >
-                                                        <SlotIcon className={`w-[18px] h-[18px] md:w-8 md:h-8 mb-1 md:mb-2 transition-colors ${iconClass}`} />
-                                                        <div className="flex flex-col items-center">
-                                                            <span className={`text-[9px] md:text-[10px] font-bold uppercase tracking-wider transition-colors text-center px-1 ${labelClass}`}>
+                                                        {slot.image ? <HudIllustration src={slot.image} name={slot.label} />
+                                                            : <SlotIcon className={`w-[18px] h-[18px] md:w-8 md:h-8 mb-1 md:mb-2 transition-colors ${iconClass}`} />}
+                                                        <div className={`flex flex-col items-center ${slot.image ? 'relative mt-auto w-full pb-1 md:pb-2 pt-5' : ''}`}>
+                                                            <span className={`text-[9px] md:text-[10px] font-bold uppercase tracking-wider transition-colors text-center px-1 ${slot.image ? 'text-[#f0e6d2]' : labelClass}`}>
                                                                 {slot.label}
                                                             </span>
                                                         </div>
@@ -1606,6 +1591,11 @@ const CombatHUD = ({
                                         {combatHudObjects.map((obj, idx) => {
                                             const objectName = obj.name || obj.nombre || 'Objeto';
                                             const objectKey = obj.runItemId || obj.instanceId || obj.canvasSlot || obj.id || `${objectName}-${idx}`;
+                                            const objectImage = resolveEquipmentImage(obj, customEquipmentImages);
+                                            const selectedObject = itemUseSession?.item;
+                                            const isSelected = itemUseSession?.sourceTokenId === token?.id && objectKey === (
+                                                selectedObject?.runItemId || selectedObject?.instanceId || selectedObject?.canvasSlot || selectedObject?.id
+                                            );
                                             return (
                                                 <div
                                                     key={`${objectKey}-${idx}`}
@@ -1622,16 +1612,17 @@ const CombatHUD = ({
                                                             const result = onAction?.('use_item', obj);
                                                             if (result !== false) setSelectedActionId('item-use');
                                                         }}
-                                                        className="relative flex w-full h-16 md:h-24 flex-col items-center justify-center overflow-hidden rounded-lg border border-slate-700/50 bg-[#161f32] transition-all hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 disabled:grayscale group/item"
+                                                        className={`relative flex w-full h-20 md:h-24 flex-col items-center justify-center overflow-hidden rounded-lg border bg-[#161f32] transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#c8aa6e] active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 disabled:grayscale ${isSelected
+                                                            ? 'border-[#c8aa6e] bg-[#c8aa6e]/20 shadow-[0_0_15px_rgba(200,170,110,0.3)]'
+                                                            : 'border-slate-700/50 hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10'}`}
                                                     >
-                                                        <span aria-hidden="true" className="absolute inset-x-0 top-0 h-px bg-[#c8aa6e]/30 opacity-60" />
-                                                        <div className="relative w-8 h-8 md:w-12 md:h-12 mb-1 md:mb-1.5 overflow-hidden border border-[#c8aa6e]/30 bg-black/45 shadow-inner">
-                                                            <ItemImage src={resolveCombatItemImage(obj, customEquipmentImages)} type={obj.type || obj.itemType} name={objectName} />
-                                                            <span aria-hidden="true" className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-black/35" />
+                                                        {objectImage ? <HudIllustration src={objectImage} name={objectName} />
+                                                            : <Backpack className="w-[18px] h-[18px] md:w-8 md:h-8 mb-1 md:mb-2 text-slate-400 group-hover:text-[#c8aa6e]" />}
+                                                        <div className={`flex flex-col items-center ${objectImage ? 'relative mt-auto w-full pb-1 md:pb-2 pt-5' : ''}`}>
+                                                            <span className="w-full px-1 text-center text-[9px] md:text-[10px] font-bold uppercase tracking-wider text-[#f0e6d2]">
+                                                                {objectName}
+                                                            </span>
                                                         </div>
-                                                        <span className="w-full truncate px-2 text-center text-[8px] md:text-[10px] font-bold uppercase tracking-wider text-slate-300 transition-colors group-hover/item:text-[#f0e6d2]">
-                                                            {objectName}
-                                                        </span>
                                                     </button>
                                                 </div>
                                             );

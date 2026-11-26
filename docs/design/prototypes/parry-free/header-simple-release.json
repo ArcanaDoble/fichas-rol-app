@@ -1,0 +1,32 @@
+{
+  "verifiedAtUtc": "2026-10-21T02:50:58.666213+00:00",
+  "release": "parry-header-without-context",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.ddfc4c79.js",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "9536281408bdc801714f91e36fccd8c5ffbf5a14fb061ebda3947233ab1aefa1"
+    },
+    "main.css": {
+      "path": "/static/css/main.06c62844.css",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "cf670de3d6ce910884cb6e5f8b3cdd768490cffede1f51a427cdba37e8f9f7af"
+    }
+  },
+  "buildLog": "output/playwright/parry-header-simple-build.log",
+  "deployLog": "output/playwright/parry-header-simple-deploy.log",
+  "verification": "Removed Campaign / Shared room context. Existing instruction remains below title on desktop and hidden on mobile. Real provider visually checked at 1280x800 and 412x915; no gameplay changes.",
+  "evidence": [
+    "evidence/header-simple-desktop.png",
+    "evidence/header-simple-mobile.png"
+  ],
+  "supersedes": "header-layout-release.json",
+  "productionRoomWritesForVerification": 0,
+  "firestoreRulesChanged": false
+}

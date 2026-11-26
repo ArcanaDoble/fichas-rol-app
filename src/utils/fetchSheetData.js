@@ -1,6 +1,6 @@
 let errorShown = false;
 export default async function fetchSheetData(sheetId, sheetName) {
-  if (process.env.NODE_ENV === 'test') return [];
+  if (!sheetId || process.env.NODE_ENV === 'test') return [];
   
   const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?sheet=${sheetName}&tqx=out:json`;
   

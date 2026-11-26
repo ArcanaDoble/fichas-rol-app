@@ -48,7 +48,10 @@ Consultar [DESIGN.md](DESIGN.md) para la dirección artística acordada, captura
 
 ## Fuente de reglas vigente
 
-El usuario confirmó el 24/09/2026 como fuente el archivo
-`C:/Users/Arcana/Downloads/documento_maestro_ttrpg_roguelite_v0_2_40.docx`.
-Leer el archivo adjunto vigente, aunque conserve el nombre de una revisión anterior.
+El documento maestro de Descargas es la fuente de reglas. En la revisión del
+07/10/2026 se ha leído la revisión más reciente disponible:
+`documento_maestro_ttrpg_roguelite_v0_2_41.docx`.
+La referencia previa era v0.2.40 (confirmada el 24/09/2026). Comprobar siempre
+el archivo vigente de Descargas y leer su contenido actual, aunque conserve
+el nombre de una revisión anterior; no sustituirlo por extracciones antiguas.
 Las instrucciones expresas posteriores del usuario prevalecen ante discrepancias.

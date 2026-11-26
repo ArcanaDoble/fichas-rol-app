@@ -11,5 +11,7 @@ test('separa explícitamente el bestiario tradicional del Roguelite', () => {
   expect(onSelect).toHaveBeenCalledWith('roguelite');
   fireEvent.click(screen.getByRole('button', { name: /rol tradicional/i }));
   expect(onSelect).toHaveBeenCalledWith('role');
+  fireEvent.click(screen.getByRole('button', { name: /PNJ y enemigos de Campaña/i }));
+  expect(onSelect).toHaveBeenCalledWith('campaignNpc');
 });
 

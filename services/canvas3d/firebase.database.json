@@ -1,0 +1,8 @@
+{
+  "firestore": [
+    {
+      "database": "noma-canvas3d",
+      "rules": "firestore.rules"
+    }
+  ]
+}

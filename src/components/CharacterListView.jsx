@@ -25,9 +25,9 @@ export const CharacterListView = ({
     rarityColorMap,
     onBack,
     onLaunchDiceCalculator,
-    onLaunchSpeedSystem,
     onLaunchMinimap,
     onLaunchCanvas,
+    onLaunchCanvas3D,
     onLaunchBoard,
     onLaunchMinigame,
     initialCharacterName = null,
@@ -134,9 +134,9 @@ export const CharacterListView = ({
 
             onLaunchMinigame={onLaunchMinigame}
             onLaunchDiceCalculator={onLaunchDiceCalculator}
-            onLaunchSpeedSystem={onLaunchSpeedSystem}
             onLaunchMinimap={onLaunchMinimap}
             onLaunchCanvas={onLaunchCanvas}
+            onLaunchCanvas3D={onLaunchCanvas3D}
             onLaunchBoard={onLaunchBoard}
             currentUserId={playerName}
 

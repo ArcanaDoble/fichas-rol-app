@@ -1,0 +1,35 @@
+{
+  "verifiedAtUtc": "2026-10-21T03:02:37.806288+00:00",
+  "release": "parry-participants-mobile-rows",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.ddfc4c79.js",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "9536281408bdc801714f91e36fccd8c5ffbf5a14fb061ebda3947233ab1aefa1"
+    },
+    "main.css": {
+      "path": "/static/css/main.a08d7065.css",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "91e2fee9826ec0e8a52322173cab62a0a1aab4b414e8454740f62d6fbf5b79a4"
+    }
+  },
+  "buildLog": "output/playwright/parry-participants-rows-build.log",
+  "deployLog": "output/playwright/parry-participants-rows-deploy.log",
+  "verification": "CSS only: two compact participant rows when the room stage is 600px or narrower. Avatar/name/controller left; action/confirmation in stable lines at right. Real provider checked during selection and after reveal, including swapped roles and image/fallback portraits. Viewed at 320x740, 412x915, 575x915 and 1280x800. Wide desktop retains two columns.",
+  "evidence": [
+    "evidence/participants-choosing-mobile.png",
+    "evidence/participants-rows-mobile.png",
+    "evidence/participants-rows-small-mobile.png",
+    "evidence/participants-rows-wide-mobile.png",
+    "evidence/participants-rows-desktop.png"
+  ],
+  "productionRoomWritesForVerification": 0,
+  "firestoreRulesChanged": false,
+  "gameplayChanged": false
+}

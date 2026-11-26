@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useSyncExternalStore } from 'react';
+import { hasWeaponTrick, resolveWeaponForm } from '../features/roguelite/weaponForms';
 import { db } from '../firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 
@@ -13,11 +14,17 @@ import { collection, onSnapshot } from 'firebase/firestore';
 const normalizeKey = (name) =>
     (name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
 
-export const useCustomEquipmentImages = () => {
-    const [images, setImages] = useState(new Map());
+// Retain the latest catalog when a HUD or preparation remounts. Consumers share
+// one live subscription rather than each starting with an empty catalog.
+let imageSnapshot = new Map();
+let unsubscribeImages = null;
+const imageListeners = new Set();
+const getImageSnapshot = () => imageSnapshot;
 
-    useEffect(() => {
-        const unsub = onSnapshot(collection(db, 'equipment_images'), (snap) => {
+const subscribeToImages = (listener) => {
+    imageListeners.add(listener);
+    if (!unsubscribeImages) {
+        unsubscribeImages = onSnapshot(collection(db, 'equipment_images'), (snap) => {
             const map = new Map();
             snap.forEach(doc => {
                 const data = doc.data();
@@ -29,19 +36,29 @@ export const useCustomEquipmentImages = () => {
                     }
                 }
             });
-            setImages(map);
+            imageSnapshot = map;
+            imageListeners.forEach(notify => notify());
         });
-        return () => unsub();
-    }, []);
-
-    return images;
+    }
+    return () => {
+        imageListeners.delete(listener);
+        if (imageListeners.size === 0) {
+            unsubscribeImages?.();
+            unsubscribeImages = null;
+        }
+    };
 };
+
+export const useCustomEquipmentImages = () => useSyncExternalStore(
+    subscribeToImages, getImageSnapshot, getImageSnapshot,
+);
 
 /**
  * Given an item and the customImages map, check if a custom image exists.
  * Returns the custom image URL or null.
  */
 export const getCustomImage = (item, customImages) => {
+    if (hasWeaponTrick(item)) return resolveWeaponForm(item).image || null;
     if (!customImages || !item) return null;
 
     const getImageFromMap = (key) => {

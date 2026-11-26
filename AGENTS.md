@@ -5,6 +5,8 @@
 - This project uses React, Tailwind and Firebase. Keep code formatting consistent with existing files.
 - After changes, update the README with notable updates.
 
+For Bardo class design discussions, read [the exploration register](docs/rules/bardo-exploracion.md) before proposing a direction. Record future proposals and the user's concrete objections there; do not repeat a previous mechanism under a new name or treat an unapproved concept as a chosen class. This register concerns tabletop system design and does not authorize implementing the Bardo in the web app.
+
 # NOMA — Frontend Design Rules
 
 ## User-approved art direction — read first

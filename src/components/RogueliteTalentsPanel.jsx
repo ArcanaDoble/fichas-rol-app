@@ -17,6 +17,7 @@ import LoadingImage from './LoadingImage';
 import ItemRulesText from './ItemRulesText';
 import { getItemRulesPresentation } from '../utils/itemRulesPresentation';
 import { uploadDataUrl } from '../utils/storage';
+import '../features/campaign/CampaignLoadout.css';
 import {
   ROGUELITE_SKILL_SLOT_COUNT,
   ROGUELITE_TALENT_SLOT_COUNT,
@@ -98,8 +99,8 @@ const renderInDocumentBody = (content) =>
     ? content
     : createPortal(content, document.body);
 
-const TalentImage = ({ image, name, size = 'sm' }) => (
-  <HexIcon size={size} active={Boolean(image)}>
+const TalentImage = ({ image, name, size = 'sm', className }) => (
+  <HexIcon size={size} active={Boolean(image)} className={className}>
     {image ? (
       <LoadingImage
         src={image}
@@ -134,7 +135,9 @@ const RogueliteTalentsPanel = ({
   onEquippedSkillIdsChange,
   onRarityChange,
 }) => {
-  const isMaster = role === 'master';
+  const isCampaign = role === 'campaign';
+  const isMaster = role === 'master' || isCampaign;
+  const resourceLabel = isCampaign ? 'clave' : 'recurso de clase';
   const fileInputRef = useRef(null);
   const [imageTarget, setImageTarget] = useState(null);
   const [cropState, setCropState] = useState(null);
@@ -142,6 +145,7 @@ const RogueliteTalentsPanel = ({
   const [activeSlot, setActiveSlot] = useState(null);
   const [activeSkillSlot, setActiveSkillSlot] = useState(null);
   const [showRarityMenu, setShowRarityMenu] = useState(false);
+  const [isDescriptionEditing, setIsDescriptionEditing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
   const availableTalents = useMemo(
@@ -158,8 +162,22 @@ const RogueliteTalentsPanel = ({
     RARITIES.find((item) => item.id === rarity) || RARITIES[2];
   const equippedTalentCount = equippedTalentIds.filter((talentId) => {
     const talent = catalogById.get(talentId);
-    return talent && talent.available !== false;
+    return talent && (isCampaign || talent.available !== false);
   }).length;
+
+  const toggleCampaignTalent = (talentId) => {
+    const next = Array.from({ length: ROGUELITE_TALENT_SLOT_COUNT }, (_, index) => (
+      catalogById.has(equippedTalentIds[index]) ? equippedTalentIds[index] : null
+    ));
+    const equippedIndex = next.indexOf(talentId);
+    if (equippedIndex >= 0) next[equippedIndex] = null;
+    else {
+      const emptyIndex = next.indexOf(null);
+      if (emptyIndex < 0) return;
+      next[emptyIndex] = talentId;
+    }
+    onEquippedTalentIdsChange(next);
+  };
 
   const updateTalent = useCallback(
     (talentId, patch) => {
@@ -222,7 +240,7 @@ const RogueliteTalentsPanel = ({
       setIsUploading(true);
       const targetId =
         imageTarget.type === 'resource' ? 'resource' : imageTarget.talentId;
-      const basePath = `roguelite-class-assets/${classId}/${targetId}`;
+      const basePath = `${isCampaign ? 'campaign-character-assets' : 'roguelite-class-assets'}/${classId}/${targetId}`;
       const [imageSource, image] = await Promise.all([
         cropState.source.startsWith('data:')
           ? uploadDataUrl(cropState.source, `${basePath}-source`)
@@ -323,7 +341,7 @@ const RogueliteTalentsPanel = ({
         </div>
 
         <div className="noma-talent-stage__content">
-          <span className="noma-talent-stage__eyebrow">Recurso de clase</span>
+          <span className="noma-talent-stage__eyebrow">{isCampaign ? 'Clave del personaje' : 'Recurso de clase'}</span>
 
           <div className="noma-talent-stage__rarity-wrap">
             <button
@@ -359,8 +377,8 @@ const RogueliteTalentsPanel = ({
               value={resource.name || ''}
               onChange={(event) => onResourceChange('name', event.target.value)}
               className="noma-talent-stage__title-input"
-              aria-label="Nombre del recurso de clase"
-              placeholder="Recurso de clase"
+              aria-label={`Nombre ${isCampaign ? 'de la' : 'del'} ${resourceLabel}`}
+              placeholder={isCampaign ? 'Clave del personaje' : 'Recurso de clase'}
             />
           ) : (
             <h4 className="noma-talent-stage__title">
@@ -368,15 +386,29 @@ const RogueliteTalentsPanel = ({
             </h4>
           )}
 
-          {isMaster ? (
+          {isMaster && (!isCampaign || isDescriptionEditing) ? (
             <textarea
               value={resource.description || ''}
               onChange={(event) => onResourceChange('description', event.target.value)}
+              autoFocus={isCampaign}
+              onBlur={isCampaign ? () => setIsDescriptionEditing(false) : undefined}
+              onKeyDown={isCampaign ? (event) => {
+                if (event.key === 'Escape') event.currentTarget.blur();
+              } : undefined}
               rows={4}
               className="noma-talent-stage__description-input"
-              aria-label="Descripción del recurso de clase"
-              placeholder="Describe cómo funciona el recurso de esta clase."
+              aria-label={`Descripción ${isCampaign ? 'de la' : 'del'} ${resourceLabel}`}
+              placeholder={isCampaign ? 'Describe cómo funciona esta clave.' : 'Describe cómo funciona el recurso de esta clase.'}
             />
+          ) : isCampaign ? (
+            <button
+              type="button"
+              className="noma-talent-stage__description campaign-key-description"
+              aria-label="Editar descripción de la clave"
+              onClick={() => setIsDescriptionEditing(true)}
+            >
+              {resource.description || 'Añadir descripción…'}
+            </button>
           ) : (
             <p className="noma-talent-stage__description">
               {resource.description ||
@@ -390,7 +422,7 @@ const RogueliteTalentsPanel = ({
             type="button"
             onClick={() => requestImage({ type: 'resource' })}
             className="noma-talent-stage__edit-art"
-            aria-label="Editar imagen del recurso de clase"
+            aria-label={`Editar imagen ${isCampaign ? 'de la' : 'del'} ${resourceLabel}`}
           >
             <FiImage aria-hidden="true" />
             <span>Cambiar arte</span>
@@ -400,30 +432,54 @@ const RogueliteTalentsPanel = ({
         <div className="noma-talent-stage__edge" aria-hidden="true" />
       </section>
 
-      {isMaster ? (
+      {isMaster && (
         <section className="noma-talent-ledger noma-talent-catalog w-full">
           <div className="noma-talent-catalog__header">
             <div>
-              <span className="noma-talent-catalog__eyebrow">Archivo de clase</span>
+              <span className="noma-talent-catalog__eyebrow">{isCampaign ? 'Repertorio personal' : 'Archivo de clase'}</span>
               <h4>
-                Catálogo de talentos
+                {isCampaign ? 'Talentos equipados' : 'Catálogo de talentos'}
               </h4>
               <span className="noma-talent-catalog__meta">
-                {talentCatalog.length} definidos
+                {isCampaign ? `${equippedTalentCount} / ${ROGUELITE_TALENT_SLOT_COUNT} activos` : `${talentCatalog.length} definidos`}
               </span>
             </div>
             <button
               type="button"
               onClick={addTalent}
               className="noma-talent-catalog__add"
-              aria-label="Añadir talento a la clase"
+              aria-label={isCampaign ? 'Añadir talento al personaje' : 'Añadir talento a la clase'}
             >
               <FiPlus className="h-4 w-4" />
             </button>
           </div>
 
           <div className="noma-talent-ledger__list">
-            {talentCatalog.map((talent, index) => (
+            {talentCatalog.map((talent, index) => isCampaign ? (
+              <div key={talent.id} className={`noma-talent-entry noma-token-feature campaign-talent-entry ${equippedTalentIds.includes(talent.id) ? 'is-equipped' : 'is-used'}`}>
+                <button type="button" className="noma-token-feature__summary campaign-talent-entry__edit group"
+                  onClick={() => setSelectedTalentId(talent.id)} aria-label={`Editar talento ${talent.name}`}>
+                  <span className="noma-talent-entry__index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+                  <TalentImage image={talent.image} name={talent.name}
+                    className={!equippedTalentIds.includes(talent.id) ? 'noma-token-feature__hex--used' : undefined} />
+                  <span className="min-w-0 flex-1">
+                    <span className="noma-talent-entry__title block truncate">{talent.name}</span>
+                    <span className="noma-talent-entry__description block truncate">{talent.description || 'Sin descripción'}</span>
+                  </span>
+                  <FiEdit2 className="h-3.5 w-3.5 shrink-0 text-slate-600 transition group-hover:text-[#c8aa6e]" />
+                </button>
+                <button type="button" className="noma-token-feature__use-toggle campaign-talent-entry__toggle"
+                  aria-label={`${equippedTalentIds.includes(talent.id) ? 'Desactivar' : 'Activar'} talento ${talent.name}`}
+                  aria-pressed={!equippedTalentIds.includes(talent.id)}
+                  disabled={!equippedTalentIds.includes(talent.id) && equippedTalentCount >= ROGUELITE_TALENT_SLOT_COUNT}
+                  title={!equippedTalentIds.includes(talent.id) && equippedTalentCount >= ROGUELITE_TALENT_SLOT_COUNT
+                    ? 'Desactiva un talento para activar otro (máximo 3).'
+                    : equippedTalentIds.includes(talent.id) ? 'Desactivar talento' : 'Activar talento'}
+                  onClick={() => toggleCampaignTalent(talent.id)}>
+                  <FiCheck aria-hidden="true" />
+                </button>
+              </div>
+            ) : (
               <button
                 key={talent.id}
                 type="button"
@@ -455,7 +511,8 @@ const RogueliteTalentsPanel = ({
             )}
           </div>
         </section>
-      ) : (
+      )}
+      {!isMaster && (
         <section className="noma-talent-ledger noma-talent-slots w-full">
           <div className="noma-talent-catalog__header">
             <div>
@@ -592,7 +649,7 @@ const RogueliteTalentsPanel = ({
                     Editar talento
                   </h4>
                   <span className="text-[9px] uppercase tracking-[0.14em] text-slate-600">
-                    Definición global de clase
+                    {isCampaign ? 'Talento del personaje' : 'Definición global de clase'}
                   </span>
                 </div>
                 <button
@@ -674,15 +731,17 @@ const RogueliteTalentsPanel = ({
                 <label className="flex min-h-11 cursor-pointer items-center gap-3 text-xs text-slate-300">
                   <input
                     type="checkbox"
-                    checked={selectedTalent.available !== false}
-                    onChange={(event) =>
-                      updateTalent(selectedTalent.id, {
+                    checked={isCampaign ? equippedTalentIds.includes(selectedTalent.id) : selectedTalent.available !== false}
+                    disabled={isCampaign && !equippedTalentIds.includes(selectedTalent.id) && equippedTalentCount >= ROGUELITE_TALENT_SLOT_COUNT}
+                    onChange={(event) => isCampaign
+                      ? toggleCampaignTalent(selectedTalent.id)
+                      : updateTalent(selectedTalent.id, {
                         available: event.target.checked,
                       })
                     }
                     className="h-5 w-5 accent-[#c8aa6e]"
                   />
-                  Disponible para los jugadores
+                  {isCampaign ? 'Talento activo' : 'Disponible para los jugadores'}
                 </label>
                 <button
                   type="button"
@@ -960,7 +1019,7 @@ TalentImage.propTypes = {
 };
 
 RogueliteTalentsPanel.propTypes = {
-  role: PropTypes.oneOf(['master', 'player']).isRequired,
+  role: PropTypes.oneOf(['master', 'player', 'campaign']).isRequired,
   classId: PropTypes.string.isRequired,
   resource: PropTypes.object,
   talentCatalog: PropTypes.arrayOf(PropTypes.object),

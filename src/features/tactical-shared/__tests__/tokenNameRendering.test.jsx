@@ -85,7 +85,25 @@ test('a long enemy name is preserved at distant zoom without requiring visible L
     const label = container.querySelector('.noma-token-name-only');
     expect(label).toHaveAttribute('aria-label', name);
     expect(label.style.transform).toBe('rotate(-90deg)');
-    expect(label.querySelector('.noma-token-life-readout').style.transform).toBe('translateX(-50%) scale(4)');
+    expect(label.querySelector('.noma-token-life-readout').style.transform)
+        .toBe('translateX(-50%) scale(4) translateY(var(--token-readout-clearance, 0px))');
     expect(label.textContent).toBe(name);
     expect(label.querySelector('[data-life-block]')).not.toBeInTheDocument();
+});
+
+test.each([true, false])('the original drag ghost is shown only to the player in Canvas (player=%s)', isPlayerView => {
+    const { container } = setup({ ...enemy, controlledBy: ['Ada'] }, {
+        isPlayerView, selectedTokenIds: ['enemy'], draggedTokenId: 'enemy',
+        tokenOriginalPos: { enemy: { x: 10, y: 10 } }, dragVisualOrigin: { enemy: { x: 10, y: 10 } },
+    });
+    const ghost = container.querySelector('[data-token-movement-ghost="enemy"]');
+    if (isPlayerView) {
+        expect(ghost).toBeInTheDocument();
+        expect(ghost).toHaveClass('grayscale', 'opacity-40');
+        expect(ghost.style.transform).toContain('translate(10px, 10px)');
+        expect(ghost.style.transform).toContain('rotate(0deg)');
+    } else {
+        expect(ghost).toBeNull();
+        expect(container.querySelector('line[stroke-dasharray="6 4"]')).toBeNull();
+    }
 });

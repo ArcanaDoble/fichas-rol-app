@@ -1,0 +1,53 @@
+{
+  "verifiedAtUtc": "2026-10-21T03:15:50.169784+00:00",
+  "release": "remove-retired-speed-system",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.2576d97f.js",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "a4a51505d3b9237576602dd8a5e4f3df3c693a32942ef435da66faa349a578d6"
+    },
+    "main.css": {
+      "path": "/static/css/main.21fea173.css",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "208f02a4ef86934847d021596e0872ae6c7a983bdd19106d1378db3184cfc1a8"
+    }
+  },
+  "buildLog": "output/playwright/remove-speed-build.log",
+  "deployLog": "output/playwright/remove-speed-deploy.log",
+  "testsLog": "output/playwright/remove-speed-all-tests.log",
+  "tests": {
+    "suitesPassed": 225,
+    "testsPassed": 1566,
+    "testsSkipped": 1
+  },
+  "removed": [
+    "InitiativeTracker screen and helpers",
+    "dedicated initiative utility and tests",
+    "both master routes and the player overlay",
+    "master menu and sheet/token entrypoints",
+    "player permission",
+    "speed cost calculation and Firebase accumulation in traditional attack/defense modals",
+    "exclusive menu cyan palette"
+  ],
+  "preserved": [
+    "Parry libre and legacy-tag mapping to its access",
+    "Canvas and Board initiative",
+    "movement and other game statistics",
+    "Ingenio consumption moved unchanged to tokenResources.js"
+  ],
+  "sourceAudit": "No runtime imports, handlers, permissions or Firebase references for the retired tool remain in src; no retired symbols or title in the built main JavaScript. A regression test still names the absent tool.",
+  "visualVerification": "Production MasterMenu component with compiled production CSS checked locally at 1280x900 and 412x915; live published role entry page reloaded successfully. No production game data written.",
+  "evidence": [
+    "evidence/master-menu-desktop.png",
+    "evidence/master-menu-mobile.png"
+  ],
+  "firestoreRulesChanged": false,
+  "remoteDataDeleted": false
+}

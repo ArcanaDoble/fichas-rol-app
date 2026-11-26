@@ -1,0 +1,137 @@
+.n3-survey-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.n3-survey {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  max-width: calc(100% - 12px);
+  color: #f3e6ce;
+  font-family: Georgia, serif;
+}
+.n3-survey-tools,
+.n3-survey-inspect,
+.n3-survey-help {
+  border: 1px solid #a1895d;
+  background: #272a20f7;
+  box-shadow:
+    0 3px 0 #302719,
+    0 4px 8px #14100c73;
+}
+.n3-survey-tools {
+  display: flex;
+  padding: 2px;
+  background: linear-gradient(#443d2e, #302b21);
+}
+.n3 .n3-survey-tools button {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 2px;
+  color: #decaa4;
+  min-height: 46px;
+  min-width: clamp(43px, 7vw, 60px);
+  padding-inline: 3px;
+  border-bottom: 2px solid transparent;
+  font:
+    600 0.78rem/1 NomaMesa, Georgia,
+    serif;
+}
+.n3-survey-tools button[aria-pressed='true'] {
+  color: #ffebbd;
+  background: #574b35;
+  border-bottom-color: #e3bb72;
+}
+.n3-survey-tools button:last-child {
+  border-left: 1px solid #897550;
+}
+.n3-survey-help {
+  margin: 0;
+  padding: 5px 12px;
+  text-align: center;
+  font-size: 0.82rem;
+}
+.n3-survey-inspect {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 5px 8px;
+  max-width: min(650px, calc(100vw - 18px));
+}
+.n3-survey-inspect button,
+.n3-survey-inspect label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 35px;
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+.n3-survey-inspect button {
+  padding: 0 6px;
+}
+.n3-survey-inspect button:last-child {
+  color: #e4b89e;
+  min-width: 40px;
+}
+.n3-survey-inspect select {
+  color: #f8e9c6;
+  background-color: #3b3529;
+  border: 1px solid #8c7854;
+  padding: 3px;
+}
+.n3-survey-color input {
+  width: 25px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+}
+.n3-survey-inspect label.n3-survey-range {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 1px;
+  text-align: left;
+}
+.n3-survey-range input {
+  width: 91px;
+  max-width: 24vw;
+  accent-color: #c4a46e;
+}
+.n3-survey-range output {
+  color: #d3b989;
+}
+.n3-survey-check input {
+  accent-color: #b79862;
+}
+.n3-survey button:focus-visible,
+.n3-survey input:focus-visible,
+.n3-survey select:focus-visible {
+  outline: 2px solid #f8e5b7;
+  outline-offset: -2px;
+}
+@media (max-width: 600px) {
+  .n3-survey {
+    width: fit-content;
+    bottom: max(7px, env(safe-area-inset-bottom));
+  }
+  .n3-survey-inspect {
+    width: min(347px, calc(100vw - 20px));
+    gap: 1px 7px;
+  }
+  .n3-survey-inspect label,
+  .n3-survey-inspect button {
+    min-height: 38px;
+  }
+}

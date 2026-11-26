@@ -1,0 +1,83 @@
+.campaign-yermo {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgb(200 170 110 / 20%);
+  border-radius: 12px;
+  background: rgb(22 31 50 / 80%);
+}
+
+.campaign-yermo__header {
+  display: flex;
+  min-height: 44px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 8px;
+}
+
+.campaign-yermo__header h4 { margin: 0; }
+
+.campaign-yermo__infinity {
+  width: 16px;
+  height: 16px;
+  color: #c8aa6e;
+}
+
+.campaign-yermo__controls {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  margin-left: auto;
+}
+
+.campaign-yermo__amount {
+  flex: 0 1 auto;
+  border-bottom-color: transparent;
+}
+
+.campaign-yermo__amount:hover:not(:read-only) { border-bottom-color: #c8aa6e66; }
+
+.campaign-yermo__track {
+  display: flex;
+  width: 100%;
+  height: 12px;
+  gap: 3px;
+  margin-top: 3px;
+}
+
+.campaign-yermo__segment {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  background: linear-gradient(180deg, #211d2c, #12111b);
+  box-shadow: inset 0 1px #5f587344;
+  clip-path: polygon(0 0, calc(100% - 4px) 0, 100% 50%, calc(100% - 4px) 100%, 0 100%, 4px 50%);
+}
+
+.campaign-yermo__segment:first-child {
+  clip-path: polygon(0 0, calc(100% - 4px) 0, 100% 50%, calc(100% - 4px) 100%, 0 100%);
+}
+
+.campaign-yermo__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+  transform-origin: left center;
+  background: linear-gradient(180deg, #a59bb8, #5f5873 38%, #332d43);
+  box-shadow: inset 0 1px #d6cbe9aa, inset 0 -1px #211a31;
+  transition: transform 180ms ease-out;
+}
+
+.campaign-yermo__scale {
+  margin-top: 6px;
+  color: #b3a9c3;
+  font: 11px/1.4 Lato, sans-serif;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .campaign-yermo__fill { transition: none; }
+}

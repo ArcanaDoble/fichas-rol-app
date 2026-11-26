@@ -3,6 +3,10 @@ import PropTypes from 'prop-types';
 import { Footprints, Gauge, Heart, Shield, Sparkles } from 'lucide-react';
 import { FiMinus, FiPlus } from 'react-icons/fi';
 import LegacyTokenResources from '../../../components/TokenResources';
+import { clearArcaneBarrier, getArcaneBarrierBonus } from '../spells/arcaneBarrierState';
+import { useArcaneBarrierPresentation } from '../../tactical-shared/useArcaneBarrierPresentation';
+import CampaignTokenResources from './CampaignTokenResources';
+import { isCampaignToken } from '../campaignSystem';
 
 const RESOURCE_DEFINITIONS = [
   { id: 'vida', fallbackLabel: 'Vida', fallbackColor: '#e7a0a8', Icon: Heart },
@@ -17,7 +21,10 @@ const normalizeValue = (value) => {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 };
 
-const CanvasTokenResources = ({ token, onUpdate, movementRuntime = null }) => {
+const CanvasTokenResources = ({ token, onUpdate, movementRuntime = null, barrierPresentation = null, isPlayerView = false, canSeeCampaignResources = false }) => {
+  const { visible: hasVisibleBarrier } = useArcaneBarrierPresentation(token, barrierPresentation);
+  if (isCampaignToken(token)) return isPlayerView && !canSeeCampaignResources ? <p className="text-sm text-slate-400">Recursos reservados</p>
+    : <CampaignTokenResources token={token} onUpdate={onUpdate} isPlayerView={isPlayerView} />;
   if (token?.profileType !== 'rogueliteClass' && token?.profileType !== 'rogueliteEnemy') {
     return <LegacyTokenResources token={token} onUpdate={onUpdate} />;
   }
@@ -88,6 +95,11 @@ const CanvasTokenResources = ({ token, onUpdate, movementRuntime = null }) => {
     onUpdate({ stats });
   };
 
+  const removeBarrier = () => {
+    const nextToken = clearArcaneBarrier(token);
+    onUpdate({ status: nextToken.status || [], arcaneBarrier: null });
+  };
+
   return (
     <section className="space-y-3" data-testid="roguelite-token-resources">
       <div className="flex items-center justify-between border-b border-slate-800/70 pb-2">
@@ -112,6 +124,7 @@ const CanvasTokenResources = ({ token, onUpdate, movementRuntime = null }) => {
           const label = stat.label || fallbackLabel;
           const temporary = id === 'vida' ? normalizeValue(token.stats?.vidaTemporal?.current) : 0;
           const temporaryMax = id === 'vida' ? normalizeValue(token.stats?.vidaTemporal?.max) : 0;
+          const defenseBonus = id === 'cd' && hasVisibleBarrier ? getArcaneBarrierBonus(token) : 0;
           const movementBaseMaximum = id === 'movimiento' && movementRuntime
             ? Math.max(
               normalizeValue(movementRuntime.statMax ?? movementRuntime.base),
@@ -135,6 +148,11 @@ const CanvasTokenResources = ({ token, onUpdate, movementRuntime = null }) => {
                     {label}
                   </span>
                   <span className="font-mono text-[9px]" style={{ color }}>{current} / {maximum}</span>
+                  {defenseBonus > 0 && <button type="button" onClick={removeBarrier}
+                    className="-m-2 p-2 font-mono text-[9px] text-[#dfc885] transition-colors hover:text-[#fff0bd] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[#dfc885]"
+                    aria-label="Retirar Barrera" title={`+${defenseBonus} CD temporal · Barrera`}>
+                    <span aria-label={`CD temporal: ${defenseBonus}`}>+{defenseBonus}</span>
+                  </button>}
                   {temporaryMax > 0 && <button type="button" onClick={removeTemporaryLife}
                     className="-m-2 p-2 font-mono text-[9px] text-[#dfc885] transition-colors hover:text-[#fff0bd] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[#dfc885]"
                     aria-label="Retirar toda la Vida temporal" title="Retirar Vida temporal">
@@ -165,7 +183,7 @@ const CanvasTokenResources = ({ token, onUpdate, movementRuntime = null }) => {
                 </div>
               </div>
 
-              {maximum === 0 && temporaryMax === 0 ? (
+              {maximum === 0 && temporaryMax === 0 && defenseBonus === 0 ? (
                 <div className="flex h-6 items-center justify-center border border-dashed border-slate-800/80 bg-black/15 text-[8px] font-bold uppercase tracking-[0.15em] text-slate-700">
                   Sin {label.toLowerCase()}
                 </div>
@@ -209,6 +227,12 @@ const CanvasTokenResources = ({ token, onUpdate, movementRuntime = null }) => {
                     aria-label={`Bloque temporal ${index + 1}: ${index < temporary ? 'quitar 1 Vida temporal' : `restaurar Vida temporal a ${index + 1}`}`}
                     title={index < temporary ? 'Quitar 1 bloque de Vida temporal' : `Corrección manual: fijar Vida temporal en ${index + 1}`}
                     style={{ backgroundColor: index < temporary ? '#dfc885' : '#dfc88515', borderColor: index < temporary ? '#dfc885' : '#dfc88555' }} />)}
+                  {defenseBonus > 0 && <button type="button" onClick={removeBarrier}
+                    className="min-w-0 flex-1 border transition-colors duration-150 hover:brightness-110 active:scale-y-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#dfc885]"
+                    data-cd-temporary="true" aria-pressed="true"
+                    aria-label={`Retirar Barrera: +${defenseBonus} CD temporal`}
+                    title={`+${defenseBonus} CD temporal · Barrera`}
+                    style={{ backgroundColor: '#dfc885', borderColor: '#dfc885' }} />}
                 </div>
               )}
             </div>
@@ -223,6 +247,9 @@ CanvasTokenResources.propTypes = {
   token: PropTypes.object.isRequired,
   onUpdate: PropTypes.func.isRequired,
   movementRuntime: PropTypes.object,
+  barrierPresentation: PropTypes.object,
+  isPlayerView: PropTypes.bool,
+  canSeeCampaignResources: PropTypes.bool,
 };
 
 export default CanvasTokenResources;

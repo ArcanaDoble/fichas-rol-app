@@ -1,0 +1,48 @@
+.canvas-fireball-effect { position: absolute; inset: 0; z-index: 48; pointer-events: none; }
+/* One casting sequence: gather, drifting ribbon, rolling cloud, quiet handoff. */
+.canvas-arcane-mist { position: absolute; inset: 0; z-index: 48; pointer-events: none; }
+.canvas-arcane-mist__surface, .canvas-arcane-mist__cell { position: absolute; pointer-events: none; }
+.canvas-arcane-mist[data-renderer="webgl"] .canvas-arcane-mist__fallback { display: none; }
+.canvas-arcane-mist[data-renderer="fallback"] .canvas-arcane-mist__surface { visibility: hidden; }
+.canvas-arcane-mist__gather { position: absolute; border-radius: 50%; background: conic-gradient(from 30deg, transparent 12%, #b6a5ce70 24%, transparent 38% 52%, #eee5d799 65%, transparent 80%); mask-image: radial-gradient(ellipse, transparent 25%, black 45%, transparent 72%); animation: canvas-mist-gather 1400ms ease-out both; animation-delay: var(--mist-delay); }
+.canvas-arcane-mist__ribbon { position: absolute; left: 0; top: 0; border-radius: 50%; background: radial-gradient(ellipse, #e1d9e7aa, #a091b955 38%, transparent 72%); animation: canvas-mist-ribbon 1250ms ease-in-out both; animation-delay: calc(var(--mist-delay) + 480ms + var(--mist-wisp-index) * 85ms); }
+.canvas-arcane-mist__seal { position: absolute; inset: 35%; border: 1px dashed #d8c8e1; border-radius: 50%; animation: canvas-mist-seal 1300ms ease-out both; animation-delay: calc(var(--mist-delay) + var(--mist-arrival)); }
+.canvas-arcane-mist__seal::after { content: ''; position: absolute; inset: 20%; border: 1px solid #c4bfd5; border-radius: 50%; }
+.canvas-arcane-mist__bloom { position: absolute; inset: 0; overflow: hidden; mask-image: radial-gradient(ellipse, black 45%, transparent 76%); animation: canvas-mist-bloom 3000ms ease-out both; animation-delay: calc(var(--mist-delay) + var(--mist-arrival)); }
+.canvas-arcane-mist__wisp { position: absolute; inset: -5%; background: conic-gradient(from 60deg, transparent 0 35%, #d2c8df55 45%, transparent 57% 82%, #ada3c233 90%, transparent); mask-image: radial-gradient(ellipse, transparent 20%, black 37%, transparent 72%); animation: canvas-mist-wisp 2400ms ease-out both; animation-delay: calc(var(--mist-delay) + var(--mist-arrival)); }
+.canvas-mist-zone[data-mist-forming="true"] { animation: canvas-mist-zone-arrive 1600ms ease-out both; animation-delay: calc(var(--mist-delay) + var(--mist-arrival)); }
+@keyframes canvas-mist-gather { 0% { opacity: 0; transform: scale(.7) rotate(-50deg); } 25% { opacity: .85; } 100% { opacity: 0; transform: scale(1.15) rotate(85deg); } }
+@keyframes canvas-mist-ribbon { 0% { opacity: 0; offset-distance: 0%; transform: scale(.45); } 20% { opacity: .85; } 80% { opacity: .7; offset-distance: 100%; transform: scale(1.4); } 100% { opacity: 0; offset-distance: 100%; transform: scale(2); } }
+@keyframes canvas-mist-seal { 0% { opacity: 0; transform: scale(.8); } 20% { opacity: .65; } 100% { opacity: 0; transform: scale(1.2) rotate(30deg); } }
+@keyframes canvas-mist-bloom { 0% { opacity: 0; transform: scale(.15); } 18% { opacity: .55; } 55% { opacity: .6; transform: scale(1.2); } 100% { opacity: 0; transform: scale(1.3); } }
+@keyframes canvas-mist-wisp { 0% { opacity: 0; transform: scale(.3); } 25% { opacity: .65; } 100% { opacity: 0; transform: scale(1.2) rotate(70deg); } }
+@keyframes canvas-mist-zone-arrive { 0% { opacity: 0; } 25% { opacity: .08; } 65% { opacity: .6; } 100% { opacity: 1; } }
+.canvas-arcane-mist[data-reduced-motion="true"] .canvas-arcane-mist__gather,
+.canvas-arcane-mist[data-reduced-motion="true"] .canvas-arcane-mist__ribbon,
+.canvas-arcane-mist[data-reduced-motion="true"] .canvas-arcane-mist__seal,
+.canvas-arcane-mist[data-reduced-motion="true"] .canvas-arcane-mist__wisp { display: none; }
+.canvas-arcane-mist[data-reduced-motion="true"] .canvas-arcane-mist__bloom { animation: none; opacity: .2; transform: none; }
+.canvas-fireball-effect__surface { position: absolute; pointer-events: none; }
+.canvas-fireball-effect[data-renderer="webgl"] .canvas-fireball-effect__fallback { display: none; }
+.canvas-fireball-effect[data-renderer="fallback"] .canvas-fireball-effect__surface { visibility: hidden; }
+.canvas-fireball-effect__orb { position: absolute; left: 0; top: 0; border-radius: 50%; background: radial-gradient(circle, #fff3ce 8%, #ffcb5a 28%, #ec5b14 58%, #96291100 78%); box-shadow: 0 0 18px #e87838b0; animation: canvas-fireball-flight 4400ms linear both; animation-delay: var(--fireball-delay); }
+.canvas-fireball-effect__blast { position: absolute; border-radius: 30%; background: radial-gradient(ellipse at 35% 42%, #fff0bf 2%, #fbb847a0 16%, transparent 38%), radial-gradient(ellipse at 65% 65%, #fff0bf 1%, #f5a532cc 20%, transparent 45%), radial-gradient(ellipse, #ffab35, #d33e14bf 45%, #70220b20 70%, transparent 82%); animation: canvas-fireball-blast 4400ms ease-out both; animation-delay: var(--fireball-delay); }
+.canvas-fireball-effect__wave { position: absolute; border-radius: 50%; border: 2px solid #ffd89f; box-shadow: 0 0 12px #d16e36; animation: canvas-fireball-wave 4400ms ease-out both; animation-delay: var(--fireball-delay); }
+@keyframes canvas-fireball-flight { 0% { offset-distance: 0%; transform: scale(.25); opacity: 0; } 8.6% { offset-distance: 0%; transform: scale(1); opacity: 1; } 25% { offset-distance: 100%; opacity: 1; } 27%, 100% { offset-distance: 100%; opacity: 0; } }
+@keyframes canvas-fireball-blast { 0%, 24.9% { transform: scale(.1); opacity: 0; } 34% { transform: scale(1.1); opacity: 1; } 52% { transform: scale(1); opacity: .8; } 80% { transform: scale(1.05); opacity: .15; } 100% { transform: scale(1.08); opacity: 0; } }
+@keyframes canvas-fireball-wave { 0%, 25% { transform: scale(.1); opacity: 0; } 27% { opacity: .6; } 44%, 100% { transform: scale(1.8); opacity: 0; } }
+.canvas-fireball-effect[data-reduced-motion="true"] .canvas-fireball-effect__orb,
+.canvas-fireball-effect[data-reduced-motion="true"] .canvas-fireball-effect__wave { display: none; }
+.canvas-fireball-effect[data-reduced-motion="true"] .canvas-fireball-effect__blast { animation: none; opacity: .5; }
+.canvas-arcane-projectile { position: absolute; inset: 0; z-index: 48; pointer-events: none; }
+.canvas-arcane-projectile[data-renderer='webgl'] .canvas-arcane-projectile__fallback { display: none; }
+.canvas-arcane-projectile[data-renderer='fallback'] canvas { visibility: hidden; }
+.canvas-arcane-projectile__orb { position: absolute; left: 0; top: 0; border-radius: 50%; background: radial-gradient(circle, #fff2de 6%, #e8d7fc 22%, #af80de 40%, #7845c000 75%); box-shadow: 0 0 12px #ac78d9; animation: canvas-arcane-projectile-flight 4400ms linear both; animation-delay: var(--fireball-delay); }
+.canvas-arcane-projectile__orb::before { content: ''; position: absolute; inset: 15% -28%; border: 1px solid #e9d7ffb3; border-radius: 50%; transform: rotate(-25deg); }
+.canvas-arcane-projectile__impact { position: absolute; border-radius: 50%; border: 1px solid #d5adef; background: radial-gradient(circle, #e8cfff80, #a674d938 45%, transparent 70%); animation: canvas-arcane-projectile-impact 4400ms ease-out both; animation-delay: var(--fireball-delay); }
+.canvas-arcane-projectile__impact::before { content: ''; position: absolute; inset: -12%; border: 1px dashed #e8d7fccc; border-radius: 50%; }
+.canvas-arcane-projectile__impact::after { content: ''; position: absolute; inset: 18%; border: 1px solid #f4dfc699; transform: rotate(45deg); }
+@keyframes canvas-arcane-projectile-flight { 0% { offset-distance: 0%; opacity: 0; } 9.5% { offset-distance: 0%; opacity: 1; } 32.3% { offset-distance: 100%; opacity: 1; } 43.6%, 100% { offset-distance: 100%; opacity: 0; } }
+@keyframes canvas-arcane-projectile-impact { 0%, 32.2% { transform: scale(.2); opacity: 0; } 39% { transform: scale(1.3); opacity: .85; } 70% { transform: scale(1.5); opacity: .5; } 100% { transform: scale(1.7); opacity: 0; } }
+.canvas-arcane-projectile[data-reduced-motion='true'] .canvas-arcane-projectile__orb { display: none; }
+.canvas-arcane-projectile[data-reduced-motion='true'] .canvas-arcane-projectile__impact { animation: none; opacity: .45; }

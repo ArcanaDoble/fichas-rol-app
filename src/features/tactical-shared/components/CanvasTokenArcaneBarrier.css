@@ -1,0 +1,50 @@
+.noma-token-barrier { position: absolute; inset: 0; z-index: 18; pointer-events: none; color: #d8bd80; }
+.noma-token-barrier[data-forming='true'] { animation: barrier-appear 420ms ease-out both; }
+@keyframes barrier-appear { from { opacity: 0; } to { opacity: 1; } }
+.noma-token-barrier__membrane { position: absolute; inset: 0; overflow: hidden; }
+.noma-token-barrier__membrane canvas { display: block; width: 100%; height: 100%; mix-blend-mode: screen; }
+.noma-token-barrier__sheen { display: none; position: absolute; inset: 0;
+  background: conic-gradient(from 10deg, transparent 10%, #ebbf7660, transparent 35%, #fff0ba55, transparent 75%, #deb36945, transparent);
+  mask-image: radial-gradient(ellipse, transparent 22%, #000 68%, transparent 99%);
+  animation: barrier-fallback-flow 8s linear infinite;
+}
+.noma-token-barrier__membrane canvas[data-barrier-shader='fallback'] { visibility: hidden; }
+.noma-token-barrier__membrane canvas[data-barrier-shader='fallback'] + .noma-token-barrier__sheen { display: block; }
+@keyframes barrier-fallback-flow { to { transform: rotate(360deg); } }
+.noma-token-barrier__impact { position: absolute; inset: -5%; border-radius: 50%;
+  background: radial-gradient(ellipse, #fff0c412 0%, transparent 46%, #ffe4aa35 61%, #fff5d950 65%, transparent 71%);
+  animation: barrier-impact-wave 650ms ease-out both; }
+@keyframes barrier-impact-wave { 0% { opacity: .45; transform: scale(.3); } 28% { opacity: .5; }
+  100% { opacity: 0; transform: scale(1.6); } }
+.noma-token-barrier[data-reduced-motion='true'] * { animation: none; }
+.noma-token-barrier[data-reduced-motion='true'] { animation: none; }
+.noma-token-barrier[data-reduced-motion='true'] .noma-token-barrier__impact { opacity: .3; }
+
+.canvas-runic-barrier { position: absolute; inset: 0; z-index: 36; pointer-events: none; color: #f2d69b; }
+.canvas-runic-barrier__surface { position: absolute; pointer-events: none; }
+.canvas-runic-barrier[data-renderer='fallback'] .canvas-runic-barrier__surface { display: none; }
+.canvas-runic-barrier__source { position: absolute;
+  animation: barrier-source 4400ms ease-out both; animation-delay: var(--barrier-delay); }
+.canvas-runic-barrier__fallback { position: absolute; inset: 0; }
+.canvas-runic-barrier[data-renderer='webgl'] .canvas-runic-barrier__fallback { display: none; }
+.canvas-runic-barrier__thread { position: absolute; offset-rotate: auto; border-radius: 50%;
+  background: radial-gradient(ellipse at 70% 50%, #fff7d8 0%, #e6c58cb0 20%, transparent 72%);
+  animation: barrier-thread 4400ms ease-in-out both; animation-delay: calc(var(--barrier-delay) + var(--barrier-strand) * 65ms); }
+.canvas-runic-barrier__aura { position: absolute; border-radius: 50%;
+  background: radial-gradient(ellipse, transparent 65%, #e6c58c55 90%, transparent 100%);
+  animation: barrier-forge 4400ms ease-out both; animation-delay: var(--barrier-delay); }
+.canvas-runic-barrier__veil { position: absolute; border-radius: 50%;
+  background: conic-gradient(from 25deg, transparent, #fff0c440, transparent 22%, #b78a4620, transparent 60%, #fff0c455, transparent);
+  mask-image: radial-gradient(ellipse, transparent 40%, #000 82%, transparent 100%);
+  animation: barrier-veil 4400ms ease-out both; animation-delay: var(--barrier-delay); }
+@keyframes barrier-forge { 0%, 33% { opacity: 0; transform: scale(.5); } 42% { opacity: 1; }
+  61% { opacity: .92; transform: scale(1.03); } 82% { opacity: .55; } 100% { opacity: 0; transform: scale(1); } }
+@keyframes barrier-veil { 0%, 33% { opacity: 0; transform: scale(.65) rotate(-40deg); } 42% { opacity: .8; }
+  66% { opacity: .5; transform: scale(1) rotate(15deg); } 100% { opacity: 0; transform: scale(1.06) rotate(32deg); } }
+@keyframes barrier-source { 0% { opacity: 0; } 5% { opacity: .9; } 15% { opacity: .85; } 26%, 100% { opacity: 0; } }
+@keyframes barrier-thread { 0%, 10% { opacity: 0; offset-distance: 0%; } 18% { opacity: .9; } 33% { opacity: 1; offset-distance: 100%; }
+  44%, 100% { opacity: 0; offset-distance: 100%; } }
+.canvas-runic-barrier[data-reduced-motion='true'] .canvas-runic-barrier__surface,
+.canvas-runic-barrier[data-reduced-motion='true'] .canvas-runic-barrier__fallback { display: none; }
+.canvas-runic-barrier[data-reduced-motion='true'] * { animation: none; }
+.canvas-runic-barrier[data-reduced-motion='true'] .canvas-runic-barrier__source { opacity: .45; }

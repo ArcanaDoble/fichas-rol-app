@@ -1,0 +1,29 @@
+{
+  "verifiedAtUtc": "2026-10-20T19:51:58.5556409Z",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "release": "campaign-free-parry-in-sheets",
+  "mainJs": "/static/js/main.f3d8b4ab.js",
+  "mainCss": "/static/css/main.87f95792.css",
+  "testSuitesPassed": 223,
+  "testsPassed": 1558,
+  "testsSkipped": 1,
+  "publishedSiteStatus": 200,
+  "publishedAssetStatus": 200,
+  "publishedCssStatus": 200,
+  "publishedManifestMatches": true,
+  "publishedJavaScriptHashMatches": true,
+  "publishedCssHashMatches": true,
+  "firestoreRulesChanged": false,
+  "productionGamesCreatedForVerification": 0,
+  "browserVisualVerification": "production components and repository with local in-memory transport",
+  "desktopViewport": "1280x720",
+  "mobileViewports": [
+    "390x844",
+    "320x740"
+  ],
+  "testsLog": "output/playwright/parry-free-final-tests.log",
+  "buildLog": "output/playwright/parry-free-final-build.log",
+  "deployLog": "output/playwright/parry-free-deploy.log"
+}

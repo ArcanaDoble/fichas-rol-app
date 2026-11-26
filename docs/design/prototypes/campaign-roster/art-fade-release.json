@@ -1,0 +1,28 @@
+{
+  "verifiedAtUtc": "2026-10-21T22:35:28.319220+00:00",
+  "release": "encounter-art-soft-lateral-fade",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.ac4bc22e.js",
+      "sha256Matches": true,
+      "sha256": "3b0d9b3c1ac253d77a1dadbc273eda84b2207e2ea016de09175ea5c98428981c"
+    },
+    "main.css": {
+      "path": "/static/css/main.2e3f5540.css",
+      "sha256Matches": true,
+      "sha256": "b979c32ec54903a13bcddee707a0faed4623358069738422c00dc6c6318be1f0"
+    }
+  },
+  "buildLog": "output/playwright/encounter-art-fade-build.log",
+  "deployLog": "output/playwright/encounter-art-fade-deploy.log",
+  "verification": "CSS only: soft blue-black lateral fades join the existing title fade. Real components checked at 1440px and 412px with original Ghoul and Fusilero art. Square proportions retained; no horizontal overflow on mobile.",
+  "evidence": [
+    "evidence/art-fade-desktop.png",
+    "evidence/art-fade-mobile.png"
+  ],
+  "productionGameWritesForVerification": 0,
+  "firestoreRulesChanged": false
+}

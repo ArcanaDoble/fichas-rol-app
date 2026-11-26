@@ -13,6 +13,7 @@ import { getItemTraits } from '../../utils/armorSystem';
 import { isCardContainerItem, isCardItem } from '../../utils/cardBoard';
 import { DEFAULT_GRID_CONFIG, DEFAULT_TOKEN_CELL_SCALE, roundGridValue } from './grid';
 import { getGridWorldRect, lineRectIntersect, linesIntersect } from './spatial';
+import { getSceneBlockingSegments, isPointInsideTreeTrunk } from './scenery';
 
 // Frozen legacy rules. New Roguelite combat rules belong exclusively in features/canvas.
 
@@ -998,8 +999,7 @@ export const isCombatMoveBlockedByWall = (token, nextPosition, items = [], confi
         y: (Number(nextPosition?.y) || 0) + (tokenHeight / 2),
     };
 
-    return (items || [])
-        .filter(item => item.type === 'wall' && !(item.wallType === 'door' && item.isOpen))
+    return isPointInsideTreeTrunk(endCenter, items) || getSceneBlockingSegments(items, { kind: 'movement' })
         .some(wall => (
             linesIntersect(startCenter.x, startCenter.y, endCenter.x, endCenter.y, wall.x1, wall.y1, wall.x2, wall.y2) ||
             lineRectIntersect(wall.x1, wall.y1, wall.x2, wall.y2, nextPosition.x + 2, nextPosition.y + 2, tokenWidth - 4, tokenHeight - 4)
@@ -1113,7 +1113,7 @@ export const resolveEmpujeMovement = ({ sourceToken, pushedToken, items = [], co
         return { applied: false, reason: occupancyIssue.reason || 'Casilla bloqueada', direction };
     }
 
-    const walls = (items || []).filter((item) => item.type === 'wall' && !(item.wallType === 'door' && item.isOpen));
+    const walls = getSceneBlockingSegments(items, { kind: 'movement' });
     const startCenter = getWorldCenter(pushedToken);
     const endCenter = getWorldCenter(movedToken);
     const pathBlocked = walls.some((wall) =>

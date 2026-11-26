@@ -1,0 +1,45 @@
+{
+  "verifiedAtUtc": "2026-10-20T21:26:29.463673+00:00",
+  "release": "campaign-free-parry-shared-room",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.4661a51d.js",
+      "httpStatus": 200,
+      "sha256Matches": true
+    },
+    "main.css": {
+      "path": "/static/css/main.3847f393.css",
+      "httpStatus": 200,
+      "sha256Matches": true
+    }
+  },
+  "testSuitesPassed": 224,
+  "testsPassed": 1564,
+  "testsSkipped": 1,
+  "testsLog": "output/playwright/parry-room-final-tests.log",
+  "buildLog": "output/playwright/parry-room-build.log",
+  "deployLog": "output/playwright/parry-room-deploy.log",
+  "productionGamesCreatedForVerification": 0,
+  "productionRoomWritesForVerification": 0,
+  "firestoreRulesChanged": false,
+  "browserVisualVerification": "production room, controller and repository with local in-memory transport and three clients",
+  "desktopViewport": "1280x720",
+  "mobileViewports": [
+    "390x844",
+    "320x740"
+  ],
+  "features": [
+    "automatic room entry",
+    "direct attacks without invitations",
+    "one shared active exchange",
+    "spectators and public verified results",
+    "secret choices until both commit",
+    "20 recent results",
+    "presence and exit",
+    "same desktop and mobile combat rose"
+  ]
+}

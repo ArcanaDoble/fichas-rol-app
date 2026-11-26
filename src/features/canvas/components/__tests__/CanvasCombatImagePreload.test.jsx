@@ -61,6 +61,24 @@ test('warms a draft target that is not yet present in combat participants', () =
   expect(preloadImage).toHaveBeenCalledWith('/external-target-armor.webp');
 });
 
+test('warms the controlled mage spells and objects before selecting a token in practice', () => {
+  const fireball = { id: 'fireball', name: 'Bola de fuego', image: '/warm-fireball.webp' };
+  const mage = { ...hero, classIdentity: 'Mago', equippedItems: [],
+    equippedSkillSlots: [fireball, fireball, { name: 'Barrera arcana', image: '/warm-barrier.webp' }],
+    inventory: [{ id: 'smoke', type: 'object', name: 'Bomba de humo', image: '/warm-smoke.webp' }] };
+  const otherMage = { ...mage, id: 'other-mage', equippedSkillSlots: [{ ...fireball, image: '/private-fireball.webp' }],
+    inventory: [{ type: 'object', name: 'Vendaje', image: '/private-bandage.webp' }] };
+  render(<CanvasCombatActionModal activeScenario={{ items: [mage, otherMage] }} isPlayerView combatRuntime={{
+    attackDraft: null, pendingAttack: null, combatState: null, controlledTokenIds: [mage.id],
+  }} />);
+
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(preloadImage).toHaveBeenCalledTimes(3);
+  expect(preloadImage).toHaveBeenCalledWith('/warm-fireball.webp');
+  expect(preloadImage).toHaveBeenCalledWith('/warm-barrier.webp');
+  expect(preloadImage).toHaveBeenCalledWith('/warm-smoke.webp');
+});
+
 test('warms a late custom equipment URL and uses that same URL when the remote defense arrives', () => {
   const scenario = { items: [hero, enemy] };
   const runtime = { attackDraft: null, pendingAttack: null, combatState: { participants: { [hero.id]: { actionDice: [] } } }, controlledTokenIds: [hero.id] };

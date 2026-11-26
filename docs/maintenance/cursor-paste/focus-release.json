@@ -1,0 +1,32 @@
+{
+  "feature": "Recuperar copiar/pegar tras foco en el inspector, sin recargar",
+  "url": "https://base-de-datos-noma.web.app",
+  "verifiedAt": "2026-10-22T14:25:21.466Z",
+  "assets": [
+    {
+      "asset": "/static/js/main.1cf94ba6.js",
+      "sha256": "90ed7dd8eff57553ff677ba63a8e7e570adb23b24cd17f4e7dc510097954b045",
+      "bytes": 5330328
+    },
+    {
+      "asset": "/static/css/main.6ae8568f.css",
+      "sha256": "778b0df881cd73698e350b1d620f84ef868517da076c589133557b4676cb854d",
+      "bytes": 701040
+    }
+  ],
+  "tests": {
+    "suites": 231,
+    "passed": 1607,
+    "skipped": 1,
+    "focusedPassed": 20
+  },
+  "browser": {
+    "edge": "1280x1000: 35 Tab steps, four edit/close/copy cycles, nine pastes, uppercase shortcuts, no workspace scroll",
+    "firefox": "1280x1000: same sequence, no workspace scroll or reload"
+  },
+  "buildLog": "output/playwright/clipboard-stall-final-build.log",
+  "testLog": "output/playwright/clipboard-stall-tests.log",
+  "focusedLog": "output/playwright/clipboard-stall-focused.log",
+  "deployLog": "output/playwright/clipboard-stall-final-deploy.log",
+  "supersedes": "release.json"
+}

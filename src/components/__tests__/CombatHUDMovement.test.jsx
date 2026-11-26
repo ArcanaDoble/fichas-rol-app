@@ -17,7 +17,7 @@ test('the belt keeps its exact potion copy without hiding a second copy from the
 });
 
 describe('CombatHUD movement flow', () => {
-  test('shows belt and live Canvas objects with the same slot height as combat actions', () => {
+  test('shows belt and live Canvas objects in illustrated slots', () => {
     const onAction = jest.fn();
     const baseToken = {
       id: 'barbaro-1',
@@ -48,7 +48,7 @@ describe('CombatHUD movement flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Objetos' }));
     const beltButton = screen.getByRole('button', { name: 'Usar Bomba explosiva' });
-    expect(beltButton).toHaveClass('h-16', 'md:h-24');
+    expect(beltButton).toHaveClass('h-20', 'md:h-24');
     fireEvent.click(beltButton);
     expect(onAction).toHaveBeenCalledWith('use_item', expect.objectContaining({
       name: 'Bomba explosiva',
@@ -236,7 +236,7 @@ describe('CombatHUD movement flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Objetos' }));
     const itemButton = screen.getByRole('button', { name: 'Usar Bomba de humo' });
-    expect(itemButton).toHaveClass('h-16', 'md:h-24');
+    expect(itemButton).toHaveClass('h-20', 'md:h-24');
     fireEvent.click(itemButton);
     expect(onAction).toHaveBeenCalledWith('use_item', smokeBomb);
 

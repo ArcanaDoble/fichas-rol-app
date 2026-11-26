@@ -1,0 +1,49 @@
+{
+  "verifiedAtUtc": "2026-10-21T22:30:07.916502+00:00",
+  "release": "encounter-square-illustrations-and-hostile-tone",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.ac4bc22e.js",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "3b0d9b3c1ac253d77a1dadbc273eda84b2207e2ea016de09175ea5c98428981c"
+    },
+    "main.css": {
+      "path": "/static/css/main.22ee18b4.css",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "57394e485ad6ddeb85c807cc2a9a5c80c16860c7561614c5e244e6f0b13948dc"
+    }
+  },
+  "buildLog": "output/playwright/encounter-art-build-final.log",
+  "testLog": "output/playwright/encounter-art-tests.log",
+  "finalFocusedTestLog": "output/playwright/encounter-art-focused-final.log",
+  "deployLog": "output/playwright/encounter-art-deploy.log",
+  "tests": {
+    "suitesPassed": 226,
+    "testsPassed": 1574,
+    "testsSkipped": 1,
+    "finalFocusedTestsPassed": 14
+  },
+  "verification": [
+    "Existing cards retain panoramic layout; new cards use square layout",
+    "Square artwork uses full-width 1:1 region with lower fade and no hover enlargement",
+    "Source preserved; crop reset on format change; exported square is 1024x1024 and panorama is 1536x768",
+    "Local real editor applied panorama, saved, reopened, restored square using keyboard and saved",
+    "Enemy allegiance uses red rarity treatment and Enemy badge; Ally restores stored rarity",
+    "Desktop 1440px; mobile 412px; editor at 320px; intermediate 960px without horizontal overflow",
+    "Local samples use original Ghoul, Fusilero, Troll and Falso caballero images; transport is in-memory only"
+  ],
+  "evidence": [
+    "evidence/art-square-desktop.png",
+    "evidence/art-square-mobile.png",
+    "evidence/art-editor-mobile.png"
+  ],
+  "productionGameWritesForVerification": 0,
+  "firestoreRulesChanged": false,
+  "localSampleImagesPublished": false
+}

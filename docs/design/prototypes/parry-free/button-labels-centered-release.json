@@ -1,0 +1,35 @@
+{
+  "verifiedAtUtc": "2026-10-21T03:30:57.624364+00:00",
+  "release": "parry-centered-button-labels",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.0a782773.js",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "ed7126c87b71782c4df99bb01ace202911af5c78ad15f6c1afb0e529e85c169e"
+    },
+    "main.css": {
+      "path": "/static/css/main.0c733200.css",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "5791b8d215ab10ac0f38eb9ca4265a5f888dc4b6e31ab82ae25fbe9ee4af7ebb"
+    }
+  },
+  "buildLog": "output/playwright/parry-button-labels-build.log",
+  "deployLog": "output/playwright/parry-button-labels-deploy.log",
+  "verification": "Repeat and Change rival labels centered independently of arrows, with symmetric side space. Measured label/button center offset below 0.006px horizontally and vertically at 320,412 and1280px. Both arrows remain 24x24px. Two-line Ronda alignment visually checked.",
+  "evidence": [
+    "evidence/button-labels-centered-detail.png",
+    "evidence/button-labels-centered-mobile.png",
+    "evidence/button-labels-centered-small-mobile.png",
+    "evidence/button-labels-centered-desktop.png"
+  ],
+  "supersedes": "action-arrows-release.json",
+  "productionRoomWritesForVerification": 0,
+  "firestoreRulesChanged": false,
+  "gameplayChanged": false
+}

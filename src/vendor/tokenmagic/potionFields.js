@@ -4,7 +4,8 @@
  * Source revision: 0999bb9f2f4d4b5e41135913a67bc73a4fc2cc1d
  * https://github.com/Feu-Secret/Tokenmagic/blob/0999bb9f2f4d4b5e41135913a67bc73a4fc2cc1d/tokenmagic/fx/glsl/fragmentshaders/forcefield.js
  * Selected GLSL functions preserved; NOMA supplies transient timing, colors,
- * transparent composition and the portrait-aligned field in potionBuffShader.js.
+ * transparent composition and the portrait-aligned field in potionBuffShader.js,
+ * plus the persistent shield and impact response in arcaneBarrierFieldShader.js.
  */
 export const potionFieldNoise = `
 #define SQRT5B20 0.30901699

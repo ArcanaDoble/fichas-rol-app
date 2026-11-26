@@ -56,7 +56,7 @@ export const getTokenResourceRibbonGeometry = ({ width = 50, height = 50, cellSi
 };
 
 /** Shared crown geometry and feedback; each mode chooses which resources to show. */
-export default function TokenResourceCrown({ stats, resourceKey = 'vida', label = 'Vida', position = 'bottom', showReadout = true, className = '', children, width = 50, height = 50, cellSize = null, zoom = 1, isSelected = false, isCircular = true, rotation = 0, name = '', healingEffect = null, damageEffect = null, smokeVeil = 0, poisoned = false }) {
+export default function TokenResourceCrown({ stats, continuous = false, resourceKey = 'vida', label = 'Vida', position = 'bottom', showReadout = true, className = '', children, width = 50, height = 50, cellSize = null, zoom = 1, isSelected = false, isCircular = true, rotation = 0, name = '', healingEffect = null, damageEffect = null, smokeVeil = 0, poisoned = false, hasResizeHandle = false }) {
     const maximum = Math.max(0, Math.floor(Number(stats?.[resourceKey]?.max) || 0));
     const authoritativeLife = Math.max(0, Math.min(maximum, Math.floor(Number(stats?.[resourceKey]?.current) || 0)));
     const temporaryMaximum = resourceKey === 'vida' ? Math.max(0, Number(stats?.vidaTemporal?.max) || 0) : 0;
@@ -95,9 +95,9 @@ export default function TokenResourceCrown({ stats, resourceKey = 'vida', label 
     const [change, setChange] = useState(null);
     const gradientId = `token-life-${useId().replace(/:/g, '')}`;
     const safeZoom = Math.max(.05, Number(zoom) || 1);
-    const curved = isCircular && maximum <= 24;
-    const geometry = useMemo(() => getTokenResourceCrownGeometry({ width, height, cellSize, zoom, maximum: maximum + temporaryMaximum }), [width, height, cellSize, zoom, maximum, temporaryMaximum]);
-    const ribbon = getTokenResourceRibbonGeometry({ width, height, cellSize, zoom, maximum: maximum + temporaryMaximum });
+    const curved = isCircular && (continuous || maximum <= 24);
+    const geometry = useMemo(() => getTokenResourceCrownGeometry({ width, height, cellSize, zoom, maximum: continuous ? 1 : maximum + temporaryMaximum }), [width, height, cellSize, zoom, maximum, temporaryMaximum, continuous]);
+    const ribbon = getTokenResourceRibbonGeometry({ width, height, cellSize, zoom, maximum: continuous ? 1 : maximum + temporaryMaximum });
     // Match the centre of the selection outline (-4px inset, 2px stroke) on both edges.
     const ribbonAngle = Number(rotation || 0) * Math.PI / 180;
     const ribbonEdge = (position === 'top' ? -1 : 1) * (Number(height) / 2 + 3);
@@ -149,18 +149,27 @@ export default function TokenResourceCrown({ stats, resourceKey = 'vida', label 
                 <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0" stopColor={green ? '#b2e2bb' : poisoned ? "#d0dfa2" : "#f3c1c2"} /><stop offset="1" stopColor={green ? '#56a879' : poisoned ? "#819c4e" : "#c97c8a"} />
                 </linearGradient></defs>
-                {Array.from({ length: maximum + temporaryMaximum }, (_, index) => <g key={index} data-life-block="" data-filled={index < maximum ? index < current : index - maximum < shownTemporary} data-temporary={index >= maximum || undefined}
+                {continuous ? <g data-life-continuous="true" data-change={change?.direction}>
+                    <path d={geometry.paths[0]} className="noma-token-life-socket" />
+                    <path d={geometry.paths[0]} className="noma-token-life-piece" stroke="#35333d" />
+                    <path d={geometry.paths[0]} className="noma-token-life-piece" stroke={`url(#${gradientId})`}
+                        pathLength="100" strokeDasharray={`${current / maximum * 100} 100`} />
+                </g> : Array.from({ length: maximum + temporaryMaximum }, (_, index) => <g key={index} data-life-block="" data-filled={index < maximum ? index < current : index - maximum < shownTemporary} data-temporary={index >= maximum || undefined}
                     data-change={changed(index)}>
                     <path d={geometry.paths[index]} className="noma-token-life-socket" />
                     <path d={geometry.paths[index]} className="noma-token-life-piece"
                         stroke={index >= maximum ? (index - maximum < shownTemporary ? '#dfc885' : '#35333d') : index < current ? `url(#${gradientId})` : '#35333d'} />
                 </g>)}
             </svg> : <div className="noma-token-life-ribbon" aria-hidden="true" style={{ gap: ribbon.gap / safeZoom }}>
-                {Array.from({ length: maximum + temporaryMaximum }, (_, index) => <i key={index} data-life-block="" data-filled={index < maximum ? index < current : index - maximum < shownTemporary} data-temporary={index >= maximum || undefined}
+                {continuous ? <div className="noma-token-life-continuous" data-life-continuous="true" data-change={change?.direction}
+                    style={{ width: ribbon.width / safeZoom, height: ribbon.thickness / safeZoom }}>
+                    <div style={{ height: '100%', width: `${current / maximum * 100}%`, background: 'linear-gradient(#f3c1c2, #c97c8a)' }} />
+                </div> : Array.from({ length: maximum + temporaryMaximum }, (_, index) => <i key={index} data-life-block="" data-filled={index < maximum ? index < current : index - maximum < shownTemporary} data-temporary={index >= maximum || undefined}
                     data-change={changed(index)} style={{ width: ribbon.pieceWidth / safeZoom, height: ribbon.thickness / safeZoom }} />)}
             </div>}
         </div>
-        {showReadout && <TokenReadout name={name} height={height} zoom={safeZoom} offset={curved ? geometry.readoutOffset : ribbon.readoutOffset}>
+        {showReadout && <TokenReadout name={name} width={width} height={height} zoom={safeZoom} offset={curved ? geometry.readoutOffset : ribbon.readoutOffset}
+            isCircular={isCircular} rotation={rotation} hasResizeHandle={hasResizeHandle}>
             <span className="noma-token-life-count" aria-label={`${label}: ${current} de ${maximum}`}><strong>{current}</strong><span>/ {maximum}</span></span>
             {temporaryMaximum > 0 && <span className="noma-token-life-count noma-token-life-temporary" aria-label={`Vida temporal: ${shownTemporary}`}><strong>+{shownTemporary}</strong></span>}
             {children}

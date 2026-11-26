@@ -5,6 +5,7 @@ import {
     deleteDoc,
     doc,
     onSnapshot,
+    runTransaction,
     setDoc,
 } from 'firebase/firestore';
 import { useCanvasSharedPointer } from '../useCanvasSharedPointer';
@@ -33,6 +34,7 @@ jest.mock('firebase/firestore', () => ({
         return jest.fn();
     }),
     setDoc: jest.fn(() => Promise.resolve()),
+    runTransaction: jest.fn(),
 }));
 
 const createPointerEvent = (overrides = {}) => ({
@@ -47,8 +49,17 @@ const createPointerEvent = (overrides = {}) => ({
 });
 
 beforeEach(() => {
+    let transactionQueue = Promise.resolve();
     mockDocuments.clear();
     mockSubscriptions.clear();
+    runTransaction.mockImplementation((_db, callback) => {
+        const result = transactionQueue.then(() => callback({
+            get: async reference => ({ exists: () => mockDocuments.has(reference.path), data: () => mockDocuments.get(reference.path) }),
+            set: (reference, data) => mockDocuments.set(reference.path, data),
+        }));
+        transactionQueue = result.catch(() => {});
+        return result;
+    });
     collection.mockImplementation((...parts) => ({ path: parts.slice(1).join('/') }));
     doc.mockImplementation((...parts) => ({ path: parts.slice(1).join('/') }));
     deleteDoc.mockImplementation((reference) => {
@@ -85,7 +96,7 @@ const renderSharedPointer = (playerName) => renderHook(() => useCanvasSharedPoin
     scenarioCollectionName: 'canvas_scenarios',
 }));
 
-test('removes the shared cursor but retains its independent ping until the waves finish', () => {
+test('removes the shared cursor but retains its independent ping until the waves finish', async () => {
     jest.useFakeTimers();
     jest.setSystemTime(10_000);
 
@@ -100,6 +111,7 @@ test('removes the shared cursor but retains its independent ping until the waves
         }),
         { wrapper: StrictMode },
     );
+    await act(async () => {});
     deleteDoc.mockClear();
     setDoc.mockClear();
 
@@ -141,10 +153,11 @@ test('removes the shared cursor but retains its independent ping until the waves
     jest.useRealTimers();
 });
 
-test('does not render its own Firestore echo while pointer deletion is pending', () => {
+test('does not render its own Firestore echo while pointer deletion is pending', async () => {
     jest.useFakeTimers();
     jest.setSystemTime(15_000);
     const sender = renderSharedPointer('Ada');
+    await act(async () => {});
 
     act(() => {
         sender.result.current.handleSharedPointerDown(createPointerEvent({ clientX: 160, clientY: 180 }));
@@ -173,11 +186,12 @@ test('does not render its own Firestore echo while pointer deletion is pending',
     jest.useRealTimers();
 });
 
-test('synchronizes the live cursor and independent pings with another client', () => {
+test('synchronizes the live cursor and independent pings with another client', async () => {
     jest.useFakeTimers();
     jest.setSystemTime(20_000);
     const sender = renderSharedPointer('Ada');
     const receiver = renderSharedPointer('Bruno');
+    await act(async () => {});
 
     act(() => {
         sender.result.current.handleSharedPointerMove(createPointerEvent({ clientX: 120, clientY: 140 }));
@@ -212,5 +226,46 @@ test('synchronizes the live cursor and independent pings with another client', (
     sender.unmount();
     receiver.unmount();
     jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+});
+
+test('simultaneous participants publish different colors, retained after remount', async () => {
+    const ada = renderSharedPointer('Ada');
+    const bruno = renderSharedPointer('Bruno');
+    await act(async () => {});
+    act(() => {
+        ada.result.current.handleSharedPointerDown(createPointerEvent());
+        bruno.result.current.handleSharedPointerDown(createPointerEvent({ clientX: 150 }));
+    });
+    const adaColor = ada.result.current.canvasPointers.find(pointer => pointer.isLocal).color;
+    const brunoColor = bruno.result.current.canvasPointers.find(pointer => pointer.isLocal).color;
+    expect(adaColor).not.toBe(brunoColor);
+    expect(bruno.result.current.canvasPointers.find(pointer => pointer.name === 'Ada' && pointer.visible).color).toBe(adaColor);
+    expect(bruno.result.current.canvasPointers.find(pointer => pointer.name === 'Ada' && pointer.pings?.length).pings[0].color).toBe(adaColor);
+    ada.unmount();
+    const returningAda = renderSharedPointer('Ada');
+    await act(async () => {});
+    act(() => returningAda.result.current.handleSharedPointerMove(createPointerEvent()));
+    expect(returningAda.result.current.canvasPointers.find(pointer => pointer.isLocal).color).toBe(adaColor);
+    returningAda.unmount();
+    bruno.unmount();
+});
+
+test('a delayed reservation cannot restore a released cursor or publish an expired ping', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(30_000);
+    let resolveColor;
+    runTransaction.mockImplementationOnce(() => new Promise(resolve => { resolveColor = resolve; }));
+    const sender = renderSharedPointer('Ada');
+    setDoc.mockClear();
+    act(() => sender.result.current.handleSharedPointerDown(createPointerEvent()));
+    act(() => {
+        window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Control' }));
+        jest.advanceTimersByTime(2_300);
+    });
+    await act(async () => resolveColor('#60d5ef'));
+    expect(setDoc).not.toHaveBeenCalled();
+    expect(sender.result.current.canvasPointers).toEqual([]);
+    sender.unmount();
     jest.useRealTimers();
 });

@@ -17,15 +17,19 @@ import { WORLD_SIZE } from './spatial';
 import { areScenarioFieldValuesEqual } from './scenarioState';
 import { sanitizeForFirestore } from './legacyCombatRules';
 import { STATUS_EFFECT_IDS } from './tokenSheetSync';
+import { reconcileArcaneBarrierUpdate } from '../../utils/arcaneBarrierStatus';
 
 const ROGUELITE_RUNTIME_FIELDS = new globalThis.Set([
     'stats',
     'status',
+    'arcaneBarrier',
     'inventory',
     'equipmentLoadout',
     'equippedItems',
     'activeWeaponSet',
     'money',
+    'yermo',
+    'actionDice',
 ]);
 
 const assertRuntimePersistenceSucceeded = (results) => {
@@ -84,6 +88,7 @@ export const createCanvasScenarioController = ({
     pendingImageFile,
     persistQueueRef,
     persistRuntimeItems,
+    prepareScenarioSave,
     playerName,
     recentLocalWritesRef,
     registerLocalConfigDraft,
@@ -231,7 +236,7 @@ const saveCurrentScenario = async () => {
         const localItems = activeScenario.items || [];
         const pendingRuntimeTokenIds = localItems
             .filter((item) => (
-                item.profileType === 'rogueliteClass'
+                ['rogueliteClass', 'campaignCharacter'].includes(item.profileType)
                 && item.runtimeDirty === true
             ))
             .map((item) => item.id);
@@ -265,6 +270,7 @@ const saveCurrentScenario = async () => {
         ].filter(Boolean)));
         const saveStartedAt = Date.now();
         let persistedItems = null;
+        let committedSystem = null;
 
         pendingModifiedOrAdded.forEach(item => {
             const changedFields = getChangedItemFields(item, baselineItemMap.get(item.id));
@@ -358,12 +364,18 @@ const saveCurrentScenario = async () => {
                     lastModifiedByRole: isPlayerView ? 'player' : 'master'
                 };
 
-                transaction.update(doc(db, scenarioCollectionName, activeScenario.id), payload);
+                const finalPayload = !isPlayerView && prepareScenarioSave
+                    ? await prepareScenarioSave({ currentData, payload, transaction }) : payload;
+                persistedItems = finalPayload.items;
+                if (finalPayload.rulesSystem && finalPayload.rulesSystem !== currentData.rulesSystem) committedSystem = finalPayload.rulesSystem;
+                transaction.update(doc(db, scenarioCollectionName, activeScenario.id), sanitizeForFirestore(finalPayload));
             });
 
             if (persistedItems) {
                 lastRemoteScenarioItemsRef.current = persistedItems;
             }
+            if (committedSystem) setActiveScenario(current => current?.id === activeScenario.id
+                ? { ...current, rulesSystem: committedSystem, items: persistedItems, canvasCombat: null, canvasPracticeCombat: null } : current);
 
             if (persistRuntimeItems && pendingRuntimeTokenIds.length > 0) {
                 const runtimeResults = await persistRuntimeItems({
@@ -417,7 +429,7 @@ const saveCurrentScenario = async () => {
             if (confirmedItems.length > 0) {
                 console.log(" Iniciando sincronización inversa con fichas vinculadas...");
                 const syncPromises = confirmedItems
-                    .filter(token => token.linkedCharacterId)
+                    .filter(token => token.linkedCharacterId && token.profileType !== 'campaignCharacter')
                     .map(async (token) => {
                         const charId = token.linkedCharacterId;
                         const char = availableCharacters.find(c => c.id === charId);
@@ -764,16 +776,18 @@ const safePersistItems = async (
         return didPersist === true;
     };
 
-    const updateItem = (itemId, updates, persist = false) => {
+    const updateItem = (itemId, updates, persist = false, successMessage) => {
         const currentToken = activeScenario?.items?.find((item) => item.id === itemId);
+        const stateUpdates = scenarioCollectionName === 'canvas_scenarios'
+            ? reconcileArcaneBarrierUpdate(currentToken, updates) : updates;
         const marksRogueliteProgress = Boolean(
             persistRuntimeItems
-            && currentToken?.profileType === 'rogueliteClass'
-            && Object.keys(updates || {}).some((field) => ROGUELITE_RUNTIME_FIELDS.has(field)),
+            && ['rogueliteClass', 'campaignCharacter'].includes(currentToken?.profileType)
+            && Object.keys(stateUpdates || {}).some((field) => ROGUELITE_RUNTIME_FIELDS.has(field)),
         );
         const effectiveUpdates = marksRogueliteProgress
-            ? { ...updates, runtimeDirty: true }
-            : updates;
+            ? { ...stateUpdates, runtimeDirty: true }
+            : stateUpdates;
 
         if (!persist) {
             // Guardar localmente en el ref de ediciones no guardadas
@@ -827,6 +841,8 @@ const safePersistItems = async (
                             'Firebase no confirmó el cambio. Pulsa «Guardar cambios» para reintentarlo.',
                             'error',
                         );
+                    } else if (successMessage) {
+                        triggerToast('CAMBIO SINCRONIZADO', successMessage, 'success');
                     }
                 });
             }

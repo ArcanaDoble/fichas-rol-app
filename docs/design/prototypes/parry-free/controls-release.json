@@ -1,0 +1,42 @@
+{
+  "verifiedAtUtc": "2026-10-21T01:51:45.881011+00:00",
+  "release": "parry-free-close-name-focus-and-combat-gold",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.3d748aed.js",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "96d698a4df3611f7826636400a1c44edb007676041c9c736eb62b3c61a88ce19"
+    },
+    "main.css": {
+      "path": "/static/css/main.fd8f0b49.css",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "c914d28e482135164607c42f26be6b0e5f4aba7385261be468f3dd5df54236f2"
+    }
+  },
+  "testSuitesPassed": 2,
+  "testsPassed": 11,
+  "testsLog": "output/playwright/parry-controls-tests.log",
+  "buildLog": "output/playwright/parry-controls-build.log",
+  "deployLog": "output/playwright/parry-controls-deploy.log",
+  "previousVisualRelease": "visual-release.json",
+  "review": {
+    "disposition": "ship",
+    "scope": "fresh review of three requested corrections against user screenshot and four desktop/mobile captures",
+    "materialFixes": []
+  },
+  "evidence": [
+    "controls-name-desktop.png",
+    "controls-result-desktop.png",
+    "controls-name-mobile.png",
+    "controls-result-mobile.png"
+  ],
+  "browserVisualVerification": "production components with local in-memory transport; 1280x720 and 390x844; exact X center checked, quiet input focus, solid combat gold",
+  "productionRoomWritesForVerification": 0,
+  "firestoreRulesChanged": false
+}

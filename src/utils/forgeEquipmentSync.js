@@ -1,4 +1,6 @@
-const identityKeys = ['id', 'instanceId', 'runItemId', 'quantity', 'count', 'canvasSlot', 'equippedSlots', '_inventoryOrder', 'notes', 'note'];
+import { hasWeaponTrick, resolveWeaponForm } from '../features/roguelite/weaponForms';
+
+const identityKeys = ['id', 'instanceId', 'runItemId', 'activeFormId', 'quantity', 'count', 'canvasSlot', 'equippedSlots', '_inventoryOrder', 'notes', 'note'];
 const nameOf = item => String(item?.name || item?.nombre || '').trim().toLowerCase();
 
 // Catalog changes update definitions, never ownership or the layout of an inventory.
@@ -19,7 +21,10 @@ export const refreshForgeEquipment = (sheet, catalog) => {
             const definition = match.payload || match;
             const updated = { ...payload, ...definition };
             identityKeys.forEach(key => { if (Object.prototype.hasOwnProperty.call(payload, key)) updated[key] = payload[key]; });
-            return value.payload ? { ...value, name: match.name || definition.name || value.name, payload: updated } : updated;
+            if (value.activeFormId) updated.activeFormId = value.activeFormId;
+            const wrapped = value.payload ? { ...value, name: match.name || definition.name || value.name, payload: updated } : updated;
+            return resolveWeaponForm(value.payload && hasWeaponTrick(updated)
+                ? { ...wrapped, ...updated, id: value.id || updated.id, payload: updated } : wrapped);
         }
         return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, refresh(child)]));
     };

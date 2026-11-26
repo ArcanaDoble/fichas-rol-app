@@ -1,107 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, Save, Upload, User, Shield, Zap, Activity, Brain, Ghost, LayoutTemplate, CircleUser, Move, ZoomIn, ZoomOut, RotateCcw, Eye, Image as ImageIcon } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-
-const DEFAULT_STATS = {
-    postura: { current: 3, max: 4 },
-    vida: { current: 4, max: 4 },
-    ingenio: { current: 2, max: 3 },
-    cordura: { current: 3, max: 3 },
-    armadura: { current: 1, max: 2 },
-};
-
-const DICE_OPTIONS = ['d4', 'd6', 'd8', 'd10', 'd12'];
-
-const DiceSelector = ({ value, onChange }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const containerRef = useRef(null);
-
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (containerRef.current && !containerRef.current.contains(event.target)) {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    return (
-        <div className="relative" ref={containerRef}>
-            <button
-                onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center justify-center w-[50px] h-[50px] transition-transform hover:scale-110 focus:outline-none"
-            >
-                <img
-                    src={`/dados/${value.toUpperCase()}.webp`}
-                    alt={value}
-                    className="w-full h-full object-contain drop-shadow-[0_0_5px_rgba(200,170,110,0.5)]"
-                />
-            </button>
-
-            <AnimatePresence>
-                {isOpen && (
-                    <motion.div
-                        initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                        transition={{ duration: 0.2, ease: "easeOut" }}
-                        className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-[#0f172a] border border-[#c8aa6e]/40 rounded-xl shadow-[0_0_15px_rgba(0,0,0,0.5)] z-50 p-2 grid grid-cols-5 gap-x-1 gap-y-0 w-[210px] backdrop-blur-md"
-                    >
-                        {DICE_OPTIONS.map((dice) => {
-                            const gridPos = {
-                                'd4': 'col-start-1 row-start-1',
-                                'd10': 'col-start-2 row-start-2',
-                                'd6': 'col-start-3 row-start-1',
-                                'd12': 'col-start-4 row-start-2',
-                                'd8': 'col-start-5 row-start-1',
-                            }[dice];
-
-                            return (
-                                <button
-                                    key={dice}
-                                    onClick={() => {
-                                        onChange(dice);
-                                        setIsOpen(false);
-                                    }}
-                                    className={`flex flex-col items-center justify-center p-1 rounded-lg transition-all duration-200 group ${gridPos} ${value === dice ? 'bg-[#c8aa6e]/20 border border-[#c8aa6e]/50' : 'hover:bg-[#c8aa6e]/10 border border-transparent'}`}
-                                >
-                                    <div className="w-8 h-8 mb-0.5 transition-transform group-hover:scale-110">
-                                        <img src={`/dados/${dice.toUpperCase()}.webp`} alt={dice} className="w-full h-full object-contain" />
-                                    </div>
-                                    <span className={`text-[9px] font-bold uppercase tracking-tighter ${value === dice ? 'text-[#c8aa6e]' : 'text-slate-400 group-hover:text-[#c8aa6e]'}`}>
-                                        {dice.toUpperCase()}
-                                    </span>
-                                </button>
-                            );
-                        })}
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </div>
-    );
-};
+import { ChevronLeft, Save, Upload, User, Shield, Brain, Heart, Footprints, Dices, LayoutTemplate, CircleUser, Move, ZoomIn, ZoomOut, RotateCcw, Eye, Image as ImageIcon } from 'lucide-react';
+import DiceSelector from './ActionDiceSelector';
+import { CAMPAIGN_SYSTEM_ID, createEmptyCampaignSheet } from '../features/campaign/characterSheet';
+import './CampaignStats.css';
 
 export const CharacterCreatorView = ({ onBack, onSave }) => {
     const [formData, setFormData] = useState({
         name: '',
         subtitle: '',
         description: '',
-        attributes: {
-            destreza: 'd4',
-            vigor: 'd4',
-            intelecto: 'd4',
-            voluntad: 'd4'
-        },
-        primaryAbility: '',
-        difficulty: 'Medio',
-        role: 'Daño',
         image: null,
-        starLevel: 1,
-        currentLevel: 1,
-        isUnlocked: true,
-        stats: JSON.parse(JSON.stringify(DEFAULT_STATS))
     });
+
+    const [campaignSheet, setCampaignSheet] = useState(() => createEmptyCampaignSheet({}));
+    const [saveError, setSaveError] = useState('');
 
     // --- IMAGE CROPPER STATE ---
     const [rawImage, setRawImage] = useState(null);
@@ -130,23 +42,13 @@ export const CharacterCreatorView = ({ onBack, onSave }) => {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleAttributeChange = (attr, value) => {
-        setFormData(prev => ({
-            ...prev,
-            attributes: {
-                ...prev.attributes,
-                [attr]: value
-            }
-        }));
-    };
-
-    const handleStatChange = (statName, field, value) => {
-        setFormData(prev => ({
-            ...prev,
-            stats: {
-                ...prev.stats,
-                [statName]: { ...prev.stats[statName], [field]: Number(value), current: Number(value) }
-            }
+    const handleInitialStatChange = (key, rawValue) => {
+        if (!/^\d*$/.test(rawValue)) return;
+        const value = rawValue === '' ? null : Number(rawValue);
+        if (value !== null && !Number.isSafeInteger(value)) return;
+        setCampaignSheet(previous => ({
+            ...previous,
+            [key]: ['vida', 'mente'].includes(key) ? { current: value, max: value } : value,
         }));
     };
 
@@ -252,11 +154,12 @@ export const CharacterCreatorView = ({ onBack, onSave }) => {
     const [isSaving, setIsSaving] = useState(false);
 
     const handleSave = async () => {
-        if (!formData.name) {
-            alert("Por favor, introduce al menos el nombre del personaje.");
+        if (!formData.name.trim()) {
+            setSaveError('Introduce el nombre del personaje.');
             return;
         }
 
+        setSaveError('');
         setIsSaving(true);
         try {
             let finalImage = formData.image;
@@ -269,16 +172,19 @@ export const CharacterCreatorView = ({ onBack, onSave }) => {
 
             const newCharacter = {
                 id: `char-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-                name: formData.name,
+                name: formData.name.trim(),
+                systemId: CAMPAIGN_SYSTEM_ID,
                 subtitle: formData.subtitle || 'Aventurero',
                 description: formData.description || 'Sin descripción',
-                attributes: formData.attributes,
                 image: finalImage,
                 avatar: finalAvatar,
                 portraitSource: rawImage || formData.image,
                 level: 1,
-                stats: formData.stats,
-                equipment: { weapons: [], armor: [], abilities: [] },
+                equipment: { weapons: [], armor: [], abilities: [], objects: [], accessories: [] },
+                talents: { title: '', description: '', slots: [null, null, null] },
+                skills: { slots: [null, null, null] },
+                features: [],
+                actionData: { movement: [], action: [], bonus: [], reaction: [] },
                 money: 0,
                 inspiration: [],
                 rules: [],
@@ -287,33 +193,33 @@ export const CharacterCreatorView = ({ onBack, onSave }) => {
                 }
             };
 
-            await onSave(newCharacter);
+            await onSave(newCharacter, campaignSheet);
         } catch (error) {
             console.error("Error al crear personaje:", error);
-            alert("Hubo un error al guardar el personaje. Por favor, inténtalo de nuevo.");
+            setSaveError('No se pudo guardar el personaje. Tus cambios siguen aquí; vuelve a intentarlo.');
         } finally {
             setIsSaving(false);
         }
     };
 
     return (
-        <div className="w-full min-h-screen bg-[#09090b] text-slate-200 overflow-y-auto custom-scrollbar p-8">
+        <div className="w-full min-h-screen bg-[#09090b] text-slate-200 overflow-y-auto custom-scrollbar p-4 md:p-8">
             <div className="max-w-6xl mx-auto">
                 {/* Header */}
-                <div className="flex items-center justify-between mb-8 border-b border-[#c8aa6e]/30 pb-6">
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-8 border-b border-[#c8aa6e]/30 pb-6">
                     <div className="flex items-center gap-4">
-                        <button onClick={onBack} className="p-2 rounded-full border border-slate-700 hover:border-[#c8aa6e] text-slate-400 hover:text-[#c8aa6e] transition-colors">
+                        <button aria-label="Volver a personajes" onClick={onBack} className="p-2 rounded-full border border-slate-700 hover:border-[#c8aa6e] text-slate-400 hover:text-[#c8aa6e] transition-colors">
                             <ChevronLeft className="w-6 h-6" />
                         </button>
                         <div>
-                            <h1 className="text-3xl font-['Cinzel'] text-[#f0e6d2]">CREAR NUEVO PERSONAJE</h1>
-                            <p className="text-[#c8aa6e] text-xs font-bold uppercase tracking-widest">Inicio de la aventura</p>
+                            <h1 className="text-xl md:text-3xl font-['Cinzel'] text-[#f0e6d2]">CREAR NUEVO PERSONAJE</h1>
+                            <p className="text-[#c8aa6e] text-xs font-bold uppercase tracking-widest">Ficha de personaje · Campaña</p>
                         </div>
                     </div>
                     <button
                         onClick={handleSave}
                         disabled={isSaving}
-                        className={`flex items-center gap-2 px-8 py-3 font-bold font-['Cinzel'] uppercase tracking-wider rounded-sm shadow-lg transition-all ${isSaving ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-[#c8aa6e] hover:bg-[#d97706] text-[#0b1120]'}`}
+                        className={`flex items-center gap-2 px-5 md:px-8 py-3 font-bold font-['Cinzel'] uppercase tracking-wider rounded-sm shadow-lg transition-all ${isSaving ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-[#c8aa6e] hover:bg-[#d97706] text-[#0b1120]'}`}
                     >
                         {isSaving ? (
                             <div className="flex items-center gap-2">
@@ -326,7 +232,8 @@ export const CharacterCreatorView = ({ onBack, onSave }) => {
                     </button>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+                {saveError && <p role="alert" className="mb-6 border-l-2 border-red-400 px-3 py-2 text-sm text-red-200">{saveError}</p>}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-12">
                     {/* Left Column: ADVANCED IMAGE EDITOR */}
                     <div className="space-y-6">
                         <div className="flex gap-2">
@@ -473,66 +380,63 @@ export const CharacterCreatorView = ({ onBack, onSave }) => {
                                 <User className="w-5 h-5" /> Información Básica
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="col-span-2">
-                                    <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Nombre del Personaje</label>
-                                    <input type="text" name="name" value={formData.name} onChange={handleInputChange} className="w-full bg-[#0b1120] border border-slate-700 p-3 rounded text-[#f0e6d2] font-['Cinzel'] text-lg focus:border-[#c8aa6e] outline-none" placeholder="Ej: CUATRO TORRES" />
+                                <div className="md:col-span-2">
+                                    <label htmlFor="character-create-name" className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Nombre del Personaje</label>
+                                    <input type="text" id="character-create-name" name="name" value={formData.name} onChange={handleInputChange} className="w-full bg-[#0b1120] border border-slate-700 p-3 rounded text-[#f0e6d2] font-['Cinzel'] text-lg focus:border-[#c8aa6e] outline-none" placeholder="Ej: CUATRO TORRES" />
                                 </div>
-                                <div className="col-span-2">
-                                    <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Concepto / Título</label>
-                                    <input type="text" name="subtitle" value={formData.subtitle} onChange={handleInputChange} className="w-full bg-[#0b1120] border border-slate-700 p-3 rounded text-slate-300 text-sm tracking-wider focus:border-[#c8aa6e] outline-none" placeholder="Ej: EL CABALLERO DE LAS TRES ESPADAS" />
+                                <div className="md:col-span-2">
+                                    <label htmlFor="character-create-subtitle" className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Concepto / Título</label>
+                                    <input type="text" id="character-create-subtitle" name="subtitle" value={formData.subtitle} onChange={handleInputChange} className="w-full bg-[#0b1120] border border-slate-700 p-3 rounded text-slate-300 text-sm tracking-wider focus:border-[#c8aa6e] outline-none" placeholder="Ej: EL CABALLERO DE LAS TRES ESPADAS" />
                                 </div>
-                                <div className="col-span-2">
-                                    <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Descripción</label>
-                                    <textarea name="description" value={formData.description} onChange={handleInputChange} className="w-full bg-[#0b1120] border border-slate-700 p-3 rounded text-slate-400 text-sm h-24 focus:border-[#c8aa6e] outline-none resize-none" placeholder="Breve historia o descripción visual..." />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="bg-[#161f32]/50 p-6 rounded border border-slate-700">
-                            <h3 className="text-[#c8aa6e] font-['Cinzel'] text-lg mb-4 flex items-center gap-2">
-                                <Shield className="w-5 h-5" /> Atributos Iniciales
-                            </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="md:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
-                                    {['destreza', 'vigor', 'intelecto', 'voluntad'].map(attr => (
-                                        <div key={attr} className="flex flex-col items-center">
-                                            <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-2 capitalize">{attr}</label>
-                                            <DiceSelector
-                                                value={formData.attributes[attr]}
-                                                onChange={(val) => handleAttributeChange(attr, val)}
-                                            />
-                                        </div>
-                                    ))}
+                                <div className="md:col-span-2">
+                                    <label htmlFor="character-create-description" className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Descripción</label>
+                                    <textarea id="character-create-description" name="description" value={formData.description} onChange={handleInputChange} className="w-full bg-[#0b1120] border border-slate-700 p-3 rounded text-slate-400 text-sm h-24 focus:border-[#c8aa6e] outline-none resize-none" placeholder="Breve historia o descripción visual..." />
                                 </div>
                             </div>
                         </div>
 
-                        <div className="bg-[#161f32]/50 p-6 rounded border border-slate-700">
+                        <div className="bg-[#161f32]/50 p-4 md:p-6 rounded border border-slate-700">
                             <h3 className="text-[#c8aa6e] font-['Cinzel'] text-lg mb-4 flex items-center gap-2">
-                                <Activity className="w-5 h-5" /> ESTADÍSTICAS (Max Bloques)
+                                <Dices className="w-5 h-5" /> Dados de acción
                             </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                                {[
-                                    { id: 'postura', label: 'Postura', icon: <Shield className="w-4 h-4 text-green-400" /> },
-                                    { id: 'vida', label: 'Vida', icon: <Activity className="w-4 h-4 text-red-400" /> },
-                                    { id: 'ingenio', label: 'Ingenio', icon: <Zap className="w-4 h-4 text-blue-400" /> },
-                                    { id: 'cordura', label: 'Cordura', icon: <Brain className="w-4 h-4 text-purple-400" /> },
-                                    { id: 'armadura', label: 'Armadura', icon: <Shield className="w-4 h-4 text-slate-400" /> },
-                                ].map((stat) => (
-                                    <div key={stat.id} className="bg-[#0b1120] p-3 rounded border border-slate-800 text-center">
-                                        <div className="flex justify-center mb-2">{stat.icon}</div>
-                                        <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">{stat.label}</label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            max="10"
-                                            value={formData.stats[stat.id].max}
-                                            onChange={(e) => handleStatChange(stat.id, 'max', parseInt(e.target.value))}
-                                            className="w-12 mx-auto bg-slate-800 border-none rounded text-center text-[#f0e6d2] font-bold"
-                                        />
+                            <div className="grid grid-cols-3 gap-3">
+                                {campaignSheet.actionDice.map((die, index) => (
+                                    <div key={index} className="flex flex-col items-center gap-2 py-3 bg-[#0b1120] border border-slate-800 rounded">
+                                        <span className="text-[10px] uppercase tracking-wider text-slate-500">Dado {index + 1}</span>
+                                        <DiceSelector value={die} allowUnset ariaLabel={`Dado de acción ${index + 1}`}
+                                            menuAlign={index === 0 ? 'start' : index === 2 ? 'end' : 'center'}
+                                            onChange={(value) => setCampaignSheet(previous => ({
+                                                ...previous,
+                                                actionDice: previous.actionDice.map((entry, dieIndex) => dieIndex === index ? value : entry),
+                                            }))} />
+                                        <span className="text-xs font-bold uppercase text-[#c8aa6e]">{die || '—'}</span>
                                     </div>
                                 ))}
                             </div>
+                        </div>
+
+                        <div className="bg-[#161f32]/50 p-4 md:p-6 rounded border border-slate-700">
+                            <h3 className="text-[#c8aa6e] font-['Cinzel'] text-lg mb-2">Estadísticas iniciales</h3>
+                            <p className="text-sm text-slate-400 mb-4">Vida y Mente empiezan al máximo indicado. Puedes dejar valores sin definir y editarlos después en tu ficha.</p>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {[
+                                    { id: 'vida', label: 'Vida', Icon: Heart, color: '#e7a5ad' },
+                                    { id: 'mente', label: 'Mente', Icon: Brain, color: '#bfa5df' },
+                                    { id: 'movilidad', label: 'Movilidad', Icon: Footprints, color: '#89c4e4' },
+                                    { id: 'armaduraRd', label: 'Armadura · RD', Icon: Shield, color: '#b9b5ad' },
+                                ].map(({ id, label, Icon, color }) => (
+                                    <label key={id} className="flex flex-col items-center gap-2 border-b border-[#c8aa6e]/20 pb-2">
+                                        <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                            <Icon className="w-4 h-4" style={{ color }} />{label}
+                                        </span>
+                                        <input type="text" inputMode="numeric" pattern="[0-9]*" autoComplete="off"
+                                            aria-label={label} placeholder="—" className="campaign-stat-number"
+                                            value={(['vida', 'mente'].includes(id) ? campaignSheet[id].max : campaignSheet[id]) ?? ''}
+                                            onChange={(event) => handleInitialStatChange(id, event.target.value)} />
+                                    </label>
+                                ))}
+                            </div>
+                            <p className="text-sm text-slate-400 mt-5">Al guardar se abrirá tu ficha para añadir equipo, claves y talentos.</p>
                         </div>
 
                     </div>

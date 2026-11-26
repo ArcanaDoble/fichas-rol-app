@@ -18,6 +18,11 @@ describe('formatEquipmentSummary', () => {
     })).toBe('Armadura · CD 7');
   });
 
+  test('muestra la RD propia del equipo de Campaña', () => {
+    expect(formatEquipmentSummary({ type: 'armor', rd: 3, defenseClass: 7 }, true))
+      .toBe('Armadura · RD 3');
+  });
+
   test('usa la descripción como salida segura para objetos sin perfil de combate', () => {
     expect(formatEquipmentSummary({
       type: 'object',

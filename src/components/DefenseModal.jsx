@@ -12,7 +12,7 @@ import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { nanoid } from 'nanoid';
 import { saveTokenSheet } from '../utils/token';
-import { addSpeedForToken, consumeStatForToken } from '../utils/initiative';
+import { consumeStatForToken } from '../utils/tokenResources';
 import { buildDamageEventWrite } from '../utils/damageEvents';
 
 const atributoColor = {
@@ -102,14 +102,6 @@ const DefenseModal = ({
     if (!val) return '';
     return String(val).split(/[ (]/)[0];
   };
-  const getSpeedConsumption = (equipment) => {
-    if (!equipment) return 0;
-    const consumo = equipment.consumo || '';
-    const yellowDotCount = (consumo.match(/🟡/g) || []).length;
-    if (yellowDotCount) return yellowDotCount;
-    const parsed = parseInt(consumo, 10);
-    return isNaN(parsed) ? 0 : parsed;
-  };
   const getIngenioConsumption = (equipment) => {
     if (!equipment) return 0;
     const consumo = equipment.consumo || '';
@@ -153,7 +145,6 @@ const DefenseModal = ({
 
   const [choice, setChoice] = useState('');
   const [damage, setDamage] = useState('');
-  const [speedCost, setSpeedCost] = useState(0);
   const [ingenioCost, setIngenioCost] = useState(0);
   const [loading, setLoading] = useState(false);
   const [disabledTraits, setDisabledTraits] = useState([]);
@@ -416,7 +407,6 @@ const DefenseModal = ({
 
       setLoading(false);
       onClose(result);
-      await addSpeedForToken(target, speedCost);
       await consumeStatForToken(target, 'ingenio', ingenioCost, pageId);
     } catch (e) {
       setLoading(false);
@@ -458,7 +448,6 @@ const DefenseModal = ({
                     );
                     const dmg = item?.dano ?? item?.poder ?? '';
                     setDamage(parseDamage(dmg));
-                    setSpeedCost(getSpeedConsumption(item));
                     setIngenioCost(getIngenioConsumption(item));
                   }}
                   className="w-full bg-gray-700 text-white"
@@ -484,10 +473,7 @@ const DefenseModal = ({
                       className="w-full mt-2 bg-gray-700 text-white px-2 py-1"
                       placeholder="Daño"
                     />
-                    <p className="text-sm text-gray-300 mt-1">
-                      Consumo: 🟡{speedCost}
-                      {ingenioCost > 0 && <> {' '}🔵{ingenioCost}</>}
-                    </p>
+                    {ingenioCost > 0 && <p className="text-sm text-gray-300 mt-1">Consumo: 🔵{ingenioCost}</p>}
                     {attrTraitDetails.length > 0 && (
                       <p className="text-sm text-gray-300 mt-1 flex flex-wrap">
                         {attrTraitDetails.map(({ attr, mult, trait }) => {

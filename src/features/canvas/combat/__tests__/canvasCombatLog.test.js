@@ -41,6 +41,17 @@ test('records real rolls, equipment, spending and life loss in the original log 
   expect(JSON.stringify(entry)).not.toContain('undefined');
 });
 
+test('an area spell records its shared casting costs once while every target keeps its own defense', () => {
+  const pending = { ...args.pending, spellId: 'fireball', blastId: 'cast', manaSpent: 1 };
+  const first = buildCanvasCombatLog({ ...args, pending: { ...pending, blastIndex: 0 } });
+  const second = buildCanvasCombatLog({ ...args, pending: { ...pending, blastIndex: 1 } });
+  expect(first.resourcesSpent.filter(resource => resource.side === 'attacker').map(resource => resource.label))
+    .toEqual(['1 copia preparada', '1 de Maná', '1 dado(s) de acción']);
+  expect(second.resourcesSpent.filter(resource => resource.side === 'attacker')).toEqual([]);
+  expect(second.resourcesSpent.filter(resource => resource.side === 'target')).toEqual([{ side: 'target', label: 'Acción principal' }]);
+  expect(second.attackerDice).toEqual(first.attackerDice);
+});
+
 test('keeps attacker and defender threat rolls separate after enemy defense', () => {
   const entry = buildCanvasCombatLog({ ...args, pending: { ...args.pending,
     attackThreatUsed: { value: 6, sides: 8, source: 'stored' }, usedThreat: true,

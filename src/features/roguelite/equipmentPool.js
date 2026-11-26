@@ -483,6 +483,15 @@ export const reconcileEquippedItemsWithInventory = (equippedItems = {}, inventor
     ),
   };
 
+  if (Object.prototype.hasOwnProperty.call(normalized, 'reinforcement')) {
+    reconciled.reinforcement = findInventoryCopy(
+      [...pool.armor, ...pool.accessories],
+      normalized.reinforcement,
+      usedInstanceIds,
+      'armor',
+    );
+  }
+
   Object.keys(normalized).forEach((slot) => {
     if (slot.startsWith('belt_')) {
       reconciled[slot] = findInventoryCopy(

@@ -1,0 +1,31 @@
+{
+  "verifiedAtUtc": "2026-10-21T00:57:11.292314+00:00",
+  "release": "parry-parada-wording-and-master-reopen",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.3f6514d9.js",
+      "httpStatus": 200,
+      "sha256Matches": true
+    },
+    "main.css": {
+      "path": "/static/css/main.ff32fafb.css",
+      "httpStatus": 200,
+      "sha256Matches": true
+    }
+  },
+  "testSuitesPassed": 3,
+  "testsPassed": 15,
+  "testsLog": "output/playwright/parry-wording-reopen-tests.log",
+  "regressionBeforeFixLog": "output/playwright/parry-reopen-before.log",
+  "masterMenuReopenCycles": 3,
+  "buildLog": "output/playwright/parry-wording-reopen-build.log",
+  "deployLog": "output/playwright/parry-wording-reopen-deploy.log",
+  "previousFullSuiteRelease": "room-release.json",
+  "productionRoomWritesForVerification": 0,
+  "firestoreRulesChanged": false,
+  "browserVisualVerification": "production room with local in-memory transport, desktop and 390x844 mobile"
+}

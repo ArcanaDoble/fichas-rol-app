@@ -1,0 +1,46 @@
+{
+  "verifiedAtUtc": "2026-10-21T22:15:34.767331+00:00",
+  "release": "campaign-roster-allegiance",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.acfba5ca.js",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "5afe657abbd315118d7f98e372b6818cfacbc45bcb6a93ca0ee1e880c8bb1795"
+    },
+    "main.css": {
+      "path": "/static/css/main.e32e0d52.css",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "3be64a01f19b7f0baa979b2ad1c257abeff5b6160d7d6b59b1f0ca3ef1bf8ce2"
+    }
+  },
+  "buildLog": "output/playwright/campaign-allegiance-build.log",
+  "testLog": "output/playwright/campaign-allegiance-all-tests.log",
+  "deployLog": "output/playwright/campaign-allegiance-deploy.log",
+  "tests": {
+    "suitesPassed": 226,
+    "testsPassed": 1572,
+    "testsSkipped": 1
+  },
+  "verification": [
+    "Legacy templates default to ally",
+    "Role persists when saving and reopening",
+    "Save-before-deploy preserves latest role",
+    "Custom allied team reused; enemy avoids normalized player-team collisions",
+    "Real editor and Canvas spawn service verified using local memory transport and production CSS",
+    "Desktop 1280px, mobile 412px and 320px; choice targets at least 44px high"
+  ],
+  "evidence": [
+    "evidence/enemy-desktop.png",
+    "evidence/enemy-mobile.png",
+    "evidence/ally-small-mobile.png",
+    "evidence/deployment-both-mobile.png"
+  ],
+  "productionGameWritesForVerification": 0,
+  "firestoreRulesChanged": false
+}

@@ -20,6 +20,7 @@
 .noma-token-life [data-filled='false'] .noma-token-life-piece { stroke: #39343f; }
 .noma-token-life[data-selected='true'] [data-filled='true'] .noma-token-life-piece { filter: drop-shadow(0 0 2px #e7a0a850); }
 .noma-token-life-ribbon { display: flex; justify-content: center; flex-wrap: wrap; }
+.noma-token-life-continuous { background: #35333d; box-shadow: 0 0 0 1px #101018; transform: skewX(-18deg); overflow: hidden; }
 .noma-token-life-ribbon i { background: #3b3340; box-shadow: 0 0 0 1px #101018; transform: skewX(-18deg); }
 .noma-token-life-ribbon i[data-filled='true'] { background: #e7a0a8; }
 .noma-token-life-count { display: flex; align-items: baseline; gap: 3px; font: 13px/1.1 Alegreya, Georgia, serif; color: #b99ca5; font-variant-numeric: tabular-nums; }

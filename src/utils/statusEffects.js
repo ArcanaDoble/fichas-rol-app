@@ -148,14 +148,15 @@ export const DEFAULT_STATUS_EFFECTS = {
         hex: '#10b981',
         desc: 'No puedes recuperar Vida por ninguna fuente. No causa daño periódico ni se acumula. Dura hasta el final del combate o hasta que un Antídoto u otro efecto específico lo elimine.'
     },
-    'herido': {
-        label: 'Herido',
-        iconName: 'HeartCrack',
-        color: 'text-red-600',
-        bg: 'bg-red-600/10',
-        border: 'border-red-600/50',
-        hex: '#dc2626',
-        desc: 'Puede ser utilizado por el scheduler como una clave que garantiza un fracaso. Desaparece tras un descanso largo.'
+    'barrera': {
+        label: 'Barrera',
+        imageUrl: '/estados/Barrera.svg',
+        iconName: 'Shield',
+        color: 'text-[#dfc885]',
+        bg: 'bg-[#dfc885]/10',
+        border: 'border-[#dfc885]/50',
+        hex: '#dfc885',
+        desc: '+1 CD temporal hasta el final del combate. No se acumula. Retirar este estado elimina también su protección y efecto visual.'
     },
     'iluminado': {
         label: 'Iluminado',
@@ -197,7 +198,7 @@ export const DEFAULT_STATUS_EFFECTS = {
 
 export const PRONE_STATUS_IDS = ['derribado', 'conmocionado'];
 export const NON_SELECTABLE_STATUS_EFFECT_IDS = ['conmocionado', 'ralentizado'];
-export const DEPRECATED_STATUS_EFFECT_IDS = ['ensordecido'];
+export const DEPRECATED_STATUS_EFFECT_IDS = ['ensordecido', 'herido'];
 
 export const mergeStatusEffectsConfig = (configuredEffects = {}) => {
     const activeConfiguredEffects = Object.fromEntries(
@@ -208,7 +209,7 @@ export const mergeStatusEffectsConfig = (configuredEffects = {}) => {
 
     const orderedEffects = {};
     Object.entries(DEFAULT_STATUS_EFFECTS).forEach(([id, defaultEffect]) => {
-        if (id === HIDDEN_STATUS_EFFECT_ID || activeConfiguredEffects[id]) {
+        if (id === HIDDEN_STATUS_EFFECT_ID || id === 'barrera' || activeConfiguredEffects[id]) {
             orderedEffects[id] = activeConfiguredEffects[id] || defaultEffect;
         }
     });
@@ -224,7 +225,7 @@ export const ESTADOS = Object.entries(DEFAULT_STATUS_EFFECTS)
     .map(([id, config]) => ({
     id,
     name: config.label,
-    img: `/estados/${config.imageLabel || config.label}.webp`,
+    img: config.imageUrl || `/estados/${config.imageLabel || config.label}.webp`,
     desc: config.desc,
     hex: config.hex
 }));

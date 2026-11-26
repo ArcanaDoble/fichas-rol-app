@@ -1,0 +1,38 @@
+{
+  "feature": "Borde rojo exclusivamente con teamId enemies",
+  "verifiedAt": "2026-10-22T16:02:49.564Z",
+  "url": "https://base-de-datos-noma.web.app",
+  "assets": [
+    {
+      "asset": "/static/js/main.ea5d9429.js",
+      "sha256": "80fa594b6c0b570651657d541f9c7785617d51b6c0c7ed4c7f248afca509f7b1"
+    },
+    {
+      "asset": "/static/css/main.1996dd4a.css",
+      "sha256": "1057fc107ad7e3fa09622e9b2fb75af917a59bc2314275c0bd59d8ac1f5912ef"
+    }
+  ],
+  "tests": {
+    "suites": 2,
+    "passed": 28
+  },
+  "browser": {
+    "engine": "Edge",
+    "roles": [
+      "master",
+      "player"
+    ],
+    "sizes": [
+      "1280x900",
+      "412x915"
+    ],
+    "teams": [
+      "enemies",
+      "party",
+      "hostiles"
+    ],
+    "result": "Pass: live color changes, gold allies, red selection"
+  },
+  "build": "success",
+  "deploy": "success"
+}

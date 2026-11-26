@@ -1,0 +1,141 @@
+{
+  "verifiedAt": "2026-11-04T22:35:13.050Z",
+  "project": "base-de-datos-noma",
+  "legacyUrl": "https://base-de-datos-noma.web.app",
+  "method": "Clone existing live Hosting version; no application rebuild or database migration",
+  "unavailableSiteId": "noma (reserved by another project)",
+  "deploymentTargets": [
+    {
+      "target": "legacy",
+      "site": "base-de-datos-noma"
+    },
+    {
+      "target": "noma",
+      "site": "nomarol"
+    }
+  ],
+  "source": {
+    "url": "https://base-de-datos-noma.web.app",
+    "releaseTime": "2026-10-29T17:03:39.416Z",
+    "version": "projects/base-de-datos-noma/sites/base-de-datos-noma/versions/2f2afeb6ce773e1c",
+    "fileCount": "267",
+    "versionBytes": "73397464",
+    "config": {
+      "headers": [
+        {
+          "headers": {
+            "Cache-Control": "public, max-age=31536000, immutable"
+          },
+          "glob": "/static/**"
+        },
+        {
+          "headers": {
+            "Cache-Control": "no-cache, no-store, must-revalidate"
+          },
+          "glob": "/**"
+        }
+      ],
+      "rewrites": [
+        {
+          "glob": "**",
+          "path": "/index.html"
+        }
+      ]
+    }
+  },
+  "target": {
+    "url": "https://nomarol.web.app",
+    "releaseTime": "2026-11-04T22:29:55.556Z",
+    "version": "projects/base-de-datos-noma/sites/nomarol/versions/76b8c480b29c21f0",
+    "fileCount": "267",
+    "versionBytes": "73397464",
+    "config": {
+      "headers": [
+        {
+          "headers": {
+            "Cache-Control": "public, max-age=31536000, immutable"
+          },
+          "glob": "/static/**"
+        },
+        {
+          "headers": {
+            "Cache-Control": "no-cache, no-store, must-revalidate"
+          },
+          "glob": "/**"
+        }
+      ],
+      "rewrites": [
+        {
+          "glob": "**",
+          "path": "/index.html"
+        }
+      ]
+    }
+  },
+  "identicalIndexSha256": "eb8c8456843280aeefd964a18133bc38589efe6c8efb02f237725b83c7ca2996",
+  "assets": [
+    {
+      "path": "/static/css/main.7f40ae45.css",
+      "sha256": "59a232ba892b5a658e3423ea6554a6b6a99a382eb782833e69b8f9a1cbda1555",
+      "bytes": 709594
+    },
+    {
+      "path": "/static/js/main.1f770591.js",
+      "sha256": "0f58e308de2f28d26d861f0012f23f37a21eb82d94add0be88d42b5b5bc6b799",
+      "bytes": 5352816
+    },
+    {
+      "path": "/static/js/398.c2f8e5a8.chunk.js",
+      "sha256": "33ff35624ae48f3d13ceb2987d062f9001d2a59c2dccbaceabe1701fb5bc1461",
+      "bytes": 42564
+    },
+    {
+      "path": "/static/js/24.8efe4b22.chunk.js",
+      "sha256": "103ac5417cd3825dc4a97d65829ac0a4dd39a64378fcbf7153cbc248ac965e73",
+      "bytes": 15580
+    },
+    {
+      "path": "/static/js/369.32322afa.chunk.js",
+      "sha256": "f37075642a5e3bffa123fa9445148d1be54ef9828769e7184539870bd89036f1",
+      "bytes": 125251
+    },
+    {
+      "path": "/static/js/284.bfca7107.chunk.js",
+      "sha256": "a6195369815a20a5293d25c7f4e56736687b75dc15bc09329d7456777e84deb1",
+      "bytes": 6426
+    },
+    {
+      "path": "/static/js/453.b98f43f7.chunk.js",
+      "sha256": "4ec4ef7f98aeb325aa91d6c9c6541593bb7a954619072e6d0e844f6a57cb1f89",
+      "bytes": 4482
+    },
+    {
+      "path": "/static/media/fog-shader-portrait.5982fe95dadca0f96af4.webp",
+      "sha256": "fd4f52b36dac354157a1302a8a708e889bcf49c8e3606e911e20c6a64c16ae6d",
+      "bytes": 86520
+    },
+    {
+      "path": "/static/media/fog-shader-zone.7ab3182e6efab605c899.webp",
+      "sha256": "7d972dbb73a8d7168c8715c74f218b9e399a8d62e7bc64e5eb3ea972e48021e8",
+      "bytes": 76050
+    },
+    {
+      "path": "/static/media/cinzel-latin-700.870b55242167a32533c6.woff2",
+      "sha256": "8efa224fe70fef188a39c095e218b81fd31061809f2752537e33a9ec7b9c2263",
+      "bytes": 15184
+    },
+    {
+      "path": "/yerma/Yerma.webp",
+      "sha256": "9cbc4a2e32e211899b8b377c04a223d86cdf57989aa2fd5acedc3714188570d3",
+      "bytes": 55232
+    }
+  ],
+  "spaRewrite": true,
+  "storagePreflight": {
+    "status": 200,
+    "allowedOrigin": "*",
+    "writePerformed": false
+  },
+  "firebaseCliConfigValidated": true,
+  "preferredUrl": "https://nomarol.web.app"
+}

@@ -57,6 +57,27 @@ export const snapWorldPositionToGrid = (worldPos = {}, config = {}, itemSize = {
     };
 };
 
+export const snapWorldPositionToWallEndpoints = (worldPos, items = [], config = {}, options = {}) => {
+    const shouldSnap = options.snapToGrid ?? config.snapToGrid;
+    let snappedPos = shouldSnap ? snapWorldPositionToGrid(worldPos, config) : { ...worldPos };
+    const zoom = Number(options.zoom) > 0 ? Number(options.zoom) : 1;
+    let minDistance = 15 / zoom;
+
+    for (const wall of items) {
+        // An endpoint being edited must not magnetize to its own previous position.
+        if (wall.type !== 'wall' || (options.excludeWallId != null && wall.id === options.excludeWallId)) continue;
+        for (const point of [{ x: wall.x1, y: wall.y1 }, { x: wall.x2, y: wall.y2 }]) {
+            const distance = Math.hypot(worldPos.x - point.x, worldPos.y - point.y);
+            if (distance < minDistance) {
+                snappedPos = point;
+                minDistance = distance;
+            }
+        }
+    }
+
+    return snappedPos;
+};
+
 export const getCenteredSpawnPosition = (config = {}, itemSize = {}, options = {}) => {
     const width = Number(itemSize.width) || Number(config.cellWidth) || DEFAULT_GRID_CONFIG.cellWidth;
     const height = Number(itemSize.height) || Number(config.cellHeight) || DEFAULT_GRID_CONFIG.cellHeight;
@@ -153,7 +174,7 @@ export const linesIntersect = (x1, y1, x2, y2, x3, y3, x4, y4) => {
 };
 
 // Genera los puntos de un polígono de sombra proyectado
-export const calculateShadowPoints = (lx, ly, x1, y1, x2, y2, projection = 10000) => {
+export const calculateShadowPoints = (lx, ly, x1, y1, x2, y2, projection = 10000, nudge = 1.5) => {
     // Protección contra valores no numéricos que romperían el SVG en móvil
     if (!Number.isFinite(lx) || !Number.isFinite(ly) || !Number.isFinite(x1) || !Number.isFinite(y1) || !Number.isFinite(x2) || !Number.isFinite(y2)) {
         return "0,0 0,0 0,0 0,0";
@@ -163,8 +184,6 @@ export const calculateShadowPoints = (lx, ly, x1, y1, x2, y2, projection = 10000
     const dx = x2 - x1;
     const dy = y2 - y1;
     const len = Math.sqrt(dx * dx + dy * dy) || 1;
-    const nudge = 1.5; // Pequeño margen para solapar sombras en las uniones
-
     const nx1 = x1 - (dx / len) * nudge;
     const ny1 = y1 - (dy / len) * nudge;
     const nx2 = x2 + (dx / len) * nudge;

@@ -1,0 +1,39 @@
+{
+  "feature": "Nombre de tarjeta editable sin recortar espacios ni reponer texto al borrar",
+  "url": "https://base-de-datos-noma.web.app",
+  "verifiedAt": "2026-10-22T16:12:05.089Z",
+  "assets": [
+    {
+      "asset": "/static/js/main.592654bd.js",
+      "sha256": "cd77590ca1f0c75efd85ddcd9bac4e7bb874f96f8ecc189e21778014be901f68"
+    },
+    {
+      "asset": "/static/css/main.1996dd4a.css",
+      "sha256": "1057fc107ad7e3fa09622e9b2fb75af917a59bc2314275c0bd59d8ac1f5912ef"
+    }
+  ],
+  "tests": {
+    "suites": 3,
+    "passed": 14
+  },
+  "browser": {
+    "engine": "Edge",
+    "sizes": [
+      "1280x900",
+      "412x915"
+    ],
+    "allegiance": [
+      "ally",
+      "enemy"
+    ],
+    "checks": [
+      "empty draft",
+      "character by character spaces",
+      "description edit preserves name",
+      "close and reopen",
+      "save and reload from archive"
+    ]
+  },
+  "build": "success",
+  "deploy": "success"
+}

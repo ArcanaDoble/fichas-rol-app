@@ -1,6 +1,40 @@
-import React from 'react';
-import { Check, Crosshair, Dices, RotateCcw, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Check, Crosshair, Dices, RotateCcw, UserRound, X } from 'lucide-react';
 import './AreaPlacementOverlay.css';
+
+const TargetPortrait = ({ image, circular }) => {
+    const [failed, setFailed] = useState(false);
+    return image && !failed
+        ? <img src={image} alt="" decoding="async" draggable={false} data-circular={circular}
+            onError={() => setFailed(true)} />
+        : <UserRound className="noma-area-target__fallback" aria-hidden="true" />;
+};
+
+const SpellTargetSelector = ({ system }) => {
+    const selectedRef = useRef(null);
+    const selectedId = system.placement?.targetId;
+    useEffect(() => {
+        selectedRef.current?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    }, [selectedId]);
+    return <div className="noma-area-controls__targets" role="group"
+        aria-label={system.session?.definitionId === 'runic-barrier' ? 'Objetivo de Barrera rúnica' : system.session?.chainId ? 'Segundo objetivo de Cadena arcana' : 'Objetivo de Proyectil arcano'}>
+        {system.targetOptions?.length ? system.targetOptions.map(option => {
+            const selected = selectedId === option.targetId;
+            return <button type="button" key={option.targetId} className="noma-area-target"
+                ref={selected ? selectedRef : undefined} disabled={system.isCommitting} aria-pressed={selected}
+                aria-label={`${option.targetName} · ${option.distance} de ${option.range} casillas`}
+                title={option.targetName} onClick={() => system.selectTarget(option.targetId)}>
+                <span className="noma-area-target__portrait" aria-hidden="true">
+                    <TargetPortrait key={option.targetImage || 'empty'} image={option.targetImage} circular={option.targetIsCircular} />
+                    <span className="noma-area-target__selected"><Check size={12} /></span>
+                </span>
+                <span className="noma-area-target__name">{option.targetName}</span>
+                <span className="noma-area-target__distance">{option.distance} / {option.range} casillas</span>
+            </button>;
+        }) : <p className="noma-area-controls__targets-empty">{system.session?.definitionId === 'runic-barrier'
+            ? 'No hay aliados visibles sin Barrera dentro del alcance.' : 'No hay enemigos localizados con un recorrido válido.'}</p>}
+    </div>;
+};
 
 export const getThrowTrajectory = (source, placement, zoom = 1) => {
     if (!source || !placement) return null;
@@ -34,23 +68,31 @@ export const getThrowTrajectory = (source, placement, zoom = 1) => {
 export const AreaPlacementOverlay = ({ system, source = system?.trajectorySource || system?.sourceToken, zoom = 1 }) => {
     const placement = system?.placement;
     if ((!system?.isPlacing && !system?.isConfirming) || !placement) return null;
+    if (['arcane-projectile', 'runic-barrier'].includes(system.session?.definitionId) && !placement.valid) return null;
+    const barrier = system.session?.definitionId === 'runic-barrier';
     const isExplosiveBomb = system.session?.definitionId === 'explosive-bomb';
     const isTarBomb = system.session?.definitionId === 'tar-bomb';
     const maxRange = placement.range;
     const scale = Math.max(0.1, Number(zoom) || 1);
-    const trajectory = getThrowTrajectory(source, placement, scale);
+    const route = system.session?.definitionId === 'arcane-projectile' ? placement.route : null;
+    const mist = system.session?.definitionId === 'arcane-mist';
+    const trajectory = route?.length ? { path: route.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' '),
+        start: route[0], end: route[route.length - 1], label: route[Math.floor(route.length / 2)] }
+        : getThrowTrajectory(source, mist ? placement.basePlacement || placement : placement, scale);
     const labelTransform = `translate(-50%, -50%) scale(${1 / scale})`;
     return (
-        <div className="noma-area-overlay" data-area-placement-phase={system.isConfirming ? 'confirm' : 'place'} data-valid={placement.valid} data-explosive={isExplosiveBomb}>
+        <div className="noma-area-overlay" data-area-placement-phase={system.isConfirming ? 'confirm' : 'place'} data-valid={placement.valid} data-explosive={isExplosiveBomb} data-mist={mist} data-barrier={barrier}>
             <div className="noma-area-template" style={{ left: placement.x, top: placement.y, width: placement.width, height: placement.height, borderWidth: 1.5 / scale }} data-area-placement-valid={placement.valid ? 'true' : 'false'}>
-                {placement.cells.map((cell, index) => (
+                {!barrier && placement.cells.map((cell, index) => (
                     <span key={`${cell.column}:${cell.row}`} className={`noma-area-cell${(isExplosiveBomb || isTarBomb) && cell.column === placement.impactCell?.column && cell.row === placement.impactCell?.row ? ' noma-area-cell--impact' : ''}`} style={{
-                        left: `${(index % placement.columns) * (100 / placement.columns)}%`,
-                        top: `${Math.floor(index / placement.columns) * (100 / placement.rows)}%`,
+                        left: `${(mist ? cell.column - Math.min(...placement.cells.map(value => value.column)) : index % placement.columns) * (100 / placement.columns)}%`,
+                        top: `${(mist ? cell.row - Math.min(...placement.cells.map(value => value.row)) : Math.floor(index / placement.columns)) * (100 / placement.rows)}%`,
                         width: `${100 / placement.columns}%`, height: `${100 / placement.rows}%`,
                     }} />
                 ))}
-                <span className="noma-area-center" style={{ transform: labelTransform }}><Crosshair size={12} /> {(isExplosiveBomb || isTarBomb) ? (system.isConfirming ? 'Área 2×2' : 'Impacto') : `${placement.distance}/${placement.range}`}</span>
+                {!barrier && <span className="noma-area-center" style={{ transform: labelTransform,
+                    ...(mist && placement.basePlacement ? { left: `${(placement.basePlacement.x + placement.basePlacement.width / 2 - placement.x) / placement.width * 100}%`,
+                        top: `${(placement.basePlacement.y + placement.basePlacement.height / 2 - placement.y) / placement.height * 100}%` } : {}) }}><Crosshair size={12} /> {(isExplosiveBomb || isTarBomb) ? (system.isConfirming ? 'Área 2×2' : 'Impacto') : `${placement.distance}/${placement.range}`}</span>}
             </div>
             {trajectory && <>
                 <svg className="noma-area-trajectory" aria-hidden="true">
@@ -77,8 +119,12 @@ export const AreaPlacementControls = ({ system }) => {
     const placement = system.placement;
     const isExplosiveBomb = system.session?.definitionId === 'explosive-bomb';
     const isTarBomb = system.session?.definitionId === 'tar-bomb';
+    const isArcaneProjectile = system.session?.definitionId === 'arcane-projectile';
+    const isTargetSpell = isArcaneProjectile || system.session?.definitionId === 'runic-barrier';
+    const isMist = system.session?.definitionId === 'arcane-mist';
     const impactCommitted = Boolean(isExplosiveBomb && system.session?.context?.impactCommitted);
-    const ready = system.isConfirming && placement?.valid && !system.isCommitting;
+    const ready = system.isConfirming && placement?.valid && !system.isCommitting
+        && (!isTargetSpell || system.targetOptions?.some(option => option.targetId === placement.targetId));
     const resourceValue = Number(system.session?.context?.resource?.value) || 0;
     const maxRange = placement?.range ?? resourceValue;
     const rolls = system.session?.context?.explosiveRolls;
@@ -86,17 +132,18 @@ export const AreaPlacementControls = ({ system }) => {
     const stopPropagation = event => event.stopPropagation();
     return (
         <div className="noma-area-controls-dock" onPointerDown={stopPropagation} onMouseDown={stopPropagation} onTouchStart={stopPropagation} onTouchMove={stopPropagation} onTouchEnd={stopPropagation}>
-            <div className="noma-area-controls" role="group" aria-label={isExplosiveBomb ? 'Lanzamiento de bomba explosiva' : 'Lanzamiento de objeto'} data-explosive={isExplosiveBomb}>
+            <div className="noma-area-controls" role="group" aria-label={system.labels?.group || (isExplosiveBomb ? 'Lanzamiento de bomba explosiva' : 'Lanzamiento de objeto')} data-explosive={isExplosiveBomb} data-target-selection={isTargetSpell} data-mist={isMist}>
                 <div className="noma-area-controls__status">
                     <div className="noma-area-controls__status-line">
                         <Crosshair size={15} />
-                        <span>{isExplosiveBomb
+                        <span>{system.labels?.status || (isExplosiveBomb
                             ? system.isCommitting && !impactCommitted ? 'Lanzando y tirando 2d8…' : ready ? 'Orienta la explosión' : placement && !placement.valid ? placement.reason === 'out-of-range' ? 'Impacto fuera de alcance' : 'Impacto fuera del tablero' : 'Elige la casilla de impacto'
-                            : isTarBomb ? ready ? 'Orienta la brea · 2×2' : 'Elige la casilla de impacto' : ready ? 'Destino preparado' : placement && !placement.valid ? 'Fuera de alcance o del tablero' : 'Coloca la plantilla'}</span>
-                        {placement && <strong>{isExplosiveBomb && impactCommitted ? `−${placement.distance} Presión` : `${placement.distance} / ${maxRange} casillas`}</strong>}
+                            : isTarBomb ? ready ? 'Orienta la brea · 2×2' : 'Elige la casilla de impacto' : ready ? 'Destino preparado' : placement && !placement.valid ? 'Fuera de alcance o del tablero' : 'Coloca la plantilla')}</span>
+                        {placement && Number.isFinite(placement.distance) && <strong>{isExplosiveBomb && impactCommitted ? `−${placement.distance} Presión` : `${placement.distance} / ${maxRange} casillas`}</strong>}
                     </div>
                     <p className="noma-area-controls__hint"><span className="noma-area-controls__touch">Un dedo para fijar · Dos dedos para acercar</span><span className="noma-area-controls__mouse">Clic para fijar · Esc para cancelar</span></p>
                 </div>
+                {isTargetSpell && <SpellTargetSelector system={system} />}
                 {(isExplosiveBomb || isTarBomb) && system.isConfirming && <div className="noma-area-controls__explosion">
                     {isExplosiveBomb && <div className="noma-area-controls__formula" aria-live="polite">
                         <span>Presión compartida</span>
@@ -119,9 +166,9 @@ export const AreaPlacementControls = ({ system }) => {
                     <p className="noma-area-controls__explosion-note">{isTarBomb ? 'Terreno difícil · Inflamable · Hasta el final del combate o hasta arder.' : 'Bomba y dado gastados · Una Presión para aliados y enemigos del área.'}</p>
                 </div>}
                 <div className="noma-area-controls__actions" data-impact-committed={impactCommitted}>
-                    <button type="button" className="noma-area-controls__launch" disabled={!ready} onClick={system.confirm} aria-label={impactCommitted ? 'Confirmar área de explosión' : 'Confirmar uso del objeto'}><Check size={17} />{system.isCommitting ? 'Resolviendo…' : impactCommitted ? 'Confirmar área' : 'Lanzar'}</button>
-                    {!impactCommitted && <button type="button" disabled={!system.isConfirming || system.isCommitting} onClick={system.reposition} aria-label="Recolocar plantilla"><RotateCcw size={15} />Recolocar</button>}
-                    <button type="button" disabled={system.isCommitting} onClick={system.cancel} aria-label={impactCommitted ? 'Cerrar explosión pendiente' : 'Cancelar uso del objeto'}><X size={16} />{impactCommitted ? 'Cerrar' : 'Cancelar'}</button>
+                    <button type="button" className="noma-area-controls__launch" disabled={!ready} onClick={system.confirm} aria-label={system.labels?.confirm || (impactCommitted ? 'Confirmar área de explosión' : 'Confirmar uso del objeto')}><Check size={17} />{system.isCommitting ? 'Resolviendo…' : system.labels?.confirm || (impactCommitted ? 'Confirmar área' : 'Lanzar')}</button>
+                    {!impactCommitted && <button type="button" disabled={(!system.isConfirming && !system.canReposition) || system.isCommitting} onClick={system.reposition} aria-label="Recolocar plantilla"><RotateCcw size={15} />Recolocar</button>}
+                    <button type="button" disabled={system.isCommitting} onClick={system.cancel} aria-label={system.labels?.cancel || (impactCommitted ? 'Cerrar explosión pendiente' : 'Cancelar uso del objeto')}><X size={16} />{impactCommitted ? 'Cerrar' : 'Cancelar'}</button>
                 </div>
             </div>
         </div>

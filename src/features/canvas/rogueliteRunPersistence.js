@@ -112,6 +112,8 @@ export const syncCanvasTokenWithRuntimeProfile = (
   }, {}, {
     scenarioId,
     preserveTokenState: !hasNewerRevision || waitingForScene,
+    // A newer personal snapshot edits portable stats, not scene-local spells.
+    preserveEncounterBarrier: options.preserveEncounterBarrier !== false,
   });
   return waitingForScene ? { ...synced, runRevision: token.runRevision || 0 } : synced;
 };

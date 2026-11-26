@@ -1,3 +1,4 @@
+import { resolveWeaponForm } from '../roguelite/weaponForms';
 import {
   normalizeEquippedWeaponSets,
   resolveEquipmentHandsRequired,
@@ -19,13 +20,19 @@ import {
   resolveEquippedTalentIds,
   resolveRogueliteTalentCatalog,
 } from '../roguelite/talents';
+import {
+  ARCANE_BARRIER_STATUS_ID,
+  hasArcaneBarrier,
+  withoutArcaneBarrierStatus,
+} from '../../utils/arcaneBarrierStatus';
 
 const clampNumber = (value, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(0, parsed) : Math.max(0, Number(fallback) || 0);
 };
 
-const flattenItem = (item, type, slot) => {
+const flattenItem = (original, type, slot) => {
+  const item = resolveWeaponForm(original);
   if (!item || typeof item !== 'object') return null;
   const { payload, ...itemFields } = item;
   const flattened = payload
@@ -61,6 +68,9 @@ export const resolveRogueliteEquippedItems = (equippedItems = {}) => {
     flattenItem(activeSet.mainHand, 'weapon', 'mainHand'),
     flattenItem(activeSet.offHand, 'weapon', 'offHand'),
     flattenItem(normalized.body, 'armor', 'body'),
+    normalized.reinforcement && {
+      ...flattenItem(normalized.reinforcement, 'armor', 'reinforcement'), type: 'armor',
+    },
     flattenItem(normalized.accessory_1, 'access', 'accessory_1'),
     flattenItem(normalized.accessory_2, 'access', 'accessory_2'),
     ...Object.entries(normalized)
@@ -79,13 +89,26 @@ export const resolveRogueliteEquippedItems = (equippedItems = {}) => {
 export const createRogueliteTokenStats = createRogueliteRunStats;
 
 const resolveStatusIds = (sheetData) => (
-  (Array.isArray(sheetData.personalStatusTags) ? sheetData.personalStatusTags : sheetData.tags || [])
+  withoutArcaneBarrierStatus(Array.isArray(sheetData.personalStatusTags) ? sheetData.personalStatusTags : sheetData.tags)
     .map((tag) => String(tag || '').split('|')[0].trim().toLowerCase())
     .filter((tag) => STATUS_EFFECT_IDS.includes(tag))
 );
 
+const keepEncounterBarrier = (token, syncedToken, preserveBarrier) => ({
+  ...syncedToken,
+  status: [
+    ...withoutArcaneBarrierStatus(syncedToken.status),
+    ...(preserveBarrier && hasArcaneBarrier(token) ? [ARCANE_BARRIER_STATUS_ID] : []),
+  ],
+  arcaneBarrier: preserveBarrier && hasArcaneBarrier(token) ? token.arcaneBarrier || null : null,
+});
+
 export const syncCanvasTokenWithSheet = (token, sheetData, catalogs = {}, options = {}) => {
   if (isRogueliteEnemySheet(sheetData)) {
+    const sceneId = options.scenarioId || sheetData.runScenarioId || token.runScenarioId;
+    const preserveBarrier = (options.preserveEncounterBarrier ?? (options.preserveTokenState !== false))
+      && (!token.runScenarioId || !sceneId || token.runScenarioId === sceneId)
+      && (!token.linkedEnemyId || !sheetData.id || token.linkedEnemyId === sheetData.id);
     const portrait = sheetData.image || sheetData.portrait || sheetData.imageSource || sheetData.img || token.portrait || token.img;
     const tokenImage = sheetData.tokenImageSource
       || sheetData.imageSource
@@ -93,7 +116,7 @@ export const syncCanvasTokenWithSheet = (token, sheetData, catalogs = {}, option
       || sheetData.img
       || token.img
       || portrait;
-    return {
+    return keepEncounterBarrier(token, {
       ...token,
       ...sheetData,
       profileType: 'rogueliteEnemy',
@@ -109,10 +132,11 @@ export const syncCanvasTokenWithSheet = (token, sheetData, catalogs = {}, option
       inventory: sheetData.inventory || token.inventory || [],
       equippedItems: sheetData.equippedItems || token.equippedItems || [],
       enemyAbilities: sheetData.enemyAbilities || token.enemyAbilities || [],
+      ...(sceneId ? { runScenarioId: sceneId } : {}),
       velocidad: Number(sheetData.stats?.iniciativa?.current ?? sheetData.velocidad ?? token.velocidad) || 0,
       fixedInitiative: Number(sheetData.stats?.iniciativa?.current ?? sheetData.fixedInitiative ?? token.fixedInitiative) || 0,
       offenseBase: Number(sheetData.stats?.ofensiva?.current ?? sheetData.offenseBase ?? token.offenseBase) || 0,
-    };
+    }, preserveBarrier);
   }
   if (!isRogueliteClassSheet(sheetData)) {
     return syncLegacyTokenWithSheet(token, sheetData, catalogs, options);
@@ -139,6 +163,13 @@ export const syncCanvasTokenWithSheet = (token, sheetData, catalogs = {}, option
   const preserveRuntimeState = options.preserveTokenState !== undefined
     ? options.preserveTokenState
     : isExistingClassToken;
+  const sceneId = options.scenarioId || activeRun.currentScenarioId || token.runScenarioId;
+  // Refreshing a personal run can replace stats/loadout while the scene's
+  // protection remains active. Relinks, new encounters and resets still clear it.
+  const preserveBarrier = (options.preserveEncounterBarrier ?? preserveRuntimeState)
+    && (!token.runId || !sheetData.activeRun?.id || token.runId === activeRun.id)
+    && (!token.runScenarioId || !sceneId || token.runScenarioId === sceneId)
+    && (!token.linkedClassId || token.linkedClassId === sheetData.id);
   const equipmentSource = preserveRuntimeState && token.equipmentLoadout
       ? token.equipmentLoadout
       : hasStoredActiveRun ? activeRun.equippedItems : (sheetData.equippedItems || activeRun.equippedItems);
@@ -266,7 +297,7 @@ export const syncCanvasTokenWithSheet = (token, sheetData, catalogs = {}, option
   );
   const equippedSkills = equippedSkillSlots.filter(Boolean);
 
-  return {
+  return keepEncounterBarrier(token, {
     ...token,
     profileType: 'rogueliteClass',
     proficiencies: sheetData.summary?.proficiencies || sheetData.proficiencies || token.proficiencies || null,
@@ -298,10 +329,12 @@ export const syncCanvasTokenWithSheet = (token, sheetData, catalogs = {}, option
     equippedSkillIds,
     equippedSkillSlots,
     equippedSkills,
+    usedSkillSlots: preserveRuntimeState ? (token.usedSkillSlots || activeRun.usedSkillSlots || []) : (activeRun.usedSkillSlots || []),
+    usedSkillSlotIds: preserveRuntimeState ? (token.usedSkillSlotIds || activeRun.usedSkillSlotIds || []) : (activeRun.usedSkillSlotIds || []),
     equipmentLoadout: equipped.loadout,
     activeWeaponSet: equipped.activeWeaponSet,
     inventory: syncedInventory,
     money: preserveRuntimeState && token.money !== undefined ? token.money : activeRun.money,
     velocidad: token.velocidad || 0,
-  };
+  }, preserveBarrier);
 };

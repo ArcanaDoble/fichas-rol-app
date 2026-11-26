@@ -1,4 +1,7 @@
 .noma-area-overlay { position: absolute; inset: 0; z-index: 47; pointer-events: none; color: #d8bf88; }
+.noma-area-overlay[data-mist="true"] .noma-area-template { border: 0; background: none; }
+.noma-area-overlay[data-mist="true"] .noma-area-cell { border: 1.5px solid currentColor; background: radial-gradient(ellipse, rgb(186 183 216 / 28%), rgb(186 183 216 / 9%)); }
+.noma-area-controls[data-mist="true"] { min-width: 0; }
 .noma-area-overlay[data-valid="false"] { color: #f87171; }
 .noma-area-template { position: absolute; border: solid currentColor; background: rgb(203 213 225 / 8%); }
 .noma-area-cell { position: absolute; border: 1px solid rgb(241 245 249 / 10%); }
@@ -77,3 +80,162 @@
 }
 @media (hover: hover) { .noma-area-controls__actions button:not(:disabled):hover { background: #202a3d; border-color: #c8aa6e; color: #f0e6d2; } .noma-area-controls__actions .noma-area-controls__launch:not(:disabled):hover { background: #dfc58b; color: #0b1120; } }
 @media (pointer: coarse) { .noma-area-controls__touch { display: inline; } .noma-area-controls__mouse { display: none; } }
+
+/* Spell placement belongs to one HUD frame, including targets and mist extension. */
+.noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) {
+    --target-gold: #c8aa6e;
+    --target-ivory: #f0e6d2;
+    --target-muted: #b9ac95;
+    background: #0b1120;
+    border: 1px solid rgb(200 170 110 / 50%);
+    border-radius: 16px;
+    animation: noma-target-selector-enter 180ms cubic-bezier(.16, 1, .3, 1);
+}
+.noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) .noma-area-controls__status {
+    width: auto;
+    max-width: none;
+    margin: 0;
+    padding: 12px 14px 0;
+    border: 0;
+    background: none;
+}
+.noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) .noma-area-controls__status-line {
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    color: var(--target-ivory);
+    font: 600 13px/20px Cinzel, Georgia, serif;
+    text-align: center;
+}
+.noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) .noma-area-controls__status-line > span { overflow-wrap: anywhere; }
+.noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) .noma-area-controls__status-line > svg { color: var(--target-gold); }
+.noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) .noma-area-controls__status-line > strong {
+    margin-left: 0;
+    color: var(--target-gold);
+    font: 600 15px/20px Alegreya, Georgia, serif;
+}
+.noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) .noma-area-controls__hint { color: var(--target-muted); font-size: 11px; line-height: 16px; }
+.noma-area-controls__targets {
+    display: flex;
+    justify-content: safe center;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 10px 12px 8px;
+    overscroll-behavior: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+    scrollbar-color: #8b7751 #0b1120;
+    touch-action: pan-x;
+}
+.noma-area-target {
+    flex: 0 0 94px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 5px 8px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--target-ivory);
+    cursor: pointer;
+    touch-action: pan-x;
+    scroll-snap-align: center;
+    transition: background-color 140ms, color 140ms;
+}
+.noma-area-target__portrait {
+    position: relative;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 58px;
+    height: 58px;
+    padding: 3px;
+    border: 1px solid rgb(200 170 110 / 50%);
+    border-radius: 50%;
+    background: #161c2b;
+    transition: border-color 140ms, transform 140ms;
+}
+.noma-area-target__portrait img { width: 100%; height: 100%; border-radius: 50%; object-fit: contain; }
+.noma-area-target__portrait img[data-circular="true"] { object-fit: cover; }
+.noma-area-target__fallback { width: 28px; height: 28px; color: var(--target-muted); stroke-width: 1.2; }
+.noma-area-target__selected {
+    position: absolute;
+    right: -3px;
+    bottom: -1px;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #0b1120;
+    border-radius: 50%;
+    background: var(--target-gold);
+    color: #0b1120;
+    opacity: 0;
+    transform: scale(.7);
+    transition: opacity 140ms, transform 140ms;
+}
+.noma-area-target__name {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    height: 40px;
+    max-height: 40px;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    text-align: center;
+    font: 600 18px/20px Alegreya, Georgia, serif;
+}
+.noma-area-target__distance { color: var(--target-muted); font: 12px/16px Alegreya, Georgia, serif; font-variant-numeric: tabular-nums; }
+.noma-area-target[aria-pressed="true"] { color: #f4d58d; background: radial-gradient(ellipse at 50% 30%, rgb(200 170 110 / 16%), transparent 80%); }
+.noma-area-target[aria-pressed="true"] .noma-area-target__portrait { border-color: #f4d58d; transform: translateY(-2px); outline: 1px solid rgb(200 170 110 / 30%); outline-offset: 3px; }
+.noma-area-target[aria-pressed="true"] .noma-area-target__selected { opacity: 1; transform: scale(1); }
+.noma-area-target:focus-visible { outline: 2px solid #f0dba9; outline-offset: -2px; }
+.noma-area-target:not(:disabled):active .noma-area-target__portrait { transform: scale(.96); }
+.noma-area-target:disabled { cursor: default; opacity: .5; }
+.noma-area-controls__targets-empty { width: 100%; margin: 10px 8px 14px; color: var(--target-muted); text-align: center; font: italic 17px/23px Alegreya, Georgia, serif; }
+.noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) .noma-area-controls__actions {
+    margin: 0 12px;
+    padding: 10px 0 12px;
+    border: 0;
+    border-top: 1px solid rgb(200 170 110 / 25%);
+    border-radius: 0;
+    background: none;
+    gap: 8px;
+}
+.noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) .noma-area-controls__actions button { height: 64px; font: 700 10px/15px Cinzel, Georgia, serif; letter-spacing: .03em; }
+.noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) .noma-area-controls__actions button > svg { width: 20px; height: 20px; }
+.noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) ::selection { background: #c8aa6e66; color: #fff5de; }
+@keyframes noma-target-selector-enter { from { opacity: .6; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@media (min-width: 768px) {
+    .noma-area-target { flex-basis: 116px; }
+    .noma-area-target__portrait { width: 68px; height: 68px; }
+    .noma-area-target__name { font-size: 20px; line-height: 22px; height: 44px; max-height: 44px; }
+    .noma-area-target__distance { font-size: 14px; line-height: 18px; }
+    .noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) .noma-area-controls__status-line { font-size: 15px; line-height: 22px; }
+    .noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) .noma-area-controls__actions { margin: 0 18px; padding: 12px 0 16px; gap: 12px; }
+    .noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) .noma-area-controls__actions button { height: 76px; font-size: 12px; line-height: 18px; }
+    .noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) .noma-area-controls__actions button > svg { width: 24px; height: 24px; }
+}
+@media (min-width: 768px) and (max-width: 1023px) { .noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) { width: min(620px, calc(100% - 48px)); } }
+@media (max-height: 500px) {
+    .noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) .noma-area-controls__hint { display: none; }
+    .noma-area-controls__targets { padding-block: 4px; }
+    .noma-area-target { gap: 2px; padding-block: 4px; }
+    .noma-area-target__portrait { width: 44px; height: 44px; }
+    .noma-area-target__name { height: 22px; max-height: 22px; -webkit-line-clamp: 1; font-size: 17px; line-height: 22px; }
+    .noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) .noma-area-controls__actions { padding-block: 8px; }
+    .noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) .noma-area-controls__actions button { height: 48px; flex-direction: row; gap: 6px; }
+}
+@media (hover: hover) { .noma-area-target:not(:disabled):hover { background-color: rgb(200 170 110 / 8%); } .noma-area-target:not(:disabled):hover .noma-area-target__portrait { border-color: #f4d58d; } }
+@media (prefers-reduced-motion: reduce) {
+    .noma-area-controls:is([data-target-selection="true"], [data-mist="true"]) { animation: none; }
+    .noma-area-target, .noma-area-target__portrait, .noma-area-target__selected { transition: none; }
+}
+.noma-area-overlay[data-barrier='true'] .noma-area-template {
+  border-radius: 50%;
+  outline: 1px solid #d8be80;
+  outline-offset: 5px;
+  background: radial-gradient(ellipse, transparent 62%, #d8be8020 83%, transparent 90%);
+}

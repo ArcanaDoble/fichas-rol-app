@@ -13,7 +13,8 @@ export const setCanvasBleeding = (token, active, combat = null) => ({ ...token,
     // An application during the creature's own activation first takes effect next activation.
     bleedingDeferredActivation: active && isBleedingActivation(combat, token.id) ? bleedingActivationKey(combat) : null,
 });
-export const needsBleedingChoice = (token, combat) => isCanvasBleeding(token) && Number(token?.stats?.vida?.current) > 0
+export const needsBleedingChoice = (token, combat) => token?.rulesSystem !== 'campaign'
+    && combat?.rulesSystem !== 'campaign' && isCanvasBleeding(token) && Number(token?.stats?.vida?.current) > 0
     && isBleedingActivation(combat, token.id)
     && token.bleedingDeferredActivation !== bleedingActivationKey(combat)
     && combat.participants?.[token.id]?.bleedingChoice?.activation !== bleedingActivationKey(combat);

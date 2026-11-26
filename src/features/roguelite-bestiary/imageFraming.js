@@ -1,5 +1,7 @@
 export const ENEMY_HEADER_ASPECT = 2;
 export const ENEMY_HEADER_FOCUS = { x: 0.68, y: 0.38 };
+export const normalizeHeaderLayout = (layout) => layout === 'square' ? 'square' : 'panorama';
+export const getHeaderAspect = (layout) => layout === 'square' ? 1 : ENEMY_HEADER_ASPECT;
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
 

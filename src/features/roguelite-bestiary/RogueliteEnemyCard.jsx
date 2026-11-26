@@ -32,6 +32,9 @@ import {
   normalizeRogueliteEnemyAbility,
 } from './enemyModel';
 import RogueliteAssetCropDialog from './RogueliteAssetCropDialog';
+import { CAMPAIGN_NPC_STAT_LIMITS, normalizeCampaignNpc } from './campaignNpcModel';
+import { FreeParryEntry } from '../parry-free/FreeParryProvider';
+import CampaignThreatTray from '../canvas/components/CampaignThreatTray';
 
 const STAT_DEFINITIONS = [
   { id: 'vida', label: 'Vida', Icon: Heart, color: '#e7a0a8' },
@@ -39,6 +42,13 @@ const STAT_DEFINITIONS = [
   { id: 'movimiento', label: 'Movimiento', Icon: Footprints, color: '#86bfe2' },
   { id: 'iniciativa', label: 'Iniciativa', Icon: Gauge, color: '#d7b867' },
   { id: 'ofensiva', label: 'Base ofensiva', Icon: Crosshair, color: '#d68469' },
+];
+const CAMPAIGN_STAT_DEFINITIONS = [
+  { id: 'vida', label: 'Vida', Icon: Heart, color: '#e7a0a8' },
+  { id: 'armadura', label: 'RD', Icon: Shield, color: '#c8c6be' },
+  { id: 'movimiento', label: 'Movilidad', Icon: Footprints, color: '#86bfe2' },
+  { id: 'iniciativa', label: 'Iniciativa', Icon: Gauge, color: '#d7b867' },
+  { id: 'ofensiva', label: 'Valor de acción', Icon: Crosshair, color: '#d68469' },
 ];
 
 const identity = (item) => item?.templateId || item?.catalogId || item?.id || item?.name || item?.nombre || '';
@@ -71,7 +81,7 @@ const resolveType = (item) => {
   return 'Arma';
 };
 
-export const formatEquipmentSummary = (item) => {
+export const formatEquipmentSummary = (item, campaign = false) => {
   if (!item) return '';
   const type = resolveType(item);
   const details = [];
@@ -84,8 +94,10 @@ export const formatEquipmentSummary = (item) => {
     if (range) details.push(String(range));
     if (actionCost !== null) details.push(`${actionCost} ${actionCost === 1 ? 'dado' : 'dados'}`);
   } else if (type === 'Armadura') {
-    const defense = item.defenseClass ?? item.cd ?? item.defensa ?? item.defense ?? item.armorClass;
-    if (defense !== undefined && defense !== '') details.push(`CD ${defense}`);
+    const defense = campaign
+      ? item.rd ?? item.armaduraRd ?? item.defensa ?? item.defense ?? item.defenseClass ?? item.cd ?? item.armorClass
+      : item.defenseClass ?? item.cd ?? item.defensa ?? item.defense ?? item.armorClass;
+    if (defense !== undefined && defense !== '') details.push(`${campaign ? 'RD' : 'CD'} ${defense}`);
   } else if (type === 'Habilidad') {
     const damage = item.damage ?? item.dano;
     const range = item.alcance ?? item.range;
@@ -101,7 +113,7 @@ export const formatEquipmentSummary = (item) => {
   return [type, ...details].join(' · ');
 };
 
-const equipmentRuleData = (item) => {
+const equipmentRuleData = (item, campaign = false) => {
   const type = resolveType(item);
   const details = [];
   if (type === 'Arma') {
@@ -110,8 +122,10 @@ const equipmentRuleData = (item) => {
     if (damage) details.push(String(damage));
     if (range) details.push(String(range));
   } else if (type === 'Armadura') {
-    const defense = item.defenseClass ?? item.cd ?? item.defensa ?? item.defense ?? item.armorClass;
-    if (defense !== undefined && defense !== '') details.push(`CD ${defense}`);
+    const defense = campaign
+      ? item.rd ?? item.armaduraRd ?? item.defensa ?? item.defense ?? item.defenseClass ?? item.cd ?? item.armorClass
+      : item.defenseClass ?? item.cd ?? item.defensa ?? item.defense ?? item.armorClass;
+    if (defense !== undefined && defense !== '') details.push(`${campaign ? 'RD' : 'CD'} ${defense}`);
   } else if (type === 'Habilidad') {
     const damage = item.damage ?? item.dano;
     const range = item.range ?? item.alcance;
@@ -144,11 +158,11 @@ const ActionCostIcons = ({ value }) => {
   );
 };
 
-const EquipmentRuleSummary = ({ item }) => {
-  const { type, details, actionCost, traits } = equipmentRuleData(item);
+const EquipmentRuleSummary = ({ item, campaign = false }) => {
+  const { type, details, actionCost, traits } = equipmentRuleData(item, campaign);
   return (
     <>
-      <span className="noma-enemy-entry__rules" title={formatEquipmentSummary(item)}>
+      <span className="noma-enemy-entry__rules" title={formatEquipmentSummary(item, campaign)}>
         <span>{[type, ...details].join(' · ')}</span>
         <ActionCostIcons value={actionCost} />
       </span>
@@ -157,13 +171,13 @@ const EquipmentRuleSummary = ({ item }) => {
   );
 };
 
-const EnemyStatInput = ({ value, label, onCommit }) => {
+const EnemyStatInput = ({ value, label, onCommit, maximum = ROGUELITE_ENEMY_STAT_MAX }) => {
   const [draft, setDraft] = useState(String(value ?? 0));
 
   useEffect(() => setDraft(String(value ?? 0)), [value]);
 
   const commit = (nextValue = draft) => {
-    const normalized = clampRogueliteEnemyStat(nextValue);
+    const normalized = Math.min(maximum, Math.max(0, Math.round(Number(nextValue) || 0)));
     setDraft(String(normalized));
     onCommit(normalized);
   };
@@ -173,8 +187,8 @@ const EnemyStatInput = ({ value, label, onCommit }) => {
       type="text"
       inputMode="numeric"
       pattern="[0-9]*"
-      maxLength={2}
-      title={`Valor máximo: ${ROGUELITE_ENEMY_STAT_MAX}`}
+      maxLength={String(maximum).length}
+      title={`Valor máximo: ${maximum}`}
       value={draft}
       onFocus={(event) => event.currentTarget.select()}
       onChange={(event) => {
@@ -184,7 +198,7 @@ const EnemyStatInput = ({ value, label, onCommit }) => {
           return;
         }
         if (!/^\d+$/.test(nextValue)) return;
-        const normalized = String(clampRogueliteEnemyStat(nextValue));
+        const normalized = String(Math.min(maximum, Math.max(0, Math.round(Number(nextValue)))));
         setDraft(normalized);
         onCommit(Number(normalized));
       }}
@@ -234,20 +248,21 @@ const CatalogDialog = ({ title, eyebrow, query, onQueryChange, items, imageFor, 
   </Portal>
 );
 
-const AbilityDialog = ({ initialAbility, library, imageFor, onCancel, onSave, onChooseLibrary, onRequestImage, onClear }) => {
+const AbilityDialog = ({ initialAbility, library, imageFor, onCancel, onSave, onChooseLibrary, onRequestImage, onClear, campaign = false }) => {
   const [draft, setDraft] = useState(() => ({ ...(initialAbility || createEmptyRogueliteEnemyAbility()) }));
   const [tab, setTab] = useState(initialAbility ? 'edit' : 'library');
   const [search, setSearch] = useState('');
+  const draftTraits = draft.traits ?? draft.rasgos ?? '';
   const visibleLibrary = library.filter((ability) => (
     `${itemName(ability)} ${itemDescription(ability)}`.toLowerCase().includes(search.toLowerCase())
   ));
 
   return (
     <Portal>
-      <div className="noma-rogue-dialog-backdrop" role="dialog" aria-modal="true" aria-label="Editar habilidad del enemigo">
+      <div className="noma-rogue-dialog-backdrop" role="dialog" aria-modal="true" aria-label={campaign ? 'Editar habilidad del PNJ' : 'Editar habilidad del enemigo'}>
         <div className="noma-rogue-ability-dialog">
           <header>
-            <div><span>Archivo de combate</span><h3>Habilidad del enemigo</h3></div>
+            <div><span>Archivo de combate</span><h3>Habilidad del {campaign ? 'PNJ' : 'enemigo'}</h3></div>
             <button type="button" onClick={onCancel} aria-label="Cerrar editor"><FiX /></button>
           </header>
           <nav>
@@ -279,7 +294,7 @@ const AbilityDialog = ({ initialAbility, library, imageFor, onCancel, onSave, on
                 <div className="noma-rogue-ability-dialog__rules">
                   <label><span>Daño</span><input value={draft.damage || ''} onChange={(event) => setDraft({ ...draft, damage: event.target.value })} placeholder="Ej. 1d6" /></label>
                   <label><span>Alcance</span><select value={draft.range || 'Arma'} onChange={(event) => setDraft({ ...draft, range: event.target.value })}>{ABILITY_RANGES.map((range) => <option value={range} key={range}>{range}</option>)}</select></label>
-                  <label><span>Rasgos</span><input value={readTraits(draft).join(', ')} onChange={(event) => setDraft({ ...draft, traits: event.target.value })} placeholder="Derribo, Empuje…" /></label>
+                  <label><span>Rasgos</span><input value={Array.isArray(draftTraits) ? draftTraits.join(', ') : draftTraits} onChange={(event) => setDraft({ ...draft, traits: event.target.value })} placeholder="Derribo, Empuje…" /></label>
                 </div>
                 <label><span>Descripción</span><textarea rows={6} value={draft.description || ''} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
                 <label className="noma-rogue-ability-dialog__library-check"><input type="checkbox" checked={draft.saveToLibrary !== false} onChange={(event) => setDraft({ ...draft, saveToLibrary: event.target.checked })} /> Guardar también en la biblioteca reutilizable</label>
@@ -296,8 +311,11 @@ const AbilityDialog = ({ initialAbility, library, imageFor, onCancel, onSave, on
   );
 };
 
-const RogueliteEnemyCard = ({ enemy: rawEnemy, equipmentCatalog, abilityLibrary, onChange, onSave, onDelete, onDuplicate, onSaveAbility, onLaunch, onMove, onDragStart, onDragEnd, onDragOver, onDrop, canMovePrevious, canMoveNext, canReorder, isDragging, isDropTarget, saving, launching }) => {
-  const enemy = normalizeRogueliteEnemy(rawEnemy);
+const RogueliteEnemyCard = ({ enemy: rawEnemy, variant = 'roguelite', equipmentCatalog, abilityLibrary, onChange, onSave, onDelete, onDuplicate, onSaveAbility, onLaunch, launchNotice, onMove, onDragStart, onDragEnd, onDragOver, onDrop, canMovePrevious, canMoveNext, canReorder, isDragging, isDropTarget, saving, launching }) => {
+  const campaign = variant === 'campaignNpc';
+  const normalizedEnemy = campaign ? normalizeCampaignNpc(rawEnemy) : normalizeRogueliteEnemy(rawEnemy);
+  // Keep the name as typed; trimming and the empty-name fallback belong to saving.
+  const enemy = { ...normalizedEnemy, name: typeof rawEnemy.name === 'string' ? rawEnemy.name : normalizedEnemy.name };
   const customImages = useCustomEquipmentImages();
   const [showRarity, setShowRarity] = useState(false);
   const [equipmentSlot, setEquipmentSlot] = useState(null);
@@ -308,6 +326,8 @@ const RogueliteEnemyCard = ({ enemy: rawEnemy, equipmentCatalog, abilityLibrary,
   const [isEditingIdentity, setIsEditingIdentity] = useState(false);
   const identityEditorRef = useRef(null);
   const rarity = ROGUELITE_ENEMY_RARITIES.find((entry) => entry.id === enemy.rarity) || ROGUELITE_ENEMY_RARITIES[0];
+  const hostile = campaign && enemy.allegiance === 'enemy';
+  const tone = hostile ? { accent: '#d1746d', soft: 'rgba(209, 116, 109, 0.32)', faint: 'rgba(209, 116, 109, 0.1)' } : rarity;
   const equipmentCount = enemy.equipmentSlots.filter(Boolean).length;
   const abilityCount = enemy.abilitySlots.filter(Boolean).length;
   const imageFor = (item) => item?.image || item?.imagen || item?.imageUrl || item?.icon || getObjectImage(item || {}, customImages);
@@ -318,7 +338,9 @@ const RogueliteEnemyCard = ({ enemy: rawEnemy, equipmentCatalog, abilityLibrary,
   const update = (patch) => onChange({ ...enemy, ...patch });
   const updateStat = (key, field, value) => {
     const stat = enemy.stats[key];
-    const numeric = clampRogueliteEnemyStat(value);
+    const numeric = campaign
+      ? Math.min(CAMPAIGN_NPC_STAT_LIMITS[key], Math.max(0, Math.round(Number(value) || 0)))
+      : clampRogueliteEnemyStat(value);
     const next = { ...stat, [field]: numeric };
     if (field === 'max' && next.current > numeric) next.current = numeric;
     if (field === 'current' && numeric > next.max) next.max = numeric;
@@ -356,16 +378,16 @@ const RogueliteEnemyCard = ({ enemy: rawEnemy, equipmentCatalog, abilityLibrary,
     setCropTarget({ type: 'ability', source: draft.imageSource || draft.image || '' });
   };
 
-  const commitCrop = async ({ source, cropped, headerCropped, crop: imageCrop, focus: imageFocus, headerFocus }) => {
+  const commitCrop = async ({ source, cropped, headerCropped, crop: imageCrop, focus: imageFocus, headerFocus, headerLayout }) => {
     const targetId = cropTarget.type === 'enemy' ? 'portrait' : abilityImageBridge?.draft?.id || 'ability';
-    const basePath = `roguelite-enemy-assets/${enemy.id}/${targetId}`;
+    const basePath = `${campaign ? 'campaign-npc-assets' : 'roguelite-enemy-assets'}/${enemy.id}/${targetId}`;
     const [imageSource, image, headerImage] = await Promise.all([
       source.startsWith('data:') ? uploadDataUrl(source, `${basePath}-source`) : Promise.resolve(source),
       uploadDataUrl(cropped, `${basePath}-image`),
       headerCropped ? uploadDataUrl(headerCropped, `${basePath}-header`) : Promise.resolve(''),
     ]);
     if (cropTarget.type === 'enemy') {
-      update({ imageSource, image, headerImage, imageCrop, imageFocus, headerFocus });
+      update({ imageSource, image, headerImage, imageCrop, imageFocus, headerFocus, headerLayout });
     } else if (abilityImageBridge) {
       abilityImageBridge.setDraft({ ...abilityImageBridge.draft, imageSource, image });
     }
@@ -376,54 +398,73 @@ const RogueliteEnemyCard = ({ enemy: rawEnemy, equipmentCatalog, abilityLibrary,
   return (
     <article
       className={`noma-talents-shell noma-enemy-card ${isDragging ? 'is-dragging' : ''} ${isDropTarget ? 'is-drop-target' : ''}`}
-      style={{ '--noma-talent-accent': rarity.accent, '--noma-talent-accent-soft': rarity.soft, '--noma-talent-accent-faint': rarity.faint }}
-      data-testid="roguelite-enemy-card"
+      style={{ '--noma-talent-accent': tone.accent, '--noma-talent-accent-soft': tone.soft, '--noma-talent-accent-faint': tone.faint }}
+      data-allegiance={hostile ? 'enemy' : undefined}
+      data-testid={campaign ? 'campaign-npc-card' : 'roguelite-enemy-card'}
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
       <section
         className="noma-talent-stage noma-enemy-card__stage"
-        style={{ '--noma-talent-accent': rarity.accent, '--noma-talent-accent-soft': rarity.soft, '--noma-talent-accent-faint': rarity.faint }}
+        data-layout={enemy.headerLayout}
+        style={{ '--noma-talent-accent': tone.accent, '--noma-talent-accent-soft': tone.soft, '--noma-talent-accent-faint': tone.faint }}
       >
+        {enemy.headerLayout === 'square' && <div className="noma-enemy-card__illustration-space" aria-hidden="true" />}
         <div className="noma-talent-stage__art" aria-hidden="true">
           {enemy.headerImage || enemy.image
             ? <img src={enemy.headerImage || enemy.image} alt="" style={enemy.headerImage ? { objectPosition: `${enemy.headerFocus.x * 100}% ${enemy.headerFocus.y * 100}%` } : undefined} />
-            : <Skull />}
+            : campaign ? <Shield /> : <Skull />}
         </div>
         <div className="noma-talent-stage__veil" aria-hidden="true" />
-        <div className="noma-talent-stage__heading"><Skull aria-hidden="true" /><span>Enemigo</span></div>
+        <div className="noma-talent-stage__heading">{campaign ? <Shield aria-hidden="true" /> : <Skull aria-hidden="true" />}<span>{campaign ? 'Campaña' : 'Enemigo'}</span></div>
         <div className="noma-talent-stage__content">
           <span className="noma-talent-stage__eyebrow">Tarjeta de encuentro</span>
           <div className="noma-talent-stage__rarity-wrap">
-            <button type="button" className="noma-talent-stage__rarity" onClick={() => setShowRarity(!showRarity)}><span />{rarity.label}</button>
-            {showRarity && <div className="noma-talent-stage__rarity-menu">{ROGUELITE_ENEMY_RARITIES.map((entry) => <button type="button" key={entry.id} onClick={() => { update({ rarity: entry.id }); setShowRarity(false); }}><span style={{ backgroundColor: entry.accent }} />{entry.label}</button>)}</div>}
+            {hostile ? <span className="noma-talent-stage__rarity"><span />Enemigo</span>
+              : <button type="button" className="noma-talent-stage__rarity" onClick={() => setShowRarity(!showRarity)}><span />{rarity.label}</button>}
+            {!hostile && showRarity && <div className="noma-talent-stage__rarity-menu">{ROGUELITE_ENEMY_RARITIES.map((entry) => <button type="button" key={entry.id} onClick={() => { update({ rarity: entry.id }); setShowRarity(false); }}><span style={{ backgroundColor: entry.accent }} />{entry.label}</button>)}</div>}
           </div>
           {isEditingIdentity ? (
             <div className="noma-enemy-card__identity-editor" ref={identityEditorRef}>
-              <input className="noma-talent-stage__title-input" value={enemy.name} onChange={(event) => update({ name: event.target.value })} aria-label="Nombre del enemigo" autoFocus />
-              <textarea className="noma-talent-stage__description-input" rows={4} value={enemy.description} onChange={(event) => update({ description: event.target.value })} aria-label="Descripción del enemigo" />
+              <input className="noma-talent-stage__title-input" value={enemy.name} onChange={(event) => update({ name: event.target.value })} aria-label={campaign ? 'Nombre de la ficha de Campaña' : 'Nombre del enemigo'} autoFocus />
+              <textarea className="noma-talent-stage__description-input" rows={4} value={enemy.description} onChange={(event) => update({ description: event.target.value })} aria-label={campaign ? 'Descripción de la ficha de Campaña' : 'Descripción del enemigo'} />
               <span><FiCheck /> Pulsa fuera para terminar</span>
             </div>
           ) : (
-            <button type="button" className="noma-enemy-card__identity-display" onClick={() => setIsEditingIdentity(true)} aria-label="Editar nombre y descripción del enemigo">
-              <strong className="noma-talent-stage__title">{enemy.name || 'Enemigo sin nombre'}</strong>
+            <button type="button" className="noma-enemy-card__identity-display" onClick={() => setIsEditingIdentity(true)} aria-label={campaign ? 'Editar nombre y descripción de la ficha de Campaña' : 'Editar nombre y descripción del enemigo'}>
+              <strong className="noma-talent-stage__title">{enemy.name || (campaign ? 'PNJ sin nombre' : 'Enemigo sin nombre')}</strong>
               <span className="noma-talent-stage__description">{enemy.description || 'Añade una breve descripción de la criatura.'}</span>
               <FiEdit2 aria-hidden="true" />
             </button>
           )}
         </div>
-        <button type="button" className="noma-talent-stage__edit-art" onClick={() => setCropTarget({ type: 'enemy', source: enemy.imageSource || enemy.headerImage || enemy.image || '' })}><FiImage /><span>Cambiar arte</span></button>
+        <button type="button" className="noma-talent-stage__edit-art" aria-label="Cambiar arte" onClick={() => setCropTarget({ type: 'enemy', source: enemy.imageSource || enemy.headerImage || enemy.image || '' })}><FiImage /><span>Cambiar arte</span></button>
         <div className="noma-talent-stage__edge" aria-hidden="true" />
       </section>
 
       <section className="noma-enemy-stats">
-        <header><div><span>Perfil de combate</span><h4>Estadísticas</h4></div><label><span>Amenaza</span><select value={enemy.threatDie} onChange={(event) => update({ threatDie: event.target.value })}>{ROGUELITE_THREAT_DICE.map((die) => <option value={die} key={die || 'none'}>{die ? die.toUpperCase() : 'Sin dado'}</option>)}</select></label></header>
+        {campaign && <fieldset className="noma-campaign-allegiance">
+          <legend>Bando al añadir al encuentro</legend>
+          <div>{[{ value: 'ally', label: 'Aliado' }, { value: 'enemy', label: 'Enemigo' }].map(({ value, label }) => (
+            <label key={value} data-allegiance={value} data-selected={enemy.allegiance === value}>
+              <input type="radio" name={`campaign-allegiance-${enemy.id}`} value={value} checked={enemy.allegiance === value} onChange={() => update({ allegiance: value })} />
+              <span>{label}</span>
+            </label>
+          ))}</div>
+          <p>{enemy.allegiance === 'enemy' ? 'Se añadirá al bando enemigo.' : 'Se añadirá junto a los jugadores.'}</p>
+        </fieldset>}
+        <header><div><span>Perfil de combate</span><h4>Estadísticas</h4></div>{campaign && <FreeParryEntry actor={{ name:enemy.name, image:enemy.image || '', characterId:enemy.id }} />}{!campaign && <label><span>Amenaza</span><select value={enemy.threatDie} onChange={(event) => update({ threatDie: event.target.value })}>{ROGUELITE_THREAT_DICE.map((die) => <option value={die} key={die || 'none'}>{die ? die.toUpperCase() : 'Sin dado'}</option>)}</select></label>}</header>
+        {campaign && <CampaignThreatTray profileOnly selection={{ customDice: enemy.threatDice.map(die => Number(die.slice(1))) }}
+          onChange={({ customDice }) => update({ threatDice: customDice.map(sides => `d${sides}`), threatDie: customDice.length ? `d${customDice[0]}` : '' })} />}
         <div className="noma-enemy-stats__list">
-          {STAT_DEFINITIONS.map(({ id, label, Icon, color }) => {
+          {(campaign ? CAMPAIGN_STAT_DEFINITIONS : STAT_DEFINITIONS).map(({ id, label, Icon, color }) => {
             const stat = enemy.stats[id];
             const maximum = Math.max(0, Math.round(stat.max));
             const current = Math.max(0, Math.min(maximum, Math.round(stat.current)));
-            return <div className="noma-enemy-stat" key={id} style={{ '--enemy-stat-color': color }}><div className="noma-enemy-stat__identity"><Icon /><span>{label}</span></div><div className={`noma-enemy-stat__track ${maximum === 0 ? 'is-empty' : ''}`} aria-label={`${label}: ${current} de ${maximum} bloques`}>{maximum > 0 ? Array.from({ length: maximum }, (_, index) => <i className={index < current ? 'is-filled' : ''} key={index} />) : <span>Sin bloques</span>}</div><div className="noma-enemy-stat__values"><EnemyStatInput value={stat.current} onCommit={(value) => updateStat(id, 'current', value)} label={`${label} actual`} /><em>/</em><EnemyStatInput value={stat.max} onCommit={(value) => updateStat(id, 'max', value)} label={`${label} base`} /></div></div>;
+            const segments = Math.min(maximum, 20);
+            const filled = maximum > 0 ? Math.round((current / maximum) * segments) : 0;
+            const limit = campaign ? CAMPAIGN_NPC_STAT_LIMITS[id] : ROGUELITE_ENEMY_STAT_MAX;
+            return <div className="noma-enemy-stat" key={id} style={{ '--enemy-stat-color': color }}><div className="noma-enemy-stat__identity"><Icon /><span>{label}</span></div><div className={`noma-enemy-stat__track ${maximum === 0 ? 'is-empty' : ''}`} aria-label={`${label}: ${current} de ${maximum}`}>{maximum > 0 ? Array.from({ length: segments }, (_, index) => <i className={index < filled ? 'is-filled' : ''} key={index} />) : <span>Sin puntos</span>}</div><div className="noma-enemy-stat__values"><EnemyStatInput value={stat.current} onCommit={(value) => updateStat(id, 'current', value)} label={`${label} actual`} maximum={limit} /><em>/</em><EnemyStatInput value={stat.max} onCommit={(value) => updateStat(id, 'max', value)} label={`${label} base`} maximum={limit} /></div></div>;
           })}
         </div>
       </section>
@@ -434,13 +475,13 @@ const RogueliteEnemyCard = ({ enemy: rawEnemy, equipmentCatalog, abilityLibrary,
           <div className="noma-enemy-ledger__controls"><button type="button" disabled={enemy.equipmentSlotCount <= ROGUELITE_ENEMY_SLOT_MIN} onClick={() => resizeSlots('equipment', -1)} aria-label="Quitar ranura de equipo"><FiMinus /></button><span>{equipmentCount}<small>/{enemy.equipmentSlotCount}</small></span><button type="button" disabled={enemy.equipmentSlotCount >= ROGUELITE_ENEMY_SLOT_MAX} onClick={() => resizeSlots('equipment', 1)} aria-label="Añadir ranura de equipo"><FiPlus /></button></div>
         </div>
         <div className="noma-talent-ledger__list">
-          {enemy.equipmentSlots.map((item, index) => <button type="button" key={index} className={`noma-talent-entry group ${item ? 'is-equipped' : 'is-empty'}`} onClick={() => { setQuery(''); setEquipmentSlot(index); }}><span className="noma-talent-entry__index">{String(index + 1).padStart(2, '0')}</span><EnemyRowImage item={item} image={imageFor(item)} emptyIcon={Swords} /><span className="min-w-0 flex-1"><span className="noma-talent-entry__title block truncate">{item ? itemName(item) : 'Ranura vacía'}</span>{item ? <EquipmentRuleSummary item={item} /> : <span className="noma-talent-entry__description block truncate">Pulsa para buscar en el catálogo</span>}</span><FiEdit2 /></button>)}
+          {enemy.equipmentSlots.map((item, index) => <button type="button" key={index} className={`noma-talent-entry group ${item ? 'is-equipped' : 'is-empty'}`} onClick={() => { setQuery(''); setEquipmentSlot(index); }}><span className="noma-talent-entry__index">{String(index + 1).padStart(2, '0')}</span><EnemyRowImage item={item} image={imageFor(item)} emptyIcon={Swords} /><span className="min-w-0 flex-1"><span className="noma-talent-entry__title block truncate">{item ? itemName(item) : 'Ranura vacía'}</span>{item ? <EquipmentRuleSummary item={item} campaign={campaign} /> : <span className="noma-talent-entry__description block truncate">Pulsa para buscar en el catálogo</span>}</span><FiEdit2 /></button>)}
         </div>
       </section>
 
       <section className="noma-talent-ledger noma-enemy-ledger">
         <div className="noma-talent-catalog__header">
-          <div><span className="noma-talent-catalog__eyebrow">Patrón de criatura</span><h4>Habilidades</h4></div>
+          <div><span className="noma-talent-catalog__eyebrow">{campaign ? 'Recursos de Campaña' : 'Patrón de criatura'}</span><h4>Habilidades</h4></div>
           <div className="noma-enemy-ledger__controls"><button type="button" disabled={enemy.abilitySlotCount <= ROGUELITE_ENEMY_SLOT_MIN} onClick={() => resizeSlots('ability', -1)} aria-label="Quitar ranura de habilidad"><FiMinus /></button><span>{abilityCount}<small>/{enemy.abilitySlotCount}</small></span><button type="button" disabled={enemy.abilitySlotCount >= ROGUELITE_ENEMY_SLOT_MAX} onClick={() => resizeSlots('ability', 1)} aria-label="Añadir ranura de habilidad"><FiPlus /></button></div>
         </div>
         <div className="noma-talent-ledger__list">
@@ -449,6 +490,7 @@ const RogueliteEnemyCard = ({ enemy: rawEnemy, equipmentCatalog, abilityLibrary,
       </section>
 
       <footer className="noma-enemy-card__actions">
+        {launchNotice}
         <button type="button" onClick={() => onLaunch(enemy)} disabled={launching}><Swords />{launching ? 'Añadiendo…' : 'Añadir al encuentro'}</button>
         <div>
           <button type="button" onClick={saveEnemy} disabled={saving}><FiSave />{saving ? 'Guardando…' : 'Guardar cambios'}</button>
@@ -457,17 +499,18 @@ const RogueliteEnemyCard = ({ enemy: rawEnemy, equipmentCatalog, abilityLibrary,
             <button type="button" disabled={!canMovePrevious} onClick={() => onMove(-1)} aria-label="Mover tarjeta a la posición anterior"><ChevronLeft /></button>
             <button type="button" disabled={!canMoveNext} onClick={() => onMove(1)} aria-label="Mover tarjeta a la posición siguiente"><ChevronRight /></button>
           </span>
-          <button type="button" onClick={() => onDuplicate(enemy)} aria-label="Duplicar enemigo"><FiPlus /></button>
-          <button type="button" onClick={() => onDelete(enemy)} aria-label="Eliminar enemigo"><FiTrash2 /></button>
+          <button type="button" onClick={() => onDuplicate(enemy)} aria-label={campaign ? 'Duplicar ficha de Campaña' : 'Duplicar enemigo'}><FiPlus /></button>
+          <button type="button" onClick={() => onDelete(enemy)} aria-label={campaign ? 'Eliminar ficha de Campaña' : 'Eliminar enemigo'}><FiTrash2 /></button>
         </div>
       </footer>
 
       {equipmentSlot !== null && <CatalogDialog title={`Equipo · ranura ${equipmentSlot + 1}`} eyebrow="Catálogo general" query={query} onQueryChange={setQuery} items={filteredEquipment} imageFor={imageFor} onChoose={(item) => { setSlot('equipment', equipmentSlot, item); setEquipmentSlot(null); }} onClear={() => { setSlot('equipment', equipmentSlot, null); setEquipmentSlot(null); }} onClose={() => setEquipmentSlot(null)} />}
-      {abilitySlot !== null && <AbilityDialog initialAbility={enemy.abilitySlots[abilitySlot]} library={abilityLibrary} imageFor={imageFor} onCancel={() => setAbilitySlot(null)} onClear={() => { setSlot('ability', abilitySlot, null); setAbilitySlot(null); }} onChooseLibrary={(ability) => { setSlot('ability', abilitySlot, normalizeRogueliteEnemyAbility(ability)); setAbilitySlot(null); }} onRequestImage={requestAbilityImage} onSave={async (ability) => { const { saveToLibrary, ...storedAbility } = normalizeRogueliteEnemyAbility(ability); setSlot('ability', abilitySlot, storedAbility); if (saveToLibrary !== false) await onSaveAbility(storedAbility); setAbilitySlot(null); }} />}
+      {abilitySlot !== null && <AbilityDialog campaign={campaign} initialAbility={enemy.abilitySlots[abilitySlot]} library={abilityLibrary} imageFor={imageFor} onCancel={() => setAbilitySlot(null)} onClear={() => { setSlot('ability', abilitySlot, null); setAbilitySlot(null); }} onChooseLibrary={(ability) => { setSlot('ability', abilitySlot, normalizeRogueliteEnemyAbility(ability)); setAbilitySlot(null); }} onRequestImage={requestAbilityImage} onSave={async (ability) => { const { saveToLibrary, ...storedAbility } = normalizeRogueliteEnemyAbility(ability); setSlot('ability', abilitySlot, storedAbility); if (saveToLibrary !== false) await onSaveAbility(storedAbility); setAbilitySlot(null); }} />}
       {cropTarget && (
         <RogueliteAssetCropDialog
           initialSource={cropTarget.source}
           initialCrop={cropTarget.type === 'enemy' ? enemy.imageCrop : null}
+          initialLayout={enemy.headerLayout}
           variant={cropTarget.type === 'enemy' ? 'enemyHeader' : 'square'}
           title={cropTarget.type === 'enemy' ? `Retrato · ${enemy.name}` : 'Icono de habilidad'}
           onCancel={() => { setCropTarget(null); setAbilityImageBridge(null); }}
@@ -480,12 +523,12 @@ const RogueliteEnemyCard = ({ enemy: rawEnemy, equipmentCatalog, abilityLibrary,
 
 EnemyRowImage.propTypes = { item: PropTypes.object, image: PropTypes.string, emptyIcon: PropTypes.elementType };
 ActionCostIcons.propTypes = { value: PropTypes.oneOfType([PropTypes.number, PropTypes.string]) };
-EquipmentRuleSummary.propTypes = { item: PropTypes.object.isRequired };
-EnemyStatInput.propTypes = { value: PropTypes.number.isRequired, label: PropTypes.string.isRequired, onCommit: PropTypes.func.isRequired };
+EquipmentRuleSummary.propTypes = { item: PropTypes.object.isRequired, campaign: PropTypes.bool };
+EnemyStatInput.propTypes = { value: PropTypes.number.isRequired, label: PropTypes.string.isRequired, onCommit: PropTypes.func.isRequired, maximum: PropTypes.number };
 Portal.propTypes = { children: PropTypes.node.isRequired };
 CatalogDialog.propTypes = { title: PropTypes.string.isRequired, eyebrow: PropTypes.string.isRequired, query: PropTypes.string.isRequired, onQueryChange: PropTypes.func.isRequired, items: PropTypes.array.isRequired, imageFor: PropTypes.func.isRequired, onChoose: PropTypes.func.isRequired, onClear: PropTypes.func.isRequired, onClose: PropTypes.func.isRequired };
-AbilityDialog.propTypes = { initialAbility: PropTypes.object, library: PropTypes.array.isRequired, imageFor: PropTypes.func.isRequired, onCancel: PropTypes.func.isRequired, onSave: PropTypes.func.isRequired, onChooseLibrary: PropTypes.func.isRequired, onRequestImage: PropTypes.func.isRequired, onClear: PropTypes.func.isRequired };
-RogueliteEnemyCard.propTypes = { enemy: PropTypes.object.isRequired, equipmentCatalog: PropTypes.array.isRequired, abilityLibrary: PropTypes.array.isRequired, onChange: PropTypes.func.isRequired, onSave: PropTypes.func.isRequired, onDelete: PropTypes.func.isRequired, onDuplicate: PropTypes.func.isRequired, onSaveAbility: PropTypes.func.isRequired, onLaunch: PropTypes.func.isRequired, onMove: PropTypes.func, onDragStart: PropTypes.func, onDragEnd: PropTypes.func, onDragOver: PropTypes.func, onDrop: PropTypes.func, canMovePrevious: PropTypes.bool, canMoveNext: PropTypes.bool, canReorder: PropTypes.bool, isDragging: PropTypes.bool, isDropTarget: PropTypes.bool, saving: PropTypes.bool, launching: PropTypes.bool };
+AbilityDialog.propTypes = { initialAbility: PropTypes.object, library: PropTypes.array.isRequired, imageFor: PropTypes.func.isRequired, onCancel: PropTypes.func.isRequired, onSave: PropTypes.func.isRequired, onChooseLibrary: PropTypes.func.isRequired, onRequestImage: PropTypes.func.isRequired, onClear: PropTypes.func.isRequired, campaign: PropTypes.bool };
+RogueliteEnemyCard.propTypes = { enemy: PropTypes.object.isRequired, variant: PropTypes.oneOf(['roguelite', 'campaignNpc']), equipmentCatalog: PropTypes.array.isRequired, abilityLibrary: PropTypes.array.isRequired, onChange: PropTypes.func.isRequired, onSave: PropTypes.func.isRequired, onDelete: PropTypes.func.isRequired, onDuplicate: PropTypes.func.isRequired, onSaveAbility: PropTypes.func.isRequired, onLaunch: PropTypes.func.isRequired, launchNotice: PropTypes.node, onMove: PropTypes.func, onDragStart: PropTypes.func, onDragEnd: PropTypes.func, onDragOver: PropTypes.func, onDrop: PropTypes.func, canMovePrevious: PropTypes.bool, canMoveNext: PropTypes.bool, canReorder: PropTypes.bool, isDragging: PropTypes.bool, isDropTarget: PropTypes.bool, saving: PropTypes.bool, launching: PropTypes.bool };
 
 RogueliteEnemyCard.defaultProps = { onMove: () => {}, onDragStart: () => {}, onDragEnd: () => {}, onDragOver: () => {}, onDrop: () => {}, canMovePrevious: false, canMoveNext: false, canReorder: false, isDragging: false, isDropTarget: false, saving: false, launching: false };
 

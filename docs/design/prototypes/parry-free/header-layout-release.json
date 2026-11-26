@@ -1,0 +1,33 @@
+{
+  "verifiedAtUtc": "2026-10-21T02:45:10.824809+00:00",
+  "release": "parry-header-integrated-layout",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.d5aabd54.js",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "e4881125f31edb9722ff83098ef6d979c418154a81d398d28fe31eea898a295b"
+    },
+    "main.css": {
+      "path": "/static/css/main.49b1fd9a.css",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "a2316a487a2a996ec320165acb2bacc53fb53946d085364aab353bfcad5ab2fe"
+    }
+  },
+  "buildLog": "output/playwright/parry-header-layout-build.log",
+  "deployLog": "output/playwright/parry-header-layout-deploy.log",
+  "verification": "Original instruction moved below title, left aligned at same x coordinate; campaign context inline with title on desktop. Real provider checked at1280x800,760x800 and412x915. Compact mobile header preserved.",
+  "evidence": [
+    "evidence/header-layout-desktop.png",
+    "evidence/header-layout-narrow.png",
+    "evidence/header-layout-mobile.png"
+  ],
+  "supersedes": "header-note-release.json",
+  "productionRoomWritesForVerification": 0,
+  "firestoreRulesChanged": false
+}

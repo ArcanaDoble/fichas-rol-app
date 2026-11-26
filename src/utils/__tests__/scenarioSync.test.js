@@ -8,6 +8,55 @@ import {
   reconcileScenarioItemSnapshot,
   isStaleScenarioSnapshot,
 } from '../scenarioSync';
+import { hasArcaneBarrier, reconcileArcaneBarrierUpdate } from '../arcaneBarrierStatus';
+
+test('saving a removed Barrera advances the runtime and clears stale state locks on both clients', () => {
+  const before = { id: 'hero', profileType: 'rogueliteClass', canvasRuntimeRevision: 4,
+    x: 10, status: ['oculto', 'barrera'], stats: { cd: { current: 4, max: 4 }, vida: { current: 7, max: 8 } },
+    arcaneBarrier: { id: 'cast', spellId: 'runic-barrier', expires: 'combat-end', negatedTraits: ['critico'] } };
+  const edits = reconcileArcaneBarrierUpdate(before, { status: ['oculto'] }, 100);
+  const edited = { ...before, ...edits };
+  const concurrent = { ...before, x: 95, stats: { ...before.stats, vida: { current: 6, max: 8 } } };
+  const [saved] = mergeScenarioItemsForPersist([concurrent], [edited], [], [before]);
+  expect(saved.canvasRuntimeRevision).toBe(5);
+  expect(saved.status).toEqual(['oculto']);
+  expect(saved.arcaneBarrier).toBeNull();
+  expect(saved.stats.cd).toEqual(before.stats.cd);
+  expect(saved.stats.vida.current).toBe(6);
+  expect(saved.x).toBe(95);
+  const locks = {
+    draft: { status: before.status, arcaneBarrier: before.arcaneBarrier, rotation: 45 },
+    recentWrite: { time: 100, baseRuntimeRevision: 4,
+      fields: { status: before.status, arcaneBarrier: before.arcaneBarrier, name: 'Guerrero' } },
+    now: 101,
+  };
+  for (const local of [before, saved]) {
+    const result = reconcileScenarioItemSnapshot(saved, local, locks);
+    expect(result.item.status).toEqual(['oculto']);
+    expect(result.item.arcaneBarrier).toBeNull();
+    expect(hasArcaneBarrier(result.item)).toBe(false);
+    expect(result.item.stats.cd).toEqual(before.stats.cd);
+    expect(result.item.rotation).toBe(45);
+    expect(result.item.name).toBe('Guerrero');
+    expect(result.draft).toEqual({ rotation: 45 });
+    expect(result.recentWrite.fields).toEqual({ name: 'Guerrero' });
+  }
+});
+
+test('an unrelated inspector save captured before removal cannot restore the old Barrera', () => {
+  const before = { id: 'hero', profileType: 'rogueliteClass', canvasRuntimeRevision: 4,
+    name: 'Guerrero', status: ['barrera'], stats: { cd: { current: 4, max: 4 } },
+    arcaneBarrier: { id: 'cast', spellId: 'runic-barrier', expires: 'combat-end', negatedTraits: [] } };
+  const unrelatedDraft = { ...before, name: 'Guerrero de Ada' };
+  const removed = { ...before, ...reconcileArcaneBarrierUpdate(before, { status: [] }, 100), canvasRuntimeRevision: 5 };
+  const [saved] = mergeScenarioItemsForPersist([removed], [unrelatedDraft], [], [before]);
+  expect(saved.name).toBe('Guerrero de Ada');
+  expect(saved.status).toEqual([]);
+  expect(saved.arcaneBarrier).toBeNull();
+  expect(hasArcaneBarrier(saved)).toBe(false);
+  expect(saved.canvasRuntimeRevision).toBe(5);
+  expect(saved.stats.cd).toEqual(before.stats.cd);
+});
 
 test('a committed potion supersedes stale health/inventory locks on both clients', () => {
   const before = { id: 'hero', stats: { vida: { current: 3, max: 8 } }, inventory: ['potion'] };

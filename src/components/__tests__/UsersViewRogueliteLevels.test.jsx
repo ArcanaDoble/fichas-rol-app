@@ -11,6 +11,7 @@ jest.mock('firebase/firestore', () => ({
   getDocs: jest.fn(),
   onSnapshot: jest.fn(),
   query: jest.fn((ref) => ref),
+  runTransaction: jest.fn(async (database, action) => action({ get:async () => ({ exists:() => false }), set:jest.fn() })),
   setDoc: jest.fn(),
   updateDoc: jest.fn(),
   where: jest.fn(() => ({})),

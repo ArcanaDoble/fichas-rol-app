@@ -40,10 +40,10 @@ export const combineCanvasWeapons = (weapons, mode, traits = []) => ({
   rasgos: [...new Set(traits.filter(trait => !structural.has(trait)))],
 });
 
-export const resolveCanvasAttackSelection = ({ attacker, target, selection, items = [], gridConfig = {} }) => {
+export const resolveCanvasAttackSelection = ({ attacker, target, selection, items = [], gridConfig = {}, rulesSystem = 'roguelite' }) => {
   if (!attacker || !target || !selection) return { legal: false, reason: 'Falta el atacante, el objetivo o su arma.' };
   const pendingArmor = [attacker, target].find(token => hasCanvasMutableArmor(token) && !token.armorProtectionChoice);
-  if (pendingArmor) return { legal: false, reason: `${pendingArmor.name || 'La ficha'} debe elegir la protección de su Túnica en Ronda antes de atacar o recibir ataques.` };
+  if (pendingArmor && rulesSystem !== 'campaign') return { legal: false, reason: `${pendingArmor.name || 'La ficha'} debe elegir la protección de su Túnica en Ronda antes de atacar o recibir ataques.` };
   const available = getSingleAttackItems(attacker);
   const requests = selection?.attackWeapons || [selection];
   const identities = requests.map(getCanvasWeaponIdentity);
@@ -74,7 +74,7 @@ export const resolveCanvasAttackSelection = ({ attacker, target, selection, item
   if (!mana.legal) return { legal: false, reason: mana.reason };
   if (furySpend && manaSpend) return { legal: false, reason: 'Elige una única capacidad de recurso para este ataque.' };
   const parts = weapons.map(item => {
-    const range = evaluateCanvasAttackRange({ attacker, target, weapon: item, items, gridConfig });
+    const range = evaluateCanvasAttackRange({ attacker, target, weapon: item, items, gridConfig, allowAlliedTargets: rulesSystem === 'campaign' });
     const competence = [item.competence, item.competencia, item.weaponCompetence, item.category].map(weaponCompetence).find(Boolean);
     const proficiencies = attacker.proficiencies?.weapons;
     const proficiency = !proficiencies || !competence || Object.entries(proficiencies).some(([key, enabled]) => weaponCompetence(key) === competence && enabled);
@@ -87,7 +87,7 @@ export const resolveCanvasAttackSelection = ({ attacker, target, selection, item
   if (invalid) return { legal: false, reason: `${invalid.weapon.name || invalid.weapon.nombre}: ${invalid.range.reason || 'sin perfil de daño'}` };
   const inactiveThrow = parts.find(part => getCanvasWeaponTraits(part.weapon).includes('arrojadiza')
     && !part.traits.includes('arrojadiza')
-    && !evaluateCanvasAttackRange({ attacker, target, weapon: { ...part.weapon, rasgos: [] }, items, gridConfig }).legal);
+    && !evaluateCanvasAttackRange({ attacker, target, weapon: { ...part.weapon, rasgos: [] }, items, gridConfig, allowAlliedTargets: rulesSystem === 'campaign' }).legal);
   if (inactiveThrow) return { legal: false, reason: `${inactiveThrow.weapon.name || inactiveThrow.weapon.nombre}: Arrojadiza no está disponible para este ataque.` };
   const activeTraits = [...new Set(parts.flatMap(part => part.traits).filter(trait => !structural.has(trait)))];
   const mode = dual ? 'dual' : weapons.length > 1 ? 'multiweapon' : 'single';
@@ -110,12 +110,12 @@ export const resolveCanvasAttackSelection = ({ attacker, target, selection, item
   return { legal: true, mode, weapon, parts, profile: [...profile, ...extraProfile, ...furyProfile, ...manaProfile], range: { ...parts[0].range, suppressTraits: false }, actionCost: dual ? 2 : undefined };
 };
 
-export const getCanvasAttackOptions = ({ attacker, target, items, gridConfig }) => {
+export const getCanvasAttackOptions = ({ attacker, target, items, gridConfig, rulesSystem }) => {
   if (!attacker || !target) return [];
   const weapons = getSingleAttackItems(attacker);
   const pair = getCanvasDualWeapons(attacker);
   return [...weapons, ...(pair.length === 2 ? [combineCanvasWeapons(pair, 'dual')] : [])]
-    .map(selection => resolveCanvasAttackSelection({ attacker, target, selection, items, gridConfig }))
+    .map(selection => resolveCanvasAttackSelection({ attacker, target, selection, items, gridConfig, rulesSystem }))
     .filter(result => result.legal).map(result => ({
       ...result.weapon,
       // Show the individual weapon's structural traits without transferring

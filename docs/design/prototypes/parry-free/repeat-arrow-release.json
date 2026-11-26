@@ -1,0 +1,34 @@
+{
+  "verifiedAtUtc": "2026-10-21T03:07:03.611275+00:00",
+  "release": "parry-repeat-arrow-alignment",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.fb61a5d3.js",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "26ae7835c0e3c88c07f37972b5eb1add63e5ed378ba45f853425f6dcaf34d1c5"
+    },
+    "main.css": {
+      "path": "/static/css/main.95b7fa1b.css",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "685a159d478377e3d8b71772e1d8ca83b3e40cb1d9107a09455a2760df4bafc6"
+    }
+  },
+  "buildLog": "output/playwright/parry-repeat-arrow-build.log",
+  "deployLog": "output/playwright/parry-repeat-arrow-deploy.log",
+  "verification": "Vector arrow optically aligned with Ronda and kept with that word during line wrapping. Real result panel checked at 320x740, 412x915 and 1280x800. Gold button geometry preserved; no gameplay changes.",
+  "evidence": [
+    "evidence/repeat-arrow-detail.png",
+    "evidence/repeat-arrow-mobile.png",
+    "evidence/repeat-arrow-small-mobile.png",
+    "evidence/repeat-arrow-desktop.png"
+  ],
+  "productionRoomWritesForVerification": 0,
+  "firestoreRulesChanged": false,
+  "gameplayChanged": false
+}

@@ -1,4 +1,5 @@
 import { createCanvasScenarioController } from '../createTacticalScenarioController';
+import { applyArcaneBarrier, getArcaneBarrierBonus } from '../../../utils/arcaneBarrierStatus';
 
 jest.mock('../../../firebase', () => ({ db: {} }));
 jest.mock('../../../utils/storage', () => ({
@@ -13,6 +14,26 @@ jest.mock('firebase/firestore', () => ({
   runTransaction: jest.fn(),
   updateDoc: jest.fn(),
 }));
+
+test.each(['canvas_scenarios', 'board_scenarios'])('manual state removal reconciles Canvas protection only (%s)', scenarioCollectionName => {
+  const protectedToken = applyArcaneBarrier({ id: 'hero', status: ['oculto'], stats: { cd: { current: 4, max: 4 } } },
+    { castId: 'cast', now: 123, protections: ['critico'] });
+  let scene = { id: 'room', items: [protectedToken] };
+  const drafts = { current: {} };
+  const controller = createCanvasScenarioController({ activeScenario: scene, scenarioCollectionName,
+    localUnsavedEditsRef: drafts, recentLocalWritesRef: { current: {} },
+    setActiveScenario: update => { scene = update(scene); } });
+  controller.updateItem('hero', { status: ['oculto'] });
+  expect(scene.items[0].stats).toBe(protectedToken.stats);
+  expect(scene.items[0].status).toEqual(['oculto']);
+  if (scenarioCollectionName === 'canvas_scenarios') {
+    expect(scene.items[0].arcaneBarrier).toBeNull();
+    expect(getArcaneBarrierBonus(scene.items[0])).toBe(0);
+    expect(drafts.current.hero).toMatchObject({ status: ['oculto'], arcaneBarrier: null });
+  } else {
+    expect(scene.items[0].arcaneBarrier).toBe(protectedToken.arcaneBarrier);
+  }
+});
 
 test('Confirmar cambios saves the encounter and the pending Roguelite class runtime together', async () => {
   const firestore = require('firebase/firestore');

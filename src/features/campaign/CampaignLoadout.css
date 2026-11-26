@@ -1,0 +1,55 @@
+.campaign-key-description {
+  display: block;
+  min-height: 44px;
+  white-space: pre-wrap;
+  cursor: text;
+  transition: color 150ms ease;
+}
+
+.campaign-key-description:hover {
+  color: #efe5d2;
+}
+
+.campaign-key-description:focus-visible {
+  outline: 1px solid #c8aa6e;
+  outline-offset: 3px;
+}
+
+.noma-talent-entry.campaign-talent-entry {
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 5px;
+}
+
+.campaign-talent-entry__edit {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.campaign-talent-entry__toggle {
+  position: relative;
+  justify-self: center;
+}
+
+.campaign-talent-entry__toggle::before {
+  content: '';
+  position: absolute;
+  inset: -8.5px;
+}
+
+.campaign-talent-entry__toggle:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.campaign-talent-entry__edit:focus-visible {
+  outline: 1px solid #c8aa6e;
+  outline-offset: -1px;
+}

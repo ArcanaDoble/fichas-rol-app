@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { normalizeCropPercentages, normalizeImageFocus } from './imageFraming';
+import { normalizeCropPercentages, normalizeHeaderLayout, normalizeImageFocus } from './imageFraming';
 
 export const ROGUELITE_ENEMY_SLOT_MIN = 1;
 export const ROGUELITE_ENEMY_SLOT_MAX = 4;
@@ -73,6 +73,7 @@ export const createEmptyRogueliteEnemy = () => normalizeRogueliteEnemy({
   image: '',
   imageSource: '',
   headerImage: '',
+  headerLayout: 'square',
   imageCrop: null,
   imageFocus: { x: 0.68, y: 0.38 },
   headerFocus: { x: 0.68, y: 0.38 },
@@ -120,6 +121,7 @@ export function normalizeRogueliteEnemy(candidate = {}) {
     image: candidate.image || candidate.portrait || '',
     imageSource: candidate.imageSource || candidate.image || candidate.portrait || '',
     headerImage: candidate.headerImage || candidate.cardImage || '',
+    headerLayout: normalizeHeaderLayout(candidate.headerLayout),
     imageCrop: normalizeCropPercentages(candidate.imageCrop || candidate.headerCrop),
     imageFocus: normalizeImageFocus(candidate.imageFocus),
     headerFocus: normalizeImageFocus(candidate.headerFocus),

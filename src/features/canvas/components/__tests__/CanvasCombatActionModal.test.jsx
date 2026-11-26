@@ -606,3 +606,27 @@ test('cancels the dual preparation without confirming or changing its weapons', 
   expect(runtime.confirmAttack).not.toHaveBeenCalled();
   expect(runtime.setAttackWeapons).not.toHaveBeenCalled();
 });
+
+test.each([
+  ['master', false, []],
+  ['player', true, [hero.id]],
+  ['spectator', true, []],
+])('the %s sees the fireball before any permitted defense panel', (_role, isPlayerView, controlledTokenIds) => {
+  const pending = { id: 'cast-target', blastId: 'cast', spellId: 'fireball', status: 'awaiting-defense',
+    attackerId: enemy.id, targetId: hero.id, weaponName: 'Bola de fuego',
+    weapon: { name: 'Bola de fuego', spellId: 'fireball' }, pressure: { total: 8 },
+    weaponDiceProfile: [{ die: 'd8', sides: 8 }], weaponResults: [4], actionDice: [], range: {} };
+  const runtime = { pendingAttack: pending, controlledTokenIds, resolvePendingAttack: jest.fn(),
+    combatState: { participants: { [hero.id]: { actionDice: [] } } },
+    spellPresentation: { effect: { id: 'cast' }, resolvingDeferred: true } };
+  const view = render(<CanvasCombatActionModal activeScenario={{ items: [hero, enemy] }}
+    combatRuntime={runtime} isPlayerView={isPlayerView} />);
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  view.rerender(<CanvasCombatActionModal activeScenario={{ items: [hero, enemy] }} isPlayerView={isPlayerView}
+    combatRuntime={{ ...runtime, spellPresentation: { ...runtime.spellPresentation, resolvingDeferred: false } }} />);
+  if (!isPlayerView || controlledTokenIds.includes(hero.id)) {
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Recibir ataque' }));
+    expect(runtime.resolvePendingAttack).toHaveBeenCalledTimes(1);
+  } else expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});

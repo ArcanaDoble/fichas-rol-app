@@ -150,7 +150,7 @@ const INITIAL_ACTIONS = {
     ]
 };
 
-export const RelicsView = ({ dndClass, onFeaturesChange, onActionsChange }) => {
+export const RelicsView = ({ dndClass, onFeaturesChange, onActionsChange, readOnly = false }) => {
     const [actionData, setActionData] = useState(() => dndClass.actionData || INITIAL_ACTIONS);
     const [features, setFeatures] = useState([]);
     const [isEditing, setIsEditing] = useState(false);
@@ -241,6 +241,7 @@ export const RelicsView = ({ dndClass, onFeaturesChange, onActionsChange }) => {
 
 
     const handleToggleActionActive = (index) => {
+        if (readOnly) return;
         const newFeatures = [...features];
         if (!newFeatures[index]) return;
 
@@ -258,6 +259,7 @@ export const RelicsView = ({ dndClass, onFeaturesChange, onActionsChange }) => {
     };
 
     const handleToggleTalentActive = (id) => {
+        if (readOnly) return;
         const talents = [...actionData.reaction];
         const index = talents.findIndex(t => t.id === id);
         if (index === -1) return;
@@ -363,13 +365,13 @@ export const RelicsView = ({ dndClass, onFeaturesChange, onActionsChange }) => {
                     </div>
                     <div className="flex items-center gap-4">
                         {/* EDIT TOGGLE */}
-                        <button
+                        {!readOnly && <button
                             onClick={() => setIsEditing(!isEditing)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-widest border transition-all ${isEditing ? 'bg-[#c8aa6e] text-[#0b1120] border-[#c8aa6e]' : 'bg-transparent border-slate-700 text-slate-500 hover:border-[#c8aa6e] hover:text-[#c8aa6e]'}`}
                         >
                             {isEditing ? <Check className="w-4 h-4" /> : <Settings className="w-4 h-4" />}
                             {isEditing ? 'Finalizar' : 'Editar'}
-                        </button>
+                        </button>}
 
                         <div className="hidden md:flex items-center gap-3 bg-[#161f32] px-4 py-2 rounded-full border border-[#c8aa6e]/30">
                             <div className="w-3 h-3 rounded-full bg-[#c8aa6e] animate-pulse"></div>

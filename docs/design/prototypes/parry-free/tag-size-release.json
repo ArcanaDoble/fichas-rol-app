@@ -1,0 +1,32 @@
+{
+  "verifiedAtUtc": "2026-10-21T02:02:56.931285+00:00",
+  "release": "parry-tag-equal-mobile-sizing",
+  "project": "base-de-datos-noma",
+  "url": "https://base-de-datos-noma.web.app",
+  "scope": "hosting",
+  "manifestMatches": true,
+  "assets": {
+    "main.js": {
+      "path": "/static/js/main.5702958b.js",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "c121b61140fd751a36a4392aea145d67de3f889bee8df7e754475ace17f957d2"
+    },
+    "main.css": {
+      "path": "/static/css/main.d81ffb2f.css",
+      "httpStatus": 200,
+      "sha256Matches": true,
+      "sha256": "20a3a863335af44e5fa81c9ff744137f5f5cab10ee9c11de166c3997c1fcacd9"
+    }
+  },
+  "testSuitesPassed": 1,
+  "testsPassed": 2,
+  "testsLog": "output/playwright/parry-tag-size-tests.log",
+  "buildLog": "output/playwright/parry-tag-size-build.log",
+  "deployLog": "output/playwright/parry-tag-size-deploy.log",
+  "verification": "Real FreeParryEntry beside sheet tag markup with compiled site CSS at 390px; all three tags same height, 4px 12px padding, 10px font and 15px line height",
+  "evidence": "evidence/tag-size-mobile.png",
+  "detail": "evidence/tag-size-mobile-detail.png",
+  "productionRoomWritesForVerification": 0,
+  "firestoreRulesChanged": false
+}

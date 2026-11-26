@@ -15,6 +15,29 @@ const logDie = (die, id, source) => ({
   critical: source === 'Crítico',
 });
 
+export const buildCanvasArcaneMistLog = ({ scenarioId, castId, token, spell, actionDie, manaCost, conserve, placement, now }) => ({
+  sourceEventId: castId, scenarioId, eventType: 'spell-use', spellId: 'arcane-mist',
+  actorId: token.id, actorName: token.name || 'Mago', itemName: spell.name || spell.nombre || 'Niebla arcana',
+  cells: placement.cells, duration: 'combat-end',
+  resourcesSpent: [
+    { label: conserve ? 'Copia conservada' : '1 copia preparada', resource: 'spell' },
+    { label: `1 dado de acción d${actionDie.sides} · Valor ignorado`, diceIds: [actionDie.id] },
+    ...(manaCost ? [{ label: `${manaCost} de Maná`, amount: manaCost, resource: 'mana' }] : []),
+  ],
+  canvasRoguelite: true, logVersion: 2, clientTimestamp: now,
+});
+
+export const buildCanvasArcaneBarrierLog = ({ scenarioId, castId, token, target, actionDie, manaCost, conserve, protections, now }) => ({
+  sourceEventId: castId, scenarioId, eventType: 'spell-use', spellId: 'runic-barrier',
+  actorId: token.id, actorName: token.name || 'Mago', itemName: 'Barrera rúnica',
+  targetId: target.id, targetName: target.name || 'Aliado', cdBonus: 1, duration: 'combat-end', protections,
+  resourcesSpent: [
+    { label: conserve ? 'Copia conservada' : '1 copia preparada', resource: 'spell' },
+    { label: `1 dado de acción d${actionDie.sides} · Valor ignorado`, diceIds: [actionDie.id] },
+    ...(manaCost ? [{ label: `${manaCost} de Maná`, amount: manaCost, resource: 'mana' }] : []),
+  ], canvasRoguelite: true, logVersion: 2, clientTimestamp: now,
+});
+
 export const buildCanvasHealingPotionLog = ({ scenarioId, useId, token, item, result, resource, now }) => ({
   sourceEventId: useId, scenarioId, eventType: 'item-use', effect: 'heal',
   actorId: token.id, targetId: token.id, actorName: token.name || 'Personaje', itemName: item.name || item.nombre || 'Poción de curación',
@@ -47,11 +70,13 @@ export const buildCanvasCombatLog = ({ pending, attacker, target, defenseDice, r
   const attackerSpentReserve = Array.isArray(pending.attackThreatDice)
     ? attackThreatDice.some(die => die.source === 'stored')
     : pending.usedThreat || attackThreatDice.some(die => die.source === 'stored');
+  const recordAttackCost = !pending.spellCostPaid && (!pending.spellId || (pending.blastIndex || 0) === 0);
   const resourcesSpent = [
+    ...(pending.spellId && recordAttackCost ? [{ side: 'attacker', label: pending.conserved ? 'Copia conservada' : '1 copia preparada', resource: 'spell' }] : []),
     ...(pending.cunningSpent ? [{ side: 'attacker', label: '1 de Astucia', amount: 1, resource: 'astucia' }] : []),
-    ...(pending.manaSpent ? [{ side: 'attacker', label: `${pending.manaSpent} de Maná`, amount: pending.manaSpent, resource: 'mana' }] : []),
+    ...(pending.manaSpent && recordAttackCost ? [{ side: 'attacker', label: `${pending.manaSpent} de Maná`, amount: pending.manaSpent, resource: 'mana' }] : []),
     ...(pending.furySpent ? [{ side: 'attacker', label: `${pending.furySpent} de Furia`, amount: pending.furySpent, resource: 'furia' }] : []),
-    ...(pending.actionDice?.length ? [{ side: 'attacker', label: `${pending.actionDice.length} dado(s) de acción`, diceIds: pending.actionDieIds || [] }] : []),
+    ...(pending.actionDice?.length && recordAttackCost ? [{ side: 'attacker', label: `${pending.actionDice.length} dado(s) de acción`, diceIds: pending.actionDieIds || [] }] : []),
     ...(attacker?.profileType === 'rogueliteEnemy' ? [{ side: 'attacker', label: 'Acción principal' }] : []),
     ...(attackerSpentReserve ? [{ side: 'attacker', label: 'Reserva de Amenaza' }] : []),
     ...(spentDefenseAction ? [{ side: 'target', label: 'Acción principal' }] : defenderDice.length ? [{ side: 'target', label: `${defenderDice.length} dado(s) de defensa`, diceIds: defenderDice.map(die => die.id) }] : []),
@@ -106,5 +131,7 @@ export const buildCanvasCombatLog = ({ pending, attacker, target, defenseDice, r
     baseBlocksLost: { postura: 0, armadura: 0, vida: resolution.normalLifeLost ?? resolution.lifeLost, ...(resolution.temporaryLifeLost ? { vidaTemporal: resolution.temporaryLifeLost } : {}) },
     resourcesSpent,
     canvasRoguelite: true, logVersion: 2, clientTimestamp: now,
+    ...(pending.spellId ? { spellId: pending.spellId, spellCastId: pending.blastId || pending.id } : {}),
+    ...(resolution.fireWeaknessBonus ? { fireWeaknessBonus: resolution.fireWeaknessBonus } : {}),
   };
 };

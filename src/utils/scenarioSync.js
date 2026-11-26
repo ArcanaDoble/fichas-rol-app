@@ -59,7 +59,7 @@ const mergePhysicalInventoryDelta = (current, edited, original) => {
 
 export const CANVAS_RUNTIME_FIELDS = new Set([
   'stats', 'inventory', 'equipmentLoadout', 'equippedItems', 'runRevision', 'runtimeDirty',
-  'canvasRuntimeRevision', 'canvasHealingEffect',
+  'canvasRuntimeRevision', 'canvasHealingEffect', 'status', 'arcaneBarrier',
 ]);
 
 export const isStaleScenarioSnapshot = (current, remote) => (

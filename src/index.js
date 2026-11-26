@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import './index.css'       // <- importa Tailwind + tu CSS
 import 'react-tooltip/dist/react-tooltip.css'
 import App from './App';
+import Canvas3DEntry from './features/canvas/table3d/Canvas3DEntry';
 import { DndProvider } from 'react-dnd';
 import { TouchBackend } from 'react-dnd-touch-backend';
 import { ConfirmProvider } from './components/Confirm';
@@ -23,7 +24,7 @@ root.render(
   <React.StrictMode>
     <DndProvider backend={TouchBackend} options={{ enableMouseEvents: true }}>
       <ConfirmProvider>
-        <App />
+        {window.location.pathname.replace(/\/$/,'') === '/canvas-3d' ? <Canvas3DEntry/> : <App />}
       </ConfirmProvider>
     </DndProvider>
   </React.StrictMode>

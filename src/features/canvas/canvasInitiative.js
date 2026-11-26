@@ -21,8 +21,8 @@ export const buildCanvasTimelineTokens = (items = [], options = {}) => {
         return [{
             ...token,
             initiative: Number(participant.initiative),
-            timelineSide: participant.side === 'enemies' ? 'master' : 'players',
-            initiativeSide: participant.side,
+            timelineSide: (blockEntry?.block.side || participant.side) === 'enemies' ? 'master' : 'players',
+            initiativeSide: blockEntry?.block.side || participant.side,
             initiativeBlockId: blockEntry?.block.id || null,
             initiativeBlockIndex: blockEntry?.blockIndex ?? -1,
             isInitiativeActive: blockEntry?.blockIndex === combatState.activeBlockIndex,

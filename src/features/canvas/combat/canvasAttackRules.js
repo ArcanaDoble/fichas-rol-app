@@ -1,7 +1,9 @@
 import { getTemporaryLife } from '../../tactical-shared/potionBuffs';
+import { getArcaneBarrierBonus } from '../spells/arcaneBarrierState';
 import { isPoisonTrait } from '../../tactical-shared/poisonRules';
 import { resolveEquipmentHandsRequired } from '../../roguelite/equipmentPool';
 import { parseActionDiceCost } from '../../roguelite/catalogItem';
+import { resolveWeaponForm } from '../../roguelite/weaponForms';
 import { canTokenSeeThroughSmoke } from '../../tactical-shared/tokenVisibilityAccess';
 import {
   areTokensAllied,
@@ -74,14 +76,14 @@ export const getCanvasWeaponActionCost = (weapon = {}, attacker = null) => {
 };
 
 const getTokenEquippedItems = (token = {}) => {
-  if (Array.isArray(token.equippedItems) && !token.equipmentLoadout) return token.equippedItems.filter(item => item && typeof item === 'object').map(item => item.payload ? { ...item.payload, ...item } : item);
+  if (Array.isArray(token.equippedItems) && !token.equipmentLoadout) return token.equippedItems.filter(item => item && typeof item === 'object').map(item => resolveWeaponForm(item.payload ? { ...item.payload, ...item } : item));
   const loadout = token.equipmentLoadout || token.equippedItems || {};
   const activeSetIndex = Number(loadout.activeWeaponSet) === 1 ? 1 : 0;
   const activeSet = Array.isArray(loadout.weaponSets)
     ? (loadout.weaponSets[activeSetIndex] || loadout.weaponSets[0] || {})
     : loadout;
   return [['mainHand', activeSet.mainHand], ['offHand', activeSet.offHand], ['body', loadout.body], ['accessory_1', loadout.accessory_1], ['accessory_2', loadout.accessory_2]]
-    .filter(([, item]) => item).map(([canvasSlot, item]) => ({ ...item.payload, ...item, canvasSlot }));
+    .filter(([, item]) => item).map(([canvasSlot, item]) => resolveWeaponForm({ ...item.payload, ...item, canvasSlot }));
 };
 
 export const getCanvasWeaponIdentity = (item = {}) => String(item.runItemId || item.instanceId || item.id || item.catalogId || item.name || item.nombre || '');
@@ -98,7 +100,7 @@ export const getCanvasCombatItems = (token = {}) => {
   const equipped = getTokenEquippedItems(token);
   if (token.profileType !== 'rogueliteEnemy') return equipped;
   const seen = new Set();
-  return [...(Array.isArray(token.inventory) ? token.inventory : []), ...equipped].filter(item => item && typeof item === 'object').map(item => item.payload ? { ...item.payload, ...item } : item).filter(item => {
+  return [...(Array.isArray(token.inventory) ? token.inventory : []), ...equipped].filter(item => item && typeof item === 'object').map(item => resolveWeaponForm(item.payload ? { ...item.payload, ...item } : item)).filter(item => {
     const key = getCanvasWeaponIdentity(item);
     if (seen.has(key)) return false;
     seen.add(key);
@@ -115,6 +117,7 @@ export const getCanvasEquippedWeapons = (token = {}) => (
 
 export const getCanvasDefensiveEquipment = (token = {}) => (
   getCanvasCombatItems(token).filter((item) => {
+    if (getCanvasWeaponTraits(item).includes('sin guardia')) return false;
     if (token.profileType === 'rogueliteEnemy' && isCanvasShield(item)) return true;
     if (parseWeaponDiceProfile(item).length === 0) return false;
     const type = normalizeText(item?.type ?? item?._category ?? item?.category);
@@ -200,6 +203,8 @@ const getRangeValue = (weapon = {}) => {
   return Number.isFinite(numeric) ? numeric : RANGE_VALUES.toque;
 };
 
+export const getCanvasWeaponRange = getRangeValue;
+
 const isOneHanded = (weapon = {}) => resolveEquipmentHandsRequired(weapon) === 1;
 
 export const evaluateCanvasAttackRange = ({
@@ -209,12 +214,13 @@ export const evaluateCanvasAttackRange = ({
   items = [],
   gridConfig = {},
   deferThrownRange = true,
+  allowAlliedTargets = false,
 }) => {
   if (!attacker || !target || !weapon) {
     return { legal: false, reason: 'Faltan atacante, objetivo o arma.' };
   }
 
-  if (attacker.id === target.id || areTokensAllied(attacker, target)) {
+  if (attacker.id === target.id || (!allowAlliedTargets && areTokensAllied(attacker, target))) {
     return { legal: false, reason: 'El objetivo debe ser una criatura enemiga.' };
   }
 
@@ -536,21 +542,32 @@ export const resolveCanvasAttackDamage = ({
   suppressTraits = false,
   defenseCdBonus = 0,
 }) => {
-  const defense = defenseDice.reduce((sum, die) => sum + Math.max(0, asInteger(die.value, 0)), 0);
+  const defense = weapon?.preventsActiveDefense ? 0
+    : defenseDice.reduce((sum, die) => sum + Math.max(0, asInteger(die.value, 0)), 0);
   const finalPressure = Math.max(0, asInteger(attackPressure, 0) - defense);
   const surplus = Math.max(0, defense - asInteger(attackPressure, 0));
   const baseCd = Math.max(1, asInteger(target?.stats?.cd?.current ?? target?.stats?.cd?.max, 1));
   const shieldBonus = target?.profileType === 'rogueliteEnemy'
     ? Math.min(1, Math.max(0, asInteger(defenseCdBonus, 0))) : 0;
-  const protectedCd = baseCd + shieldBonus;
+  const barrierBonus = getArcaneBarrierBonus(target);
+  const protectedCd = baseCd + shieldBonus + barrierBonus;
   const effectiveCd = !suppressTraits && hasCanvasWeaponTrait(weapon, 'perforante')
     ? Math.max(1, protectedCd - 1)
     : protectedCd;
   const currentLife = Math.max(0, asInteger(target?.stats?.vida?.current, 0));
   const temporaryLife = getTemporaryLife(target);
   const damageBlocks = Math.floor(finalPressure / effectiveCd);
-  const temporaryLifeLost = Math.min(temporaryLife, damageBlocks);
-  const normalLifeLost = Math.min(currentLife, damageBlocks - temporaryLifeLost);
+  const weaknessValues = [target?.weaknesses, target?.weakness, target?.debilidades, target?.debilidad]
+    .flatMap(value => Array.isArray(value) ? value : value ? [value] : [])
+    .map(value => normalizeText(typeof value === 'string' ? value : value?.id || value?.name || value?.label));
+  const weaknessTags = [target?.tags, target?.traits, target?.rasgos].flatMap(value => Array.isArray(value) ? value : value ? [value] : [])
+    .map(value => normalizeText(typeof value === 'string' ? value : value?.id || value?.name || value?.label));
+  const weakToFire = weaknessValues.some(value => ['fuego', 'fire', 'debilidad: fuego'].includes(value))
+    || weaknessTags.some(value => /(?:debilidad|weakness)\s*:\s*(?:fuego|fire)(?:\s|$)/.test(value));
+  const fireWeaknessBonus = damageBlocks > 0 && weakToFire && hasCanvasWeaponTrait(weapon, 'fuego')
+    ? Math.min(1, Math.max(0, currentLife + temporaryLife - damageBlocks)) : 0;
+  const temporaryLifeLost = Math.min(temporaryLife, damageBlocks + fireWeaknessBonus);
+  const normalLifeLost = Math.min(currentLife, damageBlocks + fireWeaknessBonus - temporaryLifeLost);
   const lifeLost = normalLifeLost + temporaryLifeLost;
   return {
     defense,
@@ -558,8 +575,10 @@ export const resolveCanvasAttackDamage = ({
     surplus,
     baseCd,
     shieldBonus,
+    ...(barrierBonus ? { barrierBonus } : {}),
     effectiveCd,
     lifeLost,
+    ...(fireWeaknessBonus ? { fireWeaknessBonus } : {}),
     ...(temporaryLife > 0 ? { temporaryLifeLost, normalLifeLost, nextTemporaryLife: temporaryLife - temporaryLifeLost } : {}),
     nextLife: Math.max(0, currentLife - normalLifeLost),
   };

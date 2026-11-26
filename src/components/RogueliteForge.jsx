@@ -30,7 +30,9 @@ import {
   AccessoryCatalogFields,
   ArmorCatalogFields,
   WeaponCatalogFields,
+  TrickWeaponCatalogFields,
 } from './admin/RogueliteCatalogFields';
+import { getWeaponForms, hasWeaponTrick, resolveWeaponForm } from '../features/roguelite/weaponForms';
 import RogueliteInventoryCard from './RogueliteInventoryCard';
 import TraitsInput from './TraitsInput';
 import {
@@ -469,6 +471,9 @@ const RogueliteForge = ({
   const [selectedFile, setSelectedFile] = useState(null);
   const [localPreview, setLocalPreview] = useState('');
   const [removeImage, setRemoveImage] = useState(false);
+  const [editingFormIndex, setEditingFormIndex] = useState(0);
+  const [formImageEdits, setFormImageEdits] = useState({});
+  const formPreviewUrls = useRef(new Set());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [rarityManagerOpen, setRarityManagerOpen] = useState(false);
@@ -528,7 +533,20 @@ const RogueliteForge = ({
 
   const imageRecord = customImages[normalizeKey(draft.nombre)] || null;
   const inheritedImage = asImageSource(editor?.sourceImage || imageRecord?.imageUrl || editor?.item?.image || editor?.item?.icon);
-  const previewImage = removeImage ? '' : (localPreview || inheritedImage);
+  const isTrick = category === 'weapons' && hasWeaponTrick(draft);
+  const forms = isTrick ? getWeaponForms(draft, removeImage ? '' : localPreview || inheritedImage) : [];
+  const formImage = index => {
+    const edit = formImageEdits[forms[index]?.id];
+    if (edit?.remove) return '';
+    return edit?.preview || forms[index]?.image || '';
+  };
+  const previewImage = isTrick ? formImage(editingFormIndex) : removeImage ? '' : (localPreview || inheritedImage);
+  const resetFormEditing = () => {
+    formPreviewUrls.current.forEach(url => URL.revokeObjectURL(url));
+    formPreviewUrls.current.clear();
+    setFormImageEdits({}); setEditingFormIndex(0);
+  };
+  useEffect(() => () => formPreviewUrls.current.forEach(url => URL.revokeObjectURL(url)), []);
 
   const rarityAccent = useMemo(() => {
     const rarityName = draft.rareza || '';
@@ -547,6 +565,7 @@ const RogueliteForge = ({
   }), [activeConfig.singular, category, draft]);
 
   const openNew = () => {
+    resetFormEditing();
     setDraft(activeConfig.empty());
     setEditor({ mode: 'new', item: null, originalName: '' });
     setSelectedFile(null);
@@ -556,6 +575,7 @@ const RogueliteForge = ({
   };
 
   const openEdit = (item) => {
+    resetFormEditing();
     const originalName = getItemName(item);
     const record = customImages[normalizeKey(originalName)];
     setDraft(activeConfig.toForm(item));
@@ -567,6 +587,7 @@ const RogueliteForge = ({
   };
 
   const openDuplicate = (item) => {
+    resetFormEditing();
     const originalName = getItemName(item);
     const sourceImage = asImageSource(customImages[normalizeKey(originalName)]?.imageUrl || item.image || item.icon);
     setDraft({ ...activeConfig.toForm(item), id: '', nombre: `${originalName} (copia)`, fuente: 'custom' });
@@ -578,6 +599,7 @@ const RogueliteForge = ({
   };
 
   const closeEditor = () => {
+    resetFormEditing();
     setMobilePreview(false);
     setEditor(null);
     setSelectedFile(null);
@@ -589,12 +611,20 @@ const RogueliteForge = ({
   const chooseFile = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (isTrick) {
+      const preview = URL.createObjectURL(file);
+      formPreviewUrls.current.add(preview);
+      const id = forms[editingFormIndex].id;
+      setFormImageEdits(current => ({ ...current, [id]: { file, preview, remove: false } }));
+      event.target.value = '';
+      return;
+    }
     setSelectedFile(file);
     setLocalPreview(URL.createObjectURL(file));
     setRemoveImage(false);
   };
 
-  const uploadImage = async (file, name) => {
+  const uploadImage = async (file, name, register = true) => {
     const optimized = await optimizeImageFile(file, { maxWidth: 768, maxHeight: 768, quality: 0.86 });
     const uploadFile = optimized.file;
     const key = normalizeKey(name);
@@ -602,7 +632,7 @@ const RogueliteForge = ({
     const storageRef = ref(storage, `equipment_images/${category}/${key}.${extension}`);
     await uploadBytes(storageRef, uploadFile);
     const imageUrl = await getDownloadURL(storageRef);
-    await setDoc(doc(db, 'equipment_images', key), {
+    if (register) await setDoc(doc(db, 'equipment_images', key), {
       imageUrl,
       itemName: name,
       category,
@@ -626,7 +656,17 @@ const RogueliteForge = ({
       let payload = activeConfig.toStorage({ ...draft, id, nombre: name, fuente: 'custom' });
       let finalImage = '';
 
-      if (selectedFile) {
+      if (isTrick) {
+        const savedForms = [];
+        for (const [index, form] of forms.entries()) {
+          const edit = formImageEdits[form.id];
+          const file = edit?.file || (index === 0 && !edit?.remove ? selectedFile : null);
+          const image = file ? await uploadImage(file, `${name}-${id}-${form.id}`, false)
+            : edit?.remove ? '' : formImage(index);
+          savedForms.push({ ...form, image });
+        }
+        payload = activeConfig.toStorage({ ...draft, id, nombre: name, fuente: 'custom', trickForms: savedForms });
+      } else if (selectedFile) {
         finalImage = await uploadImage(selectedFile, name);
       } else if (!removeImage && inheritedImage) {
         finalImage = inheritedImage;
@@ -712,30 +752,39 @@ const RogueliteForge = ({
               <span className="text-[11px] font-bold uppercase tracking-[0.17em] text-[#9ca8bb]">Vista en inventario</span>
               <span className="text-[10px] text-[#647188]">En tiempo real</span>
             </div>
+            {(isTrick ? forms : [null]).map((form, index) => {
+              const profile = form ? resolveWeaponForm({ ...draft, trickForms: forms, activeFormId: form.id }) : draft;
+              const item = form ? { ...previewItem, ...profile, name: draft.nombre || 'Nueva arma', damage: profile.dano, description: profile.descripcion } : previewItem;
+              return <div key={form?.id || 'single'} className="mb-5">
+              {form && <button type="button" onClick={() => setEditingFormIndex(index)} className={`mb-2 min-h-[36px] w-full border-b pb-2 text-left font-['Cinzel'] text-xs ${editingFormIndex === index ? 'border-[#c8aa6e]/60 text-[#e5d2a4]' : 'border-slate-700 text-slate-500'}`}>{form.label} · Forma {index + 1}</button>}
             <div className="noma-class-inventory-grid noma-forge-inventory-preview grid">
               <div className="noma-class-inventory-entry min-w-0">
               <RogueliteInventoryCard
-                item={previewItem}
-                image={previewImage || null}
+                item={item}
+                image={(form ? formImage(index) : previewImage) || null}
                 fallbackIcon={<activeConfig.icon size={54} />}
                 categoryLabel={activeConfig.singular}
                 rarityAccent={rarityAccent}
                 raritySoft={colorWithAlpha(rarityAccent, 0.22)}
                 rarityFaint={colorWithAlpha(rarityAccent, 0.08)}
-                actionCost={(category === 'weapons' || category === 'abilities') ? Number(draft.actionCost || 0) : null}
-                handsRequired={category === 'weapons' ? Number(draft.handsRequired || 1) : null}
-                visibleTraits={splitTraits(draft.rasgos)}
+                actionCost={(category === 'weapons' || category === 'abilities') ? Number(profile.actionCost || 0) : null}
+                handsRequired={category === 'weapons' ? Number(profile.handsRequired || 1) : null}
+                visibleTraits={splitTraits(profile.rasgos)}
                 glossary={glossary}
               />
               </div>
             </div>
+            </div>;
+            })}
           </aside>
 
           <section className={`noma-forge-fields ${mobilePreview ? 'hidden md:block' : ''} min-w-0 space-y-3`}>
             <Section title="Datos y reglas" hint="Los campos cambian según el tipo de objeto" defaultOpen>
-              <FieldComponent value={draft} setValue={setDraft} rarities={rarities} glossary={glossary} />
+              {isTrick ? <TrickWeaponCatalogFields value={draft} setValue={setDraft} rarities={rarities} glossary={glossary}
+                formIndex={editingFormIndex} onFormChange={setEditingFormIndex} baseImage={removeImage ? '' : localPreview || inheritedImage} />
+                : <FieldComponent value={draft} setValue={setDraft} rarities={rarities} glossary={glossary} />}
             </Section>
-            <Section title="Arte del objeto" hint="Sube una imagen o conserva la actual" defaultOpen={!previewImage}>
+            <Section key={isTrick ? forms[editingFormIndex]?.id : 'art'} title={isTrick ? `Arte · ${forms[editingFormIndex]?.label}` : 'Arte del objeto'} hint="Sube una imagen o conserva la actual" defaultOpen={!previewImage}>
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={chooseFile} />
               <div className="grid gap-3 sm:grid-cols-[120px_1fr] sm:items-center">
                 <div className="flex aspect-square items-center justify-center overflow-hidden rounded-lg border border-dashed border-[#c8aa6e]/30 bg-black/30">
@@ -745,7 +794,10 @@ const RogueliteForge = ({
                   <button type="button" onClick={() => fileInputRef.current?.click()} className="flex min-h-[44px] w-full items-center justify-center gap-2 border border-[#785a28]/80 bg-[#0b1120] px-4 text-xs font-bold uppercase tracking-[0.12em] text-[#c8aa6e] transition-colors hover:border-[#c8aa6e]/70 hover:bg-[#c8aa6e]/[0.07] hover:text-[#ead8ac]">
                     <Upload size={17} /> {previewImage ? 'Cambiar imagen' : 'Subir imagen'}
                   </button>
-                  {previewImage && <button type="button" onClick={() => { setSelectedFile(null); setLocalPreview(''); setRemoveImage(true); }} className="flex min-h-[42px] w-full items-center justify-center gap-2 rounded border border-rose-900/40 px-4 text-xs font-semibold text-rose-300/70 transition-colors hover:bg-rose-950/30 hover:text-rose-300"><Trash2 size={15} /> Quitar imagen</button>}
+                  {previewImage && <button type="button" onClick={() => {
+                    if (isTrick) setFormImageEdits(current => ({ ...current, [forms[editingFormIndex].id]: { remove: true } }));
+                    else { setSelectedFile(null); setLocalPreview(''); setRemoveImage(true); }
+                  }} className="flex min-h-[42px] w-full items-center justify-center gap-2 rounded border border-rose-900/40 px-4 text-xs font-semibold text-rose-300/70 transition-colors hover:bg-rose-950/30 hover:text-rose-300"><Trash2 size={15} /> Quitar imagen</button>}
                   <p className="text-[11px] leading-relaxed text-[#707d92]">Se optimizará automáticamente para que editar desde el móvil sea rápido.</p>
                 </div>
               </div>
@@ -756,7 +808,7 @@ const RogueliteForge = ({
 
         <footer className="fixed inset-x-0 bottom-0 z-40 border-t border-[#c8aa6e]/20 bg-[#09090b]/96 p-3 backdrop-blur">
           <div className="mx-auto grid max-w-xl grid-cols-[auto_1fr_1.3fr] gap-2 md:grid-cols-[0.7fr_1.3fr]">
-            <button type="button" onClick={() => setMobilePreview((visible) => !visible)} className="min-h-[48px] border border-[#785a28]/60 px-3 text-xs text-[#c8aa6e] md:hidden">{mobilePreview ? 'Editar' : 'Ver carta'}</button>
+            <button type="button" onClick={() => setMobilePreview((visible) => !visible)} className="min-h-[48px] border border-[#785a28]/60 px-3 text-xs text-[#c8aa6e] md:hidden">{mobilePreview ? 'Editar' : isTrick ? 'Ver formas' : 'Ver carta'}</button>
             <button type="button" onClick={closeEditor} disabled={saving} className="min-h-[48px] border border-slate-700 font-['Cinzel'] text-xs font-bold uppercase tracking-wider text-slate-400 transition-colors hover:bg-slate-800 hover:text-white disabled:opacity-50">Cancelar</button>
             <button type="button" onClick={saveItem} disabled={saving} className="min-h-[48px] border border-[#c8aa6e]/55 bg-[#785a28]/75 px-4 font-['Cinzel'] text-xs font-bold uppercase tracking-[0.1em] text-[#f0e6d2] transition-colors hover:border-[#d6bd83] hover:bg-[#8b6a32] disabled:opacity-60">
               {saving ? 'Guardando…' : 'Guardar en catálogo'}
@@ -828,7 +880,7 @@ const RogueliteForge = ({
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             {filteredItems.map((item) => {
               const name = getItemName(item);
-              const itemImage = asImageSource(customImages[normalizeKey(name)]?.imageUrl || item.image || item.icon);
+              const itemImage = asImageSource(hasWeaponTrick(item) ? resolveWeaponForm(item).image : customImages[normalizeKey(name)]?.imageUrl || item.image || item.icon);
               const form = activeConfig.toForm(item);
               const rarity = form.rareza || 'Sin rareza';
               const accent = rarityColorMap[rarity] || rarities.find((entry) => entry.nombre === rarity)?.color || FALLBACK_RARITY_COLORS[normalizeText(rarity)] || '#c8aa6e';

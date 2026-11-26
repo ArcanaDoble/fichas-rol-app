@@ -1,8 +1,12 @@
+import CampaignCombatOverlay from './CampaignCombatOverlay';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, X } from 'lucide-react';
 import { useCustomEquipmentImages } from '../../../hooks/useCustomEquipmentImages';
 import { resolveEquipmentImage } from '../../../utils/equipmentImages';
 import { preloadImage } from '../../../components/LoadingImage';
+import { resolveCombatHudObjects } from '../../../utils/combatHudObjects';
+import { getCanvasPreparedSpells, isCanvasMage } from '../spells/canvasSpells';
+import { isSpellResolutionDeferred } from '../spells/canvasSpellPresentation';
 import {
   isCanvasProne,
   getEnemyActiveDefenseEligibility,
@@ -129,7 +133,7 @@ const resolveDefenseAppearance = (token, customImages) => {
   };
 };
 
-const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView, glossary = [] }) => {
+const RogueliteCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView, glossary = [] }) => {
   const customEquipmentImages = useCustomEquipmentImages();
   const draft = combatRuntime?.attackDraft;
   const pending = combatRuntime?.pendingAttack;
@@ -141,6 +145,7 @@ const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView, 
 
   const items = activeScenario?.items || [];
   const participants = combatRuntime?.combatState?.participants;
+  const controlledTokenIds = combatRuntime?.controlledTokenIds;
   const attacker = draft ? items.find((item) => item.id === draft.attackerId) : null;
   const target = draft ? items.find((item) => item.id === draft.targetId) : null;
   const attackerParticipant = draft ? combatRuntime?.combatState?.participants?.[draft.attackerId] : null;
@@ -165,8 +170,21 @@ const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView, 
     const tokenIds = new Set([pending?.targetId, draft?.targetId, ...Object.keys(participants || {})]);
     const sources = new Set(items.filter(item => tokenIds.has(item.id))
       .map(token => resolveDefenseAppearance(token, customEquipmentImages).image).filter(Boolean));
+    // Warm the HUD before selecting a character or opening a category, including
+    // practice mode where there are no combat participants yet.
+    const controlled = new Set(controlledTokenIds || []);
+    items.filter(token => !isPlayerView || controlled.has(token.id)).forEach(token => {
+      const illustratedItems = [
+        ...resolveCombatHudObjects(token),
+        ...(isCanvasMage(token) ? getCanvasPreparedSpells(token).filter(Boolean).map(spell => spell.item) : []),
+      ];
+      illustratedItems.forEach(item => {
+        const src = resolveEquipmentImage(item, customEquipmentImages);
+        if (src) sources.add(src);
+      });
+    });
     sources.forEach(src => { void preloadImage(src); });
-  }, [items, participants, customEquipmentImages, draft?.targetId, pending?.targetId]);
+  }, [items, participants, customEquipmentImages, draft?.targetId, pending?.targetId, controlledTokenIds, isPlayerView]);
 
   useEffect(() => {
     setSelectedActionDice([]);
@@ -184,6 +202,8 @@ const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView, 
   const availableActionDice = useMemo(() => (
     (attackerParticipant?.actionDice || []).filter((die) => die.status === 'available')
   ), [attackerParticipant?.actionDice]);
+
+  if (isSpellResolutionDeferred(combatRuntime?.spellPresentation, pending)) return null;
 
   if (combatRuntime?.pendingBleedingToken) {
     return <ModalFrame variant="defense"><CanvasBleedingChoice token={combatRuntime.pendingBleedingToken}
@@ -205,8 +225,10 @@ const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView, 
   if (pending && canResolvePending) {
     const defenseAppearance = resolveDefenseAppearance(pendingTarget, customEquipmentImages);
     const isEnemyTarget = pendingTarget?.profileType === 'rogueliteEnemy';
+    const preventsActiveDefense = Boolean(pending.weapon?.preventsActiveDefense);
     const enemyDefense = isEnemyTarget
-      ? getEnemyActiveDefenseEligibility({ token: pendingTarget, participant: pendingTargetParticipant })
+      ? preventsActiveDefense ? { eligible: false, reason: 'Proyectil arcano impide la defensa activa. Conservas la protección pasiva.' }
+        : getEnemyActiveDefenseEligibility({ token: pendingTarget, participant: pendingTargetParticipant })
       : null;
     const storedThreatValue = pendingTargetParticipant?.threatValue;
 
@@ -277,7 +299,7 @@ const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView, 
       );
     }
 
-    const defenseDice = getUsableDefenseDice(pendingTargetParticipant);
+    const defenseDice = preventsActiveDefense ? [] : getUsableDefenseDice(pendingTargetParticipant);
     const selectedDefenseObjects = defenseDice.filter((die) => selectedDefenseDice.includes(die.id));
     const preview = resolveCanvasAttackDamage({
       attackPressure: pending.pressure?.total,
@@ -302,7 +324,7 @@ const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView, 
             </button>
           )}
         >
-          <section aria-label="Dados de defensa">
+          {preventsActiveDefense ? <p className="attack-defense-note">Proyectil arcano impide la defensa activa. El impacto se resuelve contra tu CD.</p> : <section aria-label="Dados de defensa">
             <div className="attack-defense-pool-heading"><h3>Elige tu defensa</h3><span>{selectedDefenseDice.length} {selectedDefenseDice.length === 1 ? 'dado' : 'dados'}</span></div>
             <div className="combat-dice-tray combat-defense-dice-tray">
               {defenseDice.length > 0 ? defenseDice.map(die => (
@@ -310,7 +332,7 @@ const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView, 
                   onClick={() => setSelectedDefenseDice(current => current.includes(die.id) ? current.filter(id => id !== die.id) : [...current, die.id])} />
               )) : <p className="attack-defense-note">Sin dados para defender</p>}
             </div>
-          </section>
+          </section>}
         </CanvasAttackDefense>
       </ModalFrame>
     );
@@ -343,4 +365,8 @@ const CanvasCombatActionModal = ({ activeScenario, combatRuntime, isPlayerView, 
   );
 };
 
+const CanvasCombatActionModal = props => props.combatRuntime?.campaignVisible
+  ? <CampaignCombatOverlay {...props} />
+  : <RogueliteCombatActionModal {...props} combatRuntime={props.combatRuntime?.pendingAttack?.kind === 'campaign-attack'
+    ? { ...props.combatRuntime, pendingAttack: null } : props.combatRuntime} />;
 export default CanvasCombatActionModal;

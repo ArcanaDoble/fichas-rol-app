@@ -1,0 +1,31 @@
+{
+  "feature": "Imágenes guardadas de habilidades enemigas al añadir y reabrir tokens del Canvas",
+  "url": "https://base-de-datos-noma.web.app",
+  "verifiedAt": "2026-10-22T13:30:48.802Z",
+  "assets": [
+    {
+      "asset": "/static/js/main.85b04cc7.js",
+      "sha256": "41e4fb997736c17780c4f2e003a3010382f449e03ffe061fa2f12311c85c90e4",
+      "bytes": 5328641
+    },
+    {
+      "asset": "/static/css/main.057a07c9.css",
+      "sha256": "5078afd72e7e88d22b2dcc800b7971c2cc887276a2208b50cf87933914d9db71",
+      "bytes": 701011
+    }
+  ],
+  "tests": {
+    "suites": 230,
+    "passed": 1600,
+    "skipped": 1,
+    "focusedPassed": 26
+  },
+  "browser": {
+    "desktop": "1280x1000: direct spawn and reopen using production inspector and CSS, images loaded",
+    "mobile": "390x844: same flow, images loaded, no horizontal overflow"
+  },
+  "buildLog": "output/playwright/enemy-ability-images-build.log",
+  "testLog": "output/playwright/enemy-ability-images-tests.log",
+  "focusedLog": "output/playwright/enemy-ability-images-focused.log",
+  "deployLog": "output/playwright/enemy-ability-images-deploy.log"
+}

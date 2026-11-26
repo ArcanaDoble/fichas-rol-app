@@ -1,7 +1,8 @@
 import { refreshForgeEquipment } from '../utils/forgeEquipmentSync';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FreeParryEntry } from '../features/parry-free/FreeParryProvider';
 import PropTypes from 'prop-types';
-import { collection, doc, getDocs, setDoc, addDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, addDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import {
   FiChevronDown,
   FiArrowLeft,
@@ -40,6 +41,7 @@ import {
   Footprints,
   Gauge,
   Heart,
+  Brain,
   Zap,
   Map,
   Shield,
@@ -61,6 +63,9 @@ import { uploadDataUrl } from '../utils/storage';
 import Sidebar, { MobileNav } from './Sidebar';
 import ProgressionView from './ProgressionView';
 import LoadoutView from './LoadoutView';
+import { sheetWeaponFormsChanged, transformSheetWeapon } from '../features/roguelite/ownedWeaponForms';
+import { useSheetWeaponTrick } from '../features/roguelite/useSheetWeaponTrick';
+import { commitCampaignWeaponFormSave } from '../features/roguelite/sheetWeaponTrickPersistence';
 import DeckBuilderView from './DeckBuilderView';
 import CardBuilder from './CardBuilder';
 import HexIcon from './HexIcon';
@@ -69,6 +74,10 @@ import KarmaBar from './KarmaBar';
 import { LibraryCharacterCard } from './LibraryCharacterCard';
 import LoadingImage from './LoadingImage';
 import ActionDieSvg from './ActionDieSvg';
+import DiceSelector from './ActionDiceSelector';
+import { useCustomEquipmentImages, getCustomImage } from '../hooks/useCustomEquipmentImages';
+import { resolveEquipmentImage } from '../utils/equipmentImages';
+import './CampaignStats.css';
 import { isYuuzuName, KARMA_MIN, KARMA_MAX } from '../utils/karma';
 import {
   createRogueliteProfileClass,
@@ -87,6 +96,29 @@ import {
 } from '../features/roguelite/equipmentPool';
 import { resolveRogueliteClassLevels } from '../features/roguelite/progression';
 import { resolveRogueliteTalentCatalog } from '../features/roguelite/talents';
+import {
+  CAMPAIGN_CHARACTER_SHEET_COLLECTION,
+  CAMPAIGN_SYSTEM_ID,
+  normalizeCampaignSheet,
+  switchCampaignPersonality,
+  validateCampaignSheet,
+} from '../features/campaign/characterSheet';
+import { CAMPAIGN_PERSONALITIES, resolveCampaignPersonality } from '../features/campaign/personalities';
+import { isCampaignCharacter } from '../features/campaign/roster';
+import CampaignTalentsView from '../features/campaign/CampaignTalentsView';
+import CampaignYermo from '../features/campaign/CampaignYermo';
+import {
+  applyCampaignProtectionRdChange,
+  equipCampaignProtection,
+  getCampaignEquipmentState,
+  removeCampaignEquipment,
+} from '../features/campaign/campaignEquipment';
+import {
+  getCampaignLoadoutTalentCatalog,
+  getCampaignTalentSlots,
+  setCampaignLoadoutTalentCatalog,
+  setCampaignLoadoutTalentSlots,
+} from '../features/campaign/campaignTalents';
 import {
   createRogueliteActiveRun,
   rebaseRogueliteActiveRun,
@@ -1466,88 +1498,10 @@ const EditableText = ({ value, onChange, className = '', multiline = false, plac
   );
 };
 
-const DiceSelector = ({ value, onChange }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const diceOptions = ['d4', 'd6', 'd8', 'd10', 'd12'];
-  const getFaces = (die) => Number.parseInt(String(die).replace(/\D/g, ''), 10) || 6;
-
-  return (
-    <div className="relative" ref={containerRef}>
-      <button
-        type="button"
-        aria-label={value}
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex h-[72px] w-[72px] items-center justify-center transition-transform hover:-translate-y-1 focus:outline-none focus-visible:ring-1 focus-visible:ring-[#c8aa6e]"
-      >
-        <ActionDieSvg
-          faces={getFaces(value)}
-          value={getFaces(value)}
-          title={value.toUpperCase()}
-          className="h-full w-full"
-        />
-      </button>
-
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-[#0f172a] border border-[#c8aa6e]/40 rounded-xl shadow-[0_0_15px_rgba(0,0,0,0.5)] z-50 p-2 grid grid-cols-5 gap-x-1 gap-y-0 w-[210px] backdrop-blur-md"
-          >
-            {diceOptions.map((dice) => {
-              const gridPos = {
-                'd4': 'col-start-1 row-start-1',
-                'd10': 'col-start-2 row-start-2',
-                'd6': 'col-start-3 row-start-1',
-                'd12': 'col-start-4 row-start-2',
-                'd8': 'col-start-5 row-start-1',
-              }[dice];
-
-              return (
-                <button
-                  key={dice}
-                  type="button"
-                  aria-label={dice}
-                  onClick={() => {
-                    onChange(dice);
-                    setIsOpen(false);
-                  }}
-                  className={`flex flex-col items-center justify-center p-1 rounded-lg transition-all duration-200 group ${gridPos} ${value === dice ? 'bg-[#c8aa6e]/20 border border-[#c8aa6e]/50' : 'hover:bg-[#c8aa6e]/10 border border-transparent'}`}
-                >
-                  <div className="w-8 h-8 mb-0.5 transition-transform group-hover:scale-110">
-                    <ActionDieSvg
-                      faces={getFaces(dice)}
-                      value={getFaces(dice)}
-                      title={dice.toUpperCase()}
-                      className="h-full w-full"
-                      selected={value === dice}
-                    />
-                  </div>
-                  <span className={`text-[9px] font-bold uppercase tracking-tighter ${value === dice ? 'text-[#c8aa6e]' : 'text-slate-400 group-hover:text-[#c8aa6e]'}`}>
-                    {dice.toUpperCase()}
-                  </span>
-                </button>
-              );
-            })}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
+const parseCampaignSheetNumber = (value) => {
+  if (value === '') return null;
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number >= 0 ? number : null;
 };
 
 const ClassList = ({
@@ -1562,9 +1516,9 @@ const ClassList = ({
   backButtonLabel = "Volver al menú",
   onLaunchMinigame,
   onLaunchDiceCalculator,
-  onLaunchSpeedSystem,
   onLaunchMinimap,
   onLaunchCanvas,
+  onLaunchCanvas3D,
   onLaunchBoard,
   title = "Lista de Clases",
   subtitle = "Gestiona el archivo de héroes. Personaliza los retratos y estados para tu próxima sesión.",
@@ -1589,6 +1543,14 @@ const ClassList = ({
   const [sortBy, setSortBy] = useState('alphaAsc');
   const [selectedClass, setSelectedClass] = useState(null);
   const [detailPersistence, setDetailPersistence] = useState(null);
+  const [campaignSheetState, setCampaignSheetState] = useState({
+    status: 'idle', characterId: null, saved: null, draft: null, error: null,
+  });
+  const [campaignSaveError, setCampaignSaveError] = useState('');
+  const [campaignSheetRetry, setCampaignSheetRetry] = useState(0);
+  const [isCampaignStatsEditing, setIsCampaignStatsEditing] = useState(false);
+  const isCampaignDetail = isPlayerMode
+    && isCampaignCharacter(selectedClass, { collectionPath, persistenceMode: detailPersistence?.mode });
   const [isMobile, setIsMobile] = useState(false);
   const [mobileActiveView, setMobileActiveView] = useState('list');
   const [activeDetailTab, setActiveDetailTab] = useState('overview');
@@ -1611,6 +1573,14 @@ const ClassList = ({
   const imageRef = useRef(null);
 
   const [editingClass, setEditingClass] = useState(null);
+  const campaignParryTagIndex = isCampaignDetail
+    ? (editingClass?.tags || []).findIndex(tag => ['velocidad', 'parry', 'parry libre'].includes(parseTag(tag).name.toLowerCase().trim()))
+    : -1;
+  const campaignParryActor = {
+    name:editingClass?.name,
+    image:editingClass?.avatar || editingClass?.image || '',
+    characterId:String(editingClass?.id || selectedClass?.id || ''),
+  };
   const hasLocalClassDraftRef = useRef(false);
   const [levelSliderLimit, setLevelSliderLimit] = useState(12);
   const [equipmentSearchTerms, setEquipmentSearchTerms] = useState({
@@ -1620,6 +1590,7 @@ const ClassList = ({
   });
   const [saveButtonState, setSaveButtonState] = useState('idle'); // 'idle', 'saving', 'success', 'error'
   const [isCreating, setIsCreating] = useState(false);
+  const isCreatingCharacter = isCreating && collectionPath === 'characters';
   const [statusEffectsConfig, setStatusEffectsConfig] = useState(DEFAULT_STATUS_EFFECTS);
   const [showStatusSelector, setShowStatusSelector] = useState(false);
   const [viewingStatusEffect, setViewingStatusEffect] = useState(null);
@@ -1647,6 +1618,41 @@ const ClassList = ({
     if (!editingClass || !selectedClass) return false;
     return JSON.stringify(editingClass) !== JSON.stringify(selectedClass);
   }, [editingClass, selectedClass]);
+
+  const hasCampaignUnsavedChanges = useMemo(() => (
+    isCampaignDetail
+    && campaignSheetState.status === 'ready'
+    && campaignSheetState.characterId === selectedClass?.id
+    && JSON.stringify(campaignSheetState.draft) !== JSON.stringify(campaignSheetState.saved)
+  ), [isCampaignDetail, campaignSheetState, selectedClass?.id]);
+
+  useEffect(() => {
+    if (!isCampaignDetail || !selectedClass?.id) {
+      setCampaignSheetState({ status: 'idle', characterId: null, saved: null, draft: null, error: null });
+      return undefined;
+    }
+
+    let active = true;
+    const characterId = String(selectedClass.id);
+    const identity = {
+      characterId,
+      owner: selectedClass.owner || currentUserId || '',
+      personalityId: resolveCampaignPersonality(selectedClass.name)?.id,
+    };
+    setCampaignSheetState({ status: 'loading', characterId, saved: null, draft: null, error: null });
+    getDoc(doc(db, CAMPAIGN_CHARACTER_SHEET_COLLECTION, characterId))
+      .then((snapshot) => {
+        if (!active) return;
+        const sheet = normalizeCampaignSheet(snapshot.exists() ? snapshot.data() : null, identity);
+        setCampaignSheetState({ status: 'ready', characterId, saved: sheet, draft: sheet, error: null });
+      })
+      .catch((error) => {
+        if (!active) return;
+        console.error('Error loading campaign character sheet:', error);
+        setCampaignSheetState({ status: 'error', characterId, saved: null, draft: null, error });
+      });
+    return () => { active = false; };
+  }, [isCampaignDetail, selectedClass?.id, selectedClass?.owner, currentUserId, campaignSheetRetry]);
 
   const [forgeCatalog, setForgeCatalog] = useState({});
   useEffect(() => {
@@ -1953,6 +1959,8 @@ const ClassList = ({
 
   const openClassDetails = (classItem, persistence = null) => {
     setSaveStatus(null);
+    setCampaignSaveError('');
+    setIsCampaignStatsEditing(false);
     setDetailPersistence(persistence);
     const sanitized = ensureClassDefaults(classItem);
     setSelectedClass(sanitized);
@@ -1968,6 +1976,8 @@ const ClassList = ({
 
   const closeClassDetails = () => {
     setSaveStatus(null);
+    setCampaignSaveError('');
+    setIsCampaignStatsEditing(false);
     setSelectedClass(null);
     setDetailPersistence(null);
     setActiveDetailTab('overview');
@@ -2008,10 +2018,68 @@ const ClassList = ({
     });
   };
 
+  const sheetWeaponTrick = useSheetWeaponTrick({
+    sheet: editingClass, enabled: !readOnly,
+    onPrepare: (weapon, formId) => {
+      const source = isCampaignDetail ? { ...editingClass, ...getCampaignEquipmentState(editingClass) } : editingClass;
+      const next = transformSheetWeapon(source, weapon, formId);
+      hasLocalClassDraftRef.current = true;
+      setEditingClass(next);
+    },
+  });
+
   // Funciones de actualización para campos editables
   const handleUpdateClassField = (field, value) => {
     updateEditingClass((draft) => {
       draft[field] = value;
+    });
+  };
+
+  const handleUpdateCampaignSheet = (nextSheet) => {
+    if (!isCampaignDetail || !selectedClass?.id) return;
+    setCampaignSaveError('');
+    setCampaignSheetState((previous) => {
+      if (previous.status !== 'ready' || previous.characterId !== String(selectedClass.id)) return previous;
+      return {
+        ...previous,
+        draft: normalizeCampaignSheet(nextSheet, {
+          characterId: selectedClass.id,
+          owner: selectedClass.owner || currentUserId || '',
+        }),
+      };
+    });
+  };
+
+  const handleSelectPersonality = (personality) => {
+    if (isCampaignDetail) {
+      if (campaignSheetState.status !== 'ready' || saveButtonState === 'saving' || readOnly) return;
+      if (campaignSheetState.draft.activePersonality === personality.id) return;
+      setCampaignSaveError('');
+      setCampaignSheetState((previous) => ({
+        ...previous,
+        draft: switchCampaignPersonality(previous.draft, personality.id, {
+          characterId: selectedClass.id,
+          owner: selectedClass.owner || currentUserId || '',
+        }),
+      }));
+    }
+    updateEditingClass((draft) => {
+      if (isCampaignDetail) {
+        const currentId = campaignSheetState.draft.activePersonality;
+        draft.personalityPortraits = {
+          ...draft.personalityPortraits,
+          [currentId]: {
+            image: draft.image || '',
+            avatar: draft.avatar || '',
+            portraitSource: draft.portraitSource || '',
+          },
+        };
+      }
+      const portrait = isCampaignDetail ? draft.personalityPortraits?.[personality.id] : null;
+      draft.image = portrait?.image || personality.src;
+      draft.avatar = portrait?.avatar || portrait?.image || personality.src;
+      draft.portraitSource = portrait?.portraitSource || portrait?.image || personality.src;
+      draft.name = personality.name;
     });
   };
 
@@ -2076,6 +2144,7 @@ const ClassList = ({
 
     // Normalizar el item para asegurar que tiene todas las propiedades necesarias
     const normalized = {
+      ...(isCampaignDetail ? payload : {}),
       templateId: createEquipmentTemplateId(payload, category),
       name: payload.name || payload.nombre || 'Item sin nombre',
       category: payload.category || 'General',
@@ -2090,7 +2159,7 @@ const ClassList = ({
         : {}),
       physicalLoad: payload.physicalLoad || payload.cargaFisica || '',
       mentalLoad: payload.mentalLoad || payload.cargaMental || '',
-      defense: payload.defense || payload.defensa || '',
+      defense: payload.defense ?? payload.defensa ?? '',
       traits: payload.traits || payload.rasgos || payload.trait || '',
       rareza: payload.rareza || payload.rarity || '',
       description: payload.description || payload.descripcion || '',
@@ -2126,8 +2195,26 @@ const ClassList = ({
     });
   };
 
+  const syncCampaignProtectionRd = (previousItems, nextItems) => {
+    if (!isCampaignDetail) return;
+    setCampaignSheetState((previous) => {
+      if (previous.status !== 'ready' || previous.characterId !== String(selectedClass?.id)) return previous;
+      const draft = applyCampaignProtectionRdChange(previous.draft, previousItems, nextItems);
+      return draft === previous.draft ? previous : { ...previous, draft };
+    });
+  };
+
   const handleRemoveEquipment = (index, category) => {
+    if (isCampaignDetail) {
+      const previous = getCampaignEquipmentState(editingClass);
+      const next = removeCampaignEquipment(editingClass, category, index);
+      syncCampaignProtectionRd(previous.equippedItems, next.equippedItems);
+    }
     updateEditingClass((draft) => {
+      if (isCampaignDetail) {
+        Object.assign(draft, removeCampaignEquipment(draft, category, index));
+        return;
+      }
       if (!draft.equipment || Array.isArray(draft.equipment)) return;
 
       if (category && draft.equipment[category]) {
@@ -2165,6 +2252,9 @@ const ClassList = ({
     }
 
     try {
+      if (collectionPath === 'characters') {
+        await deleteDoc(doc(db, CAMPAIGN_CHARACTER_SHEET_COLLECTION, classId));
+      }
       await deleteDoc(doc(db, collectionPath, classId));
       setClasses((prev) => prev.filter((c) => c.id !== classId));
 
@@ -2193,6 +2283,12 @@ const ClassList = ({
 
   const handleUpdateTalentCatalog = (talentCatalog) => {
     updateEditingClass((draft) => {
+      if (isCampaignDetail) {
+        const next = setCampaignLoadoutTalentCatalog(draft, talentCatalog);
+        draft.actionData = next.actionData;
+        draft.talents = next.talents;
+        return;
+      }
       draft.talentCatalog = talentCatalog;
       draft.roguelite = {
         ...(draft.roguelite || {}),
@@ -2203,6 +2299,12 @@ const ClassList = ({
 
   const handleUpdateEquippedTalentIds = (equippedTalentIds) => {
     updateEditingClass((draft) => {
+      if (isCampaignDetail) {
+        const next = setCampaignLoadoutTalentSlots(draft, equippedTalentIds);
+        draft.actionData = next.actionData;
+        draft.talents = next.talents;
+        return;
+      }
       draft.equippedTalentIds = equippedTalentIds;
       draft.talents = {
         ...(draft.talents || {}),
@@ -2248,7 +2350,7 @@ const ClassList = ({
           return {
             name: payload.name || 'Armadura sin nombre',
             category: payload.category || 'Armadura',
-            defense: payload.defense || '',
+            defense: payload.defense ?? '',
             physicalLoad: payload.physicalLoad || payload.weight || '',
             mentalLoad: payload.mentalLoad || '',
             traits: payload.traits || '',
@@ -2307,11 +2409,19 @@ const ClassList = ({
   };
 
   const handleUpdateEquipped = (slot, item, options = {}) => {
+    if (isCampaignDetail && ['body', 'reinforcement'].includes(slot)) {
+      const previous = getCampaignEquipmentState(editingClass).equippedItems;
+      const next = equipCampaignProtection(previous, slot, item);
+      if (next === previous) return;
+      syncCampaignProtectionRd(previous, next);
+    }
     updateEditingClass((draft) => {
+      if (isCampaignDetail) Object.assign(draft, getCampaignEquipmentState(draft));
       const equippedItems = draft.equippedItems || { mainHand: null, offHand: null, body: null };
 
       if (slot === 'activeWeaponSet') {
         draft.equippedItems = activateWeaponSet(equippedItems, item);
+        return;
       } else if (
         (slot === 'mainHand' || slot === 'offHand')
         && Number.isInteger(options.weaponSetIndex)
@@ -2325,7 +2435,9 @@ const ClassList = ({
         return;
       }
 
-      draft.equippedItems = equipItemInSlot(equippedItems, slot, item);
+      draft.equippedItems = isCampaignDetail && ['body', 'reinforcement'].includes(slot)
+        ? equipCampaignProtection(equippedItems, slot, item)
+        : equipItemInSlot(equippedItems, slot, item);
     });
   };
 
@@ -2416,7 +2528,7 @@ const ClassList = ({
     });
   };
 
-  const handleSaveNewClass = async (newClass) => {
+  const handleSaveNewClass = async (newClass, initialCampaignSheet = null) => {
     try {
       let imageUrl = newClass.image;
       let avatarUrl = newClass.avatar;
@@ -2446,9 +2558,24 @@ const ClassList = ({
         owner: ownerFilter || newClass.owner || 'master',
       };
 
-      await setDoc(doc(db, collectionPath, newClass.id), classToSave);
+      if (collectionPath === 'characters') {
+        classToSave.systemId = CAMPAIGN_SYSTEM_ID;
+        const sheet = normalizeCampaignSheet(initialCampaignSheet, {
+          characterId: newClass.id,
+          owner: classToSave.owner,
+        });
+        const errors = validateCampaignSheet(sheet);
+        if (errors.length) throw new Error(errors[0]);
+        const batch = writeBatch(db);
+        batch.set(doc(db, collectionPath, newClass.id), pruneUndefined(classToSave));
+        batch.set(doc(db, CAMPAIGN_CHARACTER_SHEET_COLLECTION, newClass.id), sheet);
+        await batch.commit();
+      } else {
+        await setDoc(doc(db, collectionPath, newClass.id), classToSave);
+      }
       setClasses((prev) => [...prev, classToSave]);
       setIsCreating(false);
+      if (collectionPath === 'characters') openClassDetails(classToSave);
     } catch (error) {
       console.error("Error creating class:", error);
       throw error;
@@ -2733,8 +2860,79 @@ const ClassList = ({
     if (!editingClass) return;
 
     setSaveButtonState('saving');
+    setCampaignSaveError('');
 
     try {
+      if (isCampaignDetail) {
+        if (campaignSheetState.status !== 'ready' || campaignSheetState.characterId !== String(selectedClass?.id)) {
+          throw new Error('La ficha de Campaña aún no está disponible. Vuelve a abrirla e inténtalo de nuevo.');
+        }
+
+        const identity = {
+          characterId: selectedClass.id,
+          owner: selectedClass.owner || currentUserId || '',
+        };
+        const campaignSheet = normalizeCampaignSheet(campaignSheetState.draft, identity);
+        const sheetErrors = validateCampaignSheet(campaignSheet);
+        if (sheetErrors.length > 0) throw new Error(sheetErrors[0]);
+
+        const legacyChanged = hasUnsavedChanges;
+        const campaignChanged = hasCampaignUnsavedChanges;
+        if (!legacyChanged && !campaignChanged) {
+          setSaveButtonState('idle');
+          return;
+        }
+
+        const batch = writeBatch(db);
+        const writes = [];
+        let savedCharacter = null;
+        if (legacyChanged) {
+          savedCharacter = ensureClassDefaults(editingClass);
+          savedCharacter.systemId = CAMPAIGN_SYSTEM_ID;
+          savedCharacter.id = String(selectedClass.id);
+          savedCharacter.image = normalizeImageValue(savedCharacter.image);
+          batch.set(getDetailDocumentRef(savedCharacter.id), pruneUndefined(savedCharacter), { merge: true });
+          writes.push({ ref: getDetailDocumentRef(savedCharacter.id), value: pruneUndefined(savedCharacter) });
+        }
+        if (campaignChanged) {
+          writes.push({ ref: doc(db, CAMPAIGN_CHARACTER_SHEET_COLLECTION, String(selectedClass.id)), value: campaignSheet });
+          batch.set(
+            doc(db, CAMPAIGN_CHARACTER_SHEET_COLLECTION, String(selectedClass.id)),
+            campaignSheet,
+            { merge: true },
+          );
+        }
+        if (sheetWeaponFormsChanged(selectedClass, editingClass)) {
+          await commitCampaignWeaponFormSave({ character: { ...savedCharacter, campaignSheet }, writes,
+            catalogs: { armas, armaduras, habilidades, accesorios } });
+        } else await batch.commit();
+
+        if (savedCharacter) {
+          setClasses((previous) => previous.map((entry) => (
+            entry.id === savedCharacter.id ? savedCharacter : entry
+          )));
+          setSelectedClass(savedCharacter);
+          setEditingClass(deepClone(savedCharacter));
+          hasLocalClassDraftRef.current = false;
+          window.dispatchEvent(new CustomEvent('playerSheetSaved', {
+            detail: { name: savedCharacter.name, sheet: { ...savedCharacter, profileType: 'campaignCharacter', campaignSheet }, collection: collectionPath, preserveTokenState: !campaignChanged },
+          }));
+        }
+        if (campaignChanged) {
+          if (!savedCharacter) window.dispatchEvent(new CustomEvent('playerSheetSaved', {
+            detail: { name: editingClass.name, sheet: { ...editingClass, profileType: 'campaignCharacter', campaignSheet }, collection: collectionPath },
+          }));
+          setCampaignSheetState((previous) => ({
+            ...previous,
+            saved: campaignSheet,
+            draft: campaignSheet,
+          }));
+        }
+        setSaveButtonState('success');
+        setTimeout(() => setSaveButtonState('idle'), 2000);
+        return;
+      }
+
       // Preparar datos para Firebase
       const sanitized = ensureClassDefaults(editingClass);
       let classId = sanitized.id?.toString().trim();
@@ -2862,6 +3060,7 @@ const ClassList = ({
       setTimeout(() => setSaveButtonState('idle'), 2000);
     } catch (error) {
       console.error('Error final en handleSaveChanges:', error);
+      if (isCampaignDetail) setCampaignSaveError(error.message || 'No se pudo guardar la ficha de Campaña.');
       setSaveButtonState('error');
       // No reseteamos a idle inmediatamente para que el usuario vea el error
       setTimeout(() => setSaveButtonState('idle'), 4000);
@@ -3940,10 +4139,12 @@ const ClassList = ({
 
       const storagePrefix = detailPersistence?.storagePrefix
         || (collectionPath === 'classes' ? 'class' : 'character');
+      const personalityId = isCampaignDetail ? campaignSheetState.draft?.activePersonality : null;
+      const portraitId = personalityId ? `${classId}-${personalityId}` : classId;
 
       // 0. If it's a new upload, save the RAW source first
       if (cropperState.isNewUpload && cropperState.imageSrc.startsWith('data:')) {
-        const sourcePath = `${storagePrefix}-sources/${classId}`;
+        const sourcePath = `${storagePrefix}-sources/${portraitId}`;
         const sourceUrl = await uploadDataUrl(cropperState.imageSrc, sourcePath);
         updates.portraitSource = sourceUrl;
         hasUpdates = true;
@@ -3952,7 +4153,7 @@ const ClassList = ({
       // 1. Process Main Card Image
       const cardDataUrl = await generateCustomImage('CARD');
       if (cardDataUrl) {
-        const filePath = `${storagePrefix}-images/${classId}`;
+        const filePath = `${storagePrefix}-images/${portraitId}`;
         const url = await uploadDataUrl(cardDataUrl, filePath);
         updates.image = normalizeImageValue(url);
         hasUpdates = true;
@@ -3961,21 +4162,37 @@ const ClassList = ({
       // 2. Process Avatar Image
       const avatarDataUrl = await generateCustomImage('AVATAR');
       if (avatarDataUrl) {
-        const filePath = `${storagePrefix}-avatars/${classId}`;
+        const filePath = `${storagePrefix}-avatars/${portraitId}`;
         const url = await uploadDataUrl(avatarDataUrl, filePath);
         updates.avatar = normalizeImageValue(url);
         hasUpdates = true;
       }
 
       if (hasUpdates) {
-        await setDoc(getDetailDocumentRef(classId), updates, { merge: true });
+        let persistedUpdates = updates;
+        if (personalityId) {
+          updates.personalityPortraits = {
+            ...editingClass.personalityPortraits,
+            [personalityId]: {
+              image: updates.image || editingClass.image || '',
+              avatar: updates.avatar || editingClass.avatar || '',
+              portraitSource: updates.portraitSource || editingClass.portraitSource || '',
+            },
+          };
+          // A portrait edit must not change the saved active personality when
+          // the user has only switched to another profile in the local draft.
+          if (campaignSheetState.saved?.activePersonality !== personalityId) {
+            persistedUpdates = { personalityPortraits: updates.personalityPortraits };
+          }
+        }
+        await setDoc(getDetailDocumentRef(classId), persistedUpdates, { merge: true });
 
         if (detailPersistence?.updateMainLibrary !== false) {
-          setClasses((prev) => prev.map((c) => c.id === classId ? { ...c, ...updates } : c));
+          setClasses((prev) => prev.map((c) => c.id === classId ? { ...c, ...persistedUpdates } : c));
         }
 
         if (selectedClass?.id === classId) {
-          setSelectedClass((prev) => ({ ...prev, ...updates }));
+          setSelectedClass((prev) => ({ ...prev, ...persistedUpdates }));
         }
         if (editingClass?.id === classId) {
           setEditingClass((prev) => ({ ...prev, ...updates }));
@@ -4004,6 +4221,10 @@ const ClassList = ({
 
     const isRoguelitePlayerClass = detailPersistence?.mode === 'roguelite';
     const isRogueliteClassSummary = isRoguelitePlayerClass || !isPlayerMode;
+    const campaignSheetReady = isCampaignDetail
+      && campaignSheetState.status === 'ready'
+      && campaignSheetState.characterId === String(editingClass.id);
+    const campaignSheet = campaignSheetReady ? campaignSheetState.draft : null;
 
     const updateMasterRogueliteField = (field, value) => {
       updateEditingClass((draft) => {
@@ -4014,6 +4235,10 @@ const ClassList = ({
 
     const updateMasterRogueliteResource = (field, value) => {
       updateEditingClass((draft) => {
+        if (isCampaignDetail) {
+          draft.talents = { ...(draft.talents || {}), [field === 'name' ? 'title' : field]: value };
+          return;
+        }
         const resource = { ...(draft.roguelite?.resource || {}), ...(draft.resource || {}) };
         resource[field] = value;
         draft.resource = resource;
@@ -4046,10 +4271,13 @@ const ClassList = ({
       equipment: editingClass.equipment || [],
       classEquipmentPool: editingClass.classEquipmentPool || null,
       talents: editingClass.talents || {},
-      resource: editingClass.resource || editingClass.roguelite?.resource || {},
-      talentCatalog: resolveRogueliteTalentCatalog(editingClass),
-      equippedTalentIds: editingClass.equippedTalentIds || [],
-      equippedSkillIds: editingClass.equippedSkillIds || [],
+      resource: isCampaignDetail ? {
+        ...editingClass.talents,
+        name: editingClass.talents?.title || '',
+      } : editingClass.resource || editingClass.roguelite?.resource || {},
+      talentCatalog: isCampaignDetail ? getCampaignLoadoutTalentCatalog(editingClass) : resolveRogueliteTalentCatalog(editingClass),
+      equippedTalentIds: isCampaignDetail ? getCampaignTalentSlots(editingClass).map((talent) => talent?.id || null) : editingClass.equippedTalentIds || [],
+      equippedSkillIds: editingClass.equippedSkillIds || (isCampaignDetail ? editingClass.skills?.slots : null) || [],
       activeRun: editingClass.activeRun || null,
       hasActiveRun: Boolean(editingClass.hasActiveRun || (editingClass.activeRun && editingClass.activeRun.status === 'active')),
       owner: editingClass.owner || currentUserId || '',
@@ -4338,26 +4566,21 @@ const ClassList = ({
                     </div>
                   </div>
 
-                  {!isRoguelitePlayerClass && ['Yerma', 'Taiga', 'Tundra'].includes(dndClass.name) && !isCropping && (
+                  {!isRoguelitePlayerClass && (resolveCampaignPersonality(dndClass.name) || campaignSheet?.activePersonality) && !isCropping && (
                     <div className="flex justify-center gap-6 mt-4">
-                      {[
-                        { name: 'Yerma', src: '/yerma/Yerma.webp' },
-                        { name: 'Taiga', src: '/yerma/Taiga.webp' },
-                        { name: 'Tundra', src: '/yerma/Tundra.webp' }
-                      ].map((item) => (
+                      {CAMPAIGN_PERSONALITIES.map((item) => (
                         <div key={item.name} className="relative group w-14 h-14 cursor-pointer">
                           {/* Glow Effect */}
                           <div className="absolute -inset-2 bg-[#c8aa6e] rounded-full opacity-0 blur-md group-hover:opacity-30 transition-opacity duration-700 pointer-events-none"></div>
 
                           {/* Button */}
                           <button
-                            onClick={() => updateEditingClass(draft => {
-                              draft.image = item.src;
-                              draft.avatar = item.src;
-                              draft.name = item.name;
-                            })}
-                            className="relative w-full h-full rounded-full border-2 border-slate-600 group-hover:border-[#c8aa6e] overflow-hidden shadow-xl
-                                     transition-all duration-700 transform group-hover:scale-110 will-change-transform"
+                            onClick={() => handleSelectPersonality(item)}
+                            disabled={readOnly || (isCampaignDetail && (!campaignSheetReady || saveButtonState === 'saving'))}
+                            aria-label={`Personalidad ${item.name}`}
+                            aria-pressed={isCampaignDetail ? campaignSheet?.activePersonality === item.id : dndClass.name === item.name}
+                            className={`relative w-full h-full rounded-full border-2 ${campaignSheet?.activePersonality === item.id ? 'border-[#c8aa6e]' : 'border-slate-600'} group-hover:border-[#c8aa6e] overflow-hidden shadow-xl
+                                     transition-all duration-700 transform group-hover:scale-110 will-change-transform disabled:cursor-default`}
                             title={item.name}
                           >
                             <img src={item.src} alt={item.name} className="w-full h-full object-cover" />
@@ -4375,10 +4598,17 @@ const ClassList = ({
                   {/* Header / Title Section */}
                   <div className="flex flex-col items-center lg:items-start text-center lg:text-left">
                     <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 mb-4">
+                      {isCampaignDetail && campaignParryTagIndex === -1 && <FreeParryEntry variant="tag" actor={campaignParryActor} />}
                       {/* ETIQUETAS DINÁMICAS */}
                       {(editingClass.tags || []).map((tag, index) => {
                         const { name: tagName, color: tagColor } = parseTag(tag);
                         const tagLower = tagName.toLowerCase().trim();
+
+                        if (isCampaignDetail && ['velocidad', 'parry', 'parry libre'].includes(tagLower)) {
+                          return index === campaignParryTagIndex
+                            ? <FreeParryEntry key={index} variant="tag" actor={campaignParryActor} />
+                            : null;
+                        }
 
                         const isMinigame = tagLower === 'minijuego';
 
@@ -4422,26 +4652,7 @@ const ClassList = ({
                           );
                         }
 
-                        const isSpeedSystem = tagLower === 'velocidad';
-
-                        if (isSpeedSystem) {
-                          return (
-                            <div key={index} className="relative">
-                              <button
-                                onClick={() => {
-                                  if (onLaunchSpeedSystem) {
-                                    onLaunchSpeedSystem(editingClass.name);
-                                  }
-                                }}
-                                className="px-3 py-1 bg-amber-900/40 border border-amber-500/50 text-amber-400 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2 hover:bg-amber-800/60 transition-colors group/mini relative"
-                                title="Abrir Sistema de Velocidad"
-                              >
-                                <Zap className="w-3 h-3" />
-                                VELOCIDAD
-                              </button>
-                            </div>
-                          );
-                        }
+                        if (tagLower === 'velocidad') return null;
 
                         const isMinimap = tagLower === 'minimapa';
 
@@ -4778,7 +4989,7 @@ const ClassList = ({
                         <div className="mb-6 border-b border-[#c8aa6e]/30 pb-2">
                           <h4 className="text-[#c8aa6e] font-['Cinzel'] text-lg tracking-widest flex items-center gap-2">
                             <span className="w-8 h-[1px] bg-[#c8aa6e]"></span>
-                            {isRogueliteClassSummary ? 'DADOS DE ACCIÓN' : 'ATRIBUTOS'}
+                            {isRogueliteClassSummary || isCampaignDetail ? 'DADOS DE ACCIÓN' : 'ATRIBUTOS'}
                           </h4>
                         </div>
                         {isRogueliteClassSummary ? (
@@ -4820,6 +5031,28 @@ const ClassList = ({
                               </div>
                             ))}
                           </div>
+                        ) : isCampaignDetail ? (
+                          <div className="grid grid-cols-3 gap-4" data-testid="campaign-action-dice">
+                            {[0, 1, 2].map((index) => {
+                              const diceValue = campaignSheet?.actionDice?.[index] || null;
+                              return (
+                                <div key={index} className="group flex w-full flex-col items-center rounded-xl border border-[#c8aa6e]/20 bg-[#161f32]/80 p-4 transition-colors hover:border-[#c8aa6e]/50">
+                                  <DiceSelector
+                                    value={diceValue}
+                                    allowUnset
+                                    disabled={!campaignSheetReady || readOnly}
+                                    ariaLabel={`Dado de acción ${index + 1}: ${diceValue?.toUpperCase() || 'Sin definir'}`}
+                                    onChange={(newValue) => {
+                                      const nextDice = [...campaignSheet.actionDice];
+                                      nextDice[index] = newValue;
+                                      handleUpdateCampaignSheet({ ...campaignSheet, actionDice: nextDice });
+                                    }}
+                                  />
+                                  <div className="mt-3 text-center text-sm font-bold tracking-widest text-[#c8aa6e]">{diceValue?.toUpperCase() || '—'}</div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         ) : (
                           <div className="grid grid-cols-2 gap-4">
                             {[
@@ -4849,6 +5082,14 @@ const ClassList = ({
                           </div>
                         )}
                       </div>
+
+                      {isCampaignDetail && campaignSheet?.activePersonality && (
+                        <CampaignYermo
+                          value={campaignSheet.yermo}
+                          readOnly={readOnly || saveButtonState === 'saving'}
+                          onChange={(yermo) => handleUpdateCampaignSheet({ ...campaignSheet, yermo })}
+                        />
+                      )}
 
                       {isYuuzuName(dndClass.name) && (
                         <div className="mt-3 mb-2 rounded-xl border border-[#c8aa6e]/20 bg-[#161f32]/80 p-4 relative overflow-hidden">
@@ -4898,11 +5139,21 @@ const ClassList = ({
                       )}
 
                       {/* Actions */}
-                      <div className={`${isRogueliteClassSummary ? '' : 'mt-auto'} space-y-4`}>
+                      <div className={`${isRogueliteClassSummary || isCampaignDetail ? '' : 'mt-auto'} space-y-4`}>
                         <button
                           onClick={async () => {
                             let nextClass = editingClass;
                             try {
+                              if (isCampaignDetail) {
+                                if (!campaignSheetReady) return;
+                                const errors = validateCampaignSheet(campaignSheet);
+                                if (errors.length) throw new Error(errors[0]);
+                                const batch = writeBatch(db);
+                                batch.set(doc(db, 'characters', editingClass.id), pruneUndefined({ ...editingClass, systemId: CAMPAIGN_SYSTEM_ID }), { merge: true });
+                                batch.set(doc(db, CAMPAIGN_CHARACTER_SHEET_COLLECTION, editingClass.id), campaignSheet, { merge: true });
+                                await batch.commit();
+                                nextClass = { ...editingClass, campaignSheet, profileType: 'campaignCharacter', launchSource: 'campaignCharacter', systemId: CAMPAIGN_SYSTEM_ID };
+                              }
                               if (isRoguelitePlayerClass || detailPersistence?.mode === 'roguelite') {
                                 const targetOwner = editingClass.owner || currentUserId || '';
                                 const targetId = editingClass.id;
@@ -4935,7 +5186,7 @@ const ClassList = ({
                             }
 
                             if (onLaunchCanvas) {
-                              onLaunchCanvas(editingClass.name, isRoguelitePlayerClass ? {
+                              onLaunchCanvas(editingClass.name, isCampaignDetail ? nextClass : isRoguelitePlayerClass ? {
                                 ...nextClass,
                                 profileType: 'rogueliteClass',
                                 launchSource: 'rogueliteClass',
@@ -4964,6 +5215,9 @@ const ClassList = ({
                           <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500 ease-in-out z-0" />
                         </button>
 
+                        {isRoguelitePlayerClass && onLaunchCanvas3D && <button onClick={() => onLaunchCanvas3D(editingClass)}
+                          className="w-full border border-[#a48a59] bg-[#29352c] px-6 py-3 font-['Cinzel'] font-bold text-[#eddbb6]">Sentarse en Canvas 3D</button>}
+
                         {!isRoguelitePlayerClass && (
                           <button
                             onClick={() => handleStartPortraitEdit(dndClass)}
@@ -4978,7 +5232,18 @@ const ClassList = ({
                     {/* Right Column: Stats */}
                     < div >
 
-                      {isRogueliteClassSummary ? (
+                      {isCampaignDetail ? (
+                        <CampaignStatsSummary
+                          sheet={campaignSheet}
+                          armor={editingClass?.equippedItems?.body}
+                          status={campaignSheetState.status}
+                          isEditing={isCampaignStatsEditing}
+                          readOnly={readOnly}
+                          onToggleEditing={() => setIsCampaignStatsEditing((previous) => !previous)}
+                          onChange={handleUpdateCampaignSheet}
+                          onRetry={() => setCampaignSheetRetry((previous) => previous + 1)}
+                        />
+                      ) : isRogueliteClassSummary ? (
                         <RogueliteClassStatsSummary
                           classData={editingClass}
                           editable={!isRoguelitePlayerClass}
@@ -5492,11 +5757,12 @@ const ClassList = ({
           );
         case 'loadout':
           return (
+            <>
             <LoadoutView
               key={dndClass.id}
               dndClass={dndClass}
               isCharacter={isPlayerMode}
-              rogueliteRole={isRoguelitePlayerClass ? 'player' : (!isPlayerMode ? 'master' : 'legacy')}
+              rogueliteRole={isCampaignDetail ? 'campaign' : isRoguelitePlayerClass ? 'player' : (!isPlayerMode ? 'master' : 'legacy')}
               equipmentCatalog={equipmentCatalog}
               glossary={glossary}
               rarityColorMap={rarityColorMap}
@@ -5510,9 +5776,28 @@ const ClassList = ({
               onUpdateEquippedSkillIds={handleUpdateEquippedSkillIds}
               onUpdateProficiency={handleProficiencyChange}
               onUpdateEquipped={handleUpdateEquipped}
+              onTransformWeapon={readOnly ? undefined : sheetWeaponTrick.begin}
+              weaponTrickBusy={saveButtonState === 'saving'}
+              weaponTrickError={sheetWeaponTrick.error}
             />
+            </>
           );
         case 'feats':
+          if (isCampaignDetail) {
+            return (
+              <div className="h-full overflow-y-auto custom-scrollbar pb-16 md:pb-0">
+                <CampaignTalentsView
+                  character={editingClass}
+                  onChange={(nextCharacter) => updateEditingClass((draft) => {
+                    draft.actionData = nextCharacter.actionData;
+                    draft.talents = nextCharacter.talents;
+                    draft.features = nextCharacter.features;
+                  })}
+                  readOnly={readOnly}
+                />
+              </div>
+            );
+          }
           return (
             <RelicsView
               dndClass={dndClass}
@@ -5543,12 +5828,17 @@ const ClassList = ({
           characterImage={dndClass.image}
           characterAvatar={dndClass.avatar}
           onSave={readOnly ? undefined : handleSaveChanges}
-          hasUnsavedChanges={hasUnsavedChanges}
+          hasUnsavedChanges={hasUnsavedChanges || hasCampaignUnsavedChanges}
           saveButtonState={saveButtonState}
           isPlayerMode={isPlayerMode}
           isRogueliteClass={isRoguelitePlayerClass || !isPlayerMode}
         />
         <div className="flex-1 relative overflow-hidden pb-16 md:pb-0">
+          {campaignSaveError && (
+            <div className="absolute inset-x-4 top-3 z-50 border border-red-400/50 bg-[#27161b] px-4 py-2 text-sm text-red-100" role="alert">
+              {campaignSaveError}
+            </div>
+          )}
           {renderActiveView()}
 
           {/* Close Button Absolute Positioned — hidden when opened from canvas overlay (which has its own golden X) */}
@@ -5567,7 +5857,7 @@ const ClassList = ({
           activeTab={activeDetailTab}
           onTabChange={setActiveDetailTab}
           onSave={readOnly ? undefined : handleSaveChanges}
-          hasUnsavedChanges={hasUnsavedChanges}
+          hasUnsavedChanges={hasUnsavedChanges || hasCampaignUnsavedChanges}
           saveButtonState={saveButtonState}
           isPlayerMode={isPlayerMode}
           isRogueliteClass={isRoguelitePlayerClass || !isPlayerMode}
@@ -5622,7 +5912,7 @@ const ClassList = ({
             transition={{ duration: 0.3 }}
             className="mx-auto flex w-full max-w-[1600px] flex-col gap-8"
           >
-            <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between border-b border-[#c8aa6e]/20 pb-8">
+            {!isCreatingCharacter && <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between border-b border-[#c8aa6e]/20 pb-8">
               <div className="space-y-4">
                 <div className="inline-flex items-center gap-3 text-xs font-bold uppercase tracking-[0.25em] text-[#c8aa6e]">
                   <span className="opacity-70">ARCANA VAULT</span>
@@ -5659,6 +5949,8 @@ const ClassList = ({
               </div>
 
               <div className="flex flex-col gap-4 md:items-end">
+                {onLaunchCanvas3D && <button onClick={() => onLaunchCanvas3D()}
+                  className="min-h-[44px] border border-[#a48a59] bg-[#29352c] px-5 py-2 font-['Cinzel'] text-[#eddbb6]">Canvas 3D</button>}
                 <button
                   onClick={onBack}
                   className="group relative px-6 py-2 overflow-hidden rounded-sm border border-[#c8aa6e]/30 bg-[#c8aa6e]/5 text-[#c8aa6e] font-['Cinzel'] font-bold text-xs uppercase tracking-[0.2em] transition-all hover:border-[#c8aa6e] hover:bg-[#c8aa6e]/10 hover:shadow-[0_0_15px_rgba(200,170,110,0.3)]"
@@ -5669,9 +5961,9 @@ const ClassList = ({
                   </span>
                 </button>
               </div>
-            </div>
+            </div>}
 
-            {primaryLibraryEnabled && (
+            {primaryLibraryEnabled && !isCreatingCharacter && (
             <div className="sticky top-4 z-30 flex flex-col gap-4 rounded-xl border border-[#c8aa6e]/20 bg-[#0f172a]/80 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl md:flex-row md:items-center md:justify-between">
               <div className="relative w-full md:max-w-md">
                 <FiSearch className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#c8aa6e]/70" />
@@ -5794,10 +6086,10 @@ const ClassList = ({
       </AnimatePresence>
 
       <div
-        className={selectedClass || isAutoOpening
+        className={selectedClass || isAutoOpening || isCreatingCharacter
           ? 'hidden'
           : 'mx-auto mt-10 w-full max-w-[1600px]'}
-        aria-hidden={selectedClass || isAutoOpening ? 'true' : undefined}
+        aria-hidden={selectedClass || isAutoOpening || isCreatingCharacter ? 'true' : undefined}
       >
         {typeof additionalLibrarySection === 'function'
           ? additionalLibrarySection({ openClassDetails, syncOpenClassDetails })
@@ -6033,6 +6325,7 @@ const RogueliteStatBar = ({
   maximum,
   color,
   valueLabel,
+  ariaValueLabel,
   testId,
   controls,
   onLabelChange,
@@ -6074,7 +6367,7 @@ const RogueliteStatBar = ({
           )}
         </div>
         <div className="flex items-center gap-2.5">
-          <span className="text-[#c8aa6e] font-bold font-mono text-xs opacity-90 tracking-wide" aria-label={`${label} inicio: ${safeValue}`}>
+          <span className="text-[#c8aa6e] font-bold font-mono text-xs opacity-90 tracking-wide" aria-label={ariaValueLabel || `${label} inicio: ${safeValue}`}>
             {valueLabel}
           </span>
           {controls}
@@ -6127,11 +6420,301 @@ RogueliteStatBar.propTypes = {
   maximum: PropTypes.number.isRequired,
   color: PropTypes.string.isRequired,
   valueLabel: PropTypes.string.isRequired,
+  ariaValueLabel: PropTypes.string,
   testId: PropTypes.string,
   controls: PropTypes.node,
   onLabelChange: PropTypes.func,
   onValueChange: PropTypes.func,
   onColorChange: PropTypes.func,
+};
+
+const CampaignNumberInput = ({ label, value, onChange }) => (
+  <input
+    type="text"
+    inputMode="numeric"
+    pattern="[0-9]*"
+    autoComplete="off"
+    aria-label={label}
+    placeholder="—"
+    value={value ?? ''}
+    onChange={(event) => {
+      if (/^\d*$/.test(event.target.value)) onChange(parseCampaignSheetNumber(event.target.value));
+    }}
+    className="campaign-stat-number"
+  />
+);
+
+CampaignNumberInput.propTypes = {
+  label: PropTypes.string.isRequired,
+  value: PropTypes.number,
+  onChange: PropTypes.func.isRequired,
+};
+
+const CampaignStatHeading = ({ icon: Icon, label, color }) => (
+  <span className="campaign-stat-heading">
+    <Icon aria-hidden="true" className="h-4 w-4" style={{ color }} />
+    {label}
+  </span>
+);
+
+CampaignStatHeading.propTypes = {
+  icon: PropTypes.elementType.isRequired,
+  label: PropTypes.string.isRequired,
+  color: PropTypes.string.isRequired,
+};
+
+const CampaignResourceRow = ({ icon, label, value, color, isEditing, readOnly, onChange }) => {
+  const current = value?.current ?? null;
+  const maximum = value?.max ?? null;
+  const editable = isEditing && !readOnly;
+  const hasProgress = current !== null && maximum !== null && maximum > 0;
+  const percentage = hasProgress ? Math.max(0, Math.min(100, (current / maximum) * 100)) : 0;
+  const resourceKey = label.toLowerCase();
+
+  return (
+    <div className="campaign-stat-row" data-campaign-resource={resourceKey}>
+      <div className="campaign-stat-header">
+        <CampaignStatHeading icon={icon} label={label} color={color} />
+        {editable ? (
+          <div className="campaign-stat-editor">
+            <button
+              type="button"
+              aria-label={`Reducir ${label} actual`}
+              disabled={current === null || current <= 0}
+              onClick={() => onChange({ ...value, current: current - 1 })}
+              className="campaign-stat-adjust"
+            >
+              <FiMinus aria-hidden="true" />
+            </button>
+            <CampaignNumberInput label={`${label} actual`} value={current}
+              onChange={(nextCurrent) => onChange({ ...value, current: nextCurrent })} />
+            <button
+              type="button"
+              aria-label={`Aumentar ${label} actual`}
+              disabled={current === Number.MAX_SAFE_INTEGER || (maximum !== null && (current ?? 0) >= maximum)}
+              onClick={() => onChange({ ...value, current: (current ?? 0) + 1 })}
+              className="campaign-stat-adjust"
+            >
+              <FiPlus aria-hidden="true" />
+            </button>
+            <span className="campaign-stat-divider" aria-hidden="true">/</span>
+            <CampaignNumberInput label={`${label} máximo`} value={maximum}
+              onChange={(nextMaximum) => onChange({ ...value, max: nextMaximum })} />
+          </div>
+        ) : (
+          <span className="campaign-stat-readout">{current ?? '—'} <span>/</span> {maximum ?? '—'}</span>
+        )}
+      </div>
+      <div
+        className="campaign-stat-track"
+        role={hasProgress ? 'progressbar' : 'img'}
+        aria-label={hasProgress ? label : `${label}: ${current ?? 'sin definir'} de ${maximum ?? 'sin definir'}`}
+        aria-valuemin={hasProgress ? 0 : undefined}
+        aria-valuemax={hasProgress ? maximum : undefined}
+        aria-valuenow={hasProgress ? current : undefined}
+        aria-valuetext={hasProgress ? `${current} de ${maximum}` : undefined}
+      >
+        <div
+          className="campaign-stat-fill"
+          data-testid={`campaign-resource-fill-${resourceKey}`}
+          data-filled={percentage > 0}
+          style={{ width: `${percentage}%` }}
+        >
+          <span className="campaign-stat-vapor" aria-hidden="true" />
+        </div>
+      </div>
+      <div className="campaign-stat-rule" aria-hidden="true" />
+    </div>
+  );
+};
+
+CampaignResourceRow.propTypes = {
+  icon: PropTypes.elementType.isRequired,
+  label: PropTypes.string.isRequired,
+  value: PropTypes.shape({ current: PropTypes.number, max: PropTypes.number }),
+  color: PropTypes.string.isRequired,
+  isEditing: PropTypes.bool.isRequired,
+  readOnly: PropTypes.bool.isRequired,
+  onChange: PropTypes.func.isRequired,
+};
+
+const CampaignScalarRow = ({ icon, label, kind, value, color, isEditing, readOnly, onChange }) => {
+  const visibleUnits = Math.min(value ?? 0, 12);
+  const remainingUnits = Math.max(0, (value ?? 0) - visibleUnits);
+  const unitLabel = kind === 'movement' ? 'casillas' : 'puntos de reducción';
+
+  return (
+    <div className="campaign-stat-row campaign-stat-row--scalar">
+      <div className="campaign-stat-header">
+        <CampaignStatHeading icon={icon} label={label} color={color} />
+        {isEditing && !readOnly ? (
+          <CampaignNumberInput
+            label={label === 'Armadura · RD' ? 'Armadura RD' : label}
+            value={value ?? null}
+            onChange={onChange}
+          />
+        ) : <span className="campaign-stat-readout">{value ?? '—'}</span>}
+      </div>
+      <div
+        className={`campaign-stat-units campaign-stat-units--${kind}`}
+        role="img"
+        aria-label={`${label}: ${value == null ? 'sin definir' : `${value} ${unitLabel}`}`}
+      >
+        {Array.from({ length: visibleUnits }, (_, index) => (
+          <span key={index} className="campaign-stat-unit" aria-hidden="true" />
+        ))}
+        {remainingUnits > 0 && (
+          <span className="campaign-stat-overflow" aria-hidden="true">+{remainingUnits}</span>
+        )}
+        {visibleUnits === 0 && (
+          <span className="campaign-stat-empty" aria-hidden="true">
+            {value == null ? 'Sin definir' : kind === 'movement' ? 'Sin movimiento' : 'Sin reducción'}
+          </span>
+        )}
+      </div>
+      <div className="campaign-stat-rule" aria-hidden="true" />
+    </div>
+  );
+};
+
+CampaignScalarRow.propTypes = {
+  icon: PropTypes.elementType.isRequired,
+  label: PropTypes.string.isRequired,
+  kind: PropTypes.oneOf(['movement', 'armor']).isRequired,
+  value: PropTypes.number,
+  color: PropTypes.string.isRequired,
+  isEditing: PropTypes.bool.isRequired,
+  readOnly: PropTypes.bool.isRequired,
+  onChange: PropTypes.func.isRequired,
+};
+
+const CampaignArmorRow = ({ armor, value, readOnly, onChange }) => {
+  const customImages = useCustomEquipmentImages();
+  const [failedImage, setFailedImage] = useState(null);
+  const name = armor?.name || armor?.nombre || 'Sin armadura equipada';
+  const image = armor
+    ? getCustomImage(armor, customImages) || resolveEquipmentImage(armor, customImages)
+    : null;
+  const hasImage = Boolean(image && image !== failedImage);
+
+  return (
+    <div className="campaign-stat-row campaign-armor">
+      <CampaignStatHeading icon={Shield} label="Armadura" color="#b9b5ad" />
+      <div className={`campaign-armor-detail${hasImage ? '' : ' campaign-armor-detail--no-art'}`}>
+        {hasImage && (
+          <img
+            src={image}
+            alt=""
+            data-testid="campaign-armor-art"
+            className="campaign-armor-image"
+            decoding="async"
+            onError={() => setFailedImage(image)}
+          />
+        )}
+        <span className="campaign-armor-name">{name}</span>
+        <div className="campaign-armor-value">
+          <span>RD</span>
+          {readOnly ? (
+            <span className="campaign-armor-readout" aria-label={`Armadura RD: ${value ?? 'sin definir'}`}>{value ?? '—'}</span>
+          ) : (
+            <CampaignNumberInput label="Armadura RD" value={value ?? null} onChange={onChange} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+CampaignArmorRow.propTypes = {
+  armor: PropTypes.object,
+  value: PropTypes.number,
+  readOnly: PropTypes.bool.isRequired,
+  onChange: PropTypes.func.isRequired,
+};
+
+const CampaignStatsSummary = ({ sheet, armor, status, isEditing, readOnly, onToggleEditing, onChange, onRetry }) => (
+  <div>
+    <div className="mb-6 flex items-center justify-between border-b border-[#c8aa6e]/30 pb-2">
+      <h4 className="flex items-center gap-2 font-['Cinzel'] text-lg tracking-widest text-[#c8aa6e]">
+        <span className="h-px w-8 bg-[#c8aa6e]" />
+        ESTADÍSTICAS
+      </h4>
+      {sheet && !readOnly && (
+        <button
+          type="button"
+          onClick={onToggleEditing}
+          aria-label="Editar estadísticas"
+          aria-pressed={isEditing}
+          className={`rounded p-1.5 transition-colors ${isEditing ? 'bg-[#c8aa6e]/10 text-[#c8aa6e]' : 'text-slate-600 hover:text-[#c8aa6e]'}`}
+        >
+          {isEditing ? <FiCheckSquare className="h-4 w-4" /> : <FiEdit2 className="h-4 w-4" />}
+        </button>
+      )}
+    </div>
+    {sheet ? (
+      <div className="flex flex-col gap-5 px-1">
+        <CampaignResourceRow
+          icon={Heart}
+          label="Vida"
+          value={sheet.vida}
+          color="#e6a0a5"
+          isEditing={isEditing}
+          readOnly={readOnly}
+          onChange={(vida) => onChange({ ...sheet, vida })}
+        />
+        <CampaignResourceRow
+          icon={Brain}
+          label="Mente"
+          value={sheet.mente}
+          color="#b9a4d9"
+          isEditing={isEditing}
+          readOnly={readOnly}
+          onChange={(mente) => onChange({ ...sheet, mente })}
+        />
+        <CampaignScalarRow
+          icon={Footprints}
+          label="Movilidad"
+          kind="movement"
+          value={sheet.movilidad}
+          color="#82b8df"
+          isEditing={isEditing}
+          readOnly={readOnly}
+          onChange={(movilidad) => onChange({ ...sheet, movilidad })}
+        />
+        <CampaignArmorRow
+          armor={armor}
+          value={sheet.armaduraRd}
+          readOnly={readOnly}
+          onChange={(armaduraRd) => onChange({ ...sheet, armaduraRd })}
+        />
+      </div>
+    ) : (
+      <div className="px-1 font-serif text-sm text-slate-400" role="status">
+        {status === 'error' ? (
+          <div className="flex items-center gap-4">
+            <span>No se pudo cargar la ficha de Campaña.</span>
+            <button type="button" onClick={onRetry} className="font-['Cinzel'] text-xs text-[#c8aa6e] underline">Reintentar</button>
+          </div>
+        ) : 'Cargando estadísticas de Campaña…'}
+      </div>
+    )}
+  </div>
+);
+
+CampaignStatsSummary.propTypes = {
+  armor: PropTypes.object,
+  sheet: PropTypes.shape({
+    vida: PropTypes.shape({ current: PropTypes.number, max: PropTypes.number }),
+    mente: PropTypes.shape({ current: PropTypes.number, max: PropTypes.number }),
+    movilidad: PropTypes.number,
+    armaduraRd: PropTypes.number,
+  }),
+  status: PropTypes.string.isRequired,
+  isEditing: PropTypes.bool.isRequired,
+  readOnly: PropTypes.bool.isRequired,
+  onToggleEditing: PropTypes.func.isRequired,
+  onChange: PropTypes.func.isRequired,
+  onRetry: PropTypes.func.isRequired,
 };
 
 const RogueliteClassStatsSummary = ({
